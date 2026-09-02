@@ -19,9 +19,9 @@ from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
 
 try:
-    from .world_graph import canonicalize_plan
+    from .world_graph import canonicalize_plan, controller_skill_index
 except ImportError:
-    from world_graph import canonicalize_plan
+    from world_graph import canonicalize_plan, controller_skill_index
 
 
 PLANNING_DATASET_ID = "VLABench/vlm_evaluation_v1.0"
@@ -737,6 +737,7 @@ class LeRobotWindowDataset(Dataset):
         image_keys: Sequence[str] | None = None,
         video_root: str | Path | None = None,
         condition_index: int | None = None,
+        plan_pattern: Sequence[str] = (),
         video_decoder_cache_size: int = 8,
     ):
         if observation_horizon <= 0 or action_horizon <= 0:
@@ -769,6 +770,7 @@ class LeRobotWindowDataset(Dataset):
                 if videos.is_dir():
                     self.video_keys = tuple(sorted(path.name for path in videos.iterdir() if path.is_dir()))
         self.condition_index = None if condition_index is None else int(condition_index)
+        self.plan_pattern = tuple(str(skill) for skill in plan_pattern)
         episodes: dict[int, list[int]] = {}
         if hasattr(self.records, "column_names") and "episode_index" in self.records.column_names:
             episode_values = self.records["episode_index"]
@@ -872,10 +874,25 @@ class LeRobotWindowDataset(Dataset):
         task_index = self.condition_index
         if task_index is None:
             task_index = int(obs_rows[-1].get("task_index", 0))
+        operation_index = 0
+        skill_index = 0
+        if self.plan_pattern:
+            # Demonstrations do not carry graph-operation boundaries.  Use a
+            # deterministic normalized episode phase for operation-aware BC;
+            # online rollout replaces it with the planner's actual cursor.
+            operation_index = min(
+                len(self.plan_pattern) - 1,
+                int(offset * len(self.plan_pattern) / max(1, len(indices))),
+            )
+            skill_index = controller_skill_index(self.plan_pattern[operation_index])
         return {
             "state": state,
             "images": images,
             "actions": actions,
             "task_index": torch.tensor(task_index, dtype=torch.long),
+            "plan_context": torch.tensor(
+                [skill_index, 0, operation_index + 1 if self.plan_pattern else 0],
+                dtype=torch.long,
+            ),
             "episode_index": torch.tensor(episode, dtype=torch.long),
         }

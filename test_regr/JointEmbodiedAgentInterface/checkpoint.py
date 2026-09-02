@@ -15,8 +15,8 @@ import torch
 from .world_graph import JointDomainRuntime
 
 
-JOINT_CHECKPOINT_VERSION = 5
-SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, 4, JOINT_CHECKPOINT_VERSION})
+JOINT_CHECKPOINT_VERSION = 6
+SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, 4, 5, JOINT_CHECKPOINT_VERSION})
 
 
 def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
@@ -243,10 +243,16 @@ def _controller_configuration(controller) -> Mapping[str, Any]:
             getattr(controller, "action_representation_version", 1)
         ),
         "critic_version": int(getattr(controller, "critic_version", 1)),
+        "plan_conditioning_version": int(
+            getattr(controller, "plan_conditioning_version", 0)
+        ),
         "state_dim": getattr(controller, "state_dim", None),
         "action_dim": getattr(controller, "action_dim", None),
         "action_horizon": getattr(controller, "action_horizon", None),
         "pose_step_scale": tuple(getattr(controller, "pose_step_scale", ())),
+        "controller_skill_count": getattr(getattr(controller, "skill_embedding", None), "num_embeddings", 0),
+        "controller_entity_count": getattr(getattr(controller, "entity_embedding", None), "num_embeddings", 0),
+        "controller_operation_count": getattr(getattr(controller, "operation_embedding", None), "num_embeddings", 0),
     }
 
 
@@ -405,10 +411,23 @@ def load_joint_checkpoint(
             f"saved={saved_controller!r}, current={current_controller!r}"
         )
     _load_planner_state(planner, payload["planner"])
-    controller.load_state_dict(payload["controller"])
+    if migrate_legacy_controller:
+        result = controller.load_state_dict(payload["controller"], strict=False)
+        unexpected = list(result.unexpected_keys)
+        if unexpected:
+            raise RuntimeError(
+                "legacy controller checkpoint has unexpected state: "
+                + ", ".join(unexpected[:5])
+            )
+    else:
+        controller.load_state_dict(payload["controller"])
     if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])
-    if controller_optimizer is not None and payload.get("controller_optimizer") is not None:
+    if (
+        not migrate_legacy_controller
+        and controller_optimizer is not None
+        and payload.get("controller_optimizer") is not None
+    ):
         controller_optimizer.load_state_dict(payload["controller_optimizer"])
     if migrate_legacy_controller:
         reset = getattr(controller, "reset_for_action_representation_migration", None)

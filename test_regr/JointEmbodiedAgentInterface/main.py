@@ -24,6 +24,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
 )
 from test_regr.VLABenchAgentInterface.main import _control_loaders, _controller
 from test_regr.VLABenchAgentInterface.training import (
+    evaluate_controller,
     evaluate_planner,
     prepare_planner_program_examples,
 )
@@ -98,9 +99,21 @@ def stage2_selection_key(metrics):
     return (minimum, mean, float(eai.get("goal_recall", eai["reward"])), float(vla["return"]), efficiency)
 
 
-def stage2_checkpoint_eligible(metrics, *, min_vlabench_success_rate: float) -> bool:
-    return float(metrics["vlabench"]["success_rate"]) >= float(
-        min_vlabench_success_rate
+def stage2_checkpoint_eligible(
+    metrics,
+    *,
+    min_vlabench_success_rate: float,
+    min_successful_tasks: int = 0,
+    max_ik_truncation_rate: float = 1.0,
+) -> bool:
+    """Require success, task coverage, and executable controller behavior."""
+
+    vlabench = metrics["vlabench"]
+    return (
+        float(vlabench["success_rate"]) >= float(min_vlabench_success_rate)
+        and int(vlabench.get("successful_task_count", 0)) >= int(min_successful_tasks)
+        and float(vlabench.get("ik_truncation_rate", 0.0))
+        <= float(max_ik_truncation_rate)
     )
 
 
@@ -366,6 +379,12 @@ def command_train_agent(args):
                     control_loaders["train"],
                     steps=args.controller_warmup_steps,
                 )
+                warmup_metrics["validation"] = evaluate_controller(
+                    controller,
+                    control_loaders["validation"],
+                    device=device,
+                    max_batches=args.validation_limit,
+                )
                 metrics = dict(payload.get("metrics", {}))
                 metrics["controller_warmup"] = warmup_metrics
                 best_stage1 = save_joint_checkpoint(
@@ -419,12 +438,25 @@ def command_train_agent(args):
         ik_max_steps=args.ik_max_steps,
     )
     stage2.round_robin_cursor = cursor
+    if args.stage2_eval_rollouts_per_task > 0 and start_stage2 == 0:
+        _status(
+            "evaluating the Stage 1/controller-warm-up baseline on fixed-seed "
+            f"VLABench rollouts={args.stage2_eval_rollouts_per_task} per task"
+        )
+        baseline = stage2.evaluate_rollouts(
+            descriptors,
+            rollouts_per_task=args.stage2_eval_rollouts_per_task,
+            seed=args.seed + 100000,
+        )
+        _json({"stage": "stage2-baseline-evaluation", "vlabench": baseline})
     best_key = None
     best_path = None
     if resume_stage == "stage2" and resume_payload is not None:
         if stage2_checkpoint_eligible(
             resume_payload["metrics"],
             min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
+            min_successful_tasks=args.stage2_min_successful_tasks,
+            max_ik_truncation_rate=args.stage2_max_ik_truncation_rate,
         ):
             best_key = stage2_selection_key(resume_payload["metrics"])
             best_path = Path(args.resume).resolve()
@@ -442,6 +474,26 @@ def command_train_agent(args):
             rounds=args.stage2_rounds_per_epoch,
             vlabench_rollouts_per_update=args.vlabench_rollouts,
         )
+        if args.stage2_eval_rollouts_per_task > 0:
+            metrics["eai_training"] = metrics["eai"]
+            eai_evaluation = _evaluate_eai(
+                planner,
+                runtime,
+                eai_valid,
+                limit=args.validation_limit,
+            )
+            metrics["eai"] = {
+                **metrics["eai_training"],
+                "success": eai_evaluation["goal_success"],
+                "goal_recall": eai_evaluation["goal_recall"],
+                "evaluation": eai_evaluation,
+            }
+            metrics["vlabench_training"] = metrics["vlabench"]
+            metrics["vlabench"] = stage2.evaluate_rollouts(
+                descriptors,
+                rollouts_per_task=args.stage2_eval_rollouts_per_task,
+                seed=args.seed + 100000,
+            )
         path = save_joint_checkpoint(
             output / f"joint_stage2_epoch_{epoch:03d}.pt",
             runtime=runtime,
@@ -458,6 +510,8 @@ def command_train_agent(args):
         eligible = stage2_checkpoint_eligible(
             metrics,
             min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
+            min_successful_tasks=args.stage2_min_successful_tasks,
+            max_ik_truncation_rate=args.stage2_max_ik_truncation_rate,
         )
         if eligible and (best_key is None or key > best_key):
             best_key, best_path = key, path
@@ -467,6 +521,8 @@ def command_train_agent(args):
             "checkpoint": path,
             "best_candidate_eligible": eligible,
             "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
+            "minimum_successful_vlabench_tasks": args.stage2_min_successful_tasks,
+            "maximum_ik_truncation_rate": args.stage2_max_ik_truncation_rate,
             "metrics": metrics,
         })
     if best_path is not None:
@@ -495,8 +551,10 @@ def command_train_agent(args):
     else:
         _json({
             "stage": "stage2-best-skipped",
-            "reason": "no epoch met the minimum VLABench success rate",
+            "reason": "no epoch met all VLABench success, task-coverage, and IK-feasibility gates",
             "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
+            "minimum_successful_vlabench_tasks": args.stage2_min_successful_tasks,
+            "maximum_ik_truncation_rate": args.stage2_max_ik_truncation_rate,
         })
 
 
@@ -532,9 +590,27 @@ def build_parser():
         default=0.10,
         help="minimum rollout success required for an epoch to become joint_stage2_best.pt",
     )
+    agent.add_argument(
+        "--stage2-min-successful-tasks",
+        type=int,
+        default=3,
+        help="minimum number of VLABench task families with at least one successful rollout",
+    )
+    agent.add_argument(
+        "--stage2-max-ik-truncation-rate",
+        type=_unit_interval,
+        default=0.25,
+        help="maximum fraction of VLABench rollouts terminated by unrecoverable IK",
+    )
     agent.add_argument("--eai-samples", type=int, default=8)
     agent.add_argument("--vlabench-planner-samples", type=int, default=4)
     agent.add_argument("--vlabench-rollouts", type=int, default=8)
+    agent.add_argument(
+        "--stage2-eval-rollouts-per-task",
+        type=int,
+        default=1,
+        help="fixed-seed held-out simulator rollouts per task before RL and after each Stage 2 epoch; use 0 to disable",
+    )
     agent.add_argument("--planner-learning-rate", type=float, default=2e-5)
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
     agent.add_argument("--controller-warmup-steps", type=int, default=20000)

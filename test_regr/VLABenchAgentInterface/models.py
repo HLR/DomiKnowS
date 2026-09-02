@@ -175,18 +175,19 @@ class ControllerPolicyOutput:
     pose_std: torch.Tensor
     gripper_logits: torch.Tensor
     value: torch.Tensor
+    latent_pose_mean: torch.Tensor | None = None
 
 
 class MultiViewController(nn.Module):
     """Behavior-cloning controller and PPO actor-critic over EE chunks."""
 
-    # Version 2 predicts a sequence of bounded local increments and integrates
-    # them around the last observed EE pose.  The public action remains an
-    # absolute [xyz, roll, pitch, yaw, gripper] target, matching the dataset and
-    # simulator adapter, but the actor can no longer point every action in a
-    # chunk at an arbitrary distant pose.
-    action_representation_version = 3
+    # Version 4 predicts tanh-bounded local increments, conditions them on the
+    # active graph operation, and integrates them around the last observed EE
+    # pose. The public action remains an absolute
+    # [xyz, roll, pitch, yaw, gripper] target matching dataset and simulator.
+    action_representation_version = 4
     critic_version = 2
+    plan_conditioning_version = 1
 
     def __init__(
         self,
@@ -198,6 +199,9 @@ class MultiViewController(nn.Module):
         hidden_dim: int = 256,
         max_views: int = 4,
         task_count: int = 128,
+        controller_skill_count: int = 10,
+        controller_entity_count: int = 65,
+        controller_operation_count: int = 17,
     ):
         super().__init__()
         if action_dim != 7:
@@ -211,12 +215,18 @@ class MultiViewController(nn.Module):
         self.state_projection = nn.Sequential(nn.Linear(state_dim, hidden_dim), nn.LayerNorm(hidden_dim), nn.GELU())
         self.vision_projection = nn.Sequential(nn.Linear(vision_dim, hidden_dim), nn.LayerNorm(hidden_dim), nn.GELU())
         self.task_embedding = nn.Embedding(task_count, hidden_dim)
+        self.skill_embedding = nn.Embedding(controller_skill_count, hidden_dim, padding_idx=0)
+        self.entity_embedding = nn.Embedding(controller_entity_count, hidden_dim, padding_idx=0)
+        self.operation_embedding = nn.Embedding(controller_operation_count, hidden_dim, padding_idx=0)
         self.temporal = nn.GRU(hidden_dim * 2, hidden_dim, batch_first=True)
         self.fusion = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.GELU())
         self.policy_head = nn.Linear(hidden_dim, action_horizon * action_dim)
         self.value_head = nn.Linear(hidden_dim, 1)
         self.pose_step_scale = (0.02, 0.02, 0.02, 0.10, 0.10, 0.10)
-        self.exploration_std = (0.01, 0.01, 0.01, 0.05, 0.05, 0.05)
+        # Standard deviations are in the pre-tanh local-delta space.  A value
+        # of 0.35 explores without allowing a sampled target to escape the
+        # graph-independent Cartesian safety envelope.
+        self.exploration_std = (0.35,) * 6
         self.log_std = nn.Parameter(torch.tensor(self.exploration_std).log())
 
     def reset_for_action_representation_migration(self) -> None:
@@ -229,6 +239,9 @@ class MultiViewController(nn.Module):
 
         self.policy_head.reset_parameters()
         self.task_embedding.reset_parameters()
+        self.skill_embedding.reset_parameters()
+        self.entity_embedding.reset_parameters()
+        self.operation_embedding.reset_parameters()
         self.value_head.reset_parameters()
         with torch.no_grad():
             self.log_std.copy_(
@@ -264,7 +277,13 @@ class MultiViewController(nn.Module):
         pose = torch.cat((pose[..., :3], angles), -1)
         return pose
 
-    def _features(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor) -> torch.Tensor:
+    def _features(
+        self,
+        images: torch.Tensor,
+        state: torch.Tensor,
+        task_index: torch.Tensor,
+        plan_context: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         if images.ndim != 6:
             raise ValueError("images must have shape [batch, history, views, channels, height, width]")
         batch, history, views, channels, height, width = images.shape
@@ -281,13 +300,24 @@ class MultiViewController(nn.Module):
         state_features = self.state_projection(state.float())
         temporal, _ = self.temporal(torch.cat((vision, state_features), dim=-1))
         task = self.task_embedding(task_index.long().reshape(batch))
+        if plan_context is not None:
+            context = plan_context.long().reshape(batch, 3)
+            skill = context[:, 0].clamp(0, self.skill_embedding.num_embeddings - 1)
+            entity = context[:, 1].clamp(0, self.entity_embedding.num_embeddings - 1)
+            operation = context[:, 2].clamp(0, self.operation_embedding.num_embeddings - 1)
+            task = (
+                task
+                + self.skill_embedding(skill)
+                + self.entity_embedding(entity)
+                + self.operation_embedding(operation)
+            )
         return self.fusion(torch.cat((temporal[:, -1], task), dim=-1))
 
-    def policy(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor) -> ControllerPolicyOutput:
-        features = self._features(images, state, task_index)
+    def policy(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor, plan_context=None) -> ControllerPolicyOutput:
+        features = self._features(images, state, task_index, plan_context)
         raw = self.policy_head(features).reshape(-1, self.action_horizon, self.action_dim)
         pose_mean = self._local_pose_chunk(raw[..., :6], state)
-        std = self.log_std.clamp(-5.0, 2.0).exp().view(1, 1, 6).expand_as(raw[..., :6])
+        std = self.log_std.clamp(float(torch.tensor(0.05).log()), float(torch.tensor(0.75).log())).exp().view(1, 1, 6).expand_as(raw[..., :6])
         output = ControllerPolicyOutput(
             pose_mean,
             std,
@@ -297,46 +327,66 @@ class MultiViewController(nn.Module):
             # Detaching its input also prevents zero-reward value fitting from
             # silently changing the actor's shared visual/control features.
             torch.tanh(self.value_head(features.detach())).squeeze(-1),
+            raw[..., :6],
         )
         for name, value in (
             ("pose mean", output.pose_mean),
             ("pose standard deviation", output.pose_std),
             ("gripper logits", output.gripper_logits),
             ("value", output.value),
+            ("latent pose mean", output.latent_pose_mean),
         ):
             if not bool(torch.isfinite(value).all()):
                 raise ValueError(f"controller produced non-finite {name}")
         return output
 
-    def forward(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor) -> torch.Tensor:
-        output = self.policy(images, state, task_index)
+    def forward(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor, plan_context=None) -> torch.Tensor:
+        output = self.policy(images, state, task_index, plan_context)
         return torch.cat((output.pose_mean, output.gripper_logits.unsqueeze(-1)), dim=-1)
 
-    def sample_action_chunk(self, images, state, task_index):
-        output = self.policy(images, state, task_index)
-        pose_distribution = torch.distributions.Normal(output.pose_mean, output.pose_std)
+    def _bounded_pose_logprob(self, latent_distribution, latent, bounded_delta):
+        scale = bounded_delta.new_tensor(self.pose_step_scale).view(1, 1, 6)
+        normalized = (bounded_delta / scale).clamp(-1.0 + 1e-6, 1.0 - 1e-6)
+        jacobian = torch.log(scale) + torch.log1p(-(normalized * normalized) + 1e-6)
+        return latent_distribution.log_prob(latent) - jacobian
+
+    def sample_action_chunk(self, images, state, task_index, plan_context=None):
+        output = self.policy(images, state, task_index, plan_context)
+        pose_distribution = torch.distributions.Normal(output.latent_pose_mean, output.pose_std)
         grip_distribution = torch.distributions.Bernoulli(logits=output.gripper_logits)
-        pose = pose_distribution.rsample()
+        latent = pose_distribution.rsample()
+        scale = latent.new_tensor(self.pose_step_scale).view(1, 1, 6)
+        delta = torch.tanh(latent) * scale
+        base = state[:, -1, :6].to(device=latent.device, dtype=latent.dtype).unsqueeze(1)
+        pose = base + delta.cumsum(dim=1)
+        pose = torch.cat((pose[..., :3], torch.atan2(torch.sin(pose[..., 3:]), torch.cos(pose[..., 3:]))), -1)
         grip = grip_distribution.sample()
         actions = torch.cat((pose, grip.unsqueeze(-1)), dim=-1)
-        logprob = pose_distribution.log_prob(pose).sum(-1) + grip_distribution.log_prob(grip)
+        logprob = self._bounded_pose_logprob(pose_distribution, latent, delta).sum(-1) + grip_distribution.log_prob(grip)
         entropy = pose_distribution.entropy().sum(-1) + grip_distribution.entropy()
         return actions, logprob, entropy, output.value
 
-    def evaluate_action_chunk(self, images, state, task_index, actions):
-        output = self.policy(images, state, task_index)
-        pose_distribution = torch.distributions.Normal(output.pose_mean, output.pose_std)
+    def evaluate_action_chunk(self, images, state, task_index, actions, plan_context=None):
+        output = self.policy(images, state, task_index, plan_context)
+        pose_distribution = torch.distributions.Normal(output.latent_pose_mean, output.pose_std)
         grip_distribution = torch.distributions.Bernoulli(logits=output.gripper_logits)
+        base = state[:, -1, :6].to(device=actions.device, dtype=actions.dtype).unsqueeze(1)
+        previous = torch.cat((base, actions[:, :-1, :6]), dim=1)
+        delta = actions[..., :6] - previous
+        delta = torch.cat((delta[..., :3], torch.atan2(torch.sin(delta[..., 3:]), torch.cos(delta[..., 3:]))), -1)
+        scale = delta.new_tensor(self.pose_step_scale).view(1, 1, 6)
+        normalized = (delta / scale).clamp(-1.0 + 1e-6, 1.0 - 1e-6)
+        latent = torch.atanh(normalized)
         grip = actions[..., 6].clamp(0, 1)
-        logprob = pose_distribution.log_prob(actions[..., :6]).sum(-1) + grip_distribution.log_prob(grip)
+        logprob = self._bounded_pose_logprob(pose_distribution, latent, delta).sum(-1) + grip_distribution.log_prob(grip)
         entropy = pose_distribution.entropy().sum(-1) + grip_distribution.entropy()
         return logprob, entropy, output.value
 
     @torch.no_grad()
-    def predict_action_chunk(self, images, state, task_index) -> torch.Tensor:
+    def predict_action_chunk(self, images, state, task_index, plan_context=None) -> torch.Tensor:
         was_training = self.training
         self.eval()
-        output = self.policy(images, state, task_index)
+        output = self.policy(images, state, task_index, plan_context)
         actions = torch.cat((output.pose_mean, (torch.sigmoid(output.gripper_logits) >= 0.5).float().unsqueeze(-1)), -1)
         self.train(was_training)
         return actions

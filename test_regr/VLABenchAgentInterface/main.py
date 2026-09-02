@@ -125,6 +125,7 @@ def _control_loaders(args):
             # it with a primitive skill-pattern ID makes different requested
             # objects indistinguishable to the controller.
             condition_index=None,
+            plan_pattern=PRIMITIVE_TASK_PATTERNS[task],
             video_decoder_cache_size=getattr(args, "video_decoder_cache_size", 8),
         )
         _status(

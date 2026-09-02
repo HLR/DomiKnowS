@@ -101,10 +101,10 @@ def bound_ee_action(
 ) -> np.ndarray:
     """Rate-limit an absolute EE target around the current simulator pose.
 
-    The controller remains a Normal actor over absolute xyz/Euler coordinates,
-    but an unbounded exploratory draw can be far outside the local IK basin.
-    Bound the command actually sent to the simulator, using wrapped Euler
-    deltas so crossing ``-pi/pi`` does not become a full rotation.
+    The current controller already samples tanh-bounded local increments. This
+    independent execution envelope remains a defense for legacy checkpoints,
+    custom controllers, and floating-point drift, using wrapped Euler deltas
+    so crossing ``-pi/pi`` does not become a full rotation.
     """
     value = np.asarray(action, dtype=np.float64).reshape(-1)
     current = np.asarray(current_state, dtype=np.float64).reshape(-1)

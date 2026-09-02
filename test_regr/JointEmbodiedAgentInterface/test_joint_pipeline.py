@@ -956,14 +956,29 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
         {"vlabench": {"success_rate": 0.05}},
         min_vlabench_success_rate=0.10,
     )
+    assert not stage2_checkpoint_eligible(
+        {"vlabench": {"success_rate": 0.20, "successful_task_count": 2, "ik_truncation_rate": 0.10}},
+        min_vlabench_success_rate=0.10,
+        min_successful_tasks=3,
+        max_ik_truncation_rate=0.25,
+    )
+    assert not stage2_checkpoint_eligible(
+        {"vlabench": {"success_rate": 0.20, "successful_task_count": 3, "ik_truncation_rate": 0.30}},
+        min_vlabench_success_rate=0.10,
+        min_successful_tasks=3,
+        max_ik_truncation_rate=0.25,
+    )
     args = build_parser().parse_args(["train-agent", "--two-stage"])
     assert (args.stage1_epochs, args.stage2_epochs) == (5, 3)
     assert (args.eai_samples, args.vlabench_planner_samples, args.vlabench_rollouts) == (8, 4, 8)
     assert args.stage2_rounds_per_epoch == 10
+    assert args.stage2_eval_rollouts_per_task == 1
     assert args.planner_decoder_hidden_dim == 512
     assert args.video_decoder_cache_size == 8
     assert args.controller_warmup_steps == 20000
     assert args.stage2_min_vlabench_success_rate == pytest.approx(0.10)
+    assert args.stage2_min_successful_tasks == 3
+    assert args.stage2_max_ik_truncation_rate == pytest.approx(0.25)
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)
     assert args.ik_tolerance == pytest.approx(1e-3)

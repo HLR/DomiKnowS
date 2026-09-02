@@ -158,7 +158,11 @@ def train_controller_epoch(
         task_index = batch["task_index"].to(device)
         target = batch["actions"].to(device)
         with _autocast(device, mixed_precision):
-            prediction = model(images, state, task_index)
+            plan_context = batch.get("plan_context")
+            inputs = (images, state, task_index)
+            if plan_context is not None:
+                inputs += (plan_context.to(device),)
+            prediction = model(*inputs)
             loss, metrics = controller_loss(prediction, target)
             scaled_loss = loss / max(1, grad_accumulation)
         scaled_loss.backward()
@@ -181,12 +185,23 @@ def evaluate_controller(
     loader: Iterable[Mapping[str, torch.Tensor]],
     *,
     device: str | torch.device,
+    max_batches: int | None = None,
 ) -> dict[str, float]:
     device = torch.device(device)
     model.eval()
     pose_error = gripper_correct = samples = 0.0
-    for batch in loader:
-        prediction = model(batch["images"].to(device), batch["state"].to(device), batch["task_index"].to(device))
+    for batch_index, batch in enumerate(loader):
+        if max_batches is not None and batch_index >= int(max_batches):
+            break
+        plan_context = batch.get("plan_context")
+        inputs = (
+            batch["images"].to(device),
+            batch["state"].to(device),
+            batch["task_index"].to(device),
+        )
+        if plan_context is not None:
+            inputs += (plan_context.to(device),)
+        prediction = model(*inputs)
         target = batch["actions"].to(device)
         pose_error += float(torch.abs(prediction[..., :-1] - target[..., :-1]).sum())
         gripper_correct += float(((torch.sigmoid(prediction[..., -1]) >= 0.5) == (target[..., -1] >= 0.5)).sum())

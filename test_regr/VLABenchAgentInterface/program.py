@@ -20,6 +20,7 @@ try:
     from .models import controller_loss
     from .world_graph import (
         condition_index_for_pattern,
+        controller_plan_context,
         materialize_plan,
         split_subtasks,
         validate_plan,
@@ -30,7 +31,7 @@ except ImportError:
     from environment import InverseKinematicsError, bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
     from graph import dfa_accepts_plan
     from models import controller_loss
-    from world_graph import condition_index_for_pattern, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
+    from world_graph import condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
 
 
 class EOSMaskedCrossEntropyLoss(torch.nn.Module):
@@ -110,6 +111,8 @@ class ControllerTransition:
     reward: float
     done: bool
     executed: int
+    plan_context: torch.Tensor | None = None
+    feasibility_cost: float = 0.0
     advantage: float = 0.0
     return_value: float = 0.0
 
@@ -123,6 +126,9 @@ class JointEpisode:
     valid: bool
     steps: int
     planner_returns: list[float] | None = None
+    ik_failures: int = 0
+    ik_recoveries: int = 0
+    termination_reason: str = "unknown"
 
 
 @dataclass
@@ -303,7 +309,7 @@ def _entity_pointer_dfa(base_dfa, vocabulary, entity_count: int):
     )
 
 
-def _controller_inputs(observations, task_index: int, device, camera_views: int = 3):
+def _controller_inputs(observations, task_index: int, device, camera_views: int = 3, plan_context=None):
     history = list(observations)[-2:]
     if len(history) == 1:
         history.insert(0, history[0])
@@ -317,6 +323,7 @@ def _controller_inputs(observations, task_index: int, device, camera_views: int 
         torch.stack(image_history).unsqueeze(0).to(device),
         torch.stack(state_history).unsqueeze(0).to(device),
         torch.tensor([task_index], dtype=torch.long, device=device),
+        torch.tensor([plan_context or (0, 0, 0)], dtype=torch.long, device=device),
     )
 
 
@@ -350,6 +357,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         max_controller_loss: float = 50.0,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
+        feasibility_weight: float = 0.05,
         max_position_step: float = 0.02,
         max_rotation_step: float = 0.10,
         ik_tolerance: float = 1e-3,
@@ -389,6 +397,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.max_controller_loss = float(max_controller_loss)
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
+        self.feasibility_weight = float(feasibility_weight)
         self.max_position_step = float(max_position_step)
         self.max_rotation_step = float(max_rotation_step)
         self.ik_tolerance = float(ik_tolerance)
@@ -468,6 +477,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         planner_transition_indices: list[int | None] = []
         transitions: list[ControllerTransition] = []
         valid, success, steps = True, False, 0
+        operation_cursor = 0
+        ik_failures = ik_recoveries = 0
+        termination_reason = "max_steps"
         previous_progress = previous_intention = 0.0
         last_progress_report = time.monotonic()
         try:
@@ -493,6 +505,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         f"task={descriptor.get('task', 'unknown')}: {exc}"
                     )
                     valid = False
+                    termination_reason = "unknown_instruction"
 
             while steps < self.max_steps:
                 if not valid:
@@ -578,6 +591,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         f"VLABench planner rejected all {self.num_samples} candidates: {details}"
                     )
                     valid = False
+                    termination_reason = "invalid_plan"
                     break
                 plan = selected_plan
                 planner_logprobs.append(selected_logprob)
@@ -588,15 +602,29 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if controller_task_index is not None
                     else condition_index_for_pattern(subtasks[0]) if subtasks else 0
                 )
-                inputs = _controller_inputs(observations, task_index, self.device_name)
+                operation_cursor = min(operation_cursor, max(0, len(plan) - 1))
+                inputs = _controller_inputs(
+                    observations,
+                    task_index,
+                    self.device_name,
+                    plan_context=controller_plan_context(plan, operation_cursor, entities),
+                )
                 try:
-                    actions, logprobs, _entropy, values = self.controller.sample_action_chunk(*inputs)
+                    try:
+                        actions, logprobs, _entropy, values = self.controller.sample_action_chunk(*inputs)
+                    except TypeError as exc:
+                        # Preserve small legacy/fake controllers while the
+                        # production controller consumes graph plan context.
+                        if "positional" not in str(exc) and "argument" not in str(exc):
+                            raise
+                        actions, logprobs, _entropy, values = self.controller.sample_action_chunk(*inputs[:3])
                 except ValueError as exc:
                     self._report_progress(
                         f"VLABench controller policy rejected task={descriptor.get('task', 'unknown')} "
                         f"step={steps}: {exc}"
                     )
                     valid = False
+                    termination_reason = "invalid_policy"
                     break
                 # PPO must retain the latent actions sampled by the behavior
                 # policy. The safety envelope below is part of the environment
@@ -606,6 +634,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 policy_actions = actions.detach().clone()
                 executed = 0
                 chunk_reward = 0.0
+                chunk_ik_failures = 0
+                chunk_advanced = False
                 ik_truncated = False
                 for action_index, candidate in enumerate(actions[0, : self.execute_horizon]):
                     try:
@@ -615,29 +645,50 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             max_position_step=self.max_position_step,
                             max_rotation_step=self.max_rotation_step,
                         )
-                        command = ee_action_to_env_action(
-                            env,
-                            bounded,
-                            ik_tolerance=self.ik_tolerance,
-                            ik_max_steps=self.ik_max_steps,
-                        )
-                    except InverseKinematicsError as exc:
-                        # The finite target was never sent to the simulator.
-                        # End this rollout at the last valid state without
-                        # reclassifying valid plans/actions already executed as
-                        # semantically invalid or erasing their shaped reward.
-                        self._report_progress(
-                            f"VLABench rollout IK-truncated task={descriptor.get('task', 'unknown')} "
-                            f"step={steps}: {exc}"
-                        )
-                        ik_truncated = True
-                        break
+                        current = np.asarray(_observation_state(observation), dtype=np.float64)
+                        command = None
+                        last_ik_error = None
+                        for recovery_scale in (1.0, 0.5, 0.25, 0.125, 0.0):
+                            recovered = np.asarray(bounded, dtype=np.float64).copy()
+                            recovered[:3] = current[:3] + recovery_scale * (recovered[:3] - current[:3])
+                            angle_delta = np.arctan2(
+                                np.sin(recovered[3:6] - current[3:6]),
+                                np.cos(recovered[3:6] - current[3:6]),
+                            )
+                            recovered[3:6] = current[3:6] + recovery_scale * angle_delta
+                            try:
+                                command = ee_action_to_env_action(
+                                    env,
+                                    recovered,
+                                    ik_tolerance=self.ik_tolerance,
+                                    ik_max_steps=self.ik_max_steps,
+                                )
+                                if recovery_scale < 1.0:
+                                    ik_recoveries += 1
+                                    self._report_progress(
+                                        f"VLABench IK recovered task={descriptor.get('task', 'unknown')} "
+                                        f"step={steps} scale={recovery_scale:g}"
+                                    )
+                                break
+                            except InverseKinematicsError as exc:
+                                last_ik_error = exc
+                                ik_failures += 1
+                                chunk_ik_failures += 1
+                        if command is None:
+                            self._report_progress(
+                                f"VLABench rollout IK-truncated task={descriptor.get('task', 'unknown')} "
+                                f"step={steps} after bounded retries: {last_ik_error}"
+                            )
+                            ik_truncated = True
+                            termination_reason = "ik_failure"
+                            break
                     except (ValueError, TypeError, AttributeError, KeyError) as exc:
                         self._report_progress(
                             f"VLABench controller action rejected task={descriptor.get('task', 'unknown')} "
                             f"step={steps}: {type(exc).__name__}: {exc}"
                         )
                         valid = False
+                        termination_reason = "invalid_action"
                         break
                     timestep = env.step(command)
                     steps += 1
@@ -646,24 +697,45 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     observations.append(observation)
                     progress = _signal(env, "get_task_progress")
                     intention = _signal(env, "get_intention_score")
-                    chunk_reward += 0.25 * (progress - previous_progress) + 0.10 * (intention - previous_intention)
+                    delta_progress = progress - previous_progress
+                    delta_intention = intention - previous_intention
+                    chunk_reward += 0.25 * delta_progress + 0.10 * delta_intention
+                    if (
+                        not chunk_advanced
+                        and (delta_progress > 1e-6 or delta_intention > 1e-6)
+                        and operation_cursor + 1 < len(plan)
+                    ):
+                        operation_cursor += 1
+                        chunk_advanced = True
+                        # Potential-based graph-subgoal shaping moves credit to
+                        # the operation boundary. The terminal correction below
+                        # preserves the authoritative final rollout formula.
+                        chunk_reward += 0.05 / max(1, len(plan))
                     previous_progress, previous_intention = progress, intention
                     if _last(timestep):
                         success = True
+                        termination_reason = "success"
                         break
                     if steps >= self.max_steps:
                         break
-                if executed:
+                # Even a first-action IK rejection is retained for the
+                # feasibility auxiliary objective. It has no simulator reward
+                # or PPO advantage, but the actor can reduce that action's
+                # likelihood instead of repeatedly rediscovering it.
+                likelihood_steps = executed or int(chunk_ik_failures > 0)
+                if likelihood_steps:
                     transitions.append(ControllerTransition(
                         images=inputs[0].detach().cpu(),
                         state=inputs[1].detach().cpu(),
                         task_index=inputs[2].detach().cpu(),
+                        plan_context=inputs[3].detach().cpu(),
                         actions=policy_actions.cpu(),
-                        old_logprob=logprobs[0, :executed].sum().detach().cpu(),
+                        old_logprob=logprobs[0, :likelihood_steps].sum().detach().cpu(),
                         old_value=values[0].detach().cpu(),
                         reward=chunk_reward,
                         done=success or not valid or ik_truncated or steps >= self.max_steps,
-                        executed=executed,
+                        executed=likelihood_steps,
+                        feasibility_cost=float(chunk_ik_failures),
                     ))
                 if success or not valid or ik_truncated or steps >= self.max_steps:
                     break
@@ -703,7 +775,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 0.0 if start is None else sum(item.reward for item in transitions[start:])
                 for start in planner_transition_indices
             ]
-            return JointEpisode(planner_logprobs, transitions, total, success, valid, steps, planner_returns)
+            return JointEpisode(
+                planner_logprobs,
+                transitions,
+                total,
+                success,
+                valid,
+                steps,
+                planner_returns,
+                ik_failures,
+                ik_recoveries,
+                termination_reason,
+            )
         except Exception as exc:
             if _recoverable_simulator_error(exc):
                 self._report_progress(
@@ -795,11 +878,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             batch = next(iter(self.controller_anchor_loader))
         except StopIteration:
             return torch.zeros((), device=self.device_name)
-        prediction = self.controller(
+        inputs = (
             batch["images"].to(self.device_name),
             batch["state"].to(self.device_name),
             batch["task_index"].to(self.device_name),
         )
+        plan_context = batch.get("plan_context")
+        if plan_context is not None:
+            inputs += (plan_context.to(self.device_name),)
+        prediction = self.controller(*inputs)
         return controller_loss(prediction, batch["actions"].to(self.device_name))[0]
 
     def _update_controller(self, episodes: Sequence[JointEpisode]) -> float:
@@ -833,6 +920,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     item.state.to(self.device_name),
                     item.task_index.to(self.device_name),
                     item.actions.to(self.device_name),
+                    item.plan_context.to(self.device_name) if item.plan_context is not None else None,
                 )
                 new_logprob = logprob[0, : item.executed].sum()
                 old_logprob = item.old_logprob.to(self.device_name).reshape(())
@@ -862,7 +950,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if entries[index][1] else torch.zeros((), device=self.device_name)
                 )
                 losses.append(
-                    policy_loss + self.value_weight * value_loss - entropy_bonus
+                    policy_loss
+                    + self.value_weight * value_loss
+                    - entropy_bonus
+                    + self.feasibility_weight
+                    * float(item.feasibility_cost)
+                    * torch.exp(
+                        ((new_logprob - old_logprob) / max(1, item.executed)).clamp(-2.0, 2.0)
+                    )
                 )
             mean_action_log_ratio = (
                 float(torch.stack(action_log_ratios).mean())
@@ -950,13 +1045,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         for task_name, episode in zip(episode_tasks, episodes):
             totals = task_totals.setdefault(
                 task_name,
-                {"episodes": 0.0, "successes": 0.0, "valid": 0.0, "return": 0.0, "steps": 0.0},
+                {
+                    "episodes": 0.0, "successes": 0.0, "valid": 0.0,
+                    "return": 0.0, "steps": 0.0, "ik_failures": 0.0,
+                    "ik_recoveries": 0.0, "ik_truncations": 0.0,
+                    "execution_complete": 0.0,
+                },
             )
             totals["episodes"] += 1.0
             totals["successes"] += float(episode.success)
             totals["valid"] += float(episode.valid)
             totals["return"] += float(episode.total_return)
             totals["steps"] += float(episode.steps)
+            totals["ik_failures"] += float(episode.ik_failures)
+            totals["ik_recoveries"] += float(episode.ik_recoveries)
+            totals["ik_truncations"] += float(episode.termination_reason == "ik_failure")
+            totals["execution_complete"] += float(
+                episode.valid and episode.termination_reason != "ik_failure"
+            )
         per_task = {
             task_name: {
                 "episodes": int(totals["episodes"]),
@@ -965,6 +1071,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "valid_rate": totals["valid"] / totals["episodes"],
                 "return": totals["return"] / totals["episodes"],
                 "steps": totals["steps"] / totals["episodes"],
+                "ik_failures": int(totals["ik_failures"]),
+                "ik_recoveries": int(totals["ik_recoveries"]),
+                "ik_recovery_rate": totals["ik_recoveries"] / max(1.0, totals["ik_failures"]),
+                "ik_truncation_rate": totals["ik_truncations"] / totals["episodes"],
+                "execution_complete_rate": totals["execution_complete"] / totals["episodes"],
             }
             for task_name, totals in sorted(task_totals.items())
         }
@@ -976,5 +1087,109 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "valid_rate": sum(item.valid for item in episodes) / len(episodes),
             "steps": sum(item.steps for item in episodes) / len(episodes),
             "episodes": len(episodes),
+            "successful_task_count": sum(any(item.success for name, item in zip(episode_tasks, episodes) if name == task) for task in set(episode_tasks)),
+            "ik_failures": sum(item.ik_failures for item in episodes),
+            "ik_recoveries": sum(item.ik_recoveries for item in episodes),
+            "ik_truncation_rate": sum(item.termination_reason == "ik_failure" for item in episodes) / len(episodes),
+            "execution_complete_rate": sum(
+                item.valid and item.termination_reason != "ik_failure" for item in episodes
+            ) / len(episodes),
             "per_task": per_task,
+        }
+
+    @torch.no_grad()
+    def evaluate_rollouts(
+        self,
+        descriptors: Sequence[Mapping[str, Any]],
+        *,
+        rollouts_per_task: int = 1,
+        seed: int = 1729,
+    ) -> dict[str, Any]:
+        """Run fixed-seed simulator evaluation without optimizer updates."""
+
+        if not descriptors or rollouts_per_task <= 0:
+            raise ValueError("evaluation requires descriptors and positive rollouts_per_task")
+        python_state = random.getstate()
+        numpy_state = np.random.get_state()
+        torch_state = torch.get_rng_state()
+        cuda_state = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+        controller_training = self.controller.training
+        planner_training = self.planner_head.training
+        self.controller.eval()
+        self.planner_head.eval()
+        episodes: list[JointEpisode] = []
+        names: list[str] = []
+        try:
+            for task_offset, descriptor in enumerate(descriptors):
+                task_name = str(descriptor.get("task", "unknown"))
+                for rollout_offset in range(int(rollouts_per_task)):
+                    rollout_seed = int(seed) + 1009 * task_offset + rollout_offset
+                    random.seed(rollout_seed)
+                    np.random.seed(rollout_seed % (2**32 - 1))
+                    torch.manual_seed(rollout_seed)
+                    if torch.cuda.is_available():
+                        torch.cuda.manual_seed_all(rollout_seed)
+                    episodes.append(self.collect_episode(descriptor))
+                    names.append(task_name)
+        finally:
+            random.setstate(python_state)
+            np.random.set_state(numpy_state)
+            torch.set_rng_state(torch_state)
+            if cuda_state is not None:
+                for device, state in enumerate(cuda_state[: torch.cuda.device_count()]):
+                    torch.cuda.set_rng_state(state, device=device)
+            self.controller.train(controller_training)
+            self.planner_head.train(planner_training)
+
+        task_totals: dict[str, dict[str, float]] = {}
+        for task_name, episode in zip(names, episodes):
+            totals = task_totals.setdefault(task_name, {
+                "episodes": 0.0, "successes": 0.0, "valid": 0.0,
+                "return": 0.0, "steps": 0.0, "ik_failures": 0.0,
+                "ik_recoveries": 0.0, "ik_truncations": 0.0,
+                "execution_complete": 0.0,
+            })
+            totals["episodes"] += 1.0
+            totals["successes"] += float(episode.success)
+            totals["valid"] += float(episode.valid)
+            totals["return"] += float(episode.total_return)
+            totals["steps"] += float(episode.steps)
+            totals["ik_failures"] += float(episode.ik_failures)
+            totals["ik_recoveries"] += float(episode.ik_recoveries)
+            totals["ik_truncations"] += float(episode.termination_reason == "ik_failure")
+            totals["execution_complete"] += float(
+                episode.valid and episode.termination_reason != "ik_failure"
+            )
+        per_task = {
+            name: {
+                "episodes": int(values["episodes"]),
+                "successes": int(values["successes"]),
+                "success_rate": values["successes"] / values["episodes"],
+                "valid_rate": values["valid"] / values["episodes"],
+                "return": values["return"] / values["episodes"],
+                "steps": values["steps"] / values["episodes"],
+                "ik_failures": int(values["ik_failures"]),
+                "ik_recoveries": int(values["ik_recoveries"]),
+                "ik_recovery_rate": values["ik_recoveries"] / max(1.0, values["ik_failures"]),
+                "ik_truncation_rate": values["ik_truncations"] / values["episodes"],
+                "execution_complete_rate": values["execution_complete"] / values["episodes"],
+            }
+            for name, values in sorted(task_totals.items())
+        }
+        count = len(episodes)
+        return {
+            "return": sum(item.total_return for item in episodes) / count,
+            "success_rate": sum(item.success for item in episodes) / count,
+            "valid_rate": sum(item.valid for item in episodes) / count,
+            "steps": sum(item.steps for item in episodes) / count,
+            "episodes": count,
+            "successful_task_count": sum(int(value["successes"] > 0) for value in per_task.values()),
+            "ik_failures": sum(item.ik_failures for item in episodes),
+            "ik_recoveries": sum(item.ik_recoveries for item in episodes),
+            "ik_truncation_rate": sum(item.termination_reason == "ik_failure" for item in episodes) / count,
+            "execution_complete_rate": sum(
+                item.valid and item.termination_reason != "ik_failure" for item in episodes
+            ) / count,
+            "per_task": per_task,
+            "evaluation_seed": int(seed),
         }

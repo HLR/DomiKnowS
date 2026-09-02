@@ -98,9 +98,12 @@ exact same `JointQwenVLPlanner`:
 
 The controller uses the official LeRobot `task_index` for all 128 language
 instructions from `meta/tasks.parquet`; it does not collapse distinct target
-objects into a shared primitive-pattern ID. During rollout, the environment
+objects into a shared primitive-pattern ID. It also consumes the active
+graph-plan skill, grounded entity pointer, and operation position. Stage 1
+derives the operation from normalized demonstration phase; Stage 2 uses the
+actual cursor in the selected planner trajectory. During rollout, the environment
 instruction must resolve to exactly one of those IDs before controller
-execution. The controller uses Normal distributions for six end-effector coordinates, a
+execution. The controller uses tanh-transformed Normal distributions for six end-effector coordinates, a
 Bernoulli gripper, learned log standard deviation, and a value head. Its actor
 predicts bounded local xyz/Euler increments and cumulatively integrates them
 around the last observed end-effector pose. The public actions remain absolute
@@ -115,9 +118,8 @@ The critic is bounded to `[-1,1]`, uses clipped return targets and Smooth L1
 loss, and cannot backpropagate through the actor's shared features. Rollouts
 with zero total simulator return still train the critic and `0.05` BC anchor,
 but do not apply PPO or entropy gradients to failed sampled actions.
-PPO stores the controller action and log probability before the deterministic
-Cartesian safety transform; only the transformed command is sent to IK and the
-simulator. Likelihood ratios are bounded before exponentiation, and repeated
+PPO stores the bounded sampled action and its change-of-variables-corrected
+log probability. Likelihood ratios are bounded before exponentiation, and repeated
 PPO epochs stop after the mean per-action log-ratio leaves the trust region.
 This keeps the importance ratio tied to the behavior policy and prevents one
 stale trajectory from producing a catastrophic controller update.
@@ -127,11 +129,12 @@ up to 200 iterations. These defaults are configurable through
 `--max-position-step`, `--max-rotation-step`, `--ik-tolerance`, and
 `--ik-max-steps`.
 
-Constraint-invalid plans never reach the controller. Failed inverse
-kinematics and non-finite actions receive zero and are not sent to the
-environment. A finite target that fails IK safely truncates the rollout at its
-last executable state; it does not retroactively invalidate earlier actions or
-erase their accumulated shaping reward.
+Constraint-invalid plans never reach the controller. Non-finite actions receive
+zero and are not sent to the environment. An IK failure is retried at `0.5`,
+`0.25`, and `0.125` of the bounded delta, followed by a hold-position target.
+Only an unrecoverable failure truncates the rollout. Recovery and truncation
+counts are reported per task, and a feasibility penalty reduces the likelihood
+of sampled actions that needed recovery without erasing earlier shaping reward.
 
 ## Reward separation
 
@@ -145,7 +148,8 @@ state, and applicable EAI world constraints. Its `0.5` teacher-forced term is
 a separate loss, not part of the reward.
 
 For VLABench, each controller chunk stores
-`0.25 * delta_progress + 0.10 * delta_intention`. The terminal correction adds
+`0.25 * delta_progress + 0.10 * delta_intention`, plus a transient graph-operation
+potential when progress advances the active plan cursor. The terminal correction adds
 success, efficiency, and initial-score terms so the stored rewards telescope
 exactly to the final simulator formula:
 
@@ -193,12 +197,20 @@ and simulator rollouts emit flushed, newline-based progress. The messages
 remain visible when both streams are redirected to a file and followed with
 `tail -f`; they do not depend on terminal cursor control.
 Each Stage 2 epoch reports VLABench `episodes`, `successes`, `success_rate`,
-`valid_rate`, mean return, and mean steps separately for every task, in
+`valid_rate`, mean return, mean steps, IK failures/recoveries, IK truncation,
+and execution completion separately for every task, in
 addition to the aggregate metrics. This makes a success rate concentrated in
 one task visible instead of presenting it as broad multi-task performance.
 Control-video decoding uses a per-task LRU capped at eight TorchCodec decoders,
 preventing full shuffled runs from exhausting the process file-descriptor
 limit. The cap is configurable with `--video-decoder-cache-size`.
+
+By default, training also runs one fixed-seed simulator rollout per task before
+RL and after every Stage 2 epoch. Checkpoint ranking and acceptance use these
+evaluation rollouts; the update-producing rollouts remain under
+`vlabench_training` in the checkpoint metrics. Increase this to at least three
+for a final report with `--stage2-eval-rollouts-per-task 3`, or set it to `0`
+for a fast diagnostic run that intentionally uses training-rollout metrics.
 
 Override the relative paths when necessary:
 
@@ -235,10 +247,11 @@ loader-specific quantization buffers are reconstructed from the configured
 backbone instead of being duplicated in every epoch checkpoint.
 
 An epoch is eligible to become `joint_stage2_best.pt` only when its aggregate
-VLABench rollout success is at least `0.10`. Configure this acceptance gate
-with `--stage2-min-vlabench-success-rate`; setting it to `0` restores the old
-relative-best behavior. Epoch checkpoints are always written even when they
-miss the gate. If every epoch misses it, training reports
+VLABench rollout success is at least `0.10`, at least three task families have
+a success, and no more than `0.25` of rollouts terminate at IK. Configure these
+acceptance gates with `--stage2-min-vlabench-success-rate`,
+`--stage2-min-successful-tasks`, and `--stage2-max-ik-truncation-rate`.
+Epoch checkpoints are always written even when they miss a gate. If every epoch misses them, training reports
 `stage2-best-skipped` and does not label a weak epoch as the best model.
 
 The controller-only warm-up additionally writes
@@ -265,11 +278,11 @@ activation profile, graph-decoder architecture, controller action
 representation, or model configuration
 differs. Checkpoints created before graph-decoder version 1 cannot be resumed
 because their prefix-reprompt label heads have incompatible parameters.
-Checkpoints created with the former unconstrained absolute-pose or collapsed
-skill-pattern-conditioned controller may
+Checkpoints created with the former unconstrained absolute-pose, unbounded
+sample distribution, or non-plan-conditioned controller may
 be resumed only from Stage 1. Loading resets that obsolete policy head and its
 optimizer moments, then the configured controller warm-up retrains the local
-chunk head and language-task embedding. An old `joint_controller_warmup.pt` or Stage 2 checkpoint is
+chunk head and language/graph-operation embeddings. An old `joint_controller_warmup.pt` or Stage 2 checkpoint is
 rejected because it has already crossed the migration boundary.
 Checkpoints with the correct language-conditioned actor but the former
 unbounded critic are migrated at any stage by resetting only the critic and

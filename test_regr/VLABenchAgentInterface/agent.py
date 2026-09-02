@@ -14,13 +14,13 @@ try:
     from .graph import dfa_accepts_plan
     from .reward import RewardBreakdown, RolloutRewardAccumulator
     from .training import PlannerConstraintRuntime
-    from .world_graph import condition_index_for_pattern, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
+    from .world_graph import condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
 except ImportError:
     from environment import ee_action_to_env_action, numbered_views_from_observation
     from graph import dfa_accepts_plan
     from reward import RewardBreakdown, RolloutRewardAccumulator
     from training import PlannerConstraintRuntime
-    from world_graph import condition_index_for_pattern, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
+    from world_graph import condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
 
 
 @dataclass(frozen=True)
@@ -104,7 +104,7 @@ class HierarchicalVLABenchAgent:
         valid = validation.valid and dfa_valid and (constraint_score is None or constraint_score >= 1.0)
         return PlanDecision(tuple(plan), str(raw), valid, tuple(errors), dfa_valid, constraint_score)
 
-    def _controller_input(self, observation_history: Sequence[Mapping[str, Any]], task_index: int):
+    def _controller_input(self, observation_history: Sequence[Mapping[str, Any]], task_index: int, plan_context=(0, 0, 0)):
         histories = list(observation_history)[-2:]
         if len(histories) == 1:
             histories.insert(0, histories[0])
@@ -120,13 +120,18 @@ class HierarchicalVLABenchAgent:
             torch.stack(image_history).unsqueeze(0).to(self.device),
             torch.stack(state_history).unsqueeze(0).to(self.device),
             torch.tensor([task_index], dtype=torch.long, device=self.device),
+            torch.tensor([plan_context], dtype=torch.long, device=self.device),
         )
 
     @torch.no_grad()
     def action_chunk(self, observation_history: Sequence[Mapping[str, Any]], plan: Sequence[Mapping[str, Any]]) -> torch.Tensor:
         subtasks = split_subtasks([str(operation["name"]) for operation in plan])
         condition_index = condition_index_for_pattern(subtasks[0]) if subtasks else 0
-        inputs = self._controller_input(observation_history, condition_index)
+        inputs = self._controller_input(
+            observation_history,
+            condition_index,
+            controller_plan_context(plan, 0),
+        )
         return self.controller.predict_action_chunk(*inputs)[0]
 
     @staticmethod

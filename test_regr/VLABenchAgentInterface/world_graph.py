@@ -63,6 +63,64 @@ SKILL_ARGUMENTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "press": ("target_entity_name",),
 })
 
+# Index zero is deliberately reserved for "no active graph operation".  The
+# controller vocabulary is graph-owned so dataset loading and online rollout
+# cannot silently assign different meanings to the same embedding row.
+CONTROLLER_SKILLS: tuple[str, ...] = ("<none>", *SKILL_ARGUMENTS)
+
+
+def controller_skill_index(skill: str | None) -> int:
+    """Return the stable graph-derived controller index for ``skill``."""
+
+    if skill is None:
+        return 0
+    try:
+        return CONTROLLER_SKILLS.index(str(skill))
+    except ValueError:
+        return 0
+
+
+def controller_plan_context(
+    plan: Sequence[Mapping[str, Any]],
+    operation_index: int,
+    entities: Sequence[Any] = (),
+) -> tuple[int, int, int]:
+    """Encode the active graph operation as skill/entity/position indices.
+
+    Entity index zero means absent or unresolved; graph pointers are shifted by
+    one so the embedding has an explicit padding row.  The final coordinate is
+    likewise one-based, leaving the all-zero tuple as the backwards-compatible
+    context for controller-only datasets without a known operation.
+    """
+
+    if not plan:
+        return (0, 0, 0)
+    index = min(max(0, int(operation_index)), len(plan) - 1)
+    operation = plan[index]
+    entity_value = None
+    parameters = operation.get("parameters", operation.get("params", {}))
+    for role in ("target_entity_name", "target_container_name"):
+        if role in parameters:
+            entity_value = parameters[role]
+            break
+    entity_index = 0
+    if isinstance(entity_value, int) and 0 <= entity_value < len(entities):
+        entity_index = entity_value + 1
+    elif entity_value is not None:
+        for pointer, entity in enumerate(entities):
+            if isinstance(entity, str):
+                name = entity
+            else:
+                name = entity.get("name") if isinstance(entity, Mapping) else getattr(entity, "name", None)
+            if str(name) == str(entity_value):
+                entity_index = pointer + 1
+                break
+    return (
+        controller_skill_index(operation.get("name")),
+        entity_index,
+        index + 1,
+    )
+
 
 class PlanSchemaError(ValueError):
     """A planner output cannot be converted to the graph-owned plan domain."""

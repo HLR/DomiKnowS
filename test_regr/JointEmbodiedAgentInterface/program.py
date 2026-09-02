@@ -193,11 +193,15 @@ class JointSolverPOIProgram(SolverPOIProgram):
         with self.runtime.domain_scope("vlabench"):
             self.controller.train()
             device = next(self.controller.parameters()).device
-            prediction = self.controller(
+            controller_inputs = (
                 batch["images"].to(device),
                 batch["state"].to(device),
                 batch["task_index"].to(device),
             )
+            plan_context = batch.get("plan_context")
+            if plan_context is not None:
+                controller_inputs += (plan_context.to(device),)
+            prediction = self.controller(*controller_inputs)
             loss = controller_loss(prediction, batch["actions"].to(device))[0]
             self.controller_optimizer.zero_grad(set_to_none=True)
             if not bool(torch.isfinite(loss)):
@@ -460,6 +464,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "success_rate": 0.0,
             "valid_rate": 0.0,
             "steps": 0.0,
+            "ik_truncation_rate": 0.0,
+            "execution_complete_rate": 0.0,
         }
         vla_task_totals: dict[str, dict[str, float]] = {}
         vla_episode_count = 0
@@ -483,7 +489,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             for key in eai_totals:
                 eai_totals[key] += float(eai[key])
             for key in vla_totals:
-                vla_totals[key] += float(vla[key])
+                vla_totals[key] += float(vla.get(key, 0.0))
             vla_episode_count += int(vla["episodes"])
             for task_name, task_metrics in vla.get("per_task", {}).items():
                 episodes = int(task_metrics["episodes"])
@@ -495,6 +501,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                         "valid": 0.0,
                         "return": 0.0,
                         "steps": 0.0,
+                        "ik_failures": 0.0,
+                        "ik_recoveries": 0.0,
+                        "ik_truncations": 0.0,
                     },
                 )
                 totals["episodes"] += episodes
@@ -502,6 +511,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 totals["valid"] += float(task_metrics["valid_rate"]) * episodes
                 totals["return"] += float(task_metrics["return"]) * episodes
                 totals["steps"] += float(task_metrics["steps"]) * episodes
+                totals["ik_failures"] += float(task_metrics.get("ik_failures", 0))
+                totals["ik_recoveries"] += float(task_metrics.get("ik_recoveries", 0))
+                totals["ik_truncations"] += float(task_metrics.get("ik_truncation_rate", 0.0)) * episodes
             self.round_robin_cursor += 1
             progress.update(
                 offset + 1,
@@ -517,6 +529,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 "valid_rate": totals["valid"] / totals["episodes"],
                 "return": totals["return"] / totals["episodes"],
                 "steps": totals["steps"] / totals["episodes"],
+                "ik_failures": int(totals["ik_failures"]),
+                "ik_recoveries": int(totals["ik_recoveries"]),
+                "ik_recovery_rate": totals["ik_recoveries"] / max(1.0, totals["ik_failures"]),
+                "ik_truncation_rate": totals["ik_truncations"] / totals["episodes"],
+                "execution_complete_rate": 1.0 - totals["ik_truncations"] / totals["episodes"],
             }
             for task_name, totals in sorted(vla_task_totals.items())
         }
@@ -525,6 +542,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "vlabench": {
                 **{key: value / count for key, value in vla_totals.items()},
                 "episodes": vla_episode_count,
+                "successful_task_count": sum(
+                    int(metrics["successes"] > 0) for metrics in per_task.values()
+                ),
                 "per_task": per_task,
             },
             "rounds": int(rounds),

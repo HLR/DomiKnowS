@@ -508,13 +508,14 @@ def test_control_windows_controller_loss_and_training(tmp_path):
     condition_index = condition_index_for_task("select_poker")
     dataset = LeRobotWindowDataset(
         _records(), observation_horizon=2, action_horizon=3,
-        condition_index=condition_index,
+        condition_index=condition_index, plan_pattern=("pick", "lift"),
     )
     item = dataset[0]
     assert item["state"].shape == (2, 7)
     assert item["images"].shape == (2, 3, 3, 24, 24)
     assert item["actions"].shape == (3, 7)
     assert item["task_index"].item() == condition_index
+    assert item["plan_context"].tolist() == [1, 0, 1]
     language_dataset = LeRobotWindowDataset(
         _records(), observation_horizon=2, action_horizon=3, condition_index=None
     )
@@ -756,6 +757,13 @@ def test_controller_actor_critic_gae_and_ppo_contracts():
     assert logprob.shape == entropy.shape == (1, 2)
     assert value.shape == (1,)
     evaluated, _, evaluated_value = controller.evaluate_action_chunk(*inputs, actions.detach())
+    torch.testing.assert_close(evaluated, logprob, rtol=1e-4, atol=1e-4)
+    previous = torch.cat((inputs[1][:, -1:, :6], actions[:, :-1, :6]), dim=1)
+    delta = actions[..., :6] - previous
+    angular_delta = torch.atan2(torch.sin(delta[..., 3:]), torch.cos(delta[..., 3:]))
+    bounded_delta = torch.cat((delta[..., :3], angular_delta), -1)
+    scales = torch.tensor(controller.pose_step_scale).view(1, 1, 6)
+    assert bool((bounded_delta.abs() <= scales + 1e-6).all())
     loss = ppo_clipped_loss(evaluated.sum(1), logprob.detach().sum(1), torch.ones(1)) + evaluated_value.mean()
     loss.backward()
     assert controller.value_head.weight.grad is not None
@@ -777,6 +785,18 @@ def test_controller_critic_is_bounded():
     )
     assert torch.isfinite(output.value).all()
     assert bool((output.value.abs() <= 1.0).all())
+
+
+def test_controller_features_are_conditioned_on_active_graph_operation():
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    images = torch.rand(1, 2, 1, 3, 16, 16)
+    state = torch.rand(1, 2, 7)
+    task = torch.zeros(1, dtype=torch.long)
+    pick = controller._features(images, state, task, torch.tensor([[1, 1, 1]]))
+    place = controller._features(images, state, task, torch.tensor([[2, 2, 2]]))
+    assert not torch.allclose(pick, place)
 
 
 def test_controller_pose_chunk_is_local_cumulative_and_uses_physical_noise_scales():
@@ -831,6 +851,19 @@ class FakeRobot:
 class FailedRobot(FakeRobot):
     def get_qpos_from_ee_pos(self, *, physics, pos, quat, **kwargs):
         return False, np.arange(7, dtype=np.float64)
+
+
+class RecoveringRobot(FakeRobot):
+    def __init__(self):
+        self.calls = 0
+
+    def get_qpos_from_ee_pos(self, *, physics, pos, quat, **kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            return False, np.arange(7, dtype=np.float64)
+        return super().get_qpos_from_ee_pos(
+            physics=physics, pos=pos, quat=quat, **kwargs
+        )
 
 
 def test_ee_action_conversion_uses_two_finger_gripper():
@@ -947,6 +980,7 @@ def test_joint_rewards_telescope_and_planner_uses_return_to_go():
     assert episode.total_return == pytest.approx(0.95)
     assert sum(item.reward for item in episode.controller) == pytest.approx(episode.total_return)
     assert episode.planner_returns == pytest.approx([episode.total_return])
+    assert episode.controller[0].plan_context.tolist() == [[1, 1, 1]]
     assert torch.max(torch.abs(episode.controller[0].actions[0, 0, :3])).item() <= 0.05 + 1e-6
     assert torch.isfinite(episode.controller[0].old_logprob)
 
@@ -1046,6 +1080,22 @@ def test_failed_ik_action_receives_zero_and_is_not_executed():
     assert episode.valid
     assert episode.total_return == 0.0
     assert simulator.count == 0
+    assert episode.controller[0].feasibility_cost == 5.0
+
+
+def test_ik_recovery_retries_a_smaller_bounded_delta():
+    world = build_vlabench_world_graph("test_joint_recovered_ik_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_recovered_ik")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    simulator = FakeSimulator(success=True)
+    simulator.robot = RecoveringRobot()
+    program = _joint_program(runtime, planner, controller, lambda **_kwargs: simulator)
+    episode = program.collect_episode({"task": "select_book"})
+    assert episode.success and episode.valid
+    assert episode.ik_failures == 1
+    assert episode.ik_recoveries == 1
+    assert episode.termination_reason == "success"
 
 
 def test_online_controller_uses_language_task_id_not_skill_pattern():
@@ -1141,18 +1191,38 @@ def test_joint_simulator_training_updates_planner_and_controller():
     controller_before = controller.value_head.weight.detach().clone()
     metrics = program.train_joint_epoch([{"task": "select_book"}], rollouts_per_update=2)
     assert metrics["success_rate"] == 0.5
-    assert metrics["per_task"] == {
-        "select_book": {
-            "episodes": 2,
-            "successes": 1,
-            "success_rate": 0.5,
-            "valid_rate": 1.0,
-            "return": pytest.approx(0.475),
-            "steps": 1.0,
-        }
-    }
+    task_metrics = metrics["per_task"]["select_book"]
+    assert task_metrics["episodes"] == 2
+    assert task_metrics["successes"] == 1
+    assert task_metrics["success_rate"] == 0.5
+    assert task_metrics["valid_rate"] == 1.0
+    assert task_metrics["return"] == pytest.approx(0.475)
+    assert task_metrics["steps"] == 1.0
+    assert task_metrics["ik_truncation_rate"] == 0.0
+    assert task_metrics["execution_complete_rate"] == 1.0
     assert planner.preference.item() != planner_before.item()
     assert not torch.equal(controller.value_head.weight, controller_before)
+
+
+def test_fixed_seed_rollout_evaluation_does_not_update_models():
+    world = build_vlabench_world_graph("test_rollout_evaluation_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_rollout_evaluation")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    program = _joint_program(runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=True), num_samples=1)
+    planner_before = planner.preference.detach().clone()
+    controller_before = {name: value.detach().clone() for name, value in controller.state_dict().items()}
+    metrics = program.evaluate_rollouts(
+        [{"task": "select_book"}, {"task": "select_fruit"}],
+        rollouts_per_task=1,
+        seed=17,
+    )
+    assert metrics["episodes"] == 2
+    assert metrics["successful_task_count"] == 2
+    assert metrics["success_rate"] == 1.0
+    torch.testing.assert_close(planner.preference, planner_before)
+    for name, value in controller.state_dict().items():
+        torch.testing.assert_close(value, controller_before[name])
 
 
 def test_joint_checkpoint_restores_rng_and_rejects_domain_mismatch(tmp_path):
