@@ -310,24 +310,28 @@ def evaluate_controller(
     max_batches: int | None = None,
 ) -> dict[str, float]:
     device = torch.device(device)
+    was_training = model.training
     model.eval()
     pose_error = gripper_correct = samples = 0.0
-    for batch_index, batch in enumerate(loader):
-        if max_batches is not None and batch_index >= int(max_batches):
-            break
-        plan_context = batch.get("plan_context")
-        inputs = (
-            batch["images"].to(device),
-            batch["state"].to(device),
-            batch["task_index"].to(device),
-        )
-        if plan_context is not None:
-            inputs += (plan_context.to(device),)
-        prediction = model(*inputs)
-        target = batch["actions"].to(device)
-        pose_error += float(torch.abs(prediction[..., :-1] - target[..., :-1]).sum())
-        gripper_correct += float(((torch.sigmoid(prediction[..., -1]) >= 0.5) == (target[..., -1] >= 0.5)).sum())
-        samples += float(target[..., :-1].numel())
+    try:
+        for batch_index, batch in enumerate(loader):
+            if max_batches is not None and batch_index >= int(max_batches):
+                break
+            plan_context = batch.get("plan_context")
+            inputs = (
+                batch["images"].to(device),
+                batch["state"].to(device),
+                batch["task_index"].to(device),
+            )
+            if plan_context is not None:
+                inputs += (plan_context.to(device),)
+            prediction = model(*inputs)
+            target = batch["actions"].to(device)
+            pose_error += float(torch.abs(prediction[..., :-1] - target[..., :-1]).sum())
+            gripper_correct += float(((torch.sigmoid(prediction[..., -1]) >= 0.5) == (target[..., -1] >= 0.5)).sum())
+            samples += float(target[..., :-1].numel())
+    finally:
+        model.train(was_training)
     gripper_total = samples / 6.0 if samples else 0.0
     return {
         "pose_mae": pose_error / max(1.0, samples),
@@ -450,6 +454,7 @@ def train_planner_reinforcement_epoch(
 
 @torch.no_grad()
 def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime: PlannerConstraintRuntime) -> dict[str, float]:
+    was_training = planner.training
     planner.eval()
     totals = {
         "reward": 0.0,
@@ -460,31 +465,34 @@ def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime:
         "valid": 0.0,
     }
     count = 0
-    for count, example in enumerate(examples, start=1):
-        images = _planner_images(example)
-        try:
-            output = planner.generate_plan(
-                instruction=_example_value(example, "instruction", ""),
-                images=images,
+    try:
+        for count, example in enumerate(examples, start=1):
+            images = _planner_images(example)
+            try:
+                output = planner.generate_plan(
+                    instruction=_example_value(example, "instruction", ""),
+                    images=images,
+                    entity_table=_example_value(example, "entities", ()),
+                    dfa=runtime.dfa,
+                    world=runtime.world_bundle,
+                    max_steps=runtime.max_tokens,
+                )
+            finally:
+                for image in images:
+                    image.close()
+            result = score_vlabench_plan(
+                output,
+                _example_value(example, "operation_sequence"),
+                _example_value(example, "dependency", "Sequential"),
                 entity_table=_example_value(example, "entities", ()),
-                dfa=runtime.dfa,
-                world=runtime.world_bundle,
-                max_steps=runtime.max_tokens,
+                world_bundle=runtime.world_bundle,
             )
-        finally:
-            for image in images:
-                image.close()
-        result = score_vlabench_plan(
-            output,
-            _example_value(example, "operation_sequence"),
-            _example_value(example, "dependency", "Sequential"),
-            entity_table=_example_value(example, "entities", ()),
-            world_bundle=runtime.world_bundle,
-        )
-        totals["reward"] += result.total
-        totals["valid"] += float(result.valid)
-        for key in ("skill_match", "entity_match", "skill_with_entity_match", "exact_graph_match"):
-            totals[key] += getattr(result, key)
+            totals["reward"] += result.total
+            totals["valid"] += float(result.valid)
+            for key in ("skill_match", "entity_match", "skill_with_entity_match", "exact_graph_match"):
+                totals[key] += getattr(result, key)
+    finally:
+        planner.train(was_training)
     return {key: value / max(1, count) for key, value in totals.items()} | {"examples": count}
 
 

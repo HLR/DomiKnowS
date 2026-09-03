@@ -835,6 +835,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             pairs.extend(zip(episode.planner_logprobs, returns))
         if not pairs:
             return 0.0
+        # Evaluation and simulator collection may temporarily put the policy in
+        # inference mode.  cuDNN RNNs only retain the reserve-space needed for
+        # backward when their forward pass is executed in training mode, so
+        # restore the planner before replaying graph-token trajectories.
+        self.planner_head.train()
         self.planner_optimizer.zero_grad(set_to_none=True)
         reward_values = torch.tensor([float(item[1]) for item in pairs], dtype=torch.float32)
         advantages = reward_values - reward_values.mean()
@@ -893,6 +898,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         return controller_loss(prediction, batch["actions"].to(self.device_name))[0]
 
     def _update_controller(self, episodes: Sequence[JointEpisode]) -> float:
+        # PPO and the behavior-cloning anchor construct fresh autograd graphs.
+        # Do not inherit evaluation mode from an earlier rollout evaluation.
+        self.controller.train()
         entries = [
             (item, episode.total_return > 0.0)
             for episode in episodes

@@ -45,6 +45,7 @@ from test_regr.VLABenchAgentInterface.models import (
 from test_regr.VLABenchAgentInterface.main import build_parser
 from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
+    PlannerReplayDecision,
     VLABenchHierarchicalReinforcementProgram,
     _entity_pointer_dfa,
     _observation_state,
@@ -56,6 +57,8 @@ from test_regr.VLABenchAgentInterface.training import (
     build_constraint_runtime,
     create_stage1_program,
     create_stage2_program,
+    evaluate_controller,
+    evaluate_planner,
     load_joint_checkpoint,
     load_checkpoint,
     prepare_planner_program_examples,
@@ -714,6 +717,80 @@ class TinyCompactPlanner(torch.nn.Module):
 
     def supervised_loss(self, **_kwargs):
         return (self.preference - 1.0).square()
+
+
+class ModeCheckedReplayPlanner(TinyCompactPlanner):
+    def replay_labels_logprob(self, _context, _labels, _dfa, *, max_steps):
+        assert max_steps > 0
+        if not self.training:
+            raise RuntimeError("replay forward was executed in evaluation mode")
+        return torch.nn.functional.logsigmoid(self.preference)
+
+
+class EvaluationPlanner(torch.nn.Module):
+    def __init__(self, plan):
+        super().__init__()
+        self.marker = torch.nn.Parameter(torch.tensor(0.0))
+        self.plan = plan
+
+    def generate_plan(self, **_kwargs):
+        return self.plan
+
+
+def test_evaluators_restore_the_callers_training_mode():
+    world = build_vlabench_world_graph("test_evaluation_mode_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_evaluation_mode"
+    )
+    plan = (
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    )
+    planner = EvaluationPlanner(plan)
+    planner.train()
+    evaluate_planner(planner, [FakeExample(plan)], runtime)
+    assert planner.training
+
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    controller.train()
+    batch = {
+        "images": torch.rand(1, 2, 1, 3, 16, 16),
+        "state": torch.rand(1, 2, 7),
+        "task_index": torch.zeros(1, dtype=torch.long),
+        "actions": torch.rand(1, 1, 7),
+    }
+    evaluate_controller(controller, [batch], device="cpu", max_batches=1)
+    assert controller.training
+
+
+def test_stage2_planner_replay_enters_training_mode_after_evaluation():
+    world = build_vlabench_world_graph("test_replay_training_mode_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_replay_training_mode"
+    )
+    planner = ModeCheckedReplayPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.1),
+        env_factory=lambda **_kwargs: None,
+        supervised_weight=0.0,
+    )
+    replay = PlannerReplayDecision({}, (1,), None, runtime.max_tokens)
+    planner.eval()
+    loss = program._update_planner([
+        JointEpisode([replay], [], 1.0, True, True, 1),
+        JointEpisode([replay], [], 0.0, False, True, 1),
+    ])
+    assert planner.training
+    assert torch.isfinite(torch.tensor(loss))
 
 
 class TinySolverPlanner(torch.nn.Module):
