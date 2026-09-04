@@ -644,7 +644,7 @@ requires-dist = [
     { name = "flaky", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "flask", specifier = ">=3.1.3" },
     { name = "graphviz", specifier = ">=0.21" },
-    { name = "gurobipy", specifier = ">=12.0.3" },
+    { name = "gurobipy", specifier = ">=13.0.0" },
     { name = "hf-xet", marker = "extra == 'dev'", specifier = ">=1.1.0" },
     { name = "huggingface-hub", specifier = ">=0.35.0" },
     { name = "interegular", marker = "extra == 'generation-guided'", specifier = ">=0.3.3" },

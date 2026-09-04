@@ -179,9 +179,9 @@ graph traversal, `mode="circuit"` for exact weighted model counting, and
 because it is supplied through `queries=...`, returned directly, and not kept
 as another registered executable constraint on the graph or DataNode.
 
-The task then benchmarks ILP on the standard `InferenceProgram`. It uses that
-same first relation-free count question from the compact dataset and executes
-the learned query twice in each pair:
+The task then benchmarks ILP on the standard `InferenceProgram`. By default it
+attempts all 40 compiled questions from the compact dataset and executes each
+learned query twice in every warm-up or measured pair:
 
 1. **Full graph:** all graph concepts, properties, and applicable constraints
    are active.
@@ -215,12 +215,30 @@ decoding.
 The full graph is always measured before the dynamic graph, and the graph is
 restored to its all-active state afterward.
 
-The default benchmark discards one warm-up pair and reports the median of three
-measured pairs. Configure those counts with:
+Run the post-training full-graph versus dynamic-graph ILP performance
+comparison from the repository root with:
 
 ```powershell
---ilp-benchmark-warmup 1 --ilp-benchmark-repeats 3
+uv run --project Tasks\clevr_inference_vs_gumbel python Tasks\clevr_inference_vs_gumbel\main.py --ilp-benchmark-only --epochs 1 --train-items 1 --eval-items 1 --device cpu --ilp-benchmark-items 0 --ilp-benchmark-warmup 1 --ilp-benchmark-repeats 3
 ```
+
+This command requires a working Gurobi installation and license because both
+benchmark configurations call `DataNode.inferILPResults()` directly. The
+`--ilp-benchmark-only` option skips before/after evaluation, the Gumbel program,
+the winner comparison, and the three-mode ad hoc example.
+
+The default benchmark runs all questions, discards one warm-up pair per
+question, and reports the median of three measured pairs per question.
+Configure those counts with:
+
+```powershell
+--ilp-benchmark-items 0 --ilp-benchmark-warmup 1 --ilp-benchmark-repeats 3
+```
+
+Set `--ilp-benchmark-items N` to benchmark only the first `N` questions in
+dataset order. The item limit is independent of `--train-items` and
+`--eval-items`: all benchmark samples are retained from the fully compiled
+compact dataset even when training and evaluation use small subsets.
 
 The report includes:
 
@@ -229,6 +247,19 @@ The report includes:
 - predicates collected into each ILP problem;
 - milliseconds saved, percentage time reduction, and speedup ratio;
 - both native ILP answers and whether they agree.
+
+After the per-question results, the report groups questions by their terminal
+CLEVR operation (`query_color`, `query_shape`, `query_size`, `query_material`,
+`count`, `exist`, `equal_size`, `equal_integer`, or `less_than`). Each group
+shows attempted, successful, and failed question counts; average full and
+dynamic runtime; average savings; reduction; speedup; average ILP predicate
+counts; and answer agreement. The final aggregate row reports the sum of the
+per-question medians for successful questions.
+
+Every question is attempted. If an executable query shape is unsupported or
+infeasible, the benchmark records its exception, continues with the remaining
+questions, and excludes that failed question from timing averages instead of
+silently treating it as a timing result.
 
 Timing is diagnostic rather than a pass/fail threshold because wall-clock
 results vary by CPU load and Gurobi environment. Answer agreement and the

@@ -5,7 +5,7 @@ import copy
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from statistics import median
+from statistics import mean, median
 import sys
 from time import perf_counter
 from typing import Any
@@ -46,6 +46,7 @@ class BuiltProgram:
     eval_dataset: Any
     query_namespace: dict[str, Any]
     ilp_benchmark_sample: Any | None = None
+    ilp_benchmark_samples: tuple[Any, ...] = ()
 
 
 @dataclass
@@ -80,6 +81,44 @@ class ILPGraphPerformance:
     requested_concepts: tuple[str, ...]
     full: ILPTiming
     dynamic: ILPTiming
+    milliseconds_saved: float
+    reduction_percent: float
+    speedup: float
+    answers_agree: bool
+
+
+@dataclass(frozen=True)
+class ILPBenchmarkFailure:
+    sample: dict[str, Any]
+    question_type: str
+    error_type: str
+    error: str
+
+
+@dataclass(frozen=True)
+class ILPQuestionTypePerformance:
+    question_type: str
+    attempted: int
+    succeeded: int
+    failed: int
+    full_average_seconds: float | None
+    dynamic_average_seconds: float | None
+    milliseconds_saved: float | None
+    reduction_percent: float | None
+    speedup: float | None
+    answers_agree: bool | None
+    full_average_predicates: float | None
+    dynamic_average_predicates: float | None
+
+
+@dataclass(frozen=True)
+class ILPBenchmarkReport:
+    comparisons: tuple[ILPGraphPerformance, ...]
+    failures: tuple[ILPBenchmarkFailure, ...]
+    question_types: tuple[ILPQuestionTypePerformance, ...]
+    attempted: int
+    full_workload_seconds: float
+    dynamic_workload_seconds: float
     milliseconds_saved: float
     reduction_percent: float
     speedup: float
@@ -144,11 +183,30 @@ def parse_args() -> argparse.Namespace:
         default=3,
         help="Number of measured full/dynamic ILP timing pairs.",
     )
+    parser.add_argument(
+        "--ilp-benchmark-items",
+        type=int,
+        default=0,
+        help=(
+            "Number of compiled questions to benchmark in dataset order; "
+            "use 0 for all questions (default: 0)."
+        ),
+    )
+    parser.add_argument(
+        "--ilp-benchmark-only",
+        action="store_true",
+        help=(
+            "Train only the standard InferenceProgram and run only the "
+            "full/dynamic ILP benchmark."
+        ),
+    )
     args = parser.parse_args()
     if args.ilp_benchmark_warmup < 0:
         parser.error("--ilp-benchmark-warmup must be non-negative")
     if args.ilp_benchmark_repeats < 1:
         parser.error("--ilp-benchmark-repeats must be positive")
+    if args.ilp_benchmark_items < 0:
+        parser.error("--ilp-benchmark-items must be non-negative")
     return args
 
 
@@ -241,11 +299,12 @@ def filter_relation(property=None, arg1=None, arg2=None, **kwargs) -> bool:
     return len(values) < 2 or values[0].getAttribute("image_id") == values[1].getAttribute("image_id")
 
 
-def _select_simple_count_sample(
+def _select_relation_free_count_samples(
     dataset: list[dict[str, Any]],
     compiled: Any,
-) -> dict[str, Any]:
-    """Select the first deterministic count step without relation traversal."""
+) -> tuple[dict[str, Any], ...]:
+    """Select deterministic count steps that do not traverse scene relations."""
+    selected = []
     for index, item in enumerate(dataset):
         functions = [
             step.get("function", step.get("type"))
@@ -254,14 +313,24 @@ def _select_simple_count_sample(
         if not functions or functions[-1] != "count":
             continue
         if all(
-            function in {"scene", "unique", "count"}
+            function in {"scene", "unique", "count", "union", "intersect"}
             or (isinstance(function, str) and function.startswith("filter_"))
             for function in functions
         ):
-            return compiled[index]
-    raise ValueError(
-        "The ILP graph benchmark requires a relation-free count question"
-    )
+            selected.append(compiled[index])
+    if not selected:
+        raise ValueError(
+            "The ILP graph benchmark requires a relation-free count question"
+        )
+    return tuple(selected)
+
+
+def _select_simple_count_sample(
+    dataset: list[dict[str, Any]],
+    compiled: Any,
+) -> dict[str, Any]:
+    """Backward-compatible accessor for the first benchmark count sample."""
+    return _select_relation_free_count_samples(dataset, compiled)[0]
 
 
 def build_program(
@@ -319,6 +388,7 @@ def build_program(
         logic_label_keyword="logic_label",
         extra_namespace_values=attribute_names_dict,
     )
+    ilp_benchmark_samples = tuple(compiled)
     ilp_benchmark_sample = _select_simple_count_sample(dataset, compiled)
 
     if args.train_items is None:
@@ -388,6 +458,7 @@ def build_program(
         eval_dataset=eval_dataset,
         query_namespace=query_namespace,
         ilp_benchmark_sample=ilp_benchmark_sample,
+        ilp_benchmark_samples=ilp_benchmark_samples,
     )
 
 
@@ -705,6 +776,29 @@ def _synchronize_device(device: str) -> None:
         torch.cuda.synchronize(torch.device(device))
 
 
+def _question_type(sample: dict[str, Any]) -> str:
+    """Return the terminal CLEVR operation used for benchmark grouping."""
+    program = sample.get("program") or ()
+    if not program:
+        return "unknown"
+    final_step = program[-1]
+    value = final_step.get("function", final_step.get("type"))
+    return value if isinstance(value, str) and value else "unknown"
+
+
+def _executable_result_type(executable: Any) -> str:
+    from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
+
+    lc = executable.innerLC
+    if isinstance(lc, sumL):
+        return "count"
+    if isinstance(lc, queryL):
+        return "multi_query" if lc.is_multi_answer else "query"
+    if isinstance(lc, miotaL):
+        return "selection"
+    return "boolean"
+
+
 def _measure_ilp_configuration(
     built: BuiltProgram,
     sample: dict[str, Any],
@@ -747,7 +841,9 @@ def _measure_ilp_configuration(
             f"inferILPResults did not persist an answer for {executable_name}"
         )
     result = {
-        "type": "count",
+        "type": _executable_result_type(
+            built.program.graph.executableLCs[executable_name]
+        ),
         "answer": constraint_dn.attributes[answer_key],
     }
     predicate_count = len(datanode.collectedConceptsAndRelations or ())
@@ -786,13 +882,14 @@ def benchmark_ilp_graph_activation(
     *,
     warmup: int = 1,
     repeats: int = 3,
+    sample: dict[str, Any] | None = None,
 ) -> ILPGraphPerformance:
     """Compare full and query-scoped ILP inference on one learned model."""
     if warmup < 0:
         raise ValueError("warmup must be non-negative")
     if repeats < 1:
         raise ValueError("repeats must be positive")
-    sample = built.ilp_benchmark_sample
+    sample = sample if sample is not None else built.ilp_benchmark_sample
     if sample is None:
         raise ValueError(f"{built.name} has no ILP benchmark sample")
     query = sample.get("logic_str")
@@ -856,44 +953,215 @@ def benchmark_ilp_graph_activation(
     )
 
 
+def benchmark_ilp_graph_activations(
+    built: BuiltProgram,
+    device: str,
+    *,
+    warmup: int = 1,
+    repeats: int = 3,
+    items: int = 0,
+) -> ILPBenchmarkReport:
+    """Benchmark every selected question and aggregate results by CLEVR type."""
+    if items < 0:
+        raise ValueError("items must be non-negative")
+    samples = built.ilp_benchmark_samples
+    if not samples and built.ilp_benchmark_sample is not None:
+        samples = (built.ilp_benchmark_sample,)
+    if not samples:
+        raise ValueError(f"{built.name} has no ILP benchmark samples")
+    selected = samples if items == 0 else samples[:items]
+    completed = []
+    failed = []
+    for sample in selected:
+        try:
+            completed.append(
+                benchmark_ilp_graph_activation(
+                    built,
+                    device,
+                    warmup=warmup,
+                    repeats=repeats,
+                    sample=sample,
+                )
+            )
+        except Exception as error:
+            failed.append(
+                ILPBenchmarkFailure(
+                    sample=sample,
+                    question_type=_question_type(sample),
+                    error_type=type(error).__name__,
+                    error=str(error),
+                )
+            )
+    comparisons = tuple(completed)
+    failures = tuple(failed)
+
+    type_names = tuple(dict.fromkeys(_question_type(sample) for sample in selected))
+    type_summaries = []
+    for question_type in type_names:
+        type_samples = [
+            sample for sample in selected
+            if _question_type(sample) == question_type
+        ]
+        type_rows = [
+            row for row in comparisons
+            if _question_type(row.sample) == question_type
+        ]
+        type_failures = [
+            row for row in failures if row.question_type == question_type
+        ]
+        if type_rows:
+            full_average = mean(row.full.median_seconds for row in type_rows)
+            dynamic_average = mean(
+                row.dynamic.median_seconds for row in type_rows
+            )
+            saved = full_average - dynamic_average
+            reduction = (
+                100.0 * saved / full_average if full_average else 0.0
+            )
+            speedup = (
+                full_average / dynamic_average
+                if dynamic_average else float("inf")
+            )
+            answers_agree = all(row.answers_agree for row in type_rows)
+            full_predicates = mean(
+                row.full.predicate_count for row in type_rows
+            )
+            dynamic_predicates = mean(
+                row.dynamic.predicate_count for row in type_rows
+            )
+        else:
+            full_average = None
+            dynamic_average = None
+            saved = None
+            reduction = None
+            speedup = None
+            answers_agree = None
+            full_predicates = None
+            dynamic_predicates = None
+        type_summaries.append(
+            ILPQuestionTypePerformance(
+                question_type=question_type,
+                attempted=len(type_samples),
+                succeeded=len(type_rows),
+                failed=len(type_failures),
+                full_average_seconds=full_average,
+                dynamic_average_seconds=dynamic_average,
+                milliseconds_saved=(
+                    saved * 1000.0 if saved is not None else None
+                ),
+                reduction_percent=reduction,
+                speedup=speedup,
+                answers_agree=answers_agree,
+                full_average_predicates=full_predicates,
+                dynamic_average_predicates=dynamic_predicates,
+            )
+        )
+    full_seconds = sum(row.full.median_seconds for row in comparisons)
+    dynamic_seconds = sum(row.dynamic.median_seconds for row in comparisons)
+    saved_seconds = full_seconds - dynamic_seconds
+    reduction_percent = (
+        100.0 * saved_seconds / full_seconds if full_seconds else 0.0
+    )
+    speedup = full_seconds / dynamic_seconds if dynamic_seconds else float("inf")
+    return ILPBenchmarkReport(
+        comparisons=comparisons,
+        failures=failures,
+        question_types=tuple(type_summaries),
+        attempted=len(selected),
+        full_workload_seconds=full_seconds,
+        dynamic_workload_seconds=dynamic_seconds,
+        milliseconds_saved=saved_seconds * 1000.0,
+        reduction_percent=reduction_percent,
+        speedup=speedup,
+        answers_agree=all(row.answers_agree for row in comparisons),
+    )
+
+
 def print_post_training_ilp_benchmark(
     built: BuiltProgram,
     device: str,
     *,
     warmup: int,
     repeats: int,
-) -> ILPGraphPerformance:
-    """Run and print the standard-model full/dynamic ILP comparison."""
-    comparison = benchmark_ilp_graph_activation(
+    items: int = 0,
+) -> ILPBenchmarkReport:
+    """Run and print the standard-model multi-question ILP comparison."""
+    report = benchmark_ilp_graph_activations(
         built,
         device,
         warmup=warmup,
         repeats=repeats,
+        items=items,
     )
-    print("\nPost-training ILP full-graph vs dynamic-graph benchmark")
+    print(
+        "\nPost-training ILP full-graph vs dynamic-graph benchmark "
+        f"({report.attempted} questions: "
+        f"{len(report.comparisons)} succeeded, {len(report.failures)} failed)"
+    )
     print(f"{built.name}:")
-    print(f"  question={comparison.sample.get('question')!r}")
-    print(f"  expected={comparison.sample.get('answer')!r}")
-    print(f"  requested_concepts={list(comparison.requested_concepts)!r}")
+    for index, comparison in enumerate(report.comparisons, start=1):
+        print(f"  completed question {index}/{len(report.comparisons)}={comparison.sample.get('question')!r}")
+        print(f"    expected={comparison.sample.get('answer')!r}")
+        print(f"    requested_concepts={list(comparison.requested_concepts)!r}")
+        print(
+            f"    full: median={comparison.full.median_seconds * 1000.0:.2f}ms, "
+            f"active_concepts={len(comparison.full.active_concepts)}, "
+            f"ilp_predicates={comparison.full.predicate_count}, "
+            f"answer={comparison.full.answer!r}"
+        )
+        print(
+            f"    dynamic: median={comparison.dynamic.median_seconds * 1000.0:.2f}ms, "
+            f"active_concepts={len(comparison.dynamic.active_concepts)}, "
+            f"ilp_predicates={comparison.dynamic.predicate_count}, "
+            f"answer={comparison.dynamic.answer!r}"
+        )
+        print(
+            f"    difference: saved={comparison.milliseconds_saved:.2f}ms, "
+            f"reduction={comparison.reduction_percent:.2f}%, "
+            f"speedup={comparison.speedup:.2f}x, "
+            f"answers_agree={comparison.answers_agree}"
+        )
+    for index, failure in enumerate(report.failures, start=1):
+        print(
+            f"  failed question {index}/{len(report.failures)}="
+            f"{failure.sample.get('question')!r}"
+        )
+        print(
+            f"    type={failure.question_type}, "
+            f"error={failure.error_type}: {failure.error}"
+        )
+    print("  averages by question type (successful questions):")
+    for summary in report.question_types:
+        if summary.succeeded:
+            print(
+                f"    {summary.question_type}: attempted={summary.attempted}, "
+                f"succeeded={summary.succeeded}, failed={summary.failed}, "
+                f"full_avg={summary.full_average_seconds * 1000.0:.2f}ms, "
+                f"dynamic_avg={summary.dynamic_average_seconds * 1000.0:.2f}ms, "
+                f"saved_avg={summary.milliseconds_saved:.2f}ms, "
+                f"reduction={summary.reduction_percent:.2f}%, "
+                f"speedup={summary.speedup:.2f}x, "
+                f"ilp_predicates_avg="
+                f"{summary.full_average_predicates:.1f}->"
+                f"{summary.dynamic_average_predicates:.1f}, "
+                f"answers_agree={summary.answers_agree}"
+            )
+        else:
+            print(
+                f"    {summary.question_type}: attempted={summary.attempted}, "
+                f"succeeded=0, failed={summary.failed}, averages=n/a"
+            )
+    print("  aggregate (successful questions; sum of per-question medians):")
     print(
-        f"  full: median={comparison.full.median_seconds * 1000.0:.2f}ms, "
-        f"active_concepts={len(comparison.full.active_concepts)}, "
-        f"ilp_predicates={comparison.full.predicate_count}, "
-        f"answer={comparison.full.answer!r}"
+        f"    full={report.full_workload_seconds * 1000.0:.2f}ms, "
+        f"dynamic={report.dynamic_workload_seconds * 1000.0:.2f}ms, "
+        f"saved={report.milliseconds_saved:.2f}ms, "
+        f"reduction={report.reduction_percent:.2f}%, "
+        f"speedup={report.speedup:.2f}x, "
+        f"all_successful_answers_agree={report.answers_agree}, "
+        f"complete={not report.failures}"
     )
-    print(
-        f"  dynamic: median={comparison.dynamic.median_seconds * 1000.0:.2f}ms, "
-        f"active_concepts={len(comparison.dynamic.active_concepts)}, "
-        f"ilp_predicates={comparison.dynamic.predicate_count}, "
-        f"answer={comparison.dynamic.answer!r}"
-    )
-    print(
-        f"  difference: saved={comparison.milliseconds_saved:.2f}ms, "
-        f"reduction={comparison.reduction_percent:.2f}%, "
-        f"speedup={comparison.speedup:.2f}x, "
-        f"answers_agree={comparison.answers_agree}"
-    )
-    return comparison
+    return report
 
 
 def print_post_training_ad_hoc_results(
@@ -930,10 +1198,6 @@ def main() -> None:
     items = load_items()
     print(f"Loaded {len(items)} compact CLEVR examples on {device}.")
     print(
-        "Gumbel settings: "
-        f"start={args.gumbel_temp_start}, end={args.gumbel_temp_end}, hard={args.hard_gumbel}"
-    )
-    print(
         "Constraint loss settings: "
         f"global_enabled={not args.disable_global_constraint_loss}, "
         f"global_weight={args.global_constraint_loss_weight}, "
@@ -941,6 +1205,22 @@ def main() -> None:
     )
 
     inference = build_program("InferenceProgram", InferenceProgram, items, args, device)
+    if args.ilp_benchmark_only:
+        print("\nTraining InferenceProgram for ILP benchmark...")
+        train_program(inference, args, device)
+        print_post_training_ilp_benchmark(
+            inference,
+            device,
+            warmup=args.ilp_benchmark_warmup,
+            repeats=args.ilp_benchmark_repeats,
+            items=args.ilp_benchmark_items,
+        )
+        return
+
+    print(
+        "Gumbel settings: "
+        f"start={args.gumbel_temp_start}, end={args.gumbel_temp_end}, hard={args.hard_gumbel}"
+    )
     gumbel = build_program(
         "InferenceProgram(use_gumbel=True)",
         InferenceProgram,
@@ -998,6 +1278,7 @@ def main() -> None:
         device,
         warmup=args.ilp_benchmark_warmup,
         repeats=args.ilp_benchmark_repeats,
+        items=args.ilp_benchmark_items,
     )
 
 
