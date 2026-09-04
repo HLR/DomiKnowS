@@ -1,6 +1,14 @@
 import sys, torch, argparse, time
-sys.path.append('../../domiknows/')
+import sys
+import os
+import os
+import sys
 
+# Add the parent directory to the system path
+sys.path.append(os.path.abspath('.'))
+
+# Verify the path has been added
+print(sys.path)
 
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
@@ -14,6 +22,25 @@ parser.add_argument('--constraint', dest='constraint',default="foreach_IfL_atlea
                     choices=["None","simple_constraint","foreach_bag_existsL","foreach_bag_existsL_notL","foreach_bag_atLeastAL","foreach_bag_atMostAL","foreach_IfL_atleastL_bag_existsL_notL","foreach_IfL_atleastL_bag_existsL","foreach_IfL_atleastL_atmostL"], help="Choose a constraint")
 parser.add_argument('--atmostaL', dest='atmostaL',default=1,type=int)
 parser.add_argument('--atleastaL', dest='atleastaL',default=5,type=int)
+parser.add_argument('--colored', dest='colored', default=False,action='store_true',help="color every orb")
+parser.add_argument('--constraint', 
+                    dest='constraint',
+                    default="exactL", 
+                    choices=["None",
+                             "simple_constraint",
+                             "foreach_bag_existsL",
+                             "foreach_bag_existsL_notL",
+                             "foreach_bag_atLeastAL",
+                             "foreach_bag_atMostAL", 
+                             "atleastAL_notatmostL", 
+                             "atleastAL_notexactL", 
+                             "ifL_atMostL_infeasible", 
+                             "ifL_atMostL_atLeastAL",
+                             'ifL_atMostL_test',
+                             "exactL"], 
+                    help="Choose a constraint")
+parser.add_argument('--atmostaL', dest='atmostaL',default=25,type=int)
+parser.add_argument('--atleastaL', dest='atleastaL',default=2,type=int)
 
 args = parser.parse_args()
 
@@ -35,6 +62,9 @@ class DummyCityLearner2(TorchLearner):
         result = torch.zeros(len(x), 2)
         result[:, 1] = 1000
         return result
+
+#dataset = [{'csp': [0], 'csp_range': [0], 'orbs': [0, 1, 2, 3, 4]},]
+#dataset = [{'csp': [0], 'csp_range': [0, 1], 'orbs': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]},]
 
 dataset = [{'csp': [0], 'csp_range': [0, 1, 2, 3, 4], 'orbs': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]},]
 
@@ -60,15 +90,17 @@ orbs_before_inference,orbs_after_inference=[],[]
 
 for datanode in program.populate(dataset=dataset):
     print("before inference")
-    print("orb color:",end="")
+    print("orb color: ",end="")
     for csp_range_datanode in datanode.getChildDataNodes():
         print(*[int(orb_node.getAttribute('<colored_orbs>',"local/softmax")[1].item()) for orb_node in csp_range_datanode.getChildDataNodes()],end=" | ")
         
-    datanode.inferILPResults()
+    assert sum([int(orb_node.getAttribute('<colored_orbs>',"local/softmax")[1].item()) for orb_node in csp_range_datanode.getChildDataNodes()])==0
+    datanode.inferILPResults() 
         
     print("\n\nafter inference")
     print("orb color:",end="")
     for csp_range_datanode in datanode.getChildDataNodes():
         print(*[int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()],end=" | ")
 
+    assert sum([int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()])==2
 print()

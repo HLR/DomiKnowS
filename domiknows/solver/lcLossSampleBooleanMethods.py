@@ -2,54 +2,69 @@ import logging
 
 import torch
 
-from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from domiknows.solver.constraintsProcessorInterface import constraintsProcessor 
 
 from domiknows.solver.ilpConfig import ilpConfig 
    
-class lcLossSampleBooleanMethods(ilpBooleanProcessor):
+class lcLossSampleBooleanMethods(constraintsProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
         self.grad = False
+        self.current_dtype = None
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
     
+    def _get_dtype(self):
+        """Get current dtype, defaulting to float32 if not yet detected."""
+        if self.current_dtype is not None:
+            return self.current_dtype
+        return torch.float32
+
+    # ------------------------------------------------------------------
+    # Normalising at every entry
+    # point keeps the rest of the class device-agnostic.
+    # ------------------------------------------------------------------
+    def _coerceDevice(self, var):
+        """Return ``var`` with every tensor element moved to
+        ``self.current_device``. Non-tensor elements (None, int, bool, …)
+        are passed through unchanged — callers like ``countVar`` already
+        handle them separately."""
+        if getattr(self, "current_device", None) is None:
+            return list(var)
+        target = torch.device(self.current_device)
+        out = []
+        for v in var:
+            if torch.is_tensor(v) and v.device != target:
+                v = v.to(target)
+            out.append(v)
+        return out
+
     # -- Consider None
     def ifNone(self, var): # Used in all except countVar
         for v in var:
             if not torch.is_tensor(v):
                 return True
-        
+
         return False
     #--
     
     def notVar(self, _, var, onlyConstrains = False):
         if self.ifNone([var]):
             return None
-        
+        var, = self._coerceDevice((var,))
+
         if onlyConstrains:
             return var # notLoss
         else:
             notSuccess = torch.logical_not(var)
             return notSuccess
-    
-    def and2Var(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
-            return None
-        
-        and2Success = torch.logical_and(var1,var2)
-       
-        if onlyConstrains:
-            and2Loss = torch.logical_not(and2Success)
-            
-            return and2Loss
-        else:            
-            return and2Success    
-            
-    def andVar(self, _, *var, onlyConstrains = False): 
+
+    def andVar(self, _, *var, onlyConstrains = False):
         if self.ifNone(var):
             return None
-        
+        var = self._coerceDevice(var)
+
         andSuccess = var[0]
         for i in range(1, len(var)):
             andSuccess = torch.logical_and(andSuccess, var[i])
@@ -61,23 +76,11 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         else:            
             return andSuccess    
     
-    def or2Var(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
-            return None
-        
-        or2Success = torch.logical_or(var1,var2)
-            
-        if onlyConstrains:
-            or2Loss = torch.logical_not(or2Success)
-            
-            return or2Loss
-        else:            
-            return or2Success   
-    
     def orVar(self, _, *var, onlyConstrains = False):
         if self.ifNone(var):
             return None
-        
+        var = self._coerceDevice(var)
+
         orSuccess = var[0]
         for i in range(1, len(var)):
             orSuccess = torch.logical_or(orSuccess, var[i])
@@ -87,27 +90,14 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             
             return orLoss
         else:            
-            return orSuccess    
-            
-    def nand2Var(self, _, var1, var2, onlyConstrains = False):
-        #results = self.notVar(_, self.and2Var(_, var1, var2,))
-        if self.ifNone([var1, var2]):
-            return None
-        
-        nand2Success = torch.logical_not(torch.logical_and(var1, var2))
-
-        if onlyConstrains:
-            nand2Loss =  torch.logical_not(nand2Success)
-            
-            return nand2Loss
-        else:            
-            return nand2Success         
+            return orSuccess             
          
     def nandVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.andVar(_, var))
         if self.ifNone(var):
             return None
-            
+        var = self._coerceDevice(var)
+
         nandSuccess = var[0]
         for i in range(1, len(var)):
             nandSuccess = torch.logical_and(nandSuccess, var[i])
@@ -123,7 +113,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         if self.ifNone([var1, var2]):
             return None
-                
+        var1, var2 = self._coerceDevice((var1, var2))
+
         ifSuccess = torch.logical_or(torch.logical_not(var1), var2)
     
         if onlyConstrains:
@@ -137,7 +128,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         #results = self.notVar(_, self.orVar(_, var))
         if self.ifNone(var):
             return None
-            
+        var = self._coerceDevice(var)
+
         norSuccess = var[0]
         for i in range(1, len(var)):
             norSuccess = torch.logical_or(norSuccess, var[i])
@@ -150,52 +142,92 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             norSuccess = torch.logical_not(norSuccess)
             return norSuccess     
            
-    def xorVar(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
+    def xorVar(self, _, *var, onlyConstrains = False):
+        if self.ifNone(var):
             return None
-        
-        xorSuccess = torch.logical_or(torch.logical_and(torch.logical_not(var1), var2), torch.logical_and(var1, torch.logical_not((var2))))
-            
-        if onlyConstrains:
-            xorLoss = torch.logical_not(xorSuccess)
-            
-            return xorLoss
-        else:            
-            return xorSuccess
-    
-    def epqVar(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
-            return None
-        
-        epqSuccess = torch.eq(var1,var2)
-            
-        if onlyConstrains:
-            epqLoss = torch.logical_not(epqSuccess)
-            
-            return epqLoss
-        else:       
-            return epqSuccess
+        var = self._coerceDevice(var)
 
+        if len(var) == 0:
+            # XOR of no variables is False
+            return torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.bool)
+        elif len(var) == 1:
+            # XOR of single variable is the variable itself
+            return var[0]
+        else:
+            # Multi-variable XOR: iteratively apply binary XOR
+            xorSuccess = var[0]
+            
+            for v in var[1:]:
+                # XOR(a, b) = (a AND NOT b) OR (NOT a AND b)
+                xorSuccess = torch.logical_or(
+                    torch.logical_and(xorSuccess, torch.logical_not(v)),
+                    torch.logical_and(torch.logical_not(xorSuccess), v)
+                )
+            
+            if onlyConstrains:
+                xorLoss = torch.logical_not(xorSuccess)
+                return xorLoss
+            else:            
+                return xorSuccess
+
+    def equivalenceVar(self, _, *var, onlyConstrains = False):
+        if self.ifNone(var):
+            return None
+        var = self._coerceDevice(var)
+
+        if len(var) == 0:
+            # Equivalence of no variables is True (vacuous truth)
+            return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+        elif len(var) == 1:
+            # Equivalence of single variable is True (always equivalent to itself)
+            return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+        else:
+            # Multi-variable equivalence: all variables have same truth value
+            # equiv(a, b, c, ...) = (all true) OR (all false)
+            
+            # All true case: AND of all variables
+            all_true = var[0]
+            for v in var[1:]:
+                all_true = torch.logical_and(all_true, v)
+            
+            # All false case: AND of all negated variables
+            all_false = torch.logical_not(var[0])
+            for v in var[1:]:
+                all_false = torch.logical_and(all_false, torch.logical_not(v))
+            
+            # Equivalence = (all true) OR (all false)
+            equivSuccess = torch.logical_or(all_true, all_false)
+            
+            if onlyConstrains:
+                equivLoss = torch.logical_not(equivSuccess)
+                return equivLoss
+            else:       
+                return equivSuccess
+            
     def countVar(self, _, *var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName="COUNT"):
-        # -- Consider None
+        # -- Consider None (and coerce real tensors onto current_device so
+        # varSum.add_(fixedVar[i]) below does not mix devices).
+        target_device = self.current_device
         fixedVar = []
         for v in var:
             if torch.is_tensor(v):
+                if torch.device(target_device) != v.device:
+                    v = v.to(target_device)
                 fixedVar.append(v)
             else:
                 if limitOp == '>=':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=target_device, dtype=self._get_dtype()))
                 elif limitOp == '<=':
-                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.ones([self.sampleSize], device=target_device, dtype=self._get_dtype()))
                 elif limitOp == '==':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=target_device, dtype=self._get_dtype()))
         # --
 
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
 
-        varSum = torch.zeros([self.sampleSize], device=self.current_device)
+        varSum = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
         if fixedVar:
             varSum = fixedVar[0].clone()
 
@@ -220,6 +252,76 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         else:
             return countSuccess
 
+    def compareCountsVar(
+        self,
+        _,                    # no ILP model object in the PyTorch version
+        varsA,                # iterable of literals forming the “left” count
+        varsB,                # iterable of literals forming the “right” count
+        *,                    # force keyword-only for clarity
+        compareOp='>',        # one of '>', '>=', '<', '<=', '==', '!='
+        diff: int = 0,        # optional offset:  count(A) − count(B) ∘ diff
+        onlyConstrains=False,
+        logicMethodName="COUNT_CMP",
+    ):
+        """
+        Compare two literal-sets by their per-sample counts.
+
+        Returns
+        -------
+        torch.BoolTensor  (shape = [sampleSize])
+            • if onlyConstrains is False “success” mask  
+            • if onlyConstrains is True  “loss”  mask  (¬success)
+        """
+
+        if compareOp not in ('>', '>=', '<', '<=', '==', '!='):
+            raise ValueError(f"{logicMethodName}: unsupported operator {compareOp}")
+
+        # ---------- helper to normalise missing literals ----------------------
+        target_device = self.current_device
+        def _to_tensor_list(iterable):
+            tensors = []
+            for v in iterable:
+                if torch.is_tensor(v):
+                    # coerce device 
+                    if torch.device(target_device) != v.device:
+                        v = v.to(target_device)
+                    tensors.append(v)
+                else:                       # treat None / scalars as 0-tensor
+                    tensors.append(torch.zeros(
+                        [self.sampleSize], device=target_device))
+            return tensors
+
+        tensorsA = _to_tensor_list(varsA)
+        tensorsB = _to_tensor_list(varsB)
+
+        # ---------- count “True” literals per sample --------------------------
+        countA = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
+        for t in tensorsA:
+            countA.add_(t)
+
+        countB = torch.zeros_like(countA)
+        for t in tensorsB:
+            countB.add_(t)
+
+        diffTensor = torch.full([self.sampleSize], diff, device=self.current_device)
+        delta = countA - countB
+
+        # ---------- evaluate relation ----------------------------------------
+        if   compareOp == '>':
+            success = torch.gt(delta,  diffTensor)
+        elif compareOp == '>=':
+            success = torch.ge(delta,  diffTensor)
+        elif compareOp == '<':
+            success = torch.lt(delta,  diffTensor)
+        elif compareOp == '<=':
+            success = torch.le(delta,  diffTensor)
+        elif compareOp == '==':
+            success = torch.eq(delta,  diffTensor)
+        elif compareOp == '!=':
+            success = torch.ne(delta,  diffTensor)
+
+        return torch.logical_not(success) if onlyConstrains else success
+
     def fixedVar(self, _, var, onlyConstrains = False):
         if self.ifNone([var]):
             return None
@@ -232,3 +334,273 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return fixedLoss
         else:
             return fixedSuccess
+        
+    def summationVar(self, m, *var, onlyConstrains=False, label=None, logicMethodName="SUMMATION"):
+        "Sums up a list of binary literals to an integer literal."
+
+        if onlyConstrains:
+            if label is None:
+                return None
+            return self.countVar(m, *var, onlyConstrains=True, limitOp='==', limit=label, logicMethodName=logicMethodName)
+            
+        if self.ifNone(var):
+            return None
+        
+        sumResult = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
+        for v in var:
+            sumResult.add_(v)
+        
+        return sumResult
+    
+    def iotaVar(self, _, *var, onlyConstrains=False, temperature=1.0, logicMethodName="IOTA"):
+        """
+        Sample-based definite description: selects THE unique entity satisfying condition.
+        
+        In sample-based evaluation, variables are already binary samples from the
+        probability distribution. We find which entity satisfies in each sample.
+        
+        For each sample:
+            1. Find entities where condition is True (sampled value = 1)
+            2. If exactly one satisfies: select it (success)
+            3. If zero or multiple satisfy: violation
+        
+        Args:
+            _: Model context (unused)
+            *var: Sampled binary tensors [sample_size] or [sample_size, n]
+            onlyConstrains: If True, return violation indicator; if False, return selected index
+            temperature: Not used in sample-based (kept for interface)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: Boolean tensor indicating violations [sample_size]
+            - If onlyConstrains=False: Tensor of selected entity indices [sample_size]
+            (-1 indicates no valid selection)
+        """
+        if self.ifNone(var):
+            return None
+        
+        # -- Combine inputs into matrix [sample_size, n_entities]
+        # Each variable may be [sample_size] for one entity or [sample_size, k] for k entities
+        samples_list = []
+        for v in var:
+            if torch.is_tensor(v):
+                if v.dim() == 1:
+                    samples_list.append(v.unsqueeze(1))  # [sample_size, 1]
+                else:
+                    samples_list.append(v)  # [sample_size, k]
+        
+        if len(samples_list) == 0:
+            return None
+        
+        # Concatenate along entity dimension
+        # Result: [sample_size, n_entities]
+        samples = torch.cat(samples_list, dim=1)
+        sample_size, n = samples.shape
+        
+        # -- Convert to boolean (samples should be 0/1)
+        satisfied = samples > 0.5  # [sample_size, n]
+        
+        # Count how many entities satisfy in each sample
+        counts = satisfied.sum(dim=1)  # [sample_size]
+        
+        if onlyConstrains:
+            # Violation if count != 1 (either 0 or > 1)
+            violation = (counts != 1)
+            return violation
+        else:
+            # Find selected entity index for each sample
+            # If exactly one satisfies, return its index; otherwise -1
+            
+            # For samples with exactly one True, find the index
+            # torch.argmax returns first occurrence of max value
+            selected_indices = torch.argmax(satisfied.float(), dim=1)  # [sample_size]
+            
+            # Mark invalid selections (count != 1) with -1
+            valid = (counts == 1)
+            selected_indices = torch.where(valid, selected_indices, 
+                                        torch.tensor(-1, device=selected_indices.device))
+            
+            return selected_indices
+
+    def miotaVar(self, _, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        if self.ifNone(var):
+            return None
+        samples_list = []
+        for value in var:
+            if not torch.is_tensor(value):
+                continue
+            samples_list.append(value.unsqueeze(1) if value.dim() == 1 else value)
+        if not samples_list:
+            return None
+        return (torch.cat(samples_list, dim=1) >= threshold).to(self._get_dtype())
+        
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None,
+                 onlyConstrains=False, temperature=1.0, multi_answer=False,
+                 threshold=None, logicMethodName="QUERY"):
+        """
+        Sample-based query operator for multiclass attribute selection.
+
+        Given entity selection (from iotaL) and a multiclass concept with subclasses,
+        determines which subclass the selected entity belongs to in each sample.
+
+        When *subclass_data* is provided the logic is:
+            For each sample s:
+                1. Find which entity is selected (sampled selection == 1).
+                2. Look up that entity's sampled subclass indicators from subclass_data.
+                3. The active subclass indicator gives the query answer.
+
+        Without subclass_data the method falls back to treating selection_vars
+        as direct subclass indicators (legacy heuristic).
+
+        Args:
+            _: Model context (unused)
+            concept: Parent multiclass concept (e.g., material)
+            subclasses: List of (subclass_concept, name, index) tuples
+            selection_vars: Sampled binary tensors [sample_size] per entity
+            subclass_data: Per-entity subclass predictions.
+                ``subclass_data[entity_idx]`` is a list of K sampled tensors
+                (each ``[sample_size]``), one per subclass.
+            onlyConstrains: If True, return violation indicator; if False, return selected index
+            temperature: Not used in sample-based (kept for interface compatibility)
+            logicMethodName: Name for logging
+
+        Returns:
+            - If onlyConstrains=True: Boolean tensor indicating violations [sample_size]
+            - If onlyConstrains=False: Tensor of selected subclass indices [sample_size]
+              (-1 indicates no valid selection)
+        """
+        if self.ifNone(selection_vars):
+            return None
+
+        num_subclasses = len(subclasses)
+
+        if num_subclasses == 0:
+            if onlyConstrains:
+                return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+            return torch.full([self.sampleSize], -1, device=self.current_device, dtype=torch.long)
+
+        if subclass_data is None or len(subclass_data) == 0:
+            if onlyConstrains:
+                return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+            return torch.full([self.sampleSize], -1, device=self.current_device, dtype=torch.long)
+
+        num_entities = len(subclass_data)
+
+        # Build entity selection matrix [sample_size, num_entities]
+        sel_list = [v for v in selection_vars if torch.is_tensor(v)]
+        if not sel_list:
+            if onlyConstrains:
+                return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+            if multi_answer:
+                return torch.empty(
+                    (self.sampleSize, 0, num_subclasses),
+                    device=self.current_device,
+                )
+            return torch.full([self.sampleSize], -1, device=self.current_device, dtype=torch.long)
+
+        # miotaL returns its complete [sample, candidate] selection as one
+        # tensor; legacy single-answer paths provide one [sample] tensor per
+        # candidate.
+        if multi_answer and len(sel_list) == 1 and sel_list[0].dim() == 2:
+            sel_matrix = sel_list[0].float()
+        else:
+            sel_matrix = torch.stack([v.view(-1) for v in sel_list], dim=1).float()
+        sample_size = sel_matrix.shape[0]
+
+        # Build subclass matrix [num_entities, num_subclasses, sample_size]
+        # then transpose to [sample_size, num_entities, num_subclasses]
+        sub_rows = []
+        for entity_row in subclass_data:
+            if entity_row is None:
+                sub_rows.append(torch.zeros(num_subclasses, sample_size,
+                                            device=self.current_device))
+                continue
+            cols = []
+            for val in entity_row[:num_subclasses]:
+                if torch.is_tensor(val):
+                    cols.append(val.view(-1).float())
+                else:
+                    cols.append(torch.full([sample_size], float(val) if val else 0.0,
+                                           device=self.current_device))
+            while len(cols) < num_subclasses:
+                cols.append(torch.zeros(sample_size, device=self.current_device))
+            sub_rows.append(torch.stack(cols, dim=0))  # [num_subclasses, sample_size]
+
+        # sub_matrix: [num_entities, num_subclasses, sample_size]
+        sub_matrix = torch.stack(sub_rows, dim=0)
+        # -> [sample_size, num_entities, num_subclasses]
+        sub_matrix = sub_matrix.permute(2, 0, 1)
+
+        # Align selection with entity count
+        n_sel = sel_matrix.shape[1]
+        if n_sel < num_entities:
+            padding = torch.zeros(sample_size, num_entities - n_sel,
+                                  device=self.current_device)
+            sel_matrix = torch.cat([sel_matrix, padding], dim=1)
+        elif n_sel > num_entities:
+            sel_matrix = sel_matrix[:, :num_entities]
+
+        if multi_answer:
+            # [sample, candidate, class], with zero rows for candidates not
+            # selected in that sample.
+            return sel_matrix.unsqueeze(-1) * sub_matrix
+
+        # Per-sample: find selected entity, look up its subclass
+        # sel_matrix is binary samples; exactly one entity should be 1
+        sel_counts = sel_matrix.sum(dim=1)  # [sample_size]
+        # selected_entity: index of selected entity per sample
+        selected_entity = torch.argmax(sel_matrix, dim=1)  # [sample_size]
+        valid_selection = (sel_counts == 1)
+
+        # Gather: for each sample pick the selected entity's subclass row
+        # sub_matrix is [sample_size, num_entities, num_subclasses]
+        idx = selected_entity.unsqueeze(1).unsqueeze(2).expand(-1, 1, num_subclasses)
+        subclass_for_selected = sub_matrix.gather(1, idx).squeeze(1)  # [sample_size, num_subclasses]
+
+        satisfied = subclass_for_selected > 0.5  # [sample_size, num_subclasses]
+        sub_counts = satisfied.sum(dim=1)  # [sample_size]
+
+        if onlyConstrains:
+            # Violation if entity selection invalid OR subclass count != 1
+            violation = (~valid_selection) | (sub_counts != 1)
+            return violation
+        else:
+            selected_sub = torch.argmax(satisfied.float(), dim=1)  # [sample_size]
+            valid = valid_selection & (sub_counts == 1)
+            selected_sub = torch.where(valid, selected_sub,
+                                       torch.tensor(-1, device=selected_sub.device,
+                                                    dtype=selected_sub.dtype))
+            return selected_sub
+
+    def sameVar(self, _, concept, subclasses, *entity_var_groups,
+                onlyConstrains=False, logicMethodName="SAME"):
+        """
+        Sample-based check whether all entities share the same subclass.
+
+        result = OR_j( AND_i( entity_i_has_subclass_j ) )
+
+        Uses sample-based andVar/orVar.
+        """
+        num_subclasses = len(subclasses)
+        num_entities = len(entity_var_groups)
+
+        if num_entities == 0 or num_subclasses == 0:
+            return None
+
+        # For each subclass j: a_j = AND(entity_0[j], entity_1[j], ...)
+        and_results = []
+        for j in range(num_subclasses):
+            vars_for_j = []
+            for i in range(num_entities):
+                group = entity_var_groups[i]
+                if j < len(group):
+                    vars_for_j.append(group[j])
+                else:
+                    vars_for_j.append(torch.zeros([self.sampleSize], device=self.current_device))
+            a_j = self.andVar(_, *vars_for_j)
+            and_results.append(a_j)
+
+        # result = OR(a_0, a_1, ..., a_k)
+        result = self.orVar(_, *and_results, onlyConstrains=onlyConstrains)
+        return result

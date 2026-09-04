@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ..utils import consume, entuple
 from .model.base import Mode
 from .program import LearningBasedProgram
-
+import torch
 
 class ProgramStorageCallback():
     def __init__(self, program, fn) -> None:
@@ -29,9 +29,9 @@ class CallbackProgram(LearningBasedProgram):
 
     def default_after_train_step(self, output=None):
         loss, *_ = output
-        if self.opt and loss:
-            loss.backward()
-            self.opt.step()
+        # Delegate to the AMP-/compile-aware helper on the base class.
+        # zero_grad is handled by default_before_train_step, so skip it here.
+        self._backward_and_step(loss, zero_grad=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -54,18 +54,21 @@ class CallbackProgram(LearningBasedProgram):
         super().train(*args, **kwargs)
         hook(self.after_train)
 
-    def train_pure_epoch(self, dataset):
+    def train_pure_epoch(self, dataset, **kwargs):
+        """Pass kwargs through to parent."""
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
-            loss, metric, *output = self.model(data_item)
+            with self._autocast_ctx():
+                loss, metric, *output = self.model(data_item)
             yield (loss, metric, *output[:1])
 
-    def train_epoch(self, dataset):
+    def train_epoch(self, dataset, **kwargs):
+        """Pass kwargs through and fire hooks."""
         hook(self.before_train_epoch)
         for _, output in zip(
             map(hook, repeat(self.before_train_step)),
-            self.train_pure_epoch(dataset),
+            super().train_epoch(dataset, **kwargs),  # Pass kwargs to parent
             ):
             hook(self.after_train_step, output)
             yield output
@@ -76,11 +79,12 @@ class CallbackProgram(LearningBasedProgram):
         super().test(*args, **kwargs)
         hook(self.after_test)
 
-    def test_epoch(self, dataset):
+    def test_epoch(self, dataset, **kwargs):
+        """Pass kwargs through and fire hooks."""
         hook(self.before_test_epoch)
         for _, output in zip(
             map(hook, repeat(self.before_test_step)),
-            super().test_epoch(dataset),
+            super().test_epoch(dataset, **kwargs),  # Pass kwargs to parent
             ):
             hook(self.after_test_step, output)
             yield output

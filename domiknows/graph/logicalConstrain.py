@@ -1,15 +1,100 @@
 from collections import namedtuple
-from domiknows.solver.ilpConfig import ilpConfig 
+from domiknows.solver.ilpConfig import ilpConfig
 from domiknows.graph import Concept
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 import logging
+import warnings
 import torch
+import weakref
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
-V = namedtuple("V", ['name', 'v'], defaults= [None, None])
+V = namedtuple("V", ['name', 'v', 'relVarInfo'], defaults= [None, None, None])
+
+
+class _RevisionList(list):
+    """List that invalidates an owning logical element's compiled plan."""
+
+    def __init__(self, values, owner):
+        super().__init__(values)
+        self._owner_ref = weakref.ref(owner)
+
+    def _changed(self):
+        owner = self._owner_ref()
+        if owner is not None:
+            owner._touch_compile_revision()
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def append(self, value):
+        super().append(value)
+        self._changed()
+
+    def extend(self, values):
+        super().extend(values)
+        self._changed()
+
+    def insert(self, index, value):
+        super().insert(index, value)
+        self._changed()
+
+    def pop(self, index=-1):
+        value = super().pop(index)
+        self._changed()
+        return value
+
+    def remove(self, value):
+        super().remove(value)
+        self._changed()
+
+    def clear(self):
+        super().clear()
+        self._changed()
+
+    def reverse(self):
+        super().reverse()
+        self._changed()
+
+    def sort(self, *args, **kwargs):
+        super().sort(*args, **kwargs)
+        self._changed()
+
+    def __iadd__(self, values):
+        result = super().__iadd__(values)
+        self._changed()
+        return result
+
+    def __imul__(self, value):
+        result = super().__imul__(value)
+        self._changed()
+        return result
 
 class LcElement:
+    def _touch_compile_revision(self):
+        self._compile_revision = getattr(self, '_compile_revision', 0) + 1
+        graph = getattr(self, 'graph', None)
+        touch_graph = getattr(graph, '_touch_constraint_formula_revision', None)
+        if callable(touch_graph):
+            touch_graph()
+
+    @property
+    def e(self):
+        return self._e
+
+    @e.setter
+    def e(self, values):
+        # execute() deliberately aliases its inner constraint's elements. Keep
+        # that alias; the inner constraint owns the revision that compiled
+        # plans track.
+        self._e = values if isinstance(values, _RevisionList) else _RevisionList(values, self)
+        self._touch_compile_revision()
+
     def __init__(self, *e,  name = None):
         from .relation import Relation
 
@@ -61,8 +146,22 @@ class LcElement:
         for _, eItem in enumerate(self.e):
             if eItem == None:
                 continue
+        
             if isinstance(eItem, Concept): # binary concept mapping to tuple representation
                 updatedE.append((eItem, eItem.name, None, 1))
+            elif isinstance(eItem, V) and eItem.relVarInfo is not None: # Concept with relation variable mapping to tuple representation
+                    updatedArgs = {}
+                    for arg, v in eItem.relVarInfo.items():
+                        concept = v.relVarInfo
+                        if isinstance(concept, Concept):
+                            # Concept path takes precedence. 
+                            updatedArgs[arg] = V(name=v.name, v=v.v, relVarInfo=(concept, concept.name, None, 1))
+                        elif callable(concept): # multiclass label
+                            conceptEncoding = concept.__call__() # generated label
+                            updatedArgs[arg] = V(name=v.name, v=v.v, relVarInfo=conceptEncoding)
+                            
+                    eItem = V(name=eItem.name, v=eItem.v, relVarInfo=updatedArgs)
+                    updatedE.append(eItem)
             else:
                 updatedE.append(eItem)
                 
@@ -125,6 +224,30 @@ class LcElement:
 class LogicalConstrain(LcElement):
     def __init__(self, *e, p=100, active = True, sampleEntries  = False, name = None):
         super().__init__(*e, name = name)
+
+        def contains_multi_query(value):
+            if isinstance(value, LogicalConstrain):
+                return getattr(value, "_multi_answer", False)
+            if isinstance(value, V):
+                return (
+                    contains_multi_query(value.v)
+                    or contains_multi_query(value.relVarInfo)
+                )
+            if isinstance(value, dict):
+                return any(contains_multi_query(item) for item in value.values())
+            if isinstance(value, (list, tuple)):
+                return any(contains_multi_query(item) for item in value)
+            return False
+
+        if not isinstance(self, queryL):
+            for e_item in self.e:
+                if not contains_multi_query(e_item):
+                    continue
+                raise ValueError(
+                    "multi-answer queryL is a value-returning expression and "
+                    "cannot be nested inside boolean, counting, predicate, "
+                    "relation, or selector constraints"
+                )
         
         self.headLC = True # Indicate that it is head constraint and should be process individually
         self.active = active
@@ -149,7 +272,7 @@ class LogicalConstrain(LcElement):
         else:
             self.p = p
         
-    def __call__(self, model, myIlpBooleanProcessor, v): 
+    def __call__(self, model, myConstraintVarProcessor, v): 
         pass 
     
     def getLcConcepts(self):
@@ -157,7 +280,7 @@ class LogicalConstrain(LcElement):
         
         for _, eItem in enumerate(self.e):
             if isinstance(eItem, V):
-                if eItem[1] and eItem[1][1]:
+                if eItem[1] and isinstance(eItem[1], (list, tuple)) and len(eItem[1]) > 1:
                     if isinstance(eItem[1][1], eqL):
                         if eItem[1][1].e[0]:
                             lcConcepts.add(eItem[1][1].e[0][0].name)
@@ -169,6 +292,33 @@ class LogicalConstrain(LcElement):
                 lcConcepts.add(eItem[0].name)
                 
         return lcConcepts
+
+    @property
+    def declared_active(self):
+        """The explicit activation flag, before graph concept filtering."""
+        return self._active
+
+    @property
+    def active(self):
+        """Whether this constraint is active in the current graph step."""
+        if not self._active:
+            return False
+        # A parameterized executable formula stores representative concepts in
+        # its immutable template. Its actual concepts are supplied per dataset
+        # item, so applying the graph's active-concept filter to the
+        # representative would incorrectly suppress valid runtime bindings.
+        if getattr(self, '_parameterized_executable', False):
+            return True
+        checker = getattr(self.graph, 'are_concepts_active', None)
+        return checker(self.getLcConcepts()) if callable(checker) else True
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+
+    def effective_active(self):
+        """Property-compatible callable for graph execution filtering."""
+        return self.active
         
     # Get string representation of  Logical Constraint
     def strEs(self):
@@ -221,9 +371,9 @@ class LogicalConstrain(LcElement):
             
         return newStrsE
     
-    #------------
+    # ------------Method building logical constraints
     
-    def createSingleVarILPConstrains(self, lcName, lcFun, model, v, headConstrain):  
+    def createSingleVarLogicalConstrains(self, lcName, lcFun, model, v, headConstrain):  
         singleV = []
                     
         if len(v) != 1:
@@ -251,9 +401,19 @@ class LogicalConstrain(LcElement):
         
         return singleV
     
-    # Collects setups of ILP variables for logical methods calls for the created Logical Constraint - recursive method
-    def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
+    # Collects setups of variables for logical methods calls for the created Logical Constraint - recursive method
+    def _collectVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars=[]): 
+        """
+        Collects setups of variables for logical methods calls - recursive method.
         
+        Handles alignment of variables with different structures:
+        - Simple variables: [N] rows, 1 element each
+        - Relation variables: [N] rows, [M] elements each (e.g., front(b,y) has N rows for b, M elements for y)
+        - Nested constraint results: [M] rows, 1 element each (indexed by second variable)
+        
+        When combining relation[b][y] with nested_result[y], we need element-based lookup,
+        not row-based lookup. The element index within a row corresponds to the y variable.
+        """
         # Get set of ILP variables lists for the current variable name
         cLcVariables = v[lcVariableName]
         
@@ -262,7 +422,7 @@ class LogicalConstrain(LcElement):
         
         # --- Update the lcVars setup with ILP variables from this iteration
         
-        if not lcVars: # If ILP variables setup is not initialized yet - this is the first iteration of the _collectILPVariableSetups method
+        if not lcVars:  # First iteration - initialize
             if cLcVariables is None:
                 newV = [[None]]
                 newLcVars.append(newV)
@@ -275,54 +435,128 @@ class LogicalConstrain(LcElement):
                         newElement = [cvElement]
                         newV.append(newElement)
                     newLcVars.append(newV)
-        elif len(cLcVariables) == 1: # Single variable
+                    
+        elif cLcVariables is None or len(cLcVariables) == 0:
+            # No variables to add - just append None
             for indexLcV, lcV in enumerate(lcVars):
                 newV = []
                 for lcVelement in lcV:
-                    newElemenet = lcVelement.copy()
-                    if cLcVariables is None:
-                        newElemenet.append(None)  
+                    newElement = lcVelement.copy()
+                    newElement.append(None)
+                    newV.append(newElement)
+                newLcVars.append(newV)
+                    
+        elif len(cLcVariables) == 1:  # Single variable - broadcast to all
+            for indexLcV, lcV in enumerate(lcVars):
+                newV = []
+                for lcVelement in lcV:
+                    newElement = lcVelement.copy()
+                    if cLcVariables[0]:
+                        newElement.append(cLcVariables[0][0])
                     else:
-                        if cLcVariables[0]:
-                            newElemenet.append(cLcVariables[0][0])
-                        else:
-                            newElemenet.append(None)
-                    newV.append(newElemenet)
+                        newElement.append(None)
+                    newV.append(newElement)
+                newLcVars.append(newV)
                                     
-                newLcVars.append(newV)                
-        else: # Many ILP variables in the current set
+        else:  # Many ILP variables in the current set
+            # Check structure characteristics
+            num_lcVars_rows = len(lcVars)
+            num_cLc_rows = len(cLcVariables)
+            
+            # Is this a nested constraint result? (shape [N,1] - N rows, 1 element each)
+            is_nested_constraint_result = all(
+                len(row) == 1 for row in cLcVariables if row
+            )
+            
+            # Check if accumulated vars have been expanded (have multiple elements per row)
+            # This happens when a relation variable was added (e.g., front(b,y) adds 6 elements per row)
+            accumulated_is_expanded = any(len(row) > 1 for row in lcVars if row)
+            
+            # Get max elements per row in accumulated vars for alignment detection
+            max_elements_per_row = max((len(row) for row in lcVars if row), default=1)
+            
+            # Primary alignment strategy - when row counts match, use row-based indexing
+            rows_match = (num_lcVars_rows == num_cLc_rows)
+            
             for indexLcV, lcV in enumerate(lcVars):
                 newV = []
                 for indexElement, lcVelement in enumerate(lcV):
-                    if cLcVariables is None:
-                        newLcVelement = lcVelement.copy()
+                    newLcVelement = lcVelement.copy()
+                    
+                    if indexLcV >= len(cLcVariables):
+                        # Out of bounds - append None
                         newLcVelement.append(None)
+                        newV.append(newLcVelement)
+                        continue
+                    
+                    cLcRow = cLcVariables[indexLcV]
+                    
+                    if cLcRow is None or len(cLcRow) == 0:
+                        newLcVelement.append(None)
+                        newV.append(newLcVelement)
                         
-                        newV.append(newLcVelement)
-                    elif len(lcV) == len(cLcVariables[indexLcV]):
-                        cV = cLcVariables[indexLcV][indexElement]
-                        newLcVelement = lcVelement.copy()
+                    elif len(lcV) == len(cLcRow):
+                        # Element counts match within row - use element-based indexing
+                        cV = cLcRow[indexElement] if indexElement < len(cLcRow) else None
                         newLcVelement.append(cV)
-                            
                         newV.append(newLcVelement)
+                        
+                    elif is_nested_constraint_result and accumulated_is_expanded and indexElement < num_cLc_rows:
+                        # When accumulated vars are expanded by a relation (e.g., front(b,y))
+                        # and we have a nested constraint result (e.g., inner_AND(y)),
+                        # use ELEMENT-INDEX-based lookup: element index corresponds to the y variable
+                        # So for accumulated row b, element y, we want nested_result[y], not nested_result[b]
+                        cV = cLcVariables[indexElement][0] if cLcVariables[indexElement] else None
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
+                    elif is_nested_constraint_result and rows_match:
+                        # Row counts match, not expanded - use ROW-based alignment
+                        # This is for cases where both variables are indexed by the same variable
+                        cV = cLcRow[0] if cLcRow else None
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
+                    elif is_nested_constraint_result and indexElement < num_cLc_rows:
+                        # Rows don't match but nested result - use element-based lookup
+                        cV = cLcVariables[indexElement][0] if cLcVariables[indexElement] else None
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
+                    elif len(cLcRow) == 1:
+                        # Single element in row - broadcast to all elements
+                        cV = cLcRow[0]
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
                     else:
-                        for cV in cLcVariables[indexLcV]:
-                            newLcVelement = lcVelement.copy()
-                            newLcVelement.append(cV)
+                        # Fallback: expand by iterating through all values in the row
+                        for cV in cLcRow:
+                            newLcVelement_copy = lcVelement.copy()
+                            newLcVelement_copy.append(cV)
+                            newV.append(newLcVelement_copy)
                             
-                            newV.append(newLcVelement)
-                                
                 newLcVars.append(newV)                
                             
         if lcVariableNames:
-            # Recursive call - lcVars contains currently collected ILP variables setups
-            return self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars)
+            # Recursive call
+            return self._collectVariableSetups(
+                lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars
+            )
         else:
-            # Return collected setups
             return newLcVars
-
-    # Method building ILP constraints
-    def createILPConstrains(self, lcName, lcFun, model, v, headConstrain):
+    # Helper to recursively flatten nested lists to scalar values
+    def flatten_to_scalars(self, item):
+        """Recursively flatten nested lists to a flat list of scalar values."""
+        result = []
+        if isinstance(item, (list, tuple)):
+            for sub_item in item:
+                result.extend(self.flatten_to_scalars(sub_item))
+        elif item is not None:
+            result.append(item)
+        return result
+        
+    def createLogicalConstrains(self, lcName, lcFun, model, v, headConstrain):
         if len(v) < 2:
             myLogger.error("%s Logical Constraint created with %i sets of variables which is less then two"%(lcName, len(v)))
             return None
@@ -349,74 +583,128 @@ class LogicalConstrain(LcElement):
                 return rVars
             
         # Collect variables setups for ILP constraints
-        sVar = self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], v)
+        sVar = self._collectVariableSetups(lcVariableName0, lcVariableNames[1:], v)
         
         # Apply collected setups and create ILP constraint
         for z in sVar:
             tVars = [] # Collect ILP constraints results
             for t in z:
-                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
-                
+                # Check if 'onlyConstrains' is already in t (as a dict or by position)
+                if isinstance(t, dict) and 'onlyConstrains' in t:
+                    tVars.append(lcFun(model, *t))
+                elif isinstance(t, (list, tuple)):
+                    # Try to detect if onlyConstrains is already present by argument name
+                    import inspect
+                    sig = inspect.signature(lcFun)
+                    param_names = list(sig.parameters.keys())
+                    if 'onlyConstrains' in param_names and len(t) >= param_names.index('onlyConstrains') + 1:
+                        tVars.append(lcFun(model, *t))
+                    else:
+                        tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
+                else:
+                    tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
             rVars.append(tVars)
         
         # Return results from created ILP constraints - 
         # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
         return rVars
 
-    def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName="COUNT"):
+    def createCountConstraints(self, model, myConstraintVarProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName="COUNT"):
+        """
+        Build count constraints for existsL, atMostL, atLeastL, exactL.
+        
+        Fixed: Properly handles nested constraint results which may have nested list structure.
+        """
         try:
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
-        if cLimit == None:
+        if cLimit is None:
             cLimit = 1
-        lcVariableName0 = lcVariableNames[0]  # First variable
+
+        if not lcVariableNames:
+            return [[None]]
+            
+        lcVariableName0 = lcVariableNames[0]
         lcVariableSet0 = v[lcVariableName0]
 
+        if not lcVariableSet0:
+            return [[None]]
 
-        zVars = [] # Output ILP variables
-        # for i, _ in enumerate(lcVariableSet0):
-        #     varsSetup = []
-        #
-        #     var = []
-        #     for currentV in iter(v):
-        #         var.extend(v[currentV][i])
-        #
-        #     if len(var) == 0:
-        #         if not (headConstrain or integrate):
-        #             zVars.append([None])
-        #
-        #         continue
-        #
-        #     if headConstrain or integrate:
-        #         varsSetup.extend(var)
-        #     else:
-        #         varsSetup.append(var)
-        varsSetup = []
+        # -----------------------------
+        # Build flattened var list(s)
+        # -----------------------------
+        batch_vars = []   # list of lists (per-row), unless headConstrain/integrate
+        
+        for i in range(len(lcVariableSet0)):
+            row = []
+            for currentV in lcVariableNames:
+                current_val = v[currentV][i] if i < len(v[currentV]) else None
+                # Flatten any nested structure to scalar values
+                flattened = self.flatten_to_scalars(current_val)
+                row.extend(flattened)
 
-        var = [currentV[0] for currentV in iter(lcVariableSet0)]
+            if headConstrain or integrate:
+                # accumulate globally
+                batch_vars.extend(row)
+            else:
+                # element-wise
+                if len(row) == 0:
+                    batch_vars.append([])     # <-- mark empty row; we'll return None for it
+                else:
+                    batch_vars.append(row)
+
+        # -----------------------------
+        # Build constraints
+        # -----------------------------
+        zVars = []
 
         if headConstrain or integrate:
-            varsSetup.extend(var)
+            # Global mode: if we have *no* buildable candidates, propagate None
+            if len(batch_vars) == 0:
+                zVars.append([None])
+            else:
+                # Filter out None values before passing to countVar
+                valid_vars = [v for v in batch_vars if v is not None]
+                if len(valid_vars) == 0:
+                    zVars.append([None])
+                else:
+                    r = myConstraintVarProcessor.countVar(
+                        model,
+                        *valid_vars,
+                        onlyConstrains=headConstrain,
+                        limitOp=cOperation,
+                        limit=cLimit,
+                        logicMethodName=logicMethodName,
+                    )
+                    zVars.append([r])
         else:
-            varsSetup.append(var)
+            # Element-wise mode
+            for row in batch_vars:
+                if len(row) == 0:
+                    zVars.append([None])
+                else:
+                    # Filter out None values
+                    valid_vars = [v for v in row if v is not None]
+                    if len(valid_vars) == 0:
+                        zVars.append([None])
+                    else:
+                        r = myConstraintVarProcessor.countVar(
+                            model,
+                            *valid_vars,
+                            onlyConstrains=headConstrain,
+                            limitOp=cOperation,
+                            limit=cLimit,
+                            logicMethodName=logicMethodName,
+                        )
+                        zVars.append([r])
 
-        # -- Use ILP variable setup to create constrains
-        if headConstrain or integrate:
-            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
-                                                         logicMethodName = logicMethodName)])
-        else:
-            for current_var in varsSetup:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
-                                                         logicMethodName = logicMethodName)])
-           
         if model is not None:
             model.update()
-            
+
         return zVars
 
-    
-    def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
+    def createAccumulatedCountConstraints(self, model, myConstraintVarProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
         
         # Ignore value of integrate
         integrate = True
@@ -455,20 +743,520 @@ class LogicalConstrain(LcElement):
              
         # -- Use ILP variable setup to create constrains   
         if headConstrain or integrate:
-            r = myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+            r = myConstraintVarProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
                                                      logicMethodName = logicMethodName)
             for _ in lcVariableSet0:
                 zVars.append([r])
         else:
             for current_var in varsSetup:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                zVars.append([myConstraintVarProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
                                                          logicMethodName = logicMethodName)])
        
         if model is not None:
             model.update()
             
         return zVars
+
+    def createCompareCountsConstraints(self, model, myConstraintVarProcessor,v, headConstrain, compareOp, diff, integrate, *, logicMethodName="COUNT_CMP"):
+        """
+        Build ILP constraints (and optionally return indicator vars) enforcing
+        compareOp between the **counts** of two variable sets.
+
+        compareOp : one of '>', '>=', '<', '<=', '==', '!='
+        diff      : constant offset  (we enforce  count(A) - count(B) ∘ diff)
+        """
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if len(lcVariableNames) != 2:
+            myLogger.error(
+                "%s Comparative Logical Constraint created with %i sets of "
+                "variables – need exactly two",
+                logicMethodName, len(lcVariableNames)
+            )
+            return []
+
+        nameA, nameB = lcVariableNames[:2]
+        setA, setB   = v[nameA], v[nameB]
+
+        if len(setA) != len(setB):
+            myLogger.error(
+                "%s has mismatching numbers of variable-tuples: %s=%i, %s=%i",
+                logicMethodName, nameA, len(setA), nameB, len(setB)
+            )
+            return []
+
+        zVars = []
+
+        # ---------------------------------------------------------------
+        # integrate / headConstrain ➜ single global constraint
+        # ---------------------------------------------------------------
+        if headConstrain or integrate:
+            varsA_acc = [lit for tupleA in setA for lit in tupleA]
+            varsB_acc = [lit for tupleB in setB for lit in tupleB]
+
+            r = myConstraintVarProcessor.compareCountsVar(
+                model,
+                varsA_acc,
+                varsB_acc,
+                compareOp=compareOp,
+                diff=diff,
+                onlyConstrains=headConstrain,
+                logicMethodName=logicMethodName,
+            )
+            zVars = [[r] for _ in setA]        # replicate to keep shape
+        # ---------------------------------------------------------------
+        # element-wise constraints
+        # ---------------------------------------------------------------
+        else:
+            for tupleA, tupleB in zip(setA, setB):
+                r = myConstraintVarProcessor.compareCountsVar(
+                    model,
+                    tupleA,
+                    tupleB,
+                    compareOp=compareOp,
+                    diff=diff,
+                    onlyConstrains=headConstrain,
+                    logicMethodName=logicMethodName,
+                )
+                zVars.append([r])
+
+        if model is not None:
+            model.update()
+        return zVars
+    
+    def createSummation(self, model, myConstraintVarProcessor, v, headConstrain, integrate, label=None, logicMethodName="SUMMATION"):
+        """
+        Build summation constraints for sumL.
         
+        Fixed: Properly handles nested constraint results that may have 
+        different shapes/indexing than the primary iteration variable.
+        """
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if not lcVariableNames:
+            return []
+            
+        lcVariableSet0 = v[lcVariableNames[0]]
+        
+        if not lcVariableSet0:
+            return []
+            
+        zVars = []
+        num_rows = len(lcVariableSet0)
+
+        if headConstrain or integrate:
+            # Global sum across all variables and all rows
+            # For global mode, collect ALL values from ALL variables
+            all_values = []
+            for name in lcVariableNames:
+                var_data = v[name]
+                if var_data is not None:
+                    all_values.extend(self.flatten_to_scalars(var_data))
+            
+            if len(all_values) == 0:
+                zVars.append([0])
+            else:
+                S = myConstraintVarProcessor.summationVar(model, *all_values, onlyConstrains = headConstrain, label=label)
+                zVars.append([S])
+        else:
+            # Element-wise per-row sums
+            for i in range(num_rows):
+                row = []
+                for name in lcVariableNames:
+                    var_data = v[name]
+                    
+                    if var_data is None:
+                        continue
+                    
+                    # Check if this variable has the same number of rows
+                    if len(var_data) == num_rows:
+                        # Aligned - use direct index
+                        if i < len(var_data):
+                            row.extend(self.flatten_to_scalars(var_data[i]))
+                    elif len(var_data) == 1:
+                        # Single row - broadcast to all iterations
+                        row.extend(self.flatten_to_scalars(var_data[0]))
+                    else:
+                        # Different number of rows - nested constraint result
+                        # with different indexing. For element-wise sum,
+                        # we can't properly align, so include all values
+                        # in first row only to avoid double-counting
+                        if i == 0:
+                            row.extend(self.flatten_to_scalars(var_data))
+                            myLogger.warning(f"{logicMethodName}: variable '{name}' has mismatched row count; ")
+                            
+                if len(row) == 0:
+                    zVars.append([0])
+                else:
+                    S = myConstraintVarProcessor.summationVar(model, *row, onlyConstrains = headConstrain)
+                    zVars.append([S])
+
+        if model is not None:
+            model.update()
+        return zVars
+
+    def createIotaSelection(self, model, myConstraintVarProcessor, v, headConstrain, integrate, temperature, logicMethodName):
+        """
+        Build ILP constraints / loss for definite description selection.
+        
+        The iota operator:
+        1. Collects all variables representing condition satisfaction
+        2. Enforces exactly one entity satisfies (uniqueness presupposition)
+        3. Returns selection distribution over entities
+        """
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+        
+        if not lcVariableNames:
+            myLogger.error(f"{logicMethodName} has no variables")
+            return []
+        
+        zVars = []
+        condition_vars = self._selectorConditionVars(
+            model, myConstraintVarProcessor, v, lcVariableNames
+        )
+            
+        # What an iotaL contributes depends on who consumes it.
+        #
+        # ``queryL`` needs the *selection distribution* — which entity was
+        # picked — so it can read that entity's attribute. Any other context
+        # consumes iotaL as a truth value inside a boolean combinator, and there
+        # the distribution is the wrong thing: it is a vector over this iota's
+        # own candidates, which generally has a different length from its
+        # siblings' groundings (e.g. entity-level 4 vs relation-level 16), so
+        # combining them raised a shape error. The well-defined truth value is
+        # the degree to which the definite description holds — "exactly one
+        # candidate satisfies phi" — which is a scalar and broadcasts against
+        # any sibling shape.
+        wants_selection = headConstrain or getattr(self, 'returnsSelection', False)
+
+        result = myConstraintVarProcessor.iotaVar(
+            model,
+            *condition_vars,
+            onlyConstrains=headConstrain,
+            temperature=temperature,
+            logicMethodName=logicMethodName,
+        )
+
+        if not wants_selection and torch.is_tensor(result) and result.numel() > 1:
+            # iotaVar(onlyConstrains=True) reports the presupposition *loss*;
+            # the satisfaction degree its boolean parent needs is 1 - loss.
+            uniqueness_loss = myConstraintVarProcessor.iotaVar(
+                model,
+                *condition_vars,
+                onlyConstrains=True,
+                temperature=temperature,
+                logicMethodName=logicMethodName,
+            )
+            result = 1.0 - uniqueness_loss
+
+        if len(condition_vars) == 0:
+            zVars.append([None])
+    
+        if isinstance(result, (list, tuple)):
+            zVars.append(list(result))
+        else:
+            zVars.append([result])
+        
+        if model is not None:
+            model.update()
+        
+        return zVars
+
+    def createMiotaSelection(self, model, myConstraintVarProcessor, v, headConstrain,
+                             integrate, threshold, hard, logicMethodName):
+        """Return independent membership scores for every grounded candidate."""
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if not lcVariableNames:
+            myLogger.error(f"{logicMethodName} has no variables")
+            return []
+
+        condition_vars = self._selectorConditionVars(
+            model, myConstraintVarProcessor, v, lcVariableNames
+        )
+
+        result = myConstraintVarProcessor.miotaVar(
+            model,
+            *condition_vars,
+            onlyConstrains=headConstrain,
+            threshold=threshold,
+            hard=hard,
+            logicMethodName=logicMethodName,
+        )
+        if result is None:
+            return [[None]] if not condition_vars else []
+        if isinstance(result, (list, tuple)):
+            return [list(result)]
+        return [[result]]
+
+    def _selectorConditionVars(self, model, processor, v, variable_names):
+        """Conjoin each entity-aligned selector row into one membership score."""
+        setups = self._collectVariableSetups(
+            variable_names[0], variable_names[1:], v
+        )
+        conditions = []
+        for row in setups:
+            row_conditions = []
+            for grounding in row:
+                valid = [value for value in grounding if value is not None]
+                if valid:
+                    row_conditions.append(processor.andVar(model, *valid))
+            if len(row_conditions) == 1:
+                conditions.append(row_conditions[0])
+            elif row_conditions:
+                conditions.append(processor.orVar(model, *row_conditions))
+        return conditions
+   
+    def _warnIfNoSubclassData(self, subclass_data, logicMethodName):
+        """Flag a queryL whose attribute concept resolved to no datanodes.
+
+        ``queryVar`` degrades to a uniform distribution when it gets no
+        per-entity class predictions, which looks like a working answer but
+        carries no information. The usual cause is declaring the attribute as a
+        free-standing ``EnumConcept(name=...)``: with no ``is_a`` link to the
+        entity concept it owns no datanodes, so the gather finds nothing.
+        Declare it on the entity instead —
+        ``object_node(name='material', ConceptClass=EnumConcept, values=[...])``.
+        """
+        if subclass_data:
+            return
+        attrName = getattr(getattr(self, 'concept', None), 'name', 'attribute')
+        myLogger.warning(
+            "%s: attribute concept '%s' resolved to no datanodes, so the query "
+            "distribution is uninformative. Declare the attribute on its entity "
+            "concept, e.g. entity(name='%s', ConceptClass=EnumConcept, values=[...]), "
+            "rather than as a free-standing EnumConcept.",
+            logicMethodName, attrName, attrName,
+        )
+
+    def createQuerySelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, integrate, temperature, logicMethodName):
+            """Build query selection over attribute subclasses.
+
+            Variables in *v* fall into two groups:
+
+            - **Selection variables** (from ``iotaL`` etc.) — entity selection weights.
+              These do NOT start with ``_ql_``.
+            - **Subclass-data variables** (added by ``queryL.__init__``) — per-entity
+              subclass predictions.  Their names start with ``_ql_``.
+
+            The method collects both groups and passes them to ``queryVar``.
+            """
+            try:
+                lcVariableNames = [name for name in iter(v)]
+            except StopIteration:
+                return []
+
+            if not lcVariableNames:
+                myLogger.error(f"{logicMethodName} has no variables")
+                return []
+
+            # -- Separate selection vars from subclass-data vars --------
+            sel_var_names = [n for n in lcVariableNames if not n.startswith('_ql_')]
+            sub_var_names = [n for n in lcVariableNames if n.startswith('_ql_')]
+
+            if not sel_var_names:
+                myLogger.error(f"{logicMethodName} has no selection variables")
+                return []
+
+            if not headConstrain:
+                selection_vars = []
+                for name in sel_var_names:
+                    for row in v[name]:
+                        if row:
+                            selection_vars.extend(row)
+
+                if len(selection_vars) == 0:
+                    zVars = [[None]]
+                    return zVars
+
+                subclass_data = None
+                if sub_var_names:
+                    subclass_data = self._collect_query_subclass_data(
+                        v, sub_var_names, 0, 1, len(subclasses))
+                    self._warnIfNoSubclassData(subclass_data, logicMethodName)
+
+                result = myConstraintVarProcessor.queryVar(
+                    model,
+                    concept,
+                    subclasses,
+                    selection_vars,
+                    subclass_data=subclass_data,
+                    onlyConstrains=False,
+                    temperature=temperature,
+                    multi_answer=getattr(self, '_multi_answer', False),
+                    threshold=getattr(self, 'threshold', None),
+                    logicMethodName=logicMethodName,
+                )
+                return [[result]]
+
+            # Iterate over the *selection* variables' row count
+            sel_var_0 = v[sel_var_names[0]]
+            num_iterations = len(sel_var_0)
+
+            zVars = []
+
+            for i in range(num_iterations):
+                # Collect selection values for this row
+                selection_vars = []
+                for name in sel_var_names:
+                    if i < len(v[name]):
+                        selection_vars.extend(v[name][i])
+
+                if len(selection_vars) == 0:
+                    zVars.append([None])
+                    continue
+
+                # Collect subclass data if _ql_* variables are present
+                subclass_data = None
+                if sub_var_names:
+                    subclass_data = self._collect_query_subclass_data(
+                        v, sub_var_names, i, num_iterations, len(subclasses))
+
+                result = myConstraintVarProcessor.queryVar(
+                    model,
+                    concept,
+                    subclasses,
+                    selection_vars,
+                    subclass_data=subclass_data,
+                    onlyConstrains=headConstrain,
+                    temperature=temperature,
+                    multi_answer=getattr(self, '_multi_answer', False),
+                    threshold=getattr(self, 'threshold', None),
+                    logicMethodName=logicMethodName,
+                )
+
+                zVars.append([result])
+
+            return zVars
+
+    @staticmethod
+    def _collect_query_subclass_data(v, sub_var_names, iteration, num_sel_iterations, num_subclasses):
+        """Gather per-entity subclass prediction data from ``_ql_*`` variables.
+
+        Returns ``subclass_data[entity_idx]`` = list of *num_subclasses* values,
+        one per subclass, representing the model's prediction for that entity.
+
+        Two layouts are handled:
+
+        * **EnumConcept** (single ``_ql_attr`` variable): each row already
+          contains *K* values (one per enum member).
+        * **is_a subtypes** (multiple ``_ql_sub_N`` variables): each variable
+          has one value per entity per row.
+
+        In verification mode (``num_sel_iterations == 1``) the selection
+        variables have a single row while the subclass variables have *N*
+        rows (one per entity).  We return all *N* entities' data so that
+        ``queryVar`` can look up the selected entity.
+
+        In loss mode (after the constructor's split, ``num_sel_iterations > 1``)
+        every variable has *N* rows; we return only row *iteration*.
+        """
+        if num_sel_iterations == 1:
+            # Verification / ILP mode — collect ALL entity rows
+            if len(sub_var_names) == 1:
+                # EnumConcept: single var, K values per entity row.
+                #
+                # In loss mode the variable is batched: one group holding K
+                # column tensors of length N (one entry per entity), rather than
+                # N rows of K scalars. Transpose it back, otherwise queryVar's
+                # per-row read keeps only entity 0 and the answer collapses to
+                # that single entity's class distribution.
+                rows = []
+                for group in v[sub_var_names[0]]:
+                    columns = list(group)
+                    batched = (columns
+                               and all(torch.is_tensor(c) and c.numel() > 1 for c in columns)
+                               and len({c.numel() for c in columns}) == 1)
+                    if batched:
+                        for entity in range(columns[0].numel()):
+                            rows.append([c.reshape(-1)[entity] for c in columns])
+                    else:
+                        rows.append(columns)
+                return rows
+            else:
+                # is_a subtypes: K vars, 1 value per entity per var
+                num_entities = len(v[sub_var_names[0]])
+                result = []
+                for entity_idx in range(num_entities):
+                    entity_subs = []
+                    for name in sub_var_names:
+                        if entity_idx < len(v[name]):
+                            entity_subs.extend(v[name][entity_idx])
+                    result.append(entity_subs)
+                return result
+        else:
+            # Loss mode (after split) — one entity per iteration
+            if len(sub_var_names) == 1:
+                var_data = v[sub_var_names[0]]
+                if iteration < len(var_data):
+                    return [list(var_data[iteration])]
+                return None
+            else:
+                entity_subs = []
+                for name in sub_var_names:
+                    if iteration < len(v[name]):
+                        entity_subs.extend(v[name][iteration])
+                return [entity_subs] if entity_subs else None
+
+    def createSameSelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, logicMethodName):
+        """
+        Build constraints checking whether all entities share the same subclass.
+
+        Each variable name in v corresponds to one entity's subclass indicator
+        variables (resolved from concept variable bindings like ``color('x')``).
+        Collects per-entity groups and delegates to sameVar for comparison.
+        """
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if not lcVariableNames:
+            myLogger.error(f"{logicMethodName} has no variables")
+            return []
+
+        lcVariableName0 = lcVariableNames[0]
+        lcVariableSet0 = v[lcVariableName0]
+
+        zVars = []
+
+        for i, _ in enumerate(lcVariableSet0):
+            entity_var_groups = []
+            for currentV in lcVariableNames:
+                group = list(v[currentV][i]) if i < len(v[currentV]) else []
+                entity_var_groups.append(group)
+
+            if len(entity_var_groups) < 2:
+                zVars.append([None])
+                continue
+
+            result = myConstraintVarProcessor.sameVar(
+                model,
+                concept,
+                subclasses,
+                *entity_var_groups,
+                onlyConstrains=headConstrain,
+                logicMethodName=logicMethodName,
+            )
+
+            zVars.append([result])
+
+        if model is not None:
+            model.update()
+
+        return zVars
 
 def use_grad(grad):
     if not grad:
@@ -480,9 +1268,9 @@ class notL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createSingleVarILPConstrains("Not", myIlpBooleanProcessor.notVar, model, v, headConstrain)
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createSingleVarLogicalConstrains("Not", myConstraintVarProcessor.notVar, model, v, headConstrain)
 
 # ----------------- Logical
 
@@ -490,202 +1278,882 @@ class andL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createLogicalConstrains('And', myConstraintVarProcessor.andVar, model, v, headConstrain)        
 
 class orL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, headConstrain)
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createLogicalConstrains('Or', myConstraintVarProcessor.orVar, model, v, headConstrain)
     
 class nandL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, headConstrain)
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createLogicalConstrains('Nand', myConstraintVarProcessor.nandVar, model, v, headConstrain)
         
 class ifL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): #use_grad(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad): #use_grad(myConstraintVarProcessor.grad):
+            return self.createLogicalConstrains('If', myConstraintVarProcessor.ifVar, model, v, headConstrain)
     
 class norL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createLogicalConstrains('Nor', myConstraintVarProcessor.norVar, model, v, headConstrain)
 
 class xorL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
-    
-class epqL(LogicalConstrain):
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createLogicalConstrains('Xor', myConstraintVarProcessor.xorVar, model, v, headConstrain)
+
+class equivalenceL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
-            return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
-     
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad): 
+            return self.createLogicalConstrains('Equivalence', myConstraintVarProcessor.equivalenceVar, model, v, headConstrain)
+
+
+class iffL(equivalenceL):
+    """Bi-conditional logical constraint (A ↔ B).
+
+    This is a user-facing alias for `equivalenceL`.
+    Semantics: true when all provided operands have the same truth value.
+    """
+    pass
+
+# ----------------- Counting
+
+class _CountBaseL(LogicalConstrain):
+    """
+    Element-wise counting constraint.
+    Sub-classes set `limitOp` ('<=', '>=', '==').
+    Optionally set `fixedLimit` (int) to hard-code a limit that
+    *cannot* be overridden by a trailing integer.
+
+    The count/limit can be supplied in two mutually-exclusive ways:
+
+      * Explicit keyword — ``exactL(c1, c2, c3, limit=2)``.
+        Preferred: the intent is visible at the call site and the
+        element list is never accidentally conflated with the count.
+      * Trailing positional int — ``exactL(c1, c2, c3, 2)``.
+        Supported for backward compatibility. Mixing both raises
+        ``ValueError`` so the ambiguous form can never silently apply.
+    """
+    limitOp: str = None            # must be provided by subclass
+    fixedLimit: int | None = None  # override in subclass for 'exists'-style LCs
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None,
+                 limit=None):
+        if limit is not None:
+            if self.fixedLimit is not None:
+                raise ValueError(
+                    f"{type(self).__name__}: does not accept an explicit "
+                    f"limit= — its count is fixed at {self.fixedLimit}."
+                )
+            if e and isinstance(e[-1], int):
+                raise ValueError(
+                    f"{type(self).__name__}: specify the count either as a "
+                    f"trailing int or via limit=, not both "
+                    f"(got trailing {e[-1]} and limit={limit})."
+                )
+        elif self.fixedLimit is None and e and isinstance(e[-1], int):
+            # Silent trailing-int form: exactL(c1, c2, c3, 2) means ==2, but
+            # a plain int in the element list is easy to mistake for another
+            # constraint. Warn loudly and nudge toward the explicit keyword.
+            warnings.warn(
+                f"{type(self).__name__}: passing the count as a trailing "
+                f"positional int is ambiguous — a plain int mixed into the "
+                f"element list is silently consumed as the limit. Use the "
+                f"explicit keyword form instead: "
+                f"{type(self).__name__}(..., limit={e[-1]}).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._explicitLimit = limit
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+
+    def __call__(self,
+                 model,
+                 myConstraintVarProcessor,
+                 v,
+                 headConstrain=False,
+                 integrate=False):
+
+        # ── decide the numeric limit ───────────────────────────────────────
+        if self.fixedLimit is not None:
+            limit = self.fixedLimit
+        elif self._explicitLimit is not None:
+            limit = self._explicitLimit
+        else:
+            limit = (
+                self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 1
+            )
+
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createCountConstraints(
+                model,
+                myConstraintVarProcessor,
+                v,
+                headConstrain,
+                self.limitOp,
+                limit,
+                integrate,
+                logicMethodName=str(self),
+            )
+      
+class atMostL(_CountBaseL):      limitOp = "<="
+class atLeastL(_CountBaseL):     limitOp = ">="
+class exactL(_CountBaseL):       limitOp = "=="
+class existsL(_CountBaseL):
+    limitOp = ">="
+    fixedLimit = 1
+
+# ----------------- Accumulated Counting
+
+class _AccumulatedCountBaseL(LogicalConstrain):
+    """
+    Global (accumulated) counting constraint.
+    Same parameters as _CountBaseL, including the ``limit=`` keyword
+    for explicit-count form.
+    """
+    limitOp: str = None
+    fixedLimit: int | None = None
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None,
+                 limit=None):
+        if limit is not None:
+            if self.fixedLimit is not None:
+                raise ValueError(
+                    f"{type(self).__name__}: does not accept an explicit "
+                    f"limit= — its count is fixed at {self.fixedLimit}."
+                )
+            if e and isinstance(e[-1], int):
+                raise ValueError(
+                    f"{type(self).__name__}: specify the count either as a "
+                    f"trailing int or via limit=, not both "
+                    f"(got trailing {e[-1]} and limit={limit})."
+                )
+        elif self.fixedLimit is None and e and isinstance(e[-1], int):
+            warnings.warn(
+                f"{type(self).__name__}: passing the count as a trailing "
+                f"positional int is ambiguous — a plain int mixed into the "
+                f"element list is silently consumed as the limit. Use the "
+                f"explicit keyword form instead: "
+                f"{type(self).__name__}(..., limit={e[-1]}).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._explicitLimit = limit
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+
+    def __call__(self,
+                 model,
+                 myConstraintVarProcessor,
+                 v,
+                 headConstrain=False,
+                 integrate=False):
+
+        if self.fixedLimit is not None:
+            limit = self.fixedLimit
+        elif self._explicitLimit is not None:
+            limit = self._explicitLimit
+        else:
+            limit = (
+                self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 1
+            )
+
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createAccumulatedCountConstraints(
+                model,
+                myConstraintVarProcessor,
+                v,
+                headConstrain,
+                self.limitOp,
+                limit,
+                integrate,
+                logicMethodName=str(self),
+            )
+       
+class atMostAL(_AccumulatedCountBaseL):   limitOp = "<="
+class atLeastAL(_AccumulatedCountBaseL):  limitOp = ">="
+class exactAL(_AccumulatedCountBaseL):    limitOp = "=="
+class existsAL(_AccumulatedCountBaseL):   
+    limitOp = ">="
+    fixedLimit = 1 
+
+# -----------------  Comparative counting constraints (count(A) ∘ count(B)+diff)
+
+class _CompareCountsBaseL(LogicalConstrain):
+    """Base class – subclasses only need to set `compareOp`."""
+    compareOp = None  # MUST be overridden: '>', '>=', '<', '<=', '==', '!='
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+
+    def __call__(self,
+                 model,
+                 myConstraintVarProcessor,
+                 v,
+                 headConstrain=False,
+                 integrate=False):
+        # optional trailing int is the diff
+        diff = self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 0
+
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createCompareCountsConstraints(
+                model,
+                myConstraintVarProcessor,
+                v,
+                headConstrain,
+                self.compareOp,
+                diff,
+                integrate,
+                logicMethodName=str(self),
+            )
+
+class greaterL(_CompareCountsBaseL):       compareOp = '>'
+class greaterEqL(_CompareCountsBaseL):     compareOp = '>='
+class lessL(_CompareCountsBaseL):          compareOp = '<'
+class lessEqL(_CompareCountsBaseL):        compareOp = '<='
+class equalCountsL(_CompareCountsBaseL):   compareOp = '=='     # not to confuse with eqL (path-equality)
+class notEqualCountsL(_CompareCountsBaseL): compareOp = '!='
+
+# ----------------- forall
+class forAllL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createLogicalConstrains('If', myConstraintVarProcessor.ifVar, model, v, headConstrain)     
+        
 # ----------------- Auxiliary
      
 class eqL(LogicalConstrain):
-    def __init__(self, *e, active = True, sampleEntries = False, name = None):
-        #if e is len 2 and element index 1 is of type String
+    """Value-filtering logical constraint (issue #372).
+
+    Selects data nodes of a concept where a given attribute matches a
+    given value (or one of several values). Typically used inside a
+    ``path=`` tuple to pick a specific side of a relation:
+
+        # "the location whose 'text' attribute equals 'l2'"
+        ifL(
+            andL(
+                entity('e1'),
+                step('s1'),
+                action_label.destroy(
+                    'a1',
+                    path=(('s1', action_step.reversed),
+                          ('e1', action_entity.reversed)),
+                ),
+            ),
+            location(path=('e1', location_rel,
+                           eqL(location, 'text', 'l2'))),
+        )
+
+    Supported forms::
+
+        eqL(concept, value)                # equivalent to
+                                           #   eqL(concept, 'instanceID', value)
+        eqL(concept, 'attr', value)        # attr == value
+        eqL(concept, 'attr', {v1, v2, v3}) # attr in {v1, v2, v3}
+
+    Behaviour notes (also see #372):
+
+    * A scalar value in the third position is auto-wrapped in a
+      single-element set so matching is always **exact equality**.
+      Before this fix, ``eqL(location, 'text', 'l2')`` used Python's
+      ``in`` operator on the string ``'l2'`` directly, which silently
+      matched any substring (e.g. ``'l'``).
+    * ``active``, ``sampleEntries``, ``name`` and ``p`` are now
+      forwarded to the :class:`LogicalConstrain` base class, so
+      ``eqL(..., active=False)`` or a named ``eqL`` actually take
+      effect.
+    """
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+        # 2-arg form: eqL(concept, value) → filter on instanceID.
         if len(e) == 2 and isinstance(e[1], str):
-            e = (e[0],  "instanceID", e[1])  
-        LogicalConstrain.__init__(self, *e, p=100)
+            e = (e[0], "instanceID", e[1])
+
+        # Auto-wrap / coerce the required-value into a ``set`` so the
+        # downstream ``attributeValue in requiredValue`` check performs
+        # exact-equality, not substring containment (issue #372).  The
+        # ``LcElement`` validator also requires position 2 to be a
+        # ``set`` — by coercing common containers here the user can pass
+        # a scalar, list, tuple, frozenset or set interchangeably.
+        if len(e) == 3:
+            required = e[2]
+            if isinstance(required, set):
+                pass
+            elif isinstance(required, (frozenset, list, tuple)):
+                e = (e[0], e[1], set(required))
+            else:
+                e = (e[0], e[1], {required})
+
+        LogicalConstrain.__init__(
+            self, *e, p=p, active=active,
+            sampleEntries=sampleEntries, name=name,
+        )
         self.headLC = False
     
 class fixedL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
-            return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad): 
+            return self.createSingleVarLogicalConstrains("Fixed", myConstraintVarProcessor.fixedVar, model, v, headConstrain)        
+        
+# ----------------- Summation
+
+class sumL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-# ----------------- Counting
-
-class exactL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False, label=None):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad): 
+            return self.createSummation(model, myConstraintVarProcessor, v, headConstrain, integrate, label=label, logicMethodName='Summation')
         
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-
-        cOperation = '=='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class existsL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        cLimit = 1
-
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class atLeastL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+#----------------- Definite Description
+class iotaL(LogicalConstrain):
+    """
+    Definite description operator - selects THE unique entity satisfying a condition.
     
-class atMostL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '<='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-        
-        
-# ----------------- Accumulated Counting
-
-class exactAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-
-        cOperation = '=='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class existsAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        cLimit = 1
-
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class atLeastAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+    From Russell's theory of definite descriptions:
+    iota(var, expr) returns the entity that uniquely satisfies expr.
     
-class atMostAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '<='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-        
-# ----------------- forall
-class forAllL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)        
+    Semantics:
+        - Returns a probability distribution over entities (soft selection via softmax)
+        - In ILP: enforces exactly one entity satisfies, returns selection variables
+        - Presupposes existence and uniqueness of satisfying entity
     
+    Usage:
+        # Select THE person who works for Microsoft
+        iotaL(person(V.x), path=(V.x, work_for, eqL(organization, 'name', 'Microsoft')))
         
+        # Select THE sphere in the scene (assuming exactly one)
+        iotaL(sphere(V.x))
+        
+        # Can be nested in other constraints
+        # "Is there something left of THE blue sphere?"
+        existsL(left(V.x, iotaL(andL(blue(V.y), sphere(V.y)))))
+    
+    Parameters:
+        *e: Constraint elements defining the selection condition
+        p: Priority (0-100, higher = more important)
+        temperature: Softmax temperature for differentiable selection (lower = harder)
+        active: Enable/disable constraint
+        sampleEntries: Use sampling for large groundings
+        name: Constraint name (auto-generated if None)
+    
+    Returns:
+        - ILP: Selection indicator variables (one-hot among satisfying entities)
+        - Loss: Entity distribution tensor [N] via softmax over satisfaction scores
+        - Sample: Selected entity indices
+        - Verify: Index of selected entity or -1 if violation
+    
+    Notes:
+        - Unlike existsL which returns boolean, iotaL returns entity selection
+        - Implicitly enforces uniqueness (exactly one should satisfy)
+        - For soft selection during training, uses temperature-scaled softmax
+        - Gradient flows through softmax for differentiable entity selection
+    """
+    
+    def __init__(self, *e, p=100, temperature=1.0, active=True, 
+                 sampleEntries=False, name=None):
+        super().__init__(*e, p=p, active=active, 
+                        sampleEntries=sampleEntries, name=name)
+        self._prepareEntitySelector()
+        self.temperature = temperature
+        # Mark as returning entity selection rather than boolean
+        self._returns_selection = True
+
+    def _prepareEntitySelector(self):
+        """Expose a selector condition and remember its output variable."""
+        condition = self.e[0] if len(self.e) == 1 and isinstance(self.e[0], andL) else None
+        condition_items = condition.e if condition is not None else self.e
+        relational = any(
+            isinstance(item, V)
+            and item.v is not None
+            for item in condition_items
+        )
+        if condition is not None and relational:
+            self.e = list(condition_items)
+
+        self.selection_variable = next(
+            (item.name for item in condition_items
+             if isinstance(item, V) and item.name is not None),
+            None,
+        )
+
+    def __call__(self, model, myConstraintVarProcessor, v, 
+                 headConstrain=False, integrate=False):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createIotaSelection(
+                model,
+                myConstraintVarProcessor,
+                v,
+                headConstrain,
+                integrate,
+                temperature=self.temperature,
+                logicMethodName=str(self),
+            )
+
+class miotaL(LogicalConstrain):
+    """Multi-answer entity selector.
+
+    Unlike :class:`iotaL`, this operator has no existence or uniqueness
+    presupposition.  It retains one independent membership score per grounded
+    candidate and decodes every score greater than or equal to ``threshold``.
+    """
+
+    def __init__(self, *e, threshold=0.5, hard=False, p=100, active=True,
+                 sampleEntries=False, name=None):
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+            raise TypeError("miotaL: threshold must be a number in [0, 1]")
+        if not 0.0 <= float(threshold) <= 1.0:
+            raise ValueError("miotaL: threshold must be in [0, 1]")
+        if not isinstance(hard, bool):
+            raise TypeError("miotaL: hard must be a bool")
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+        iotaL._prepareEntitySelector(self)
+        self.threshold = float(threshold)
+        self.hard = hard
+        self._returns_selection = True
+
+    def __call__(self, model, myConstraintVarProcessor, v,
+                 headConstrain=False, integrate=False):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createMiotaSelection(
+                model,
+                myConstraintVarProcessor,
+                v,
+                headConstrain,
+                integrate,
+                threshold=self.threshold,
+                hard=self.hard,
+                logicMethodName=str(self),
+            )
+    
+class queryL(LogicalConstrain):
+        """
+        Query constraint for multiclass attribute concepts.
+        
+        Given a multiclass concept (parent with subclasses via is_a, or
+        EnumConcept) and an entity selection, returns the most probable
+        subclass.  ``iotaL`` produces the historical single ``[K]`` answer;
+        one direct ``miotaL`` produces a candidate-aligned ``[N, K]`` joint
+        distribution and decodes unselected positions as ``-1``.
+        
+        Usage:
+            # Define material as parent concept with subclasses
+            material = object_node(name='material')
+            metal = object_node(name='metal')
+            rubber = object_node(name='rubber')
+            metal.is_a(material)
+            rubber.is_a(material)
+            
+            # Query: "What material is THE big sphere?"
+            answer = queryL(
+                material,
+                iotaL(andL(big('x'), sphere(path='x')))
+            )
+        """
+        
+        def __init__(self, concept, *e, p=100, temperature=1.0, active=True,
+                    sampleEntries=False, name=None):
+            from domiknows.graph.concept import EnumConcept
+
+            def contains_miota(element):
+                return isinstance(element, miotaL) or (
+                    isinstance(element, LogicalConstrain)
+                    and any(contains_miota(child) for child in element.e)
+                )
+
+            direct_miota = [element for element in e if isinstance(element, miotaL)]
+            has_nested_miota = any(
+                contains_miota(element) and not isinstance(element, miotaL)
+                for element in e
+            )
+            if has_nested_miota:
+                raise ValueError(
+                    "multi-answer queryL requires one direct miotaL selector; "
+                    "miotaL cannot be nested indirectly inside another selector"
+                )
+            if direct_miota and (len(direct_miota) != 1 or len(e) != 1):
+                raise ValueError(
+                    "multi-answer queryL requires exactly one direct miotaL "
+                    "selector and no additional selector operands"
+                )
+
+            self._multi_answer = bool(direct_miota)
+            self._multi_selector = direct_miota[0] if direct_miota else None
+
+            # Build concept variable bindings so the constraint constructor
+            # collects per-entity subclass predictions into v.  This lets
+            # queryVar see which subclass each entity actually has.
+            attr_elements = []
+            if isinstance(concept, EnumConcept):
+                binding = concept('_ql_attr')
+                if isinstance(binding, list):
+                    attr_elements = [b for b in binding if b is not None]
+            else:
+                sub_idx = 0
+                for rel in concept._in.get('is_a', []):
+                    sub = rel.src
+                    sub_binding = sub(f'_ql_sub_{sub_idx}')
+                    sub_idx += 1
+                    if isinstance(sub_binding, list):
+                        attr_elements.extend(b for b in sub_binding if b is not None)
+
+            super().__init__(*e, *attr_elements, p=p, active=active,
+                            sampleEntries=sampleEntries, name=name)
+
+            # queryL is the one consumer that needs an iotaL's *selection
+            # distribution* (which entity was picked) rather than a truth
+            # degree. Mark the iotaL operands so createIotaSelection knows to
+            # hand back the distribution; every other (boolean) context gets a
+            # broadcastable satisfaction scalar instead.
+            for element in self.e:
+                if isinstance(element, iotaL):
+                    element.returnsSelection = True
+
+            self.concept = concept
+            self.temperature = temperature
+            self._returns_value = True
+            self._subclasses = None
+            self._subclass_names = None
+            self._init_subclasses()
+
+        @property
+        def is_multi_answer(self):
+            return getattr(self, '_multi_answer', False)
+
+        @property
+        def threshold(self):
+            selector = getattr(self, '_multi_selector', None)
+            return selector.threshold if selector is not None else None
+    
+        def _init_subclasses(self):
+            """Initialize subclass information from concept."""
+            from domiknows.graph.concept import EnumConcept
+            
+            if isinstance(self.concept, EnumConcept):
+                self._subclass_names = list(self.concept.enum)
+                self._subclasses = [(self.concept, name, i) 
+                                for i, name in enumerate(self._subclass_names)]
+            else:
+                self._subclasses = []
+                self._subclass_names = []
+                
+                for rel in self.concept._in.get('is_a', []):
+                    subclass = rel.src
+                    self._subclasses.append((subclass, subclass.name, len(self._subclasses)))
+                    self._subclass_names.append(subclass.name)
+                    
+            if not self._subclasses:
+                raise ValueError(f"Concept '{self.concept.name}' has no subclasses.")
+        
+        @property
+        def num_subclasses(self):
+            return len(self._subclasses)
+        
+        def get_subclass_name(self, index):
+            if 0 <= index < len(self._subclass_names):
+                return self._subclass_names[index]
+            return None
+        
+        def __call__(self, model, myConstraintVarProcessor, v, 
+                    headConstrain=False, integrate=False):
+            with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+                return self.createQuerySelection(
+                    model,
+                    self.concept,        
+                    self._subclasses,    
+                    myConstraintVarProcessor, 
+                    v, 
+                    headConstrain, 
+                    integrate,
+                    temperature=self.temperature,
+                    logicMethodName=str(self),
+                )
+
+class sameL(LogicalConstrain):
+        """
+        Same-attribute constraint for multiclass concepts.
+
+        Given a multiclass concept (parent with subclasses via is_a, or EnumConcept)
+        and entity variable names, returns true iff all entities share the same
+        subclass value.
+
+        Semantics:
+            result = OR_j( AND_i( entity_i has subclass_j ) )
+
+        Usage:
+            color = EnumConcept(name='color', values=['red', 'blue', 'green'])
+
+            # Check: "Do entities x and y have the same color?"
+            sameL(color, 'x', 'y')
+
+            # Typically used within a pair/relation context:
+            ifL(right_of('x', 'y'), sameL(color, 'x', 'y'))
+        """
+
+        def __init__(self, concept, *e, p=100, active=True,
+                    sampleEntries=False, name=None):
+
+            # Convert string variable names to concept variable bindings
+            converted = []
+            for var in e:
+                if isinstance(var, str):
+                    binding = concept(var)  # e.g. color('x') -> [tuple, V, error_or_None]
+                    if isinstance(binding, list):
+                        converted.extend(b for b in binding if b is not None)
+                    else:
+                        converted.append(binding)
+                else:
+                    converted.append(var)
+
+            super().__init__(*converted, p=p, active=active,
+                            sampleEntries=sampleEntries, name=name)
+            self.concept = concept
+            self._returns_value = False
+            self._subclasses = None
+            self._subclass_names = None
+            self._init_subclasses()
+
+        def _init_subclasses(self):
+            """Initialize subclass information from concept."""
+            from domiknows.graph.concept import EnumConcept
+
+            if isinstance(self.concept, EnumConcept):
+                self._subclass_names = list(self.concept.enum)
+                self._subclasses = [(self.concept, name, i)
+                                for i, name in enumerate(self._subclass_names)]
+            else:
+                self._subclasses = []
+                self._subclass_names = []
+
+                for rel in self.concept._in.get('is_a', []):
+                    subclass = rel.src
+                    self._subclasses.append((subclass, subclass.name, len(self._subclasses)))
+                    self._subclass_names.append(subclass.name)
+
+            if not self._subclasses:
+                raise ValueError(f"Concept '{self.concept.name}' has no subclasses.")
+
+        def __call__(self, model, myConstraintVarProcessor, v,
+                    headConstrain=False, integrate=False):
+            with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+                return self.createSameSelection(
+                    model,
+                    self.concept,
+                    self._subclasses,
+                    myConstraintVarProcessor,
+                    v,
+                    headConstrain,
+                    logicMethodName=str(self),
+                )
+
+class differentL(LogicalConstrain):
+        """
+        Different-attribute constraint for multiclass concepts.
+
+        Negation of sameL: returns true iff NOT all entities share the same
+        subclass value (i.e., at least one entity differs).
+
+        Semantics:
+            result = NOT( OR_j( AND_i( entity_i has subclass_j ) ) )
+
+        Usage:
+            color = EnumConcept(name='color', values=['red', 'blue', 'green'])
+
+            # Check: "Do entities x and y have different colors?"
+            differentL(color, 'x', 'y')
+        """
+
+        def __init__(self, concept, *e, p=100, active=True,
+                    sampleEntries=False, name=None):
+
+            # Convert string variable names to concept variable bindings
+            converted = []
+            for var in e:
+                if isinstance(var, str):
+                    binding = concept(var)
+                    if isinstance(binding, list):
+                        converted.extend(b for b in binding if b is not None)
+                    else:
+                        converted.append(binding)
+                else:
+                    converted.append(var)
+
+            super().__init__(*converted, p=p, active=active,
+                            sampleEntries=sampleEntries, name=name)
+            self.concept = concept
+            self._returns_value = False
+            self._subclasses = None
+            self._subclass_names = None
+            self._init_subclasses()
+
+        def _init_subclasses(self):
+            """Initialize subclass information from concept."""
+            from domiknows.graph.concept import EnumConcept
+
+            if isinstance(self.concept, EnumConcept):
+                self._subclass_names = list(self.concept.enum)
+                self._subclasses = [(self.concept, name, i)
+                                for i, name in enumerate(self._subclass_names)]
+            else:
+                self._subclasses = []
+                self._subclass_names = []
+
+                for rel in self.concept._in.get('is_a', []):
+                    subclass = rel.src
+                    self._subclasses.append((subclass, subclass.name, len(self._subclasses)))
+                    self._subclass_names.append(subclass.name)
+
+            if not self._subclasses:
+                raise ValueError(f"Concept '{self.concept.name}' has no subclasses.")
+
+        def __call__(self, model, myConstraintVarProcessor, v,
+                    headConstrain=False, integrate=False):
+            with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+                same_result = self.createSameSelection(
+                    model,
+                    self.concept,
+                    self._subclasses,
+                    myConstraintVarProcessor,
+                    v,
+                    headConstrain,
+                    logicMethodName=str(self),
+                )
+                # Negate each result: differentL = NOT(sameL)
+                negated = []
+                for row in same_result:
+                    neg_row = []
+                    for val in row:
+                        if val is None:
+                            neg_row.append(None)
+                        else:
+                            neg_row.append(
+                                myConstraintVarProcessor.notVar(model, val))
+                    negated.append(neg_row)
+                return negated
+
+class execute:
+    """
+    Wrapper for logical constraints that marks them as executable rather than standard constraints.
+    
+    When a LogicalConstrain is wrapped with execute(), it is moved from graph.logicalConstrains
+    to graph.executableLCs. This allows for different processing of executable constraints
+    vs standard logical constraints.
+    
+    Usage:
+        constraint1 = execute(andL(p1("x"), p2("y")))
+        
+    The wrapped constraint will be accessible via graph.executableLCs instead of 
+    graph.logicalConstrains.
+    """
+    
+    def __init__(self, lc, name=None):
+        """
+        Initialize an executable constraint wrapper.
+        
+        Args:
+            lc: LogicalConstrain instance to wrap
+            name: Optional name for this executable constraint
+        """
+        if not isinstance(lc, LogicalConstrain):
+            raise TypeError(f"execute() requires a LogicalConstrain instance, got {type(lc).__name__}")
+        
+        self.innerLC = lc
+        self.graph = lc.graph
+        
+        # Remove from logicalConstrains (it was added there during LogicalConstrain.__init__)
+        if lc.lcName in self.graph.logicalConstrains:
+            del self.graph.logicalConstrains[lc.lcName]
+        
+        # Generate name for executable constraint
+        self.lcName = "ELC%i" % (len(self.graph.executableLCs))
+        
+        if name is not None:
+            self.name = name
+        else:
+            self.name = self.lcName
+        
+        # Update the wrapped constraint's name reference
+        self.innerLC.lcName = self.lcName
+        self.innerLC.name = self.name
+        
+        # Add to executableLCs
+        self.graph.executableLCs[self.lcName] = self
+        
+        # Copy relevant attributes from wrapped constraint
+        self.headLC = self.innerLC.headLC
+        self.active = self.innerLC.declared_active
+        self.p = self.innerLC.p
+        self.e = self.innerLC.e
+        self.sampleEntries = self.innerLC.sampleEntries
+    
+    def __str__(self):
+        return self.lcName
+    
+    def __repr__(self):
+        return f"{self.lcName}(execute<{self.innerLC.__class__.__name__}>)"
+    
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain=False, integrate=False):
+        """Delegate to wrapped constraint's __call__ method."""
+        return self.innerLC(model, myConstraintVarProcessor, v, headConstrain, integrate)
+    
+    def strEs(self):
+        """Delegate to wrapped constraint's strEs method."""
+        return self.innerLC.strEs()
+    
+    def getLcConcepts(self):
+        """Delegate to wrapped constraint's getLcConcepts method."""
+        return self.innerLC.getLcConcepts()
+
+    @property
+    def declared_active(self):
+        """The wrapper's explicit activation flag before concept filtering."""
+        return self._active
+
+    @property
+    def active(self):
+        """Whether both the wrapper and its inner constraint are active."""
+        return self._active and self.innerLC.active
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+        # Executable wrappers and their inner constraint represent one logical
+        # activation flag.  Some established call paths update only the
+        # wrapper, while others update both explicitly.
+        self.innerLC.active = value
+
+    def effective_active(self):
+        """Property-compatible callable for graph execution filtering."""
+        return self.active

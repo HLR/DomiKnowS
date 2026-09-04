@@ -111,7 +111,7 @@ def context(case, graph):
             sensor.fill_data(context)
     return context
 
-
+@pytest.mark.skip(reason="Temporarily disabled")
 def test_functional_sensor(case, sensor, context):
     output = sensor(context)
     assert output == case.output

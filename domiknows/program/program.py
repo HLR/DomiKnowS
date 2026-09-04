@@ -1,8 +1,10 @@
 import logging
+import os
 import torch
+
+from ..utils import consume, detuple
 from tqdm import tqdm
 
-from ..utils import consume, entuple, detuple
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
@@ -13,150 +15,8 @@ def get_len(dataset, default=None):
     except TypeError:  # `generator` does not have __len__
         return default
 
-
-class dbUpdate():
-    def getTimeStamp(self):
-        from datetime import datetime, timezone, timedelta
-
-        timeNow = datetime.now(tz=timezone.utc)
-        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
-        timestamp_micros = (timeNow - epoch) // timedelta(microseconds=1)
-
-        return timestamp_micros
-
-    def __init__(self, graph):
-        self.experimentID = "startAt_%d"%(self.getTimeStamp())
-
-        import os
-        self.cwd = os.getcwd()
-        self.cwd = os.path.basename(self.cwd)
-
-        import __main__
-        if hasattr(__main__, '__file__'):
-            self.programName = os.path.basename(__main__.__file__)
-            if self.programName.index('.') >= 0:
-                self.programName = self.programName[:self.programName.index('.')]
-        else:
-            self.programName = ''
-
-        try:
-            import os
-            from pathlib import Path
-
-            _dir_path = Path(os.path.realpath(__file__))
-            dir_path = _dir_path.parent.parent.parent
-
-            mongoDBPermFile = 'MongoDB-DK.pem'
-            mongoDBPermPath = None
-
-            for root, dir, files in os.walk(dir_path):
-                if mongoDBPermFile in files:
-                    mongoDBPermPath= os.path.join(root, mongoDBPermFile)
-
-            if mongoDBPermPath is None:
-                self.dbClient = None
-                return
-
-            from pymongo import MongoClient
-            uri = "mongodb+srv://cluster0.us5bm.mongodb.net/Cluster0?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority"
-            self.dbClient = MongoClient(uri,
-                                        tls=True,
-                                        tlsCertificateKeyFile=mongoDBPermPath)
-        except Exception as ex:
-            self.dbClient = None
-            return
-
-        self.db = self.dbClient.mlResults
-        self.results = self.db.results
-
-        self.activeLCs = []
-        for _, lc in graph.logicalConstrains.items():
-            if lc.headLC:
-                self.activeLCs.append(lc.name)
-
-    def __calculateMetricTotal(self, metricResult):
-
-        if not isinstance(metricResult, dict):
-            return None
-
-        pT= 0
-        rT = 0
-
-        for _, v in metricResult.items():
-            if not isinstance(v, dict):
-                return None
-
-            if not ({'P', 'R'} <= v.keys()):
-                return None
-
-            pT += v['P']
-            rT += v['R']
-
-        pT = pT/len(metricResult.keys())
-        rT = rT/len(metricResult.keys())
-
-        total = {}
-        if pT + rT:
-            f1T = 2 * pT * rT / (pT + rT) # F1 score is the harmonic mean of precision and recall
-            total['F1'] = f1T
-        else:
-            return None
-
-        total['P'] = pT
-        total['R'] = rT
-
-        return total
-
-    def __call__(self, stepName, metricName, metricResult):
-
-        if self.dbClient is None:
-            return
-
-        upatedmetricResult = {}
-        for k, r in metricResult.value().items():
-            if torch.is_tensor(r):
-                upatedmetricResult[k] = r.item()
-            elif isinstance(r, dict):
-                updatedDict = {}
-
-                for j, e in r.items():
-                    if torch.is_tensor(e):
-                        updatedDict[j] = e.item()
-                    else:
-                        updatedDict[j] = e
-
-                upatedmetricResult[k] = updatedDict
-            else:
-                upatedmetricResult[k] = r
-
-        mlResult = {
-            'experimentID' : self.experimentID,
-            'experimant'   : self.cwd,
-            'program'      : self.programName,
-            'usedLCs'      : self.activeLCs,
-            'timestamp'    : self.getTimeStamp(),
-            'step'         : stepName,
-            'metric'       : metricName,
-            'results'      : upatedmetricResult
-        }
-
-        metricTotal = self.__calculateMetricTotal(upatedmetricResult)
-
-        if metricTotal is not None:
-            mlResult['metricTotal'] = metricTotal
-
-        #Step 3: Insert business object directly into MongoDB via isnert_one
-        try:
-            result = self.results.insert_one(mlResult)
-        except Exception as e:
-            return
-
-        if result.inserted_id:
-            pass
-
-
 class LearningBasedProgram():
-    def __init__(self, graph, Model, logger=None, db=False, **kwargs):
+    def __init__(self, graph, Model, logger=None, **kwargs):
         """
         This function initializes an object with a graph, a model, a logger, and other optional
         parameters.
@@ -169,27 +29,59 @@ class LearningBasedProgram():
         the
         :param logger: The `logger` parameter is an optional logger object that can be used for logging
         messages and debugging information. If no logger is provided, a default logger will be used
-        :param db: The `db` parameter is a boolean flag that indicates whether or not to perform
-        database updates. If `db` is `True`, database updates will be performed. If `db` is `False`, no
-        database updates will be performed, defaults to False (optional)
         """
         self.graph = graph
 
         self.logger = logger or logging.getLogger(__name__)
-        self.dbUpdate = None if db else dbUpdate(graph)
+
+        # --- PyTorch 2.10/2.11 feature kwargs (on by default; pass False to opt out) ---
+        # AMP (mixed precision) — bfloat16 is the safe default:
+        #   * works on CUDA (Ampere+), XPU, and CPU
+        #   * does not require GradScaler (no loss scaling needed)
+        # Users can switch to 'float16' for broader GPU support (scaler is
+        # created automatically) or disable entirely with use_amp=False.
+        self.use_amp = kwargs.pop('use_amp', True)
+        self.amp_dtype = kwargs.pop('amp_dtype', 'bfloat16')
+        # CPU autocast is opt-in: set amp_on_cpu=True to enable it.
+        self.amp_on_cpu = kwargs.pop('amp_on_cpu', False)
+        # torch.compile — opt-in. Sub-module compilation avoids graph breaks
+        # from the dynamic DataNode/sensor orchestration in
+        # TorchModel.forward, but interacts badly with PEFT/LoRA + AMP on
+        # large vision-language backbones (caches + activations retained
+        # across steps → OOM on 90+ GiB GPUs). Default off; pass
+        # compile_model=True to enable, or compile_submodules=False to
+        # compile the top-level model (expect graph breaks).
+        self.compile_model = kwargs.pop('compile_model', False)
+        self.compile_backend = kwargs.pop('compile_backend', 'inductor')
+        self.compile_mode = kwargs.pop('compile_mode', None)
+        self.compile_submodules = kwargs.pop('compile_submodules', True)
+        # Gradient clipping norm (exposed for convenience; default preserves old behavior)
+        self.grad_clip_norm = kwargs.pop('grad_clip_norm', 10.0)
+
+        # GradScaler is created lazily in train(); only float16 on CUDA needs it.
+        self.scaler = None
 
         from inspect import signature
         self.modelSignature = signature(Model.__init__)
-        
+
         self.kwargs = kwargs
         self.modelKwargs = {}
         for param in self.modelSignature.parameters.values():
             paramName = param.name
             if paramName in kwargs:
                 self.modelKwargs[paramName] = kwargs[paramName]
-            if paramName == "kwargs":
-                self.modelKwargs[paramName] = kwargs
-                
+
+        # Only add kwargs if the Model signature has **kwargs parameter
+        has_var_keyword = any(
+            param.kind == param.VAR_KEYWORD
+            for param in self.modelSignature.parameters.values()
+        )
+
+        if has_var_keyword:
+            # Pass remaining kwargs that weren't explicitly matched
+            remaining_kwargs = {k: v for k, v in kwargs.items() if k not in self.modelKwargs}
+            self.modelKwargs.update(remaining_kwargs)
+
         self.model = Model(graph, **self.modelKwargs)
         self.opt = None
         self.epoch = None
@@ -197,6 +89,135 @@ class LearningBasedProgram():
         self.device = "auto"
         if "f" in kwargs:
             self.f=kwargs["f"]
+
+        # Apply torch.compile if requested (after model is built)
+        self._maybe_compile()
+
+    # ------------------------------------------------------------------
+    # PyTorch 2.10/2.11 feature helpers
+    # ------------------------------------------------------------------
+    def _maybe_compile(self):
+        """Apply torch.compile to the model or to its sub-learner modules.
+
+        DomiKnowS' top-level ``TorchModel.forward`` iterates sensors and
+        constructs DataNodes dynamically, which is incompatible with
+        ``torch.compile(fullgraph=True)``. By default we compile each
+        ``TorchLearner``'s underlying ``nn.Module`` instead, which captures
+        the compute-heavy parts while leaving the dynamic orchestration
+        uncompiled.
+        """
+        if not self.compile_model:
+            return
+        compile_kwargs = {'backend': self.compile_backend}
+        if self.compile_mode is not None:
+            compile_kwargs['mode'] = self.compile_mode
+        try:
+            if self.compile_submodules:
+                from ..sensor.pytorch.learners import TorchLearner
+                compiled_count = 0
+                for learner in self.graph.get_sensors(TorchLearner):
+                    if getattr(learner, 'model', None) is not None and \
+                       isinstance(learner.model, torch.nn.Module):
+                        learner.model = torch.compile(learner.model, **compile_kwargs)
+                        compiled_count += 1
+                self.logger.info(
+                    'torch.compile applied to %d learner sub-modules (backend=%s, mode=%s)',
+                    compiled_count, self.compile_backend, self.compile_mode)
+            else:
+                self.logger.warning(
+                    'torch.compile applied to the top-level model; '
+                    'dynamic DataNode construction may cause graph breaks.')
+                self.model = torch.compile(self.model, **compile_kwargs)
+        except Exception as e:
+            self.logger.error('torch.compile failed (%s); continuing uncompiled.', e)
+
+    def _resolve_amp_dtype(self):
+        """Translate the string amp_dtype into a torch dtype."""
+        mapping = {
+            'float16': torch.float16,
+            'fp16': torch.float16,
+            'half': torch.float16,
+            'bfloat16': torch.bfloat16,
+            'bf16': torch.bfloat16,
+        }
+        if isinstance(self.amp_dtype, torch.dtype):
+            return self.amp_dtype
+        dtype = mapping.get(str(self.amp_dtype).lower())
+        if dtype is None:
+            raise ValueError(
+                f"Unsupported amp_dtype '{self.amp_dtype}'. "
+                "Expected one of: float16, bfloat16.")
+        return dtype
+
+    def _device_type(self):
+        """Best-effort device type string for torch.autocast."""
+        dev = getattr(self, 'device', None)
+        if isinstance(dev, torch.device):
+            return dev.type
+        if isinstance(dev, str) and dev not in ('auto', None):
+            return torch.device(dev).type
+        return 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    def _autocast_ctx(self):
+        """Return an autocast context manager, or a null context if AMP is off.
+
+        AMP is skipped on CPU: bfloat16 CPU autocast offers marginal benefit
+        for typical DomiKnowS workloads. Pass ``amp_on_cpu=True`` to force it.
+        """
+        import contextlib
+        if not self.use_amp:
+            return contextlib.nullcontext()
+        device_type = self._device_type()
+        if device_type == 'cpu' and not self.amp_on_cpu:
+            return contextlib.nullcontext()
+        return torch.autocast(device_type=device_type,
+                              dtype=self._resolve_amp_dtype())
+
+    def _ensure_scaler(self):
+        """Create a GradScaler on first use when float16 AMP is enabled."""
+        if not self.use_amp:
+            self.scaler = None
+            return
+        if self._resolve_amp_dtype() != torch.float16:
+            # bfloat16 does not need loss scaling
+            self.scaler = None
+            return
+        device_type = self._device_type()
+        if device_type == 'cpu' and not self.amp_on_cpu:
+            # AMP is disabled on CPU; no scaler needed.
+            self.scaler = None
+            return
+        if self.scaler is None:
+            # torch.amp.GradScaler replaces torch.cuda.amp.GradScaler in 2.x
+            self.scaler = torch.amp.GradScaler(device_type)
+
+    def _backward_and_step(self, loss, zero_grad=True, step=True):
+        """AMP-aware backward / grad-clip / optimizer step.
+
+        :param loss: scalar loss tensor
+        :param zero_grad: call ``opt.zero_grad()`` before backward
+        :param step: call ``opt.step()`` (and ``scaler.step``/``update`` if applicable)
+        """
+        if self.opt is None or not torch.is_tensor(loss) or not loss.requires_grad:
+            return
+        if zero_grad:
+            self.opt.zero_grad()
+        if self.scaler is not None:
+            self.scaler.scale(loss).backward()
+            if step:
+                if self.grad_clip_norm is not None:
+                    self.scaler.unscale_(self.opt)
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), max_norm=self.grad_clip_norm)
+                self.scaler.step(self.opt)
+                self.scaler.update()
+        else:
+            loss.backward()
+            if step:
+                if self.grad_clip_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), max_norm=self.grad_clip_norm)
+                self.opt.step()
 
     def to(self, device='auto'):
         if device == 'auto':
@@ -251,7 +272,9 @@ class LearningBasedProgram():
         """
         if dataset is not None:
             self.logger.info(f'{name}:')
-            desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+            # Prefer externally-set global_epoch 
+            _display_epoch = getattr(self, 'global_epoch', None) or self.epoch
+            desc = name if _display_epoch is None else f'Epoch {_display_epoch} {name}'
 
             consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
 
@@ -259,14 +282,6 @@ class LearningBasedProgram():
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
 
-                metricName = 'loss'
-                metricResult = self.model.loss
-
-                if self.dbUpdate is not None:
-                    self.dbUpdate(desc, metricName, metricResult)
-
-            ilpMetric = None
-            softmaxMetric = None
 
             if self.model.metric:
                 self.logger.info(' - metric:')
@@ -282,25 +297,7 @@ class LearningBasedProgram():
                         self.f.write("\n")
                     except:
                         pass
-
-                    metricName = key
-                    metricResult = metric
-                    if self.dbUpdate is not None:
-                        self.dbUpdate(desc, metricName, metricResult)
-
-                    if key == 'ILP':
-                        ilpMetric = metric
-
-                    if key == 'softmax':
-                        softmaxMetric = metric
-
-            """if ilpMetric is not None and softmaxMetric is not None:
-                metricDelta = self.calculateMetricDelta(ilpMetric, softmaxMetric)
-                metricDeltaKey = 'ILP' + '_' + 'softmax' + '_delta'
-
-                self.logger.info(f' - - {metricDeltaKey}')
-                self.logger.info(metricDelta)"""
-
+                    
     def train(
         self,
         training_set,
@@ -342,6 +339,8 @@ class LearningBasedProgram():
             self.opt = Optim(self.model.parameters())
         else:
             self.opt = None
+        # Create GradScaler now that the optimizer exists and device is set.
+        self._ensure_scaler()
         self.train_epoch_num = train_epoch_num
         self.epoch = 0
         self.stop = False
@@ -369,16 +368,21 @@ class LearningBasedProgram():
         """
         self.model.mode(Mode.TRAIN)
         self.model.reset()
+        _mem_probe = os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = 0
         for data_item in dataset:
-            
-            if self.opt is not None:
-                self.opt.zero_grad()
-                
-            loss, metric, *output = self.model(data_item)
-            if self.opt and loss:
-                loss.backward()
-                self.opt.step()
-                
+            with self._autocast_ctx():
+                loss, metric, *output = self.model(data_item)
+            # _backward_and_step is a no-op when self.opt is None or loss
+            # isn't differentiable, and handles AMP scaling when enabled.
+            self._backward_and_step(loss)
+
+            if _mem_probe and torch.cuda.is_available():
+                _mem_step += 1
+                _alloc = torch.cuda.memory_allocated() / 1e9
+                _res = torch.cuda.memory_reserved() / 1e9
+                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
+
             yield (loss, metric, *output[:1])
 
     def test(self, dataset, device=None, **kwargs):
@@ -407,7 +411,7 @@ class LearningBasedProgram():
         """
         self.model.mode(Mode.TEST)
         self.model.reset()
-        with torch.no_grad():
+        with torch.no_grad(), self._autocast_ctx():
             for data_item in dataset:
                 loss, metric, *output = self.model(data_item)
                 yield (loss, metric, *output[:1])
@@ -422,10 +426,10 @@ class LearningBasedProgram():
             self.to(device)
         return next(self.populate_epoch([data_item], grad = grad))
 
-    def populate_epoch(self, dataset, grad = False):
+    def populate_epoch(self, dataset, grad=False):
         """
-        The `populate_epoch` function is used to iterate over a dataset and yield the output of a model
-        for each data item, either with or without gradient calculations.
+        The function populates the model with data from the dataset, either with or without computing
+        gradients.
         
         :param dataset: The `dataset` parameter is the input data that you want to use to populate the
         model. It could be a list, array, or any other iterable object that contains the data items
@@ -439,45 +443,78 @@ class LearningBasedProgram():
         
         try:
             lenI = len(dataset)
-            print(f"\nNumber of iterations in epoch: {lenI}")
+            self.logger.debug("Number of iterations in epoch: %d", lenI)
         except:
             pass
-
+        
         if not grad:
             with torch.no_grad():
-                for i, data_item in tqdm(enumerate(dataset)):
-                    # import time
-                    # start = time.time()
+                for i, data_item in enumerate(dataset):
                     loss, metric, datanode, builder = self.model(data_item)
-                    # end = time.time()
-                    # print("Time taken for one data item in populate epoch: ", end - start)
                     yield detuple(datanode)
         else:
-            for i, data_item in tqdm(enumerate(dataset)):
-                # import time
-                # start = time.time()
+            for i, data_item in enumerate(dataset):
                 data_item["modelKwargs"] = self.modelKwargs
                 _, _, *output = self.model(data_item)
-                # end = time.time()
-                # print("Time taken for one data item in populate epoch: ", end - start)
                 yield detuple(*output[:1])
 
-    def save(self, path, **kwargs):
+    def _should_bundle_cmodel(self):
+        """Whether to also checkpoint the constraint model's state.
+
+        The constraint model (if any) carries non-gradient dual state that the
+        optimizer will not reconstruct — most importantly the Augmented
+        Lagrangian multipliers/penalty coefficients (R5). Bundle it so the
+        save-best / reload cycle does not silently reset that state. Plain
+        gradient-ascent duals keep the historical flat (model-only) format.
+        """
+        cmodel = getattr(self, 'cmodel', None)
+        if cmodel is None:
+            return False
+        return getattr(cmodel, 'dual_algorithm', 'ascent') == 'augmented'
+
+    def save(self, path, save_cmodel=None, **kwargs):
         """
         The function saves the state dictionary of a model to a specified path using the torch.save()
         function.
-        
+
         :param path: The path where the model's state dictionary will be saved
+        :param save_cmodel: If True, save a ``{'model', 'cmodel'}`` bundle so the
+            constraint model's non-gradient dual state (e.g. Augmented Lagrangian
+            multipliers/penalties) round-trips. If None (default), auto-enabled
+            whenever the constraint model carries such state. If False, always
+            save the historical flat (model-only) checkpoint.
         """
-        torch.save(self.model.state_dict(), path, **kwargs)
+        if save_cmodel is None:
+            save_cmodel = self._should_bundle_cmodel()
+
+        cmodel = getattr(self, 'cmodel', None)
+        if save_cmodel and cmodel is not None:
+            torch.save(
+                {'model': self.model.state_dict(), 'cmodel': cmodel.state_dict()},
+                path, **kwargs)
+        else:
+            torch.save(self.model.state_dict(), path, **kwargs)
 
     def load(self, path, **kwargs):
         """
         The function loads a saved model state dictionary from a specified path.
-        
+
+        Transparently accepts both the historical flat (model-only) checkpoint
+        and the ``{'model', 'cmodel'}`` bundle written when the constraint model
+        carries dual state.
+
         :param path: The path parameter is the file path to the saved model state dictionary
         """
-        self.model.load_state_dict(torch.load(path, **kwargs))
+        kwargs.setdefault('weights_only', True)
+        checkpoint = torch.load(path, **kwargs)
+
+        if isinstance(checkpoint, dict) and 'model' in checkpoint and 'cmodel' in checkpoint:
+            self.model.load_state_dict(checkpoint['model'])
+            cmodel = getattr(self, 'cmodel', None)
+            if cmodel is not None:
+                cmodel.load_state_dict(checkpoint['cmodel'])
+        else:
+            self.model.load_state_dict(checkpoint)
 
     def verifyResultsLC(self,data,constraint_names=None,device=None):
         """
@@ -558,4 +595,3 @@ class LearningBasedProgram():
         if IF_exsits:
             print("total accuracy ifL:",zero_check(sum([i for i in ifl_ac]),(sum([i for i in ifl_t]))))
         return None
-

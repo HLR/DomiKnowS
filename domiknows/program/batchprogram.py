@@ -2,6 +2,8 @@ from itertools import cycle, repeat
 from typing import Callable, List
 from dataclasses import dataclass
 
+import torch
+
 from ..utils import consume, entuple
 from .model.base import Mode
 from .program import LearningBasedProgram
@@ -18,10 +20,13 @@ class BatchProgram(LearningBasedProgram):
         self.model.reset()
         self.opt.zero_grad()
         for index, data_item in enumerate(dataset):
-            loss, metric, *output = self.model(data_item)
-            if self.opt and loss:
-                loss.backward()
-                if index % self.batch_size == self.batch_size - 1:
-                    self.opt.step()
+            with self._autocast_ctx():
+                loss, metric, *output = self.model(data_item)
+            if self.opt and torch.is_tensor(loss) and loss.requires_grad:
+                # Gradient accumulation: backward every step, step/zero at
+                # batch boundary. _backward_and_step handles AMP scaling.
+                is_boundary = index % self.batch_size == self.batch_size - 1
+                self._backward_and_step(loss, zero_grad=False, step=is_boundary)
+                if is_boundary:
                     self.opt.zero_grad()
             yield (loss, metric, *output[:1])

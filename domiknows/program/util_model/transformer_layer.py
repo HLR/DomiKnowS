@@ -205,6 +205,13 @@ class ILPTransformerSelfAttention(nn.Module):
 
         self.is_decoder = config.is_decoder
 
+        # Opt-in PyTorch 2.x fused SDPA (Flash / Memory-Efficient kernels).
+        # Used only on the fast path (absolute positions, no head mask, no
+        # output_attentions). Defaults to True — behavior is mathematically
+        # equivalent to the manual path but faster and more memory-efficient.
+        self.use_sdpa = getattr(config, "use_sdpa", True)
+        self.attention_probs_dropout_prob = config.attention_probs_dropout_prob
+
     def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(new_x_shape)
@@ -258,6 +265,41 @@ class ILPTransformerSelfAttention(nn.Module):
             # if encoder bi-directional self-attention `past_key_value` is always `None`
             past_key_value = (key_layer, value_layer)
 
+        # --- Fast path: PyTorch 2.x scaled_dot_product_attention ---
+        # SDPA handles scaling, masking, softmax, dropout and the V matmul
+        # in a single fused kernel (Flash / Memory-Efficient when available).
+        # We can only use it when there are no relative position biases, no
+        # per-head mask multiplication, and the caller doesn't need the raw
+        # attention probs.
+        can_use_sdpa = (
+            self.use_sdpa
+            and self.position_embedding_type == "absolute"
+            and head_mask is None
+            and not output_attentions
+        )
+        if can_use_sdpa:
+            dropout_p = self.attention_probs_dropout_prob if self.training else 0.0
+            # attention_mask here is an additive bias (0 / -inf style) and is
+            # already broadcastable to (B, H, Lq, Lk), which is what SDPA
+            # expects for a float attn_mask.
+            context_layer = nn.functional.scaled_dot_product_attention(
+                query_layer,
+                key_layer,
+                value_layer,
+                attn_mask=attention_mask,
+                dropout_p=dropout_p,
+                is_causal=False,
+            )
+            context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
+            new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+            context_layer = context_layer.view(new_context_layer_shape)
+
+            outputs = (context_layer,)
+            if self.is_decoder:
+                outputs = outputs + (past_key_value,)
+            return outputs
+
+        # --- Fallback manual path (relative positions / head mask / output_attentions) ---
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
 

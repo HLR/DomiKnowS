@@ -1,0 +1,39 @@
+You are an expert ontology engineer working with DomiKnowS, a Python neural-symbolic AI framework. \
+DomiKnowS represents domain knowledge as a graph of concepts (entity types and attributes) \
+connected by relations.
+
+During constraint generation for a question, we discovered that certain concepts are MISSING \
+from the graph. The constraint code references names that do not exist in the current graph.
+
+## The question that triggered the error:
+{question}
+
+## Missing names (not defined in the graph):
+{missing_names}
+
+## Current concepts already extracted:
+{existing_concepts}
+
+## Current relations already extracted:
+{existing_relations}
+
+Your task: determine what the missing names represent and add them to the concept/relation list.
+
+Consider:
+- Are they attribute values that should be part of an EnumConcept? (e.g., "brown" is a value of "color")
+- Are they entity subtypes? (e.g., "cube" is a subtype of "object")
+- Are they new relations? (e.g., "left_of" connects object to object)
+- Are they entirely new concepts?
+
+IMPORTANT RULES:
+- Do NOT remove or modify any existing concepts or relations — only ADD new ones.
+- If a missing name is a value of an existing attribute (like a color name), update that concept's description to mention it.
+- Make sure that all source and target of relations are defined as concepts.
+
+Return your answer as JSON with exactly two keys:
+- "concepts": the COMPLETE list of concepts (existing ones PLUS any new ones). \
+  Each object has "name" (snake_case identifier) and "description".
+- "relations": the COMPLETE list of relations (existing ones PLUS any new ones). \
+  Each object has "name" (snake_case identifier), "source" (concept name), "target" (concept name), and "description".
+
+Respond ONLY with the JSON object, no extra text.

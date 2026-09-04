@@ -1,6 +1,18 @@
+import logging
 from typing import Dict, NoReturn, Any
 import abc
 from ..graph.base import BaseGraphTreeNode
+from ..utils import setup_logger
+
+logger = setup_logger({
+    'log_name': 'sensor',
+    'log_level': logging.INFO,
+    'log_filename': 'sensor.log',
+    'log_filesize': 50*1024*1024,  # 50MB
+    'log_backupCount': 5,
+    'log_fileMode': 'a',
+    'error_warning_capture': False,
+})
 
 
 class Sensor(BaseGraphTreeNode):
@@ -32,7 +44,7 @@ class Sensor(BaseGraphTreeNode):
         try:
             self.update_context(data_item, force)
         except:
-            print('Error during updating data_item with sensor {}'.format(self))
+            logger.error('Error during updating data_item with sensor %s', self)
             raise
         return data_item[self]
 

@@ -1,0 +1,17 @@
+You are an expert ontology engineer working with DomiKnowS, a Python neural-symbolic AI framework. \
+DomiKnowS represents domain knowledge as a graph of concepts (entity types and attributes) \
+connected by relations. 
+The DomiKnowS graph code produced this error:
+
+```
+{error}
+```
+
+Failed code:
+```python
+{code}
+```
+
+{syntax_description}
+
+Fix the code. Return ONLY the corrected complete Python code in a ```python ... ``` block.

@@ -1,60 +1,778 @@
 import logging
+import os
+from unittest import result
 import torch
 import numpy as np
-from tqdm import tqdm
-
-from domiknows.program.model.pytorch import SolverModel
-from domiknows.graph.LeftLogic import LeftLogicElementOutput
 
 from .program import LearningBasedProgram, get_len
-from ..utils import consume, entuple, detuple
-from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
-from .model.base import Mode
+from ..utils import consume, setup_logger
+from tqdm import tqdm
 
+from .model.lossModel import (
+    PrimalDualModel,
+    SampleLossModel,
+    SemanticLossModel,
+    InferenceModel,
+)
+from .model.base import Mode
 from .model.gbi import GBIModel
 
-# Primal-dual need multiple backward through constraint loss.
-# It requires retain_graph=True.
-# Memory leak problem with `backward(create_graph=True)`
-# https://github.com/pytorch/pytorch/issues/4661#issuecomment-596526199
-# workaround with following functions based on `grad()`
-def backward(loss, parameters):
-    parameters = list(parameters)
-    grads = torch.autograd.grad(outputs=loss, inputs=parameters, retain_graph=False)
-    assert len(grads) == len(parameters)
-    for grad, parameter in zip(grads, parameters):
-        parameter.grad = grad
+logger = setup_logger({
+    'log_name': 'lossProgram',
+    'log_level': logging.INFO,
+    'log_filename': 'lossProgram.log',
+    'log_filesize': 50*1024*1024,  # 50MB
+    'log_backupCount': 5,
+    'log_fileMode': 'a',
+})
 
-def unset_backward(parameters):
-    for parameter in parameters:
-        parameter.grad = None
+
+def _grad_clip_norm():
+    """Override the hard-coded clip_grad_norm_(max_norm=10.0) via env var.
+    Set DOMIKNOWS_GRAD_CLIP=1.0 to tighten the clip during cold-start training
+    on brittle stacks (PEFT + soft-logic) where a single update can produce
+    multi-nat logit shifts that collapse softmax outputs."""
+    import os as _os
+    try:
+        return float(_os.environ.get('DOMIKNOWS_GRAD_CLIP', '10.0'))
+    except (TypeError, ValueError):
+        return 10.0
+
+
+# =============================================================================
+# Gradient Utilities for Primal-Dual
+# =============================================================================
 
 def reverse_sign_grad(parameters, factor=-1.):
+    """Reverse gradient sign for dual step (gradient ascent)."""
     for parameter in parameters:
         if parameter.grad is not None:
             parameter.grad = factor * parameter.grad
 
+
+def _project_cmodel_lambdas(cmodel):
+    project = getattr(cmodel, 'project_lmbd_', None)
+    if callable(project):
+        project()
+
+# =============================================================================
+# Evaluation Helpers  
+# =============================================================================
+
+def _apply_threshold_to_predictions(program, datanode, threshold=0.5):
+    """Apply threshold to convert probabilities to binary decisions."""
+    from domiknows.utils import getDnSkeletonMode
+    
+    conceptsRelations = datanode.collectConceptsAndRelations()
+    
+    for c in conceptsRelations:
+        cRoot = datanode.findRootConceptOrRelation(c[0])
+        
+        if getDnSkeletonMode() and "variableSet" in datanode.attributes:
+            vKeyInVariableSet = cRoot.name + "/<" + c[0].name + ">"
+            localSoftmaxKey = vKeyInVariableSet + "/local/softmax"
+            localDecisionKey = vKeyInVariableSet + "/local/decision"
+            
+            if localSoftmaxKey in datanode.attributes.get("variableSet", {}):
+                softmax_probs = datanode.attributes["variableSet"][localSoftmaxKey]
+                if softmax_probs is not None and torch.is_tensor(softmax_probs):
+                    thresholded = (softmax_probs >= threshold).float()
+                    datanode.attributes["variableSet"][localDecisionKey] = thresholded
+        else:
+            dns = datanode.findDatanodes(select=cRoot)
+            if not dns:
+                continue
+            
+            keySoftmax = "<" + c[0].name + ">/local/softmax"
+            keyDecision = "<" + c[0].name + ">/local/decision"
+            
+            for dn in dns:
+                softmax_probs = dn.getAttribute(keySoftmax)
+                if softmax_probs is not None and torch.is_tensor(softmax_probs):
+                    thresholded = (softmax_probs >= threshold).float()
+                    dn.attributes[keyDecision] = thresholded
+
+def _evaluate_condition_impl(
+    program,
+    evaluate_data,
+    device="cpu",
+    threshold=0.0,
+    return_dict=False,
+    use_gumbel=False,
+    temperature=None,
+    hard_gumbel=False,
+):
+    """
+    Unified implementation for evaluating constraints with proper metrics.
+
+    This method evaluates both boolean and counting constraints:
+    - Boolean constraints (andL, atLeastAL, exactAL, etc.): Binary accuracy using 'local/argmax'
+    - Counting constraints (sumL): Uses thresholded 'local/decision' key for verification
+
+    Primary evaluation path is ``datanode.verifySingleConstraint`` — this is
+    the historical code path that has been exercised for years across
+    multiple projects. ``AnswerSolver`` is an experimental ILP-based
+    alternative intended for executable-constraint semantics (iotaL
+    selection, counting, etc.), but it has not been proven out on CLEVR-style
+    relation graphs and has been observed to systematically return False on
+    existsL constraints, collapsing accuracy to the dataset's negative-class
+    fraction. It is therefore off by default and opt-in via the
+    ``DOMIKNOWS_USE_ANSWER_SOLVER=1`` environment variable. When enabled,
+    both paths run and the selection logic still prefers
+    ``verifySingleConstraint`` whenever it returns a non-None result; the
+    AnswerSolver output is used only as a fallback and recorded in the step
+    notebook for cross-checking.
+
+    Args:
+        evaluate_data: Dataset to evaluate on
+        device: Device to run evaluation on (default: "cpu")
+        threshold: Threshold for converting probabilities to binary decisions
+                  for counting constraints. Defaults to 0.0 - the threshold will not be applied.
+        return_dict: If True, return full results dict; if False, return primary_metric float
+        use_gumbel: If True, evaluate executable constraints on Gumbel-Softmax
+            samples instead of the deterministic local softmax.
+        temperature: Gumbel-Softmax temperature. Defaults to the program's
+            current temperature when available.
+        hard_gumbel: If True, use straight-through hard Gumbel samples.
+
+    Returns:
+        dict or float: Full results dictionary or primary metric value
+    """
+    from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
+    from domiknows.step_notebook import (
+        StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
+    )
+
+    boolean_correct = 0
+    boolean_total = 0
+
+    counting_correct = 0
+    counting_total = 0
+
+    query_correct = 0
+    query_total = 0
+    multi_query_position_correct = 0
+    multi_query_position_total = 0
+    multi_query_selection_exact_correct = 0
+    multi_query_selection_exact_total = 0
+    multi_query_selection_position_correct = 0
+    multi_query_selection_position_total = 0
+    multi_query_class_correct = 0
+    multi_query_class_total = 0
+
+    miota_exact_correct = 0
+    miota_exact_total = 0
+    miota_position_correct = 0
+    miota_position_total = 0
+
+    total = 0
+
+    # AnswerSolver opt-in: import + construct only when enabled, so a broken
+    # solver can't sabotage eval or burn wall-clock (its ILP hypothesis
+    # search takes 100 ms – 1.5 s per constraint on CLEVR scenes).
+    _use_answer_solver = os.environ.get("DOMIKNOWS_USE_ANSWER_SOLVER") == "1"
+    if _use_answer_solver:
+        from domiknows.solver.answerModule import AnswerSolver
+        answer_solver = AnswerSolver(program.graph)
+    else:
+        answer_solver = None
+
+    _notebook_active = StepNotebook.active() is not None
+    try:
+        _evaluate_data_indexable = hasattr(evaluate_data, '__getitem__')
+    except Exception:
+        _evaluate_data_indexable = False
+
+    def _populate_with_vlm_buffer():
+        # Clear once at entry so a step's buffer only contains that step's
+        # VLM calls, then drain after every yielded datanode.
+        if _notebook_active:
+            reset_vlm_buffer()
+        for _dn in program.populate(evaluate_data, device=device):
+            _calls = drain_vlm_buffer() if _notebook_active else None
+            yield _dn, _calls
+
+    for _step_idx, (datanode, _vlm_calls) in enumerate(tqdm(
+        _populate_with_vlm_buffer(),
+        total=len(evaluate_data),
+        desc="Evaluating",
+        position=0,
+        leave=True
+    )):
+        _step_results = {} if _notebook_active else None
+        constraint_labels_dict = datanode.getExecutableConstraintLabels()
+        if not constraint_labels_dict:
+            continue
+
+        active_lc_name = datanode.getActiveExecutableConstraintNames()
+
+        for lc_name, lc in program.graph.executableLCs.items():
+            lc.active = lc_name in active_lc_name
+
+        total += 1
+        datanode.inferLocal()
+        if use_gumbel:
+            eval_temperature = temperature
+            if eval_temperature is None:
+                eval_temperature = getattr(program, "current_temp", None)
+            if eval_temperature is None and hasattr(program, "get_temperature"):
+                eval_temperature = program.get_temperature()
+            if eval_temperature is None:
+                eval_temperature = 1.0
+            datanode.inferGumbelLocal(
+                temperature=eval_temperature,
+                hard=hard_gumbel,
+            )
+        if threshold > 0.0:
+            _apply_threshold_to_predictions(program, datanode, threshold)
+            key = "/local/decision"
+        else:
+            key = "/local/argmax"
+
+        lc_loss_context = None
+
+        for lc_name in active_lc_name:
+            if lc_name not in program.graph.executableLCs:
+                continue
+
+            lc = program.graph.executableLCs[lc_name]
+            if not lc.active:
+                continue
+
+            label = datanode.getExecutableConstraintLabel(lc_name)
+            if label is None:
+                continue
+
+            inner_lc = getattr(lc, "innerLC", lc)
+            is_query = isinstance(inner_lc, queryL)
+            is_counting = isinstance(inner_lc, sumL)
+
+            if isinstance(inner_lc, miotaL):
+                if lc_loss_context is None:
+                    cmodel = getattr(program, "cmodel", None)
+                    lc_loss_context = datanode._prepareLcLossContext(
+                        tnorm=getattr(cmodel, "tnorm", "P"),
+                        counting_tnorm=getattr(cmodel, "counting_tnorm", None),
+                    )
+                loss_dict = datanode.calculateSingleLcLoss(
+                    lc_name,
+                    tnorm=getattr(getattr(program, "cmodel", None), "tnorm", "P"),
+                    counting_tnorm=getattr(getattr(program, "cmodel", None), "counting_tnorm", None),
+                    _context=lc_loss_context,
+                )
+                distribution = loss_dict.get("selectionDistribution")
+                if distribution is None:
+                    continue
+                probabilities = distribution.detach().reshape(-1)
+                expected = torch.as_tensor(label, device=probabilities.device).reshape(-1)
+                if expected.numel() != probabilities.numel():
+                    raise ValueError(
+                        f"miotaL label for {lc_name} has {expected.numel()} values, "
+                        f"but the constraint grounded {probabilities.numel()} candidates"
+                    )
+                if not torch.all((expected == 0) | (expected == 1)):
+                    raise ValueError(
+                        f"miotaL label for {lc_name} must be a binary multi-hot vector"
+                    )
+                predicted = (probabilities >= inner_lc.threshold).to(expected.dtype)
+                position_matches = predicted == expected
+                exact_match = bool(position_matches.all().item())
+                miota_exact_total += 1
+                miota_exact_correct += int(exact_match)
+                miota_position_total += position_matches.numel()
+                miota_position_correct += int(position_matches.sum().item())
+                if _step_results is not None:
+                    _step_results[lc_name] = {
+                        'answer_result': predicted.cpu().tolist(),
+                        'verify_result': {
+                            'selectionDistribution': probabilities.cpu().tolist(),
+                            'expectedLabel': expected.cpu().tolist(),
+                            'threshold': inner_lc.threshold,
+                            'positionCorrect': int(position_matches.sum().item()),
+                            'positionTotal': position_matches.numel(),
+                        },
+                        'correct': exact_match,
+                        'is_counting': False,
+                        'is_query': False,
+                        'is_miota': True,
+                    }
+                continue
+
+            if is_query:
+                query_total += 1
+                try:
+                    if lc_loss_context is None:
+                        cmodel = getattr(program, "cmodel", None)
+                        lc_loss_context = datanode._prepareLcLossContext(
+                            tnorm=getattr(cmodel, "tnorm", "P"),
+                            counting_tnorm=getattr(cmodel, "counting_tnorm", None),
+                        )
+                    loss_dict = datanode.calculateSingleLcLoss(
+                        lc_name,
+                        tnorm=getattr(getattr(program, "cmodel", None), "tnorm", "P"),
+                        counting_tnorm=getattr(getattr(program, "cmodel", None), "counting_tnorm", None),
+                        _context=lc_loss_context,
+                    )
+                    query_distribution = loss_dict.get("queryDistribution")
+                    if query_distribution is None:
+                        if _step_results is not None:
+                            _step_results[lc_name] = {
+                                'answer_result': None,
+                                'verify_result': None,
+                                'correct': False,
+                                'is_counting': False,
+                                'is_query': True,
+                            }
+                        continue
+
+                    if inner_lc.is_multi_answer:
+                        distribution = query_distribution.detach()
+                        expected = torch.as_tensor(
+                            label, device=distribution.device
+                        ).reshape(-1)
+                        if expected.dtype.is_floating_point and not torch.all(expected == expected.round()):
+                            raise ValueError(
+                                f"multi-answer queryL label for {lc_name} must contain integer class IDs"
+                            )
+                        expected = expected.long()
+                        if expected.numel() != distribution.shape[0]:
+                            raise ValueError(
+                                f"multi-answer queryL label for {lc_name} has {expected.numel()} values, "
+                                f"but the constraint grounded {distribution.shape[0]} candidates"
+                            )
+                        if torch.any((expected < -1) | (expected >= inner_lc.num_subclasses)):
+                            raise ValueError(
+                                f"multi-answer queryL labels for {lc_name} must be -1 or class IDs "
+                                f"in [0, {inner_lc.num_subclasses - 1}]"
+                            )
+                        predicted = loss_dict.get("queryAnswer")
+                        if predicted is None:
+                            membership = distribution.sum(dim=-1)
+                            predicted = torch.argmax(distribution, dim=-1).long()
+                            predicted = torch.where(
+                                membership >= inner_lc.threshold,
+                                predicted,
+                                torch.full_like(predicted, -1),
+                            )
+                        predicted = predicted.detach().long().reshape(-1)
+                        position_matches = predicted == expected
+                        exact_match = bool(position_matches.all().item())
+                        query_correct += int(exact_match)
+                        multi_query_position_correct += int(position_matches.sum().item())
+                        multi_query_position_total += position_matches.numel()
+
+                        predicted_selection = predicted >= 0
+                        expected_selection = expected >= 0
+                        selection_matches = predicted_selection == expected_selection
+                        selection_exact = bool(selection_matches.all().item())
+                        multi_query_selection_exact_correct += int(selection_exact)
+                        multi_query_selection_exact_total += 1
+                        multi_query_selection_position_correct += int(selection_matches.sum().item())
+                        multi_query_selection_position_total += selection_matches.numel()
+
+                        selected_positions = expected_selection
+                        class_correct = int(
+                            (predicted[selected_positions] == expected[selected_positions]).sum().item()
+                        )
+                        class_total = int(selected_positions.sum().item())
+                        multi_query_class_correct += class_correct
+                        multi_query_class_total += class_total
+
+                        if _step_results is not None:
+                            class_names = [
+                                None if value < 0 else inner_lc.get_subclass_name(value)
+                                for value in predicted.cpu().tolist()
+                            ]
+                            _step_results[lc_name] = {
+                                'answer_result': predicted.cpu().tolist(),
+                                'verify_result': {
+                                    'queryDistribution': distribution.cpu().tolist(),
+                                    'expectedLabel': expected.cpu().tolist(),
+                                    'threshold': inner_lc.threshold,
+                                    'classNames': class_names,
+                                    'positionCorrect': int(position_matches.sum().item()),
+                                    'positionTotal': position_matches.numel(),
+                                    'selectionExact': selection_exact,
+                                    'selectionPositionCorrect': int(selection_matches.sum().item()),
+                                    'classCorrect': class_correct,
+                                    'classTotal': class_total,
+                                },
+                                'correct': exact_match,
+                                'is_counting': False,
+                                'is_query': True,
+                                'is_multi_query': True,
+                            }
+                        continue
+
+                    predicted_label = int(torch.argmax(query_distribution.detach().reshape(-1)).item())
+                    expected_label = int(label.detach().reshape(-1)[0].item() if torch.is_tensor(label) else label)
+                    use_correct = predicted_label == expected_label
+                    if use_correct:
+                        query_correct += 1
+
+                    if _step_results is not None:
+                        _step_results[lc_name] = {
+                            'answer_result': predicted_label,
+                            'verify_result': {
+                                'queryDistribution': query_distribution.detach().cpu().tolist(),
+                                'expectedLabel': expected_label,
+                            },
+                            'correct': bool(use_correct),
+                            'is_counting': False,
+                            'is_query': True,
+                        }
+                except Exception as e:
+                    if inner_lc.is_multi_answer and isinstance(e, ValueError):
+                        raise
+                    logger.warning(f"queryL accuracy evaluation failed for {lc_name}: {e}")
+                    if _step_results is not None:
+                        _step_results[lc_name] = {
+                            'answer_result': None,
+                            'verify_result': None,
+                            'correct': False,
+                            'is_counting': False,
+                            'is_query': True,
+                        }
+                continue
+
+            # ── AnswerSolver (experimental, opt-in) ─────────────────
+            # Only runs when DOMIKNOWS_USE_ANSWER_SOLVER=1. Kept here for
+            # diagnostic cross-checking of the verify path; results are
+            # consumed as a fallback only (see selection below).
+            answer_correct = None
+            answer_result = None
+            if _use_answer_solver:
+                try:
+                    answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
+                except Exception as e:
+                    logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
+                    answer_result = None
+
+                if answer_result is not None:
+                    if is_counting:
+                        # For sumL the label is the expected count
+                        expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
+                        answer_correct = (answer_result == expected_count)
+                    else:
+                        # For boolean constraints the label is 1 (True) or 0 (False)
+                        expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
+                        answer_correct = (answer_result == expected_bool)
+
+            # ── verifySingleConstraint (primary) ────────────────────
+            verify_correct = None
+            verify_result = None
+            try:
+                if is_counting:
+                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
+                else:
+                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
+
+                is_satisfied = verify_result["satisfied"] == 100.0
+
+                if is_counting:
+                    verify_correct = (is_satisfied == True)
+                else:
+                    expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
+                    verify_correct = (is_satisfied == expected_satisfied)
+            except Exception as e:
+                logger.warning(f"verifySingleConstraint failed for {lc_name}: {e}")
+
+            # ── Pick result source ───────────────────────────────────
+            if verify_correct is not None:
+                use_correct = verify_correct
+            elif answer_correct is not None:
+                use_correct = answer_correct
+            else:
+                continue
+
+            if is_counting:
+                if use_correct:
+                    counting_correct += 1
+                counting_total += 1
+            else:
+                if use_correct:
+                    boolean_correct += 1
+                boolean_total += 1
+
+            if _step_results is not None:
+                _step_results[lc_name] = {
+                    'answer_result': answer_result,
+                    'verify_result': verify_result,
+                    'correct': bool(use_correct),
+                    'is_counting': bool(is_counting),
+                }
+
+        if _notebook_active:
+            _data_item = None
+            if _evaluate_data_indexable:
+                try:
+                    _data_item = evaluate_data[_step_idx]
+                except Exception:
+                    _data_item = None
+            _extras = {'threshold': threshold}
+            if _vlm_calls:
+                _extras['vlm_calls'] = _vlm_calls
+            write_active_step(
+                datanode, program,
+                data_item=_data_item,
+                phase='eval',
+                step_idx=_step_idx,
+                precomputed_constraints=_step_results,
+                extras=_extras,
+            )
+
+    # Build results
+    results = {
+        'boolean_correct': boolean_correct,
+        'boolean_total': boolean_total,
+        'counting_correct': counting_correct,
+        'counting_total': counting_total,
+        'query_correct': query_correct,
+        'query_total': query_total,
+        'multi_query_position_correct': multi_query_position_correct,
+        'multi_query_position_total': multi_query_position_total,
+        'multi_query_selection_exact_correct': multi_query_selection_exact_correct,
+        'multi_query_selection_exact_total': multi_query_selection_exact_total,
+        'multi_query_selection_position_correct': multi_query_selection_position_correct,
+        'multi_query_selection_position_total': multi_query_selection_position_total,
+        'multi_query_class_correct': multi_query_class_correct,
+        'multi_query_class_total': multi_query_class_total,
+        'miota_exact_correct': miota_exact_correct,
+        'miota_exact_total': miota_exact_total,
+        'miota_position_correct': miota_position_correct,
+        'miota_position_total': miota_position_total,
+    }
+
+    if total == 0:
+        logger.error("No Valid Constraint found for this dataset.")
+        results.update({
+            'boolean_accuracy': 0.0, 'counting_accuracy': 0.0,
+            'primary_metric': 0.0
+        })
+        return results if return_dict else 0.0
+
+    if boolean_total > 0:
+        results['boolean_accuracy'] = (boolean_correct / boolean_total) * 100
+        print(f"Boolean accuracy: {results['boolean_accuracy']:.2f}% ({boolean_correct}/{boolean_total})")
+    else:
+        results['boolean_accuracy'] = None
+
+    if counting_total > 0:
+        counting_accuracy = (counting_correct / counting_total) * 100
+        results['counting_accuracy'] = counting_accuracy
+        print(f"Counting accuracy: {counting_accuracy:.2f}% ({counting_correct}/{counting_total})")
+    else:
+        results['counting_accuracy'] = None
+
+    if query_total > 0:
+        query_accuracy = (query_correct / query_total) * 100
+        results['query_accuracy'] = query_accuracy
+        print(f"Query accuracy: {query_accuracy:.2f}% ({query_correct}/{query_total})")
+    else:
+        results['query_accuracy'] = None
+
+    results['multi_query_position_accuracy'] = (
+        multi_query_position_correct / multi_query_position_total * 100
+        if multi_query_position_total else None
+    )
+    results['multi_query_selection_exact_accuracy'] = (
+        multi_query_selection_exact_correct / multi_query_selection_exact_total * 100
+        if multi_query_selection_exact_total else None
+    )
+    results['multi_query_selection_position_accuracy'] = (
+        multi_query_selection_position_correct / multi_query_selection_position_total * 100
+        if multi_query_selection_position_total else None
+    )
+    results['multi_query_class_accuracy'] = (
+        multi_query_class_correct / multi_query_class_total * 100
+        if multi_query_class_total else None
+    )
+
+    if miota_exact_total > 0:
+        results['miota_exact_accuracy'] = (miota_exact_correct / miota_exact_total) * 100
+        results['miota_position_accuracy'] = (
+            miota_position_correct / miota_position_total
+        ) * 100 if miota_position_total else 0.0
+        print(
+            f"miotaL exact-set accuracy: {results['miota_exact_accuracy']:.2f}% "
+            f"({miota_exact_correct}/{miota_exact_total}); position accuracy: "
+            f"{results['miota_position_accuracy']:.2f}% "
+            f"({miota_position_correct}/{miota_position_total})"
+        )
+    else:
+        results['miota_exact_accuracy'] = None
+        results['miota_position_accuracy'] = None
+
+    # Primary metric
+    accuracy_parts = [
+        (results['boolean_accuracy'], boolean_total),
+        (results['counting_accuracy'], counting_total),
+        (results['query_accuracy'], query_total),
+        (results['miota_exact_accuracy'], miota_exact_total),
+    ]
+    active_accuracy_parts = [
+        (accuracy, count)
+        for accuracy, count in accuracy_parts
+        if accuracy is not None and count > 0
+    ]
+    if active_accuracy_parts:
+        total_constraints = sum(count for _accuracy, count in active_accuracy_parts)
+        results['accuracy'] = sum(
+            accuracy * (count / total_constraints)
+            for accuracy, count in active_accuracy_parts
+        )
+    else:
+        results['accuracy'] = 0.0
+
+    results["boolean_total"] = boolean_total
+    results["counting_total"] = counting_total
+    results["query_total"] = query_total
+    results["multi_query_position_total"] = multi_query_position_total
+    results["multi_query_selection_exact_total"] = multi_query_selection_exact_total
+    results["multi_query_selection_position_total"] = multi_query_selection_position_total
+    results["multi_query_class_total"] = multi_query_class_total
+    results["miota_exact_total"] = miota_exact_total
+    results["miota_position_total"] = miota_position_total
+    results["evaluation_mode"] = "gumbel" if use_gumbel else "deterministic"
+
+    return results if return_dict else results['accuracy']
+
+
+def _write_training_step_record(program, data, data_idx, builder,
+                                 mloss, closs, total_loss,
+                                 iter_count, epoch, training_mode,
+                                 device='cpu'):
+    """Write one step record during training, mirroring the eval hook.
+
+    Captures per-concept softmax/argmax (so the trajectory of a given
+    example across epochs is readable), the classification loss
+    (``mloss``), the constraint loss (``closs``, may be None before the
+    warmup boundary), and enough training state (epoch, global step,
+    training mode) to order the records. Silent no-op when no
+    StepNotebook is active. All work guarded by try/except so a bad
+    datanode extraction can never break training.
+    """
+    from domiknows.step_notebook import StepNotebook, write_active_step
+    if StepNotebook.active() is None:
+        return
+    try:
+        datanode = builder.getDataNode(device=device)
+    except Exception:
+        return
+    try:
+        def _scalar(x):
+            if x is None:
+                return None
+            try:
+                return float(x.item()) if torch.is_tensor(x) else float(x)
+            except Exception:
+                return None
+        extras = {
+            'epoch': epoch,
+            'global_step': iter_count,
+            'training_mode': training_mode,
+            'mloss': _scalar(mloss),
+            'closs': _scalar(closs),
+            'total_loss': _scalar(total_loss),
+        }
+        write_active_step(
+            datanode, program,
+            data_item=data if isinstance(data, dict) else None,
+            phase='train',
+            step_idx=data_idx,
+            extras=extras,
+        )
+    except Exception:
+        pass
+
+
+################################################################################
+# LossProgram Base Class
+################################################################################
+
 class LossProgram(LearningBasedProgram):
-    DEFAULTCMODEL = PrimalDualModel
+    """
+    Base class for training with constraint loss.
+    
+    Provides common infrastructure for constraint-based training.
+    Subclasses implement specific training algorithms in train_epoch().
+    """
+    DEFAULTCMODEL = None  # Subclasses should specify
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, CModel=None, beta=1, **kwargs):
+    def __init__(self, graph, Model, CModel=None, beta=1,
+                 copt_class=None, copt_kwargs=None, cmodel_kwargs=None,
+                 **kwargs):
+        """
+        Initializes an instance of the LossProgram.
+
+        :param graph: Instance of the initialized DomiKnowS graph.
+        :param Model: Class used to calculate the regular model loss (e.g., SolverModel).
+        :param CModel: Class used to calculate the constraint model loss. If set to None uses
+            the `DEFAULTCMODEL`, which is `PrimalDualModel`.
+        :param beta: Weight given to the constraint model loss.
+        :param copt_class: Optimizer class used for the constraint model. Defaults to
+            ``torch.optim.Adam``; pass e.g. ``torch.optim.SGD`` to switch. Only takes effect
+            on subclasses whose ``train()`` builds ``self.copt`` (``PrimalDualProgram``,
+            ``InferenceProgram`` and ``SampleLossProgram``). See issue #422 for hyperparameter
+            guidance — defaults are a reasonable starting point but ``c_lr``, ``c_warmup_iters``
+            and the optimizer choice almost always need task-specific tuning.
+        :param copt_kwargs: Optional ``dict`` of extra keyword arguments passed to
+            ``copt_class`` (for example ``{'momentum': 0.9}`` for SGD). The learning rate is
+            set from ``c_lr`` in ``train()`` and must not be included here.
+        :param cmodel_kwargs: Optional keyword arguments intended only for ``CModel``.
+            These are not forwarded to the regular ``Model``. This is useful when
+            ``Model`` is a thin ``*args, **kwargs`` wrapper around a stricter base
+            model.
+        :params kwargs: Keyword arguments are passed to both the parent class and the CModel.
+            (if found in the signature).
+        """
+        # Validate our own kwargs before calling super(), so a bad copt_kwargs fails
+        # fast without first spinning up the (possibly heavy) Model.
+        if copt_kwargs is not None and 'lr' in copt_kwargs:
+            raise ValueError(
+                "copt_kwargs must not contain 'lr'; pass the learning rate via c_lr in train()."
+            )
+
         super().__init__(graph, Model, **kwargs)
+
         if CModel is None:
             CModel = self.DEFAULTCMODEL
-            
+        if CModel is None:
+            raise ValueError(f"{self.__class__.__name__} must specify CModel or set DEFAULTCMODEL")
+
         from inspect import signature
         cmodelSignature = signature(CModel.__init__)
-        
+
+        effective_cmodel_kwargs = dict(kwargs)
+        if cmodel_kwargs:
+            effective_cmodel_kwargs.update(cmodel_kwargs)
+
         cmodelKwargs = {}
         for param in cmodelSignature.parameters.values():
-            paramName = param.name
-            if paramName in kwargs:
-                cmodelKwargs[paramName] = kwargs[paramName]
+            if param.name in effective_cmodel_kwargs:
+                cmodelKwargs[param.name] = effective_cmodel_kwargs[param.name]
+
         self.cmodel = CModel(graph, **cmodelKwargs)
         self.copt = None
         self.beta = beta
+
+        # Pluggable constraint-optimizer configuration (issue #422).
+        self.copt_class = copt_class if copt_class is not None else torch.optim.Adam
+        self.copt_kwargs = dict(copt_kwargs) if copt_kwargs else {}
+        self._persistent_c_session = None
+
+    def _make_copt(self, lr):
+        """Build the constraint optimizer if the cmodel has parameters, else return None.
+
+        Centralising this means subclasses all honour ``copt_class`` / ``copt_kwargs``
+        without each having to re-implement optimizer construction.
+        """
+        params = list(self.cmodel.parameters())
+        if not params:
+            return None
+        return self.copt_class(params, lr=lr, **self.copt_kwargs)
 
     def to(self, device):
         super().to(device=device)
@@ -63,90 +781,40 @@ class LossProgram(LearningBasedProgram):
             self.cmodel.device = self.device
             self.cmodel.to(self.device)
 
-    def train(
-        self,
-        training_set,
-        valid_set=None,
-        test_set=None,
-        # COptim=None,  # SGD only
-        c_lr=0.05,
-        c_momentum=0.9,
-        c_warmup_iters=10,  # warmup
-        c_freq=10,
-        c_freq_increase=5,  # d
-        c_freq_increase_freq=1,
-        c_lr_decay=4,  # strategy
-        c_lr_decay_param=1,  # param in the strategy
-        batch_size = 1,
-        dataset_size = None, # provide dataset_size if dataset does not have len implemented
-        print_loss = True, # print loss on each grad update
-        **kwargs):
-        
-        # if COptim is None:
-        #     COptim = Optim
-        # if COptim is not None and list(self.model.parameters()):
-        #     self.copt = COptim(self.model.parameters())
-        if list(self.cmodel.parameters()):
-            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=c_lr)
-        else:
-            self.copt = None
-            
-        # To provide a session cache for cross-epoch variables like iter-count
-        c_session = {'iter':0, 'c_update_iter':0, 'c_update_freq':c_freq, 'c_update':0}  
-        
-        return super().train(
-            training_set,
-            valid_set=valid_set,
-            test_set=test_set,
-            c_lr=c_lr,
-            c_warmup_iters=c_warmup_iters,
-            c_freq_increase=c_freq_increase,
-            c_freq_increase_freq=c_freq_increase_freq,
-            c_lr_decay=c_lr_decay,
-            c_lr_decay_param=c_lr_decay_param,
-            c_session=c_session,
-            batch_size=batch_size,
-            dataset_size=dataset_size,
-            print_loss=print_loss,
-            **kwargs)
-    
     def call_epoch(self, name, dataset, epoch_fn, **kwargs):
         if dataset is not None:
-            self.logger.info(f'{name}:')
-            desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+            logger.info(f'{name}:')
+            epoch_kwargs = dict(kwargs)
+            persist_c_session = bool(epoch_kwargs.pop('_persist_c_session_tqdm', False))
+            dataset_len = get_len(dataset)
+            c_session = epoch_kwargs.get('c_session')
+            display_epoch = self.epoch
+            if persist_c_session and c_session is not None:
+                if name == 'Training':
+                    c_session['_epoch'] = int(c_session.get('_epoch', 0)) + 1
+                display_epoch = c_session.get('_epoch', display_epoch)
+            desc = name if display_epoch is None else f'Epoch {display_epoch} {name}'
+            tqdm_kwargs = {'total': dataset_len, 'desc': desc}
+            if persist_c_session and c_session is not None and 'iter' in c_session and dataset_len is not None:
+                initial = int(c_session['iter'])
+                tqdm_kwargs['initial'] = initial
+                tqdm_kwargs['total'] = initial + dataset_len
 
-            consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
+            consume(tqdm(epoch_fn(dataset, **epoch_kwargs), **tqdm_kwargs))
 
             if self.model.loss:
-                self.logger.info(' - loss:')
-                self.logger.info(self.model.loss)
-
-                metricName = 'loss'
-                metricResult = self.model.loss
+                logger.info(' - loss:')
+                logger.info(self.model.loss)
                     
-                if self.dbUpdate is not None:
-                    self.dbUpdate(desc, metricName, metricResult)
-                    
-            if self.cmodel.loss is not None and  repr(self.cmodel.loss) == "'None'":
-                losSTr = str(self.cmodel.loss)
-                desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
-                self.logger.info(' - Constraint loss:')
-                self.logger.info(self.cmodel.loss)
-
-                metricName = 'Constraint_loss'
-                metricResult = self.cmodel.loss
-
-                if self.dbUpdate is not None:
-                    self.dbUpdate(desc, metricName, metricResult)
-
-            ilpMetric = None
-            softmaxMetric = None
+            if self.cmodel.loss is not None and repr(self.cmodel.loss) != "'None'":
+                logger.info(' - Constraint loss:')
+                logger.info(self.cmodel.loss)
 
             if self.model.metric:
-                self.logger.info(' - metric:')
+                logger.info(' - metric:')
                 for key, metric in self.model.metric.items():
-                    self.logger.info(f' - - {key}')
-                    self.logger.info(metric)
+                    logger.info(f' - - {key}')
+                    logger.info(metric)
                     try:
                         self.f.write(f' - - {name}')
                         self.f.write(f' - - {key}')
@@ -155,299 +823,976 @@ class LossProgram(LearningBasedProgram):
                         self.f.write("\n")
                     except:
                         pass
-                    metricName = key
-                    metricResult = metric
-                    if self.dbUpdate is not None:
-                        self.dbUpdate(desc, metricName, metricResult)
 
-                    if key == 'ILP':
-                        ilpMetric = metric
+    def train(self, training_set, valid_set=None, test_set=None,
+              batch_size=1, dataset_size=None, print_loss=True,
+              warmup_epochs=0, constraint_epochs=0,
+              persist_c_session=False, reset_c_session=False,
+              start_epoch=0, resume_c_session=None,
+              resume_copt_state=None, epoch_end_callback=None,
+              **kwargs):
+        """
+        Base training loop. Subclasses pass algorithm-specific kwargs.
+        """
+        if resume_copt_state is not None:
+            if self.copt is None:
+                raise ValueError(
+                    "Cannot restore constraint optimizer state because this "
+                    "program has no constraint optimizer")
+            self.copt.load_state_dict(resume_copt_state)
 
-                    if key == 'softmax':
-                        softmaxMetric = metric
-#         super().call_epoch(name=name, dataset=dataset, epoch_fn=epoch_fn, **kwargs)
+        if resume_c_session is not None:
+            c_session = dict(resume_c_session)
+            if persist_c_session:
+                self._persistent_c_session = c_session
+        elif persist_c_session:
+            if reset_c_session or getattr(self, '_persistent_c_session', None) is None:
+                self._persistent_c_session = self._init_session()
+            c_session = self._persistent_c_session
+        else:
+            c_session = self._init_session()
         
-    def train_epoch(
-        self, dataset,
-        c_lr=1,
-        c_warmup_iters=10,  # warmup
-        c_freq_increase=1,  # d
-        c_freq_increase_freq=1,
-        c_lr_decay=0,  # strategy
-        c_lr_decay_param=1,
-        c_session={},
-        batch_size = 1,
-        dataset_size = None, # provide dataset_size if dataset does not have len implemented
-        print_loss = True, # print loss on each grad update
-        **kwargs):
+        if warmup_epochs > 0 or constraint_epochs > 0:
+            self._phased_training(
+                training_set, valid_set, test_set,
+                warmup_epochs, constraint_epochs,
+                batch_size, dataset_size, print_loss,
+                c_session, persist_c_session=persist_c_session,
+                start_epoch=start_epoch,
+                epoch_end_callback=epoch_end_callback, **kwargs
+            )
+        else:
+            return super().train(
+                training_set, valid_set=valid_set, test_set=test_set,
+                c_session=c_session, batch_size=batch_size,
+                dataset_size=dataset_size, print_loss=print_loss,
+                _persist_c_session_tqdm=persist_c_session,
+                **kwargs
+            )
 
+    def _init_session(self):
+        """Initialize session state. Override in subclasses for additional state."""
+        return {'iter': 0}
+
+    def _phased_training(self, training_set, valid_set, test_set,
+                         warmup_epochs, constraint_epochs,
+                         batch_size, dataset_size, print_loss,
+                         c_session, persist_c_session=False, start_epoch=0,
+                         epoch_end_callback=None, **kwargs):
+        """Execute phased training (warmup -> constraint)."""
+        total_epochs = int(warmup_epochs) + int(constraint_epochs)
+        start_epoch = int(start_epoch)
+        if start_epoch < 0 or start_epoch > total_epochs:
+            raise ValueError(
+                f"start_epoch must be between 0 and {total_epochs}, got "
+                f"{start_epoch}")
+        self.stop = False
+        epoch_counter = 0
+        
+        if warmup_epochs > 0:
+            logger.info(f"[Phase 1] Warmup training for {warmup_epochs} epochs")
+            for i in range(warmup_epochs):
+                if self.stop:
+                    break
+                epoch_counter += 1
+                if epoch_counter <= start_epoch:
+                    continue
+                self.epoch = epoch_counter
+                logger.info(f'Epoch: {self.epoch}')
+                self.call_epoch(
+                    'Training', training_set, self.train_epoch,
+                    c_session=c_session, batch_size=batch_size,
+                    dataset_size=dataset_size, print_loss=print_loss,
+                    _persist_c_session_tqdm=persist_c_session,
+                    training_mode='warmup', **kwargs
+                )
+                if valid_set is not None:
+                    self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+                if epoch_end_callback is not None:
+                    epoch_end_callback(
+                        self, epoch_counter, 'warmup', dict(c_session))
+        
+        if constraint_epochs > 0 and not self.stop:
+            logger.info(f"[Phase 2] Constraint training for {constraint_epochs} epochs")
+            for i in range(constraint_epochs):
+                if self.stop:
+                    break
+                epoch_counter += 1
+                if epoch_counter <= start_epoch:
+                    continue
+                self.epoch = epoch_counter
+                logger.info(f'Epoch: {self.epoch}')
+                self.call_epoch(
+                    'Training', training_set, self.train_epoch,
+                    c_session=c_session, batch_size=batch_size,
+                    dataset_size=dataset_size, print_loss=print_loss,
+                    _persist_c_session_tqdm=persist_c_session,
+                    training_mode='standard', **kwargs
+                )
+                if valid_set is not None:
+                    self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+                if epoch_end_callback is not None:
+                    epoch_end_callback(
+                        self, epoch_counter, 'constraint', dict(c_session))
+        
+        if test_set is not None:
+            self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)
+        
+        self.epoch = None
+        self.stop = None
+
+    def train_epoch(self, dataset, c_session={}, batch_size=1,
+                    dataset_size=None, print_loss=True,
+                    training_mode='standard', **kwargs):
+        """
+        Basic training epoch. Subclasses override for specific algorithms.
+        """
+        raise NotImplementedError("Subclasses must implement train_epoch()")
+    
+# =============================================================================
+# Gumbel Temperature Mixin
+# =============================================================================
+
+class GumbelTemperatureMixin:
+    """
+    Mixin providing Gumbel-Softmax temperature annealing for training programs.
+    
+    Provides shared temperature management across GumbelPrimalDualProgram,
+    GumbelSampleLossProgram, and InferenceProgram(use_gumbel=True).
+    """
+    
+    def _init_gumbel(self, use_gumbel=False, initial_temp=1.0, final_temp=0.1,
+                     anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False):
+        """Initialize Gumbel-Softmax parameters. Call from subclass __init__."""
+        self.use_gumbel = use_gumbel
+        self.initial_temp = initial_temp
+        self.final_temp = final_temp
+        self.anneal_start_epoch = anneal_start_epoch
+        self.anneal_epochs = anneal_epochs
+        self.hard_gumbel = hard_gumbel
+        self.current_epoch = 0
+        self.current_temp = initial_temp
+        
+        if use_gumbel:
+            logger.info(f"[Gumbel] Enabled: temp {initial_temp}→{final_temp}, hard={hard_gumbel}")
+    
+    def get_temperature(self):
+        """Compute current temperature with linear annealing."""
+        if not self.use_gumbel:
+            return 1.0
+        
+        if self.current_epoch < self.anneal_start_epoch:
+            return self.initial_temp
+        
+        if self.anneal_epochs is None:
+            return self.final_temp
+        
+        progress = (self.current_epoch - self.anneal_start_epoch) / self.anneal_epochs
+        progress = min(1.0, max(0.0, progress))
+        
+        return self.initial_temp - (self.initial_temp - self.final_temp) * progress
+    
+    def _auto_set_anneal_epochs(self, num_epochs):
+        """Auto-set anneal_epochs from num_epochs if not specified."""
+        if self.use_gumbel and self.anneal_epochs is None and num_epochs is not None:
+            self.anneal_epochs = num_epochs
+            logger.info(f"[Gumbel] Auto-set anneal_epochs to {num_epochs}")
+    
+    def _update_temperature_for_epoch(self):
+        """Update temperature and log periodically. Call at start of train_epoch."""
+        self.current_temp = self.get_temperature()
+        if self.use_gumbel and self.current_epoch % 10 == 0:
+            logger.info(f"[Gumbel] Epoch {self.current_epoch}: temp={self.current_temp:.3f}")
+    
+    def _increment_epoch(self):
+        """Increment epoch counter. Call at end of train_epoch."""
+        self.current_epoch += 1
+    
+    def _call_cmodel_with_gumbel(self, output):
+        """Call cmodel.forward with Gumbel parameters."""
+        return self.cmodel.forward(
+            output,
+            use_gumbel=self.use_gumbel,
+            temperature=self.current_temp,
+            hard_gumbel=self.hard_gumbel
+        )
+        
+#=============================================================================
+# Primal-Dual Program
+#=============================================================================
+
+class PrimalDualProgram(LossProgram):
+    """
+    Primal-Dual training using Lagrangian relaxation.
+    
+    Alternates between:
+    - Primal step: minimize model loss w.r.t. model parameters
+    - Dual step: maximize constraint violation w.r.t. lambda parameters
+    """
+    DEFAULTCMODEL = PrimalDualModel
+    
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, beta=1, grad_surgery='none', cagrad_c=0.5,
+                 **kwargs):
+        """
+        :param grad_surgery: R5 Phase C. ``'none'`` (default) keeps the single
+            fused backward pass. ``'diagnose'`` splits the two gradients and
+            records their conflict *without changing the update* — run this
+            first: resolving costs an extra backward pass on every step, which
+            is only worth paying if conflict actually occurs. ``'pcgrad'`` and
+            ``'cagrad'`` additionally resolve it. Read the measurement from
+            ``program.conflict_stats``.
+        :param cagrad_c: CAGrad's trust-region coefficient.
+        """
+        from .model.gradSurgery import GRAD_SURGERY, ConflictStats
+        if grad_surgery not in GRAD_SURGERY:
+            raise ValueError(f'grad_surgery must be one of {GRAD_SURGERY}')
+        self.grad_surgery = grad_surgery
+        self.cagrad_c = cagrad_c
+        #: Populated whenever ``grad_surgery != 'none'``; a diagnostic in its
+        #: own right, and what should decide whether a resolver earns its cost.
+        self.conflict_stats = ConflictStats()
+        super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
+
+    def _init_session(self):
+        """Primal-dual specific session state."""
+        c_freq = getattr(self, '_c_freq', 10)
+        return {
+            'iter': 0,
+            'c_update_iter': 0,
+            'c_update_freq': c_freq,
+            'c_update': 0
+        }
+
+    def train(self, training_set, valid_set=None, test_set=None,
+              c_lr=0.05, c_warmup_iters=10, c_freq=10,
+              c_freq_increase=5, c_freq_increase_freq=1,
+              c_lr_decay=4, c_lr_decay_param=1,
+              batch_size=1, dataset_size=None, print_loss=True,
+              warmup_epochs=0, constraint_epochs=0,
+              constraint_only=False, constraint_loss_scale=1.0,
+              persist_c_session=False, reset_c_session=False,
+              **kwargs):
+        """
+        Performs training over a single epoch using a combination of the model loss
+        and the constraint model loss.
+
+        Optionally performs batched training using gradient accumulation.
+
+        In `standard` training_mode, updates using the constraint loss are scheduled 
+        based on the `c_*` parameters.
+
+        In `constraint_only` training_mode, updates on each iteration and rescales
+        the constraint loss.
+        
+        :param dataset: Iterable of data items to train on.
+        :param c_lr: Learning rate for updating parameters with the constraint loss.
+        :param c_warmup_iters: The number of initial steps to perform where only the
+            regular model loss is used to perform updates.
+        :param c_freq_increase: Schedules the rate of parameter updates from constraint loss.
+        :param c_freq_increase_freq: Schedules the rate of parameter updates from constraint loss.
+        :param c_lr_decay: Method for scheduling the learning rate of the constraint loss.
+        :param c_lr_decay_param: Parameter used in the learning rate scheduler.
+        :param c_session: Saves the constraint update schedule state from epoch to epoch. Gets updated
+            at the end of the epoch.
+        :param batch_size: If set > 1, batches updates using gradient accumulation.
+        :param dataset_size: Used to determine when to update the last batch. If set to None, tries
+            to calculate using len(dataset).
+        :param training_mode: `standard`, `constraint_only`, or `warmup` (see above).
+        :param constraint_loss_scale: Used in `constraint_only` mode; rescales the constraint loss.
+        """
+        
+        # Setup constraint optimizer
+        self.copt = self._make_copt(c_lr)
+        
+        # Store c_freq for _init_session to use
+        self._c_freq = c_freq
+        
+        # Let base class create c_session via _init_session()
+        return super().train(
+            training_set, valid_set=valid_set, test_set=test_set,
+            c_lr=c_lr, c_warmup_iters=c_warmup_iters,
+            c_freq_increase=c_freq_increase,
+            c_freq_increase_freq=c_freq_increase_freq,
+            c_lr_decay=c_lr_decay, c_lr_decay_param=c_lr_decay_param,
+            batch_size=batch_size, dataset_size=dataset_size,
+            print_loss=print_loss, warmup_epochs=warmup_epochs,
+            constraint_epochs=constraint_epochs,
+            constraint_only=constraint_only,
+            constraint_loss_scale=constraint_loss_scale,
+            persist_c_session=persist_c_session,
+            reset_c_session=reset_c_session,
+            **kwargs
+        )
+
+    def train_epoch(self, dataset, c_lr=0.05, c_warmup_iters=10,
+                    c_freq_increase=5, c_freq_increase_freq=1,
+                    c_lr_decay=4, c_lr_decay_param=1,
+                    c_session={}, batch_size=1, dataset_size=None,
+                    print_loss=True, training_mode='standard',
+                    constraint_only=False, constraint_loss_scale=1.0,
+                    **kwargs):
+        """
+        Primal-Dual training epoch.
+        
+        Primal step: gradient descent on model params (minimize loss)
+        Dual step: gradient ascent on lambda params (maximize constraint violation)
+        """
         if batch_size < 1:
-            raise ValueError(f'batch_size must be at least 1, but got batch_size={batch_size}')
+            raise ValueError(f'batch_size must be at least 1')
 
         assert c_session
-        from torch import autograd
-        torch.autograd.set_detect_anomaly(False)
+        
         self.model.mode(Mode.TRAIN)
-#         self.cmodel.mode(Mode.TRAIN)
-        iter = c_session['iter']
-        c_update_iter = c_session['c_update_iter']
-        c_update_freq = c_session['c_update_freq']
-        c_update = c_session['c_update']
         self.model.train()
         self.model.reset()
         self.cmodel.train()
         self.cmodel.reset()
 
-        # try to get the number of iterations
+        # Session state
+        iter_count = c_session['iter']
+        c_update_iter = c_session['c_update_iter']
+        c_update_freq = c_session['c_update_freq']
+        c_update = c_session['c_update']
+
+        # Dataset size
         num_data_iters = dataset_size
         if num_data_iters is None:
             if not hasattr(dataset, '__len__'):
-                raise ValueError(f'dataset must have attribute __len__ if dataset_size is not provided')
-
+                raise ValueError('dataset must have __len__ if dataset_size not provided')
             num_data_iters = len(dataset)
 
-        batch_loss = 0.0 # track accumulated loss across batch for logging
+        batch_loss = 0.0
+        
         for data_idx, data in enumerate(dataset):
-            # forward pass
-            mloss, metric, *output = self.model(data)  # output = (datanode, builder)
-            if iter < c_warmup_iters:
+            try:
+                mloss, metric, *output = self.model(data)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise
+
+            # Compute loss based on training mode
+            closs = None
+            if training_mode == 'warmup':
                 loss = mloss
-            else:
+            elif constraint_only:
                 closs, *_ = self.cmodel(output[1])
-                if torch.is_nonzero(closs):
-                    loss = mloss + self.beta * closs
-                    self.logger.info('closs is not zero')
+                if torch.is_tensor(closs) and torch.isfinite(closs) and abs(closs.item()) > 1e-8:
+                    loss = mloss * 0.01 + closs * constraint_loss_scale
                 else:
+                    continue
+            else:
+                if iter_count < c_warmup_iters:
                     loss = mloss
+                else:
+                    closs, *_ = self.cmodel(output[1])
+                    if torch.is_tensor(closs) and torch.is_nonzero(closs):
+                        loss = mloss + self.beta * closs
+                    else:
+                        loss = mloss
 
             if not loss:
                 continue
 
-            # get hypothetical position in the batch
-            batch_pos = data_idx % batch_size
-
-            # calculate gradients for item
-            loss /= batch_size
-            batch_loss += loss.item()
-            loss.backward()
-
-            # only update if we're the last item in the batch
-            # or if we're the last item in the dataset
-            do_update = (
-                (batch_pos == (batch_size - 1)) or
-                (data_idx == (num_data_iters - 1))
+            _write_training_step_record(
+                self, data, data_idx, output[1],
+                mloss=mloss, closs=closs, total_loss=loss,
+                iter_count=iter_count, epoch=self.epoch,
+                training_mode=training_mode, device=self.device,
             )
 
-            # log loss on each update
+            batch_pos = data_idx % batch_size
+            do_update = (batch_pos == batch_size - 1) or (data_idx == num_data_iters - 1)
+
+            # Accumulate gradients
+            scaled_loss = loss / batch_size
+            batch_loss += scaled_loss.item()
+
+            surgery = getattr(self, 'grad_surgery', 'none')
+            if surgery != 'none' and closs is not None and torch.is_tensor(closs):
+                # R5 Phase C. The two gradients must be taken separately — a
+                # fused backward cannot be decomposed afterwards — so this costs
+                # an extra pass and stays opt-in.
+                from .model.gradSurgery import conflict_report
+                conflict_report(
+                    mloss / batch_size, (self.beta * closs) / batch_size,
+                    list(self.model.parameters()),
+                    method=surgery, stats=self.conflict_stats,
+                    cagrad_c=getattr(self, 'cagrad_c', 0.5))
+            else:
+                scaled_loss.backward()
+
             if do_update:
-                self.logger.info(f'loss (i={data_idx}) = {batch_loss:.3f}')
+                # Gradient clipping
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
+                
+                # Primal step: update model params
+                if self.opt is not None:
+                    self.opt.step()
+                    self.opt.zero_grad()
+                
+                iter_count += 1
 
-            # do backwards pass update
-            if self.opt is not None and do_update:
-                self.opt.step()
-            iter += 1
+                # Dual step: update lambda params.
+                # ascent: gradient ascent via copt (reversed-sign gradient).
+                # augmented (Augmented Lagrangian): closed-form multiplier update
+                #   on the cmodel; no copt exists (lambda/rho are buffers), so the
+                #   schedule must still fire — gate on the AL updater instead.
+                al_mode = getattr(self.cmodel, 'dual_algorithm', 'ascent') == 'augmented'
+                dual_updater_ready = (self.copt is not None) or al_mode
+                should_update_dual = (
+                    dual_updater_ready and
+                    iter_count > c_warmup_iters and
+                    iter_count - c_update_iter > c_update_freq
+                )
 
-            if (
-                self.copt is not None and
-                iter > c_warmup_iters and
-                do_update
-                # iter - c_update_iter > c_update_freq
-            ):
-                # NOTE: Based on the face the gradient of lambda in dual
-                #       is reversing signs of their gradient in primal,
-                #       we avoid a repeated backward (and also pytorch's
-                #       retain_graph problem), we simply reverse the sign
-                #       for the dual. Don't zero_grad() here!
-                reverse_sign_grad(self.model.parameters())
-                self.copt.step()
-                # update counting
-                c_update_iter = iter
-                c_update += 1
-                # update freq
-                if c_freq_increase_freq > 0 and c_update % c_freq_increase_freq == 0:
-                    c_update_freq += c_freq_increase
-                # update c_lr
-                if c_lr_decay == 0:
-                    # on the paper
-                    # c_lr_decay_param = beta
-                    def update_lr(lr):
-                        return c_lr * 1. / (1 + c_lr_decay_param * c_update)
-                elif c_lr_decay == 1:
-                    # in pd code / srl strategy 1
-                    # c_lr_decay_param = lr_decay_after
-                    def update_lr(lr):
-                        return lr * np.sqrt(((c_update-1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
-                elif c_lr_decay == 2:
-                    # in pd code / srl strategy 2
-                    # c_lr_decay_param = lr_decay_after
-                    def update_lr(lr):
-                        return lr * (((c_update-1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
-                elif c_lr_decay == 3:
-                    # in pd code / srl strategy 3
-                    # c_lr_decay_param = lr_decay_after
-                    assert c_lr_decay_param <= 1.
-                    def update_lr(lr):
-                        return lr * c_lr_decay_param
-                elif c_lr_decay == 4:
-                    # in pd code / ner strategy 1
-                    def update_lr(lr):
-                        return lr * np.sqrt((c_update+1) / (c_update+2))
-                else:
-                    raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
-                for param_group in self.copt.param_groups:
-                    param_group['lr'] = update_lr(param_group['lr'])
+                if should_update_dual:
+                    if al_mode:
+                        # Closed-form Augmented-Lagrangian dual update + rho schedule.
+                        self.cmodel.al_dual_update_()
+                        if self.copt is not None:
+                            # R5 Phase F: an amortized critic under AL is
+                            # *regressed* onto the closed-form target, not
+                            # ascended, so it takes an ordinary descent step —
+                            # no sign flip. Without this the critic's parameters
+                            # would never be updated at all, since AL otherwise
+                            # bypasses the constraint optimizer.
+                            torch.nn.utils.clip_grad_norm_(
+                                self.cmodel.parameters(), max_norm=_grad_clip_norm())
+                            self.copt.step()
+                    else:
+                        # Reverse gradients for lambda (gradient ascent)
+                        reverse_sign_grad(self.cmodel.parameters())
+                        torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
+                        self.copt.step()
+                        _project_cmodel_lambdas(self.cmodel)
+
+                    c_update_iter = iter_count
+                    c_update += 1
+
+                    # Update dual frequency
+                    if c_freq_increase_freq > 0 and c_update % c_freq_increase_freq == 0:
+                        c_update_freq += c_freq_increase
+
+                    # Update dual learning rate (only meaningful for the gradient
+                    # ascent optimizer; AL has no copt learning rate).
+                    if self.copt is not None:
+                        self._update_dual_lr(c_lr_decay, c_lr_decay_param, c_update, c_lr)
+
+                if self.copt is not None:
+                    self.copt.zero_grad()
+                
+                batch_loss = 0.0
             
             yield (loss, metric, *output[:1])
 
-            # only zero out grads & loss tracker if we've done an update
-            if do_update:
-                batch_loss = 0.0
-                if self.opt is not None:
-                    self.opt.zero_grad()
-                if self.copt is not None:
-                    self.copt.zero_grad()
-
-        c_session['iter'] = iter
+        # Save session state
+        c_session['iter'] = iter_count
         c_session['c_update_iter'] = c_update_iter
         c_session['c_update_freq'] = c_update_freq
         c_session['c_update'] = c_update
 
-    def test_epoch(self, dataset, **kwargs):
-        # just to consum kwargs
-#         self.cmodel.mode(Mode.TEST)
-        yield from super().test_epoch(dataset)
-        
-    def populate_epoch(self, dataset, grad = False):
-        self.model.mode(Mode.POPULATE)
-#         self.cmodel.mode(Mode.POPULATE)
-        self.model.reset()
-        if not grad:
-            with torch.no_grad():
-                for i, data_item in enumerate(dataset):
-                    _, _, *output = self.model(data_item)
-                    yield detuple(*output[:1])
+    def _update_dual_lr(self, c_lr_decay, c_lr_decay_param, c_update, c_lr):
+        """Update learning rate for dual optimizer."""
+        if c_lr_decay == 0:
+            new_lr = lambda lr: c_lr * 1. / (1 + c_lr_decay_param * c_update)
+        elif c_lr_decay == 1:
+            new_lr = lambda lr: lr * np.sqrt(((c_update-1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
+        elif c_lr_decay == 2:
+            new_lr = lambda lr: lr * (((c_update-1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
+        elif c_lr_decay == 3:
+            assert c_lr_decay_param <= 1.
+            new_lr = lambda lr: lr * c_lr_decay_param
+        elif c_lr_decay == 4:
+            new_lr = lambda lr: lr * np.sqrt((c_update+1) / (c_update+2))
         else:
-            for i, data_item in enumerate(dataset):
-                for dataKey in data_item:
-                    if data_item[dataKey].dtype in [torch.float32, torch.float64, torch.complex64, torch.complex128]:
-                        data_item[dataKey].requires_grad= True
-                    
-                _, _, *output = self.model(data_item)
-                yield detuple(*output[:1])
-                
-class PrimalDualProgram(LossProgram):
-    logger = logging.getLogger(__name__)
-
-    def __init__(self, graph, Model, beta=1, **kwargs):
-        super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
-
-class InferenceProgram(LossProgram):
-    logger = logging.getLogger(__name__)
-
-    def __init__(self, graph, Model, beta=1, **kwargs):
-        super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
-
-    def evaluate_condition(self, evaluate_data, device="cpu"):
-        acc = 0
-        total = 0
-
-        for datanode in self.populate(evaluate_data, device=device):
-
-            # Finding the label of constraints/condition
-            find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
-            if len(find_constraints_label) < 1:
-                self.logger.error("No Constraint Labels found")
-                continue
-            find_constraints_label = find_constraints_label[0]
-            constraint_labels_dict = find_constraints_label.getAttributes()
-            active_lc_name = set(x.split('/')[0] for x in constraint_labels_dict)
-
-            # Follow code for set active/non-active before querying
-            for lc_name, lc in self.graph.logicalConstrains.items():
-                assert lc_name == str(lc)
-
-                if lc_name in active_lc_name:
-                    lc.active = True
-                else:
-                    lc.active = False
-
-            total += 1
-            # Inference the final output
-            verify_constrains = datanode.verifyResultsLC()
-            if not verify_constrains:
-                continue
-            # Getting label of constraints and convert to 0-1
-            verify_constrains = {k: v for k, v in verify_constrains.items() if k in active_lc_name}
-
-            condition_list = [1 if verify_constrains[lc]["satisfied"] == 100.0 else 0 for lc in verify_constrains]
-            constraint_labels = [int(constraint_labels_dict[lc + "/label"].item()) for lc in active_lc_name]
-            acc += int(constraint_labels == condition_list)
-
-        if total == 0:
-            self.logger.error("No Valid Constraint found for this dataset.")
-            return None
-
-        return acc / total
-
-
-class SampleLossProgram(LossProgram):
-    logger = logging.getLogger(__name__)
-
-    def __init__(self, graph, Model, beta=1, **kwargs):
-        super().__init__(graph, Model, CModel=SampleLossModel, beta=beta, **kwargs)
-
-
-    def train(
-        self,
-        training_set,
-        valid_set=None,
-        test_set=None,
-        # COptim=None,  # SGD only
-        c_lr=0.05,
-        c_momentum=0.9,
-        c_warmup_iters=10,  # warmup
-        c_freq=10,
-        c_freq_increase=5,  # d
-        c_freq_increase_freq=1,
-        c_lr_decay=4,  # strategy
-        c_lr_decay_param=1,  # param in the strategy
-        **kwargs):
+            raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
         
-        return super().train(
-            training_set=training_set,
-            valid_set=valid_set,
-            test_set=test_set,
-            c_lr=c_lr,
-            c_momentum=c_momentum,
-            c_warmup_iters=c_warmup_iters,  # warmup
-            c_freq=c_freq,
-            c_freq_increase=c_freq_increase,  # d
-            c_freq_increase_freq=c_freq_increase_freq,
-            c_lr_decay=c_lr_decay,  # strategy
-            c_lr_decay_param=c_lr_decay_param,  # param in the strategy
-            **kwargs)
+        for param_group in self.copt.param_groups:
+            param_group['lr'] = new_lr(param_group['lr'])
+            
+#=============================================================================
+# Gumbel Primal-Dual Program
+#=============================================================================
 
+class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
+    """Primal-Dual with Gumbel-Softmax for differentiable discrete sampling."""
+    
+    logger = logging.getLogger(__name__)
 
-    def train_epoch(
-        self, dataset,
-        c_warmup_iters=0,  # warmup
-        c_session={},
-        **kwargs):
-        self.model.mode(Mode.TRAIN)
-#         self.cmodel.mode(Mode.TRAIN)
+    def __init__(self, graph, Model, beta=1,
+                 use_gumbel=False, initial_temp=1.0, final_temp=0.1,
+                 anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
+                 **kwargs):
+        super().__init__(graph, Model, beta=beta, **kwargs)
+        self._init_gumbel(use_gumbel, initial_temp, final_temp,
+                          anneal_start_epoch, anneal_epochs, hard_gumbel)
+    
+    def train(self, training_set, valid_set=None, test_set=None,
+              num_epochs=None, **kwargs):
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
+        self._auto_set_anneal_epochs(num_epochs)
+        return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
+
+    def train_epoch(self, dataset, c_lr=0.05, c_warmup_iters=10,
+                    c_freq_increase=5, c_freq_increase_freq=1,
+                    c_lr_decay=4, c_lr_decay_param=1,
+                    c_session={}, batch_size=1, dataset_size=None,
+                    print_loss=True, training_mode='standard',
+                    constraint_only=False, constraint_loss_scale=1.0,
+                    **kwargs):
+        """Primal-Dual epoch with Gumbel-Softmax."""
+        self._update_temperature_for_epoch()
+
+        if batch_size < 1:
+            raise ValueError(f'batch_size must be at least 1')
+
         assert c_session
-        iter = c_session['iter']
+        
+        self.model.mode(Mode.TRAIN)
         self.model.train()
         self.model.reset()
         self.cmodel.train()
         self.cmodel.reset()
+
+        iter_count = c_session['iter']
+        c_update_iter = c_session['c_update_iter']
+        c_update_freq = c_session['c_update_freq']
+        c_update = c_session['c_update']
+
+        num_data_iters = dataset_size
+        if num_data_iters is None:
+            if not hasattr(dataset, '__len__'):
+                raise ValueError('dataset must have __len__ if dataset_size not provided')
+            num_data_iters = len(dataset)
+
+        batch_loss = 0.0
+        
+        for data_idx, data in enumerate(dataset):
+            try:
+                mloss, metric, *output = self.model(data)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise
+
+            closs = None
+            if training_mode == 'warmup':
+                loss = mloss
+            elif constraint_only:
+                closs, *_ = self._call_cmodel_with_gumbel(output[1])
+                if torch.is_tensor(closs) and torch.isfinite(closs) and abs(closs.item()) > 1e-8:
+                    loss = mloss * 0.01 + closs * constraint_loss_scale
+                else:
+                    continue
+            else:
+                if iter_count < c_warmup_iters:
+                    loss = mloss
+                else:
+                    closs, *_ = self._call_cmodel_with_gumbel(output[1])
+                    if torch.is_tensor(closs) and torch.is_nonzero(closs):
+                        loss = mloss + self.beta * closs
+                    else:
+                        loss = mloss
+
+            if not loss:
+                continue
+
+            _write_training_step_record(
+                self, data, data_idx, output[1],
+                mloss=mloss, closs=closs, total_loss=loss,
+                iter_count=iter_count, epoch=self.epoch,
+                training_mode=training_mode, device=self.device,
+            )
+
+            batch_pos = data_idx % batch_size
+            do_update = (batch_pos == batch_size - 1) or (data_idx == num_data_iters - 1)
+
+            scaled_loss = loss / batch_size
+            batch_loss += scaled_loss.item()
+            scaled_loss.backward()
+
+            if do_update:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
+                
+                if self.opt is not None:
+                    self.opt.step()
+                    self.opt.zero_grad()
+                
+                iter_count += 1
+                
+                should_update_dual = (
+                    self.copt is not None and
+                    iter_count > c_warmup_iters and
+                    iter_count - c_update_iter > c_update_freq
+                )
+                
+                if should_update_dual:
+                    reverse_sign_grad(self.cmodel.parameters())
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
+                    self.copt.step()
+                    _project_cmodel_lambdas(self.cmodel)
+                    
+                    c_update_iter = iter_count
+                    c_update += 1
+                    
+                    if c_freq_increase_freq > 0 and c_update % c_freq_increase_freq == 0:
+                        c_update_freq += c_freq_increase
+                    
+                    self._update_dual_lr(c_lr_decay, c_lr_decay_param, c_update, c_lr)
+                
+                if self.copt is not None:
+                    self.copt.zero_grad()
+                
+                batch_loss = 0.0
+            
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter_count
+        c_session['c_update_iter'] = c_update_iter
+        c_session['c_update_freq'] = c_update_freq
+        c_session['c_update'] = c_update
+        
+        self._increment_epoch()
+
+    def evaluate_condition(
+        self,
+        evaluate_data,
+        device="cpu",
+        threshold=0.5,
+        return_dict=False,
+        use_gumbel=False,
+        temperature=None,
+        hard_gumbel=False,
+    ):
+        return _evaluate_condition_impl(
+            self,
+            evaluate_data,
+            device=device,
+            threshold=threshold,
+            return_dict=return_dict,
+            use_gumbel=use_gumbel,
+            temperature=temperature,
+            hard_gumbel=hard_gumbel,
+        )
+
+#=============================================================================
+# Inference Program
+#=============================================================================
+
+# Supported training styles for InferenceProgram.
+_INFERENCE_STYLES = ('default', 'primal_dual', 'simple')
+
+
+class InferenceProgram(GumbelTemperatureMixin, LossProgram):
+    """
+    Program for training with program execution.
+
+    During training, logical expressions either specified directly in the graph,
+    or compiled from the dataset are executed using soft-logic. Parameters are
+    then updated based on the soft-logic output and the provided ground-truth value
+    of the logical expression.
+
+    Two training styles are supported (issue #424):
+
+    * ``training_style='default'`` — one-shot update per batch:
+      ``loss = mloss + beta * closs``. This matches the original
+      ``InferenceProgram`` behaviour and is fully backward compatible.
+    * ``training_style='primal_dual'`` — Lagrangian primal/dual updates with
+      gradient reversal on the dual parameters, constraint-update frequency
+      scheduling and learning-rate decay. Identical algorithm to
+      ``GumbelPrimalDualProgram`` but driven by ``InferenceModel`` instead of
+      ``PrimalDualModel``.
+
+    Gumbel-Softmax annealing (``use_gumbel=True``) can be enabled with either
+    style; when enabled the constraint model is called through the
+    ``GumbelTemperatureMixin`` helpers so the same annealing schedule is
+    available directly on ``InferenceProgram``.
+    """
+    DEFAULTCMODEL = InferenceModel
+
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, beta=1,
+                 training_style='default',
+                 use_gumbel=False, initial_temp=1.0, final_temp=0.1,
+                 anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
+                 compile_lc=True,
+                 include_global_constraint_loss=False,
+                 global_constraint_loss_weight=1.0,
+                 executable_constraint_loss_weight=1.0,
+                 query_loss=None,
+                 **kwargs):
+        """
+        Initializes an InferenceProgram instance.
+
+        :param graph: The initialized graph either containing the logical expressions to be executed
+            and/or called with `.compile_executable` to use the logical expressions in the dataset.
+        :param Model: The class to use for the regular forward pass and
+            supervised training (e.g., `SolverModel`).
+        :param beta: The weight given to the CModel loss (in this case, the loss from the program
+            execution output).
+        :param training_style: Either ``'default'`` or ``'primal_dual'``.
+            ``'simple'`` is accepted as a legacy alias for ``'default'``.
+        :param use_gumbel: If ``True``, apply Gumbel-Softmax sampling to the local decisions when
+            computing the constraint loss. Other ``*_temp`` / ``anneal_*`` / ``hard_gumbel``
+            parameters control the annealing schedule (see ``GumbelTemperatureMixin``).
+        :param include_global_constraint_loss: If ``True``, add graph-global
+            constraint loss to executable-constraint loss.
+        :param compile_lc: If ``True`` (default), use the compiled batched-gather
+            evaluator for labeled executable constraints and the optional
+            graph-global loss. Custom ``LogicalConstrain`` subclasses use the
+            common compiled formula protocol without explicit registration.
+        :param query_loss: Optional loss factory for multiclass ``queryL``
+            outputs. It is forwarded only to the constraint model; scalar
+            executable constraints continue to use that model's binary loss.
+        """
+        if training_style not in _INFERENCE_STYLES:
+            raise ValueError(
+                f"training_style must be one of {_INFERENCE_STYLES}, got {training_style!r}"
+            )
+        self.training_style = 'default' if training_style == 'simple' else training_style
+        cmodel_kwargs = {
+            'compile_lc': bool(compile_lc),
+            'include_global_constraint_loss': bool(include_global_constraint_loss),
+            'global_constraint_loss_weight': global_constraint_loss_weight,
+            'executable_constraint_loss_weight': executable_constraint_loss_weight,
+        }
+        if query_loss is not None:
+            cmodel_kwargs['query_loss'] = query_loss
+
+        super().__init__(
+            graph,
+            Model,
+            CModel=InferenceModel,
+            beta=beta,
+            cmodel_kwargs=cmodel_kwargs,
+            **kwargs,
+        )
+        self._init_gumbel(use_gumbel, initial_temp, final_temp,
+                          anneal_start_epoch, anneal_epochs, hard_gumbel)
+
+    # ------------------------------------------------------------------
+    # Session / training setup
+    # ------------------------------------------------------------------
+
+    def _init_session(self):
+        """Session shape depends on the training style."""
+        if self.training_style == 'primal_dual':
+            c_freq = getattr(self, '_c_freq', 10)
+            return {
+                'iter': 0,
+                'c_update_iter': 0,
+                'c_update_freq': c_freq,
+                'c_update': 0,
+            }
+        return super()._init_session()
+
+    def train(self, training_set, valid_set=None, test_set=None,
+              batch_size=1, dataset_size=None, print_loss=True,
+              warmup_epochs=0, constraint_epochs=0,
+              num_epochs=None,
+              # primal-dual specific scheduling; ignored in default mode
+              c_lr=0.05, c_warmup_iters=10, c_freq=10,
+              c_freq_increase=5, c_freq_increase_freq=1,
+              c_lr_decay=4, c_lr_decay_param=1,
+              constraint_only=False, constraint_loss_scale=1.0,
+              **kwargs):
+        """Setup optimizer and train.
+
+        The ``c_*`` parameters are the Primal-Dual scheduling knobs; they are
+        forwarded to ``train_epoch`` but have no effect in ``'default'`` mode.
+        ``num_epochs`` is used to auto-configure the Gumbel annealing window.
+        """
+        # Pick the constraint optimizer's learning rate based on style so the
+        # two modes stay consistent with the standalone programs they mirror.
+        copt_lr = c_lr if self.training_style == 'primal_dual' else 0.01
+        self.copt = self._make_copt(copt_lr)
+        if list(self.cmodel.parameters()):
+            copt_lr = c_lr if self.training_style == 'primal_dual' else 0.01
+            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=copt_lr)
+        else:
+            self.copt = None
+
+        self._c_freq = c_freq
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
+        self._auto_set_anneal_epochs(num_epochs)
+
+        return super().train(
+            training_set, valid_set=valid_set, test_set=test_set,
+            batch_size=batch_size, dataset_size=dataset_size,
+            print_loss=print_loss, warmup_epochs=warmup_epochs,
+            constraint_epochs=constraint_epochs,
+            c_lr=c_lr, c_warmup_iters=c_warmup_iters,
+            c_freq_increase=c_freq_increase,
+            c_freq_increase_freq=c_freq_increase_freq,
+            c_lr_decay=c_lr_decay, c_lr_decay_param=c_lr_decay_param,
+            constraint_only=constraint_only,
+            constraint_loss_scale=constraint_loss_scale,
+            **kwargs,
+        )
+
+    # ------------------------------------------------------------------
+    # Epoch dispatch
+    # ------------------------------------------------------------------
+
+    def train_epoch(self, dataset, c_session={}, batch_size=1,
+                    dataset_size=None, print_loss=True,
+                    training_mode='standard', **kwargs):
+        """Dispatch to the correct training loop based on ``training_style``."""
+        if self.training_style == 'primal_dual':
+            pd_program_cls = GumbelPrimalDualProgram if self.use_gumbel else PrimalDualProgram
+            yield from pd_program_cls.train_epoch(
+                self, dataset,
+                c_session=c_session, batch_size=batch_size,
+                dataset_size=dataset_size, print_loss=print_loss,
+                training_mode=training_mode, **kwargs,
+            )
+            return
+
+        # Default style — the original inference loop, with an optional
+        # Gumbel-Softmax hop on the constraint call.
+        yield from self._train_epoch_simple(
+            dataset, c_session=c_session, batch_size=batch_size,
+            dataset_size=dataset_size, print_loss=print_loss,
+            training_mode=training_mode, **kwargs,
+        )
+
+    def _train_epoch_simple(self, dataset, c_session={}, batch_size=1,
+                            dataset_size=None, print_loss=True,
+                            training_mode='standard', **kwargs):
+        """Original (non-PD) inference training loop."""
+        self._update_temperature_for_epoch()
+        """Simple training: model loss + constraint loss."""
+
+        import os as _os
+        _mem_probe = _os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = c_session.get('_mem_step', 0)
+
+        self.model.mode(Mode.TRAIN)
+        self.model.train()
+        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
+
+        iter_count = c_session.get('iter', 0)
+
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
             if self.copt is not None:
                 self.copt.zero_grad()
-            mloss, metric, *output = self.model(data)  # output = (datanode, builder)
-            if iter < c_warmup_iters:
+
+            mloss, metric, *output = self.model(data)
+
+            if training_mode == 'warmup':
+                loss = mloss
+            else:
+                if self.use_gumbel:
+                    closs, *_ = self._call_cmodel_with_gumbel(output[1])
+                else:
+                    closs, *_ = self.cmodel(output[1])
+                if torch.is_tensor(closs):
+                    loss = mloss + self.beta * closs
+                else:
+                    loss = mloss
+
+            if torch.is_tensor(loss) and loss.requires_grad:
+                loss.backward()
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
+
+                if self.opt is not None:
+                    self.opt.step()
+                if self.copt is not None:
+                    self.copt.step()
+                    _project_cmodel_lambdas(self.cmodel)
+                iter_count += 1
+
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter_count
+        if _mem_probe and torch.cuda.is_available():
+            _mem_step += 1
+            _alloc = torch.cuda.memory_allocated() / 1e9
+            _res = torch.cuda.memory_reserved() / 1e9
+            print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
+        c_session['_mem_step'] = _mem_step
+        self._increment_epoch()
+
+    def evaluate_condition(
+        self,
+        evaluate_data,
+        device="cpu",
+        threshold=0.0,
+        return_dict=False,
+        use_gumbel=False,
+        temperature=None,
+        hard_gumbel=False,
+    ):
+        return _evaluate_condition_impl(
+            self,
+            evaluate_data,
+            device=device,
+            threshold=threshold,
+            return_dict=return_dict,
+            use_gumbel=use_gumbel,
+            temperature=temperature,
+            hard_gumbel=hard_gumbel,
+        )
+
+#=============================================================================
+# Sample Loss Program
+#=============================================================================
+
+class SampleLossProgram(LossProgram):
+    """
+    Sampling-based constraint training.
+    """
+    DEFAULTCMODEL = SampleLossModel
+    
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, beta=1, **kwargs):
+        super().__init__(graph, Model, CModel=SampleLossModel, beta=beta, **kwargs)
+
+    def train(self, training_set, valid_set=None, test_set=None,
+              c_lr=0.05, c_warmup_iters=10, **kwargs):
+        """Setup optimizer and train."""
+        self.copt = self._make_copt(c_lr)
+
+        return super().train(
+            training_set, valid_set=valid_set, test_set=test_set,
+            c_warmup_iters=c_warmup_iters, **kwargs
+        )
+
+    def train_epoch(self, dataset, c_warmup_iters=0, c_session={}, **kwargs):
+        """Sampling-based training epoch."""
+        
+        self.model.mode(Mode.TRAIN)
+        self.model.train()
+        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
+        
+        iter_count = c_session.get('iter', 0)
+        
+        for data in dataset:
+            if self.opt is not None:
+                self.opt.zero_grad()
+            if self.copt is not None:
+                self.copt.zero_grad()
+            
+            mloss, metric, *output = self.model(data)
+            
+            if iter_count < c_warmup_iters:
                 loss = mloss
             else:
                 closs, *_ = self.cmodel(output[1])
@@ -455,29 +1800,334 @@ class SampleLossProgram(LossProgram):
                     loss = mloss + self.beta * closs
                 else:
                     loss = mloss
-                    
-                if loss != loss:
-                    raise Exception("Calculated loss is nan")
                 
-            if self.opt is not None and loss:
+                if loss != loss:  # NaN check
+                    raise Exception("Calculated loss is nan")
+            
+            if self.opt is not None and torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
-                # for name, param in self.model.named_parameters():
-                #     if param.requires_grad:
-                #         print (name, param.grad)
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 self.opt.step()
-                iter += 1
+                iter_count += 1
             
-            if (
-                self.copt is not None and
-                loss
-            ):
+            if self.copt is not None and torch.is_tensor(loss) and loss.requires_grad:
                 self.copt.step()
+                _project_cmodel_lambdas(self.cmodel)
             
             yield (loss, metric, *output[:1])
 
-        c_session['iter'] = iter    
+        c_session['iter'] = iter_count
+
+
+class SemanticLossProgram(SampleLossProgram, PrimalDualProgram):
+    """Train with differentiable exact ``-log(WMC)`` constraint loss.
+
+    Inherits both epoch implementations (both are ``LossProgram`` subclasses, so
+    the MRO linearises cleanly) and dispatches on ``training_style``. Real
+    inheritance — rather than calling the other class's methods unbound — is
+    what keeps the zero-argument ``super()`` inside those methods valid.
+
+    Two training styles:
+
+    * ``'fixed'`` (default) — the classic semantic-loss objective
+      ``model_loss + beta * semantic_loss``, reusing ``SampleLossProgram``'s
+      epoch.
+    * ``'primal_dual'`` — run the constraint loss through
+      :class:`PrimalDualProgram`'s epoch so the R5 dual machinery applies to the
+      exact loss (learned multipliers, augmented-Lagrangian closed-form updates,
+      or the amortized per-grounding critic). Requires ``lambda_weighted=True``
+      on the constraint model for the multipliers to actually be used; the
+      amortized critic additionally needs per-grounding aggregation, which
+      :class:`SemanticLossModel` selects automatically.
+    """
+
+    DEFAULTCMODEL = SemanticLossModel
+
+    def __init__(self, graph, Model, beta=1, training_style='fixed', **kwargs):
+        if training_style not in ('fixed', 'primal_dual'):
+            raise ValueError(
+                "training_style must be 'fixed' or 'primal_dual', "
+                f"got {training_style!r}")
+        self.training_style = training_style
+        # Reuse SampleLossProgram's optimizer setup and train_epoch, whose
+        # objective is exactly mloss + beta * closs after warmup.
+        LossProgram.__init__(
+            self,
+            graph,
+            Model,
+            CModel=SemanticLossModel,
+            beta=beta,
+            **kwargs,
+        )
+
+    def train(self, *args, **kwargs):
+        # PrimalDualProgram.train is what builds ``copt`` and records ``_c_freq``
+        # for the dual schedule; inheriting SampleLossProgram.train would leave
+        # c_update_freq at its default so the dual step would never fire.
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram.train(self, *args, **kwargs)
+        return super().train(*args, **kwargs)
+
+    def train_epoch(self, dataset, **kwargs):
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram.train_epoch(self, dataset, **kwargs)
+        return super().train_epoch(dataset, **kwargs)
+
+    def _init_session(self):
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram._init_session(self)
+        return super()._init_session()
+
+#=============================================================================
+# Structured Program (R3 factor-graph heads + R4 refinement)
+#=============================================================================
+
+class StructuredProgram(PrimalDualProgram):
+    """Train with constraint structure *inside* the model, not only in the loss.
+
+    The R-line mechanisms compose along two independent axes:
+
+    * **model side** — R3 factor-graph heads and R4 refinement, supplied by
+      :class:`~domiknows.program.model.structured.StructuredModel`;
+    * **cmodel side** — R1 ``compile_lc``, R5 ``dual_algorithm`` /
+      ``dual_granularity``, all inherited from :class:`PrimalDualProgram`.
+
+    Because ``Model`` is a parameter of every Program, the model side alone
+    needs no new Program. What this class adds is the **constraint partition**
+    R3 makes necessary: a constraint the architecture enforces structurally has
+    zero violation by construction, so keeping it in the loss allocates a
+    multiplier pinned at zero and feeds ``al_dual_update_`` an all-zero window —
+    a dual that can only ever learn nothing. Those constraints are excluded from
+    the cmodel entirely.
+
+    :param refine: enable R4B refinement (default True).
+    :param factor_graph: enable R3 exact constrained marginals (default False —
+      exact but one circuit per grounding).
+    :param belief_flow: ``'write_back'`` | ``'constraint_only'``; see
+        :class:`StructuredModel`.
+    :param partition:
+        ``'auto'`` (default) — exclude structurally-enforced constraints from
+        the loss and the dual system at construction, **only when**
+        ``factor_graph=True``. No multiplier is allocated for them. Cheapest,
+        but the decision is permanent: if a constraint's circuit falls back at
+        runtime it is left enforced by nothing (reported, loudly).
+        ``'adaptive'`` — keep every constraint in the cmodel, and skip its
+        penalty *per step* for exactly those the model reports as enforced that
+        step. Costs one unused multiplier per structural constraint, and in
+        exchange a fallback silently restores the penalty instead of leaving a
+        gap. Prefer this when the circuit budget is tight.
+        ``'none'`` — keep every constraint in the loss.
+
+    Only ``factor_graph`` licenses exclusion. Refinement *moves* beliefs toward
+    satisfaction but guarantees nothing, so a refined-only constraint keeps its
+    loss term and its dual.
+    """
+
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model=None, beta=1, *,
+                 refine=True, factor_graph=False, belief_flow='write_back',
+                 partition='auto', poi=None, loss=None, metric=None,
+                 inferTypes=None, structure_kwargs=None, **kwargs):
+        if partition not in ('auto', 'adaptive', 'none'):
+            raise ValueError("partition must be 'auto', 'adaptive' or 'none'")
+
+        from .model.structured import StructuredModel
+
+        structure = dict(refine=refine, factor_graph=factor_graph,
+                         belief_flow=belief_flow)
+        structure.update(structure_kwargs or {})
+        if Model is None:
+            # A plain factory (not model_helper's lambda): LearningBasedProgram
+            # introspects ``signature(Model.__init__)``, which for any function
+            # resolves to ``object.__init__`` and so reports ``**kwargs`` —
+            # meaning *every* program kwarg is forwarded here. Absorb them and
+            # keep only what StructuredModel actually accepts, so cmodel-only
+            # options (``compile_lc``, ``dual_algorithm``, ``exclude_constraints``)
+            # do not reach the model.
+            def Model(graph_, **extra):
+                from inspect import signature
+                allowed = signature(StructuredModel.__init__).parameters
+                passthrough = {k: v for k, v in extra.items()
+                               if k in allowed and k not in structure}
+                return StructuredModel(graph_, poi=poi, loss=loss, metric=metric,
+                                       inferTypes=inferTypes,
+                                       **structure, **passthrough)
+
+        exclude = set()
+        if factor_graph and partition == 'auto':
+            exclude = self.structural_candidates(graph)
+
+        #: constraints excluded from the loss because structure enforces them.
+        self.structural_partition = exclude
+        self.partition = partition
+        self._warned_fallback = False
+
+        super().__init__(graph, Model, beta=beta,
+                         exclude_constraints=exclude, **kwargs)
+
+        if factor_graph and partition == 'adaptive':
+            # Consulted per forward. The model runs before the cmodel in every
+            # train_epoch, so its report is already current for this step, and a
+            # constraint that fell back simply reappears in the loss.
+            self.cmodel.skip_provider = (
+                lambda: getattr(self.model, 'enforced_constraints', set()))
+            self.structural_partition = self.structural_candidates(graph)
+
+    @staticmethod
+    def structural_candidates(graph):
+        """Constraint names a factor-graph head can enforce structurally.
+
+        Purely syntactic (constraint *type* and limit), so it is available at
+        construction time — before any datanode exists. Whether a particular
+        grounding's circuit fits the budget is only known at runtime;
+        :meth:`report_partition` cross-checks that and warns if an excluded
+        constraint actually fell back.
+        """
+        from .model.refinement import _factor_kind
+
+        names = set()
+        rec = getattr(graph, 'logicalConstrainsRecursive', None)
+        constraints = rec if rec is not None else getattr(graph, 'logicalConstrains', {}).items()
+        for key, lc in constraints:
+            if not getattr(lc, 'headLC', False) or not getattr(lc, 'active', True):
+                continue
+            if _factor_kind(lc) is not None:
+                names.add(getattr(lc, 'lcName', key))
+        return names
+
+    def report_partition(self):
+        """Human-readable split, and a loud warning if exclusion over-reached.
+
+        A constraint that was excluded from the loss but whose circuit fell back
+        at runtime is enforced by *nothing* — neither structure nor penalty. That
+        is the one failure mode of partitioning, so it is surfaced rather than
+        left to be inferred from a metric.
+        """
+        model = getattr(self, 'model', None)
+        report = getattr(model, 'report', None)
+        enforced = set(getattr(model, 'enforced_constraints', set()) or ())
+
+        if self.partition == 'adaptive':
+            lines = [f'structural partition (adaptive): {len(enforced)} constraint(s) '
+                     f'skipped this step, {len(self.cmodel.constr) - len(enforced)} '
+                     f'penalised; {len(self.cmodel.constr)} kept in the dual system']
+        else:
+            lines = [f'structural partition: {len(self.structural_partition)} '
+                     f'constraint(s) excluded from loss/duals, '
+                     f'{len(self.cmodel.constr)} still penalised']
+        if report is not None:
+            lines.append('  ' + report.render().replace('\n', '\n  '))
+
+        # 'adaptive' re-penalises whatever was not enforced, so there is no gap
+        # to warn about; only a permanent exclusion can leave one.
+        unenforced = (set() if self.partition == 'adaptive'
+                      else self.structural_partition - enforced)
+        if unenforced:
+            # Deliberately NOT gated on ``enforced`` being non-empty: the worst
+            # case is precisely the one where nothing was enforced and everything
+            # was excluded, leaving those constraints held by neither structure
+            # nor penalty. Suppressing the warning there would silence the only
+            # state it exists to report.
+            scope = ('nothing was enforced structurally, so every excluded '
+                     'constraint is unconstrained'
+                     if not enforced else
+                     'excluded from the loss but NOT enforced structurally at runtime')
+            message = (f'{scope}: {sorted(unenforced)} — these are currently '
+                       'unconstrained; re-run with partition="none"')
+            lines.append('  WARNING: ' + message)
+            if not self._warned_fallback:
+                self.logger.warning('StructuredProgram: %s', message)
+                self._warned_fallback = True
+        return '\n'.join(lines)
+
+
+#=============================================================================
+# Gumbel Sample Loss Program
+#=============================================================================
+
+class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
+    """Sample Loss with Gumbel-Softmax support."""
+    
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, beta=1,
+                 use_gumbel=False, initial_temp=1.0, final_temp=0.1,
+                 anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
+                 **kwargs):
+        super().__init__(graph, Model, beta=beta, **kwargs)
+        self._init_gumbel(use_gumbel, initial_temp, final_temp,
+                          anneal_start_epoch, anneal_epochs, hard_gumbel)
+    
+    def train(self, training_set, valid_set=None, test_set=None,
+              num_epochs=None, **kwargs):
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
+        self._auto_set_anneal_epochs(num_epochs)
+        return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
+    
+    def train_epoch(self, dataset, c_warmup_iters=0, c_session={}, **kwargs):
+        """Sampling epoch with Gumbel-Softmax."""
+        self._update_temperature_for_epoch()
         
+        self.model.mode(Mode.TRAIN)
+        self.model.train()
+        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
+        
+        iter_count = c_session.get('iter', 0)
+        
+        for data in dataset:
+            if self.opt is not None:
+                self.opt.zero_grad()
+            if self.copt is not None:
+                self.copt.zero_grad()
+            
+            mloss, metric, *output = self.model(data)
+            
+            if iter_count < c_warmup_iters:
+                loss = mloss
+            else:
+                closs, *_ = self._call_cmodel_with_gumbel(output[1])
+                
+                if torch.is_tensor(closs):
+                    loss = mloss + self.beta * closs
+                else:
+                    loss = mloss
+                
+                if loss != loss:
+                    raise Exception("Calculated loss is nan")
+            
+            if self.opt is not None and torch.is_tensor(loss) and loss.requires_grad:
+                loss.backward()
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
+
+                self.opt.step()
+                iter_count += 1
+            
+            if self.copt is not None and loss:
+                self.copt.step()
+                _project_cmodel_lambdas(self.cmodel)
+            
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter_count
+        self._increment_epoch()    
+        
+# =============================================================================
+# GBI Program 
+# =============================================================================
+
 class GBIProgram(LossProgram):
     logger = logging.getLogger(__name__)
 

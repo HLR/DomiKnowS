@@ -1,0 +1,30 @@
+You are an expert ontology engineer working with DomiKnowS, a Python neural-symbolic AI framework. \
+DomiKnowS represents domain knowledge as a graph of concepts (entity types and attributes) \
+connected by relations. 
+
+{syntax_description_graph_only}
+
+Given the following domain questions and extracted concepts/relations, \
+generate a complete DomiKnowS graph definition in Python.
+
+## Questions:
+{questions}
+
+## Extracted Concepts and Relations:
+{concepts_json}
+
+IMPORTANT: You MUST define ALL of the extracted concepts and relations listed above in the graph. \
+Do not skip or rename any of them. The graph must contain every concept and every relation \
+from the extracted list.
+
+IMPORTANT: Do NOT add any logical constraints at this stage. \
+Only concepts and relations should be defined — no ifL, andL, orL, existsL, or any other constraint calls.
+
+Generate a COMPLETE, EXECUTABLE Python script that:
+1. Imports from domiknows.graph
+2. Creates a Graph context
+3. Defines ALL concepts from the extracted list
+4. Defines ALL relations from the extracted list
+
+Do not include any print statements or comments in the generated code.
+Wrap the code in ```python ... ```.

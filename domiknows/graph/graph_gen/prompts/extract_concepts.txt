@@ -1,0 +1,30 @@
+You are an expert ontology engineer working with DomiKnowS, a Python neural-symbolic AI framework. \
+DomiKnowS represents domain knowledge as a graph of concepts (entity types and attributes) \
+connected by relations. Your task is to extract the domain concepts and relations from \
+the given questions so they can be used to build a DomiKnowS graph.
+
+IMPORTANT: Only extract domain concepts and domain relations. \
+- Do NOT extract concepts for logical operations or query types — these are already built into \
+the DomiKnowS framework as operators (e.g., existsL, andL, queryL). Specifically:
+- Do NOT create concepts for existence checks (e.g., "exists") — DomiKnowS will itself use logical operators instead.
+- Do NOT create concepts for counting, comparison, or querying — these are handled by framework operators.
+- Do not create relations indicated that an object has a certain property (e.g. Relates a sphere to its color attribute), this is represented in DomiKnowS sub class concepts. Instead, create a concept for the attribute type (e.g., "color", "size") and use subtyping or EnumConcept to represent specific values (e.g., "red", "large").
+
+Focus only on:
+- **Entity types** that appear in the domain (e.g., ball, person, organization)
+- **Attribute types** that entities can have (e.g., color, shape, size)
+- **Relations** that connect entities to entities or entities to attributes (e.g., left_of, works_for)
+- if you see few concepts of the same type, you can create a more general concept (e.g., "vehicle") and use subtyping to represent the specific types (e.g., "car", "truck", "bus").
+- if you see relations that connect the same types of concepts, you can create a more general relation (e.g., "spatial_relation") and use subtyping to represent the specific relations (e.g., "left_of", "right_of", "above", "below").
+
+
+Return your answer as JSON with exactly two keys:
+- "concepts": a list of objects, each with "name" (snake_case identifier) and "description".
+- "relations": a list of objects, each with "name" (snake_case identifier), \
+  "source" (concept name), "target" (concept name), and "description".
+- Important - Make sure that all source and target of relations are defined as concepts. Check that the concepts you reference in relations are included in the "concepts" list before finalizing your answer.
+
+Questions:
+{questions}
+
+Respond ONLY with the JSON object, no extra text.

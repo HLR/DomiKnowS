@@ -1,7 +1,5 @@
 import abc
-from collections import OrderedDict
-from itertools import chain, permutations
-from domiknows.graph.logicalConstrain import nandL
+from itertools import permutations
 
 import torch
 
@@ -30,6 +28,11 @@ class Transformed():
         mapping = mapping.to(dtype=torch.float, device=device)
         value = value.to(dtype=torch.float, device=device)
         if self.fn is None:
+            # Ensure shapes are compatible for matrix multiplication
+            # mapping should be (N, M) and value should be (M, ...) 
+            if mapping.shape[1] != value.shape[0]:
+                raise ValueError(f"Shape mismatch: mapping has shape {mapping.shape} but value has shape {value.shape}. "
+                                f"Expected mapping.shape[1] ({mapping.shape[1]}) == value.shape[0] ({value.shape[0]})")
             return mapping.matmul(value)
         # mapping (N,M)
         # value (M,...)
@@ -44,7 +47,7 @@ class Relation(BaseGraphTree):
     def name(cls):  # complicated to use class property, just function
         return cls.__name__
 
-    def __init__(self, src, dst, argument_name, reverse_of=None, auto_constraint=None):
+    def __init__(self, src, dst, originalDst, argument_name, reverse_of=None, auto_constraint=None):
         cls = type(self)
         if isinstance(argument_name, str):
             name = argument_name
@@ -57,7 +60,9 @@ class Relation(BaseGraphTree):
             self.is_reversed = False
             src._out.setdefault(cls.name(), []).append(self)
             dst._in.setdefault(cls.name(), []).append(self)
-            reverse_of = Relation(dst, src, f'{name}.reversed', self)
+            if originalDst is not None and originalDst.name != dst.name:
+                originalDst._in.setdefault(cls.name(), []).append(self)
+            reverse_of = Relation(dst, src, None, f'{name}.reversed', self)
         else:
             self.is_reversed = True
         self.reversed = reverse_of
@@ -126,22 +131,25 @@ class Relation(BaseGraphTree):
                     prop = Property(prop_name=name)
             self.get_apply(name).attach(sub)
 
-
+# One-to-Rest Relation
 class OTORelation(Relation):
     pass
 
-
+# Many-to-One Relation
 class OTMRelation(Relation):
     pass
 
-
+# Many-to-One Relation
 class MTORelation(Relation):
     pass
 
-
-class MTMRelation(Relation):
+# One-to-Many Relation
+class MTORelation(Relation):
     pass
 
+# Many-to-Many Relation
+class MTMRelation(Relation):
+    pass
 
 @Concept.relation_type('is_a')
 class IsA(OTORelation):
@@ -151,6 +159,7 @@ class IsA(OTORelation):
 @Concept.relation_type('not_a')
 class NotA(OTORelation):
     def __init__(self, src, dst, *args, **kwargs):
+        from domiknows.graph.logicalConstrain import nandL
         super().__init__(src, dst, *args, **kwargs)
         nandL(src, dst)
 

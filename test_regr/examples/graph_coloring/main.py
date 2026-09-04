@@ -1,13 +1,14 @@
 # test_cases.py
 import sys
-sys.path.append('../../../../domiknows/')
+sys.path.append('.')
+sys.path.append('../..')
 
 import torch, argparse
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
 from domiknows.program import SolverPOIProgram
 from domiknows.sensor.pytorch.learners import TorchLearner
-from graph import get_graph
+from .graph import get_graph
 from domiknows.sensor import Sensor
 
 def run_test_case(test_input):
