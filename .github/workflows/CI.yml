@@ -1,7 +1,7 @@
 name: CI - Continuous Integration
 on:
   push: 
-    branches: [develop-CLEVER-relations, main]
+    branches: [develop, main]
   workflow_dispatch:
 
 # Prevent multiple runs of the same branch overlapping

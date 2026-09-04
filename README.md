@@ -9,7 +9,7 @@ While several approaches for integrating symbolic and sub-symbolic models have b
 | Branch | CI Status |
 |--------|-----------|
 | main | [![CI](https://github.com/HLR/DomiKnowS/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/HLR/DomiKnowS/actions) |
-| develop-CLEVER-relations | [![CI](https://github.com/HLR/DomiKnowS/actions/workflows/CI.yml/badge.svg?branch=develop-CLEVER-relations)](https://github.com/HLR/DomiKnowS/actions) |
+| develop | [![CI](https://github.com/HLR/DomiKnowS/actions/workflows/CI.yml/badge.svg?branch=develop)](https://github.com/HLR/DomiKnowS/actions) |
 
 ## Contents
 
