@@ -708,7 +708,7 @@ This detail of mapping from OWL to logical representation is presented below for
 
 The same logical expressions described above for the purpose of specifying constraints can also be used to describe *programs* that are executed during training and inference. We can then train the underlying model based on the ground-truth outputs of the these *programs*.
 
-For example, in [Clever](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/Clever), we have questions (e.g., "*Does there blue big square in the image?*") represented with logical expressions (`existL(is_blue('x'), is_big(path=('x')), is_square(path=('x')))`) along with the ground-truth answers to those questions (i.e., `True`/`False`). During training, we update model parameters so that the predicted program outputs (i.e., answers to the questions) match the ground-truth values.
+For example, in [Clever](https://github.com/HLR/DomiKnowS/tree/develop/test_regr/Clever), we have questions (e.g., "*Does there blue big square in the image?*") represented with logical expressions (`existL(is_blue('x'), is_big(path=('x')), is_square(path=('x')))`) along with the ground-truth answers to those questions (i.e., `True`/`False`). During training, we update model parameters so that the predicted program outputs (i.e., answers to the questions) match the ground-truth values.
 
 Specifically, during training, the program outputs are calculated by finding the (differentiable) soft-logic conversion of the underlying logical expressions. Model parameters are then updated based on the loss between these predicted program outputs and the ground-truth program outputs.
 
@@ -759,7 +759,7 @@ program.train(dataset, ...)
 
 The dataset here must specify the program output label (here, in the `question_label` key) in each data item.
 
-A complete example of this API can be found [here](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/InferenceAPI).
+A complete example of this API can be found [here](https://github.com/HLR/DomiKnowS/tree/develop/test_regr/InferenceAPI).
 
 ### Programs are different across examples (Individual Program Query)
 On the other hand, if the programs to be executed are different across training examples, we need to specify *both* the program (in the form of logical expression strings) and the program output labels in each data item. The syntax for specifying the programs is the same as before, except now, instead of directly adding it to the graph, we specify it through the dataset first *then* add it to the graph.
@@ -814,4 +814,4 @@ program = InferenceProgram(
 program.train(transformed_dataset, ...)
 ```
 
-Two complete examples of this API can be found [CLEVR Example](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/Clever) and [Relation Learning Example](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/examples/PMDExistL/relation_learning_tests)
+Two complete examples of this API can be found [CLEVR Example](https://github.com/HLR/DomiKnowS/tree/develop/test_regr/Clever) and [Relation Learning Example](https://github.com/HLR/DomiKnowS/tree/develop/test_regr/examples/PMDExistL/relation_learning_tests)
