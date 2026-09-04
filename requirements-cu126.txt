@@ -346,9 +346,7 @@ thinc==8.3.6
 threadpoolctl==3.6.0
     # via scikit-learn
 tokenizers==0.22.0
-    # via
-    #   domiknows
-    #   transformers
+    # via transformers
 torch==2.11.0+cu126
     # via
     #   accelerate

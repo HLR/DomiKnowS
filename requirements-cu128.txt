@@ -149,7 +149,7 @@ networkx==3.5
     #   torch
 nltk==3.9.4
     # via domiknows
-numpy==2.3.3
+numpy==2.2.6
     # via
     #   accelerate
     #   blis
@@ -344,9 +344,7 @@ thinc==8.3.6
 threadpoolctl==3.6.0
     # via scikit-learn
 tokenizers==0.22.0
-    # via
-    #   domiknows
-    #   transformers
+    # via transformers
 torch==2.10.0+cu128
     # via
     #   accelerate
