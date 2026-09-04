@@ -121,7 +121,7 @@ uv run --project Tasks\clevr_inference_vs_gumbel python Tasks\clevr_inference_vs
 Fast smoke run:
 
 ```powershell
-uv run --project Tasks\clevr_inference_vs_gumbel python Tasks\clevr_inference_vs_gumbel\main.py --epochs 1 --train-items 4 --eval-items 2
+uv run --project Tasks\clevr_inference_vs_gumbel python Tasks\clevr_inference_vs_gumbel\main.py --epochs 1 --train-items 4 --eval-items 2 --ilp-benchmark-warmup 0 --ilp-benchmark-repeats 1
 ```
 
 Show English questions from the compact dataset with their translated
@@ -169,6 +169,71 @@ To compare executable constraints only, pass:
 
 The global and executable loss weights can be adjusted with
 `--global-constraint-loss-weight` and `--executable-constraint-loss-weight`.
+
+## Full-Graph vs Dynamic-Graph ILP Benchmark
+
+After training, the task first evaluates one temporary executable count query
+with all three `inferExecutableResults` backends: `mode="tnorm"` for fuzzy
+graph traversal, `mode="circuit"` for exact weighted model counting, and
+`mode="ilp"` for a constrained MAP-world answer. This is an **ad hoc** query
+because it is supplied through `queries=...`, returned directly, and not kept
+as another registered executable constraint on the graph or DataNode.
+
+The task then benchmarks ILP on the standard `InferenceProgram`. It uses that
+same first relation-free count question from the compact dataset and executes
+the learned query twice in each pair:
+
+1. **Full graph:** all graph concepts, properties, and applicable constraints
+   are active.
+2. **Dynamic graph:** only concepts referenced by the current executable query
+   are requested. `Graph.set_active_concepts(...)` automatically adds their
+   ontology ancestors and the graph constraint concept.
+
+Each configuration receives a fresh DataNode. The benchmark keeps only the
+selected sample's registered executable activation label and invokes the
+in-place ILP method directly:
+
+```python
+datanode.inferILPResults()
+```
+
+`DataNode.inferILPResults()` reads the active `ELC*/label`, builds and solves the
+constrained ILP hypotheses, writes the selected `<concept>/ILP` assignment, and
+persists the executable answer as `ELC*/answer`. These writes occur only on the
+fresh benchmark DataNode, which is discarded after that measurement.
+
+No concept arguments are passed to either timed call. `inferILPResults()`
+therefore collects every predicate present in that fresh DataNode. The full and
+dynamic calls are identical; their only experimental difference is whether the
+DataNode was built after `Graph.set_active_concepts(None)` or after activating
+the query-specific concept set.
+
+Model forward execution and DataNode construction happen before the timer, so
+the reported duration covers the complete `inferILPResults()` call, including
+ILP model construction, hypothesis solving, assignment population, and answer
+decoding.
+The full graph is always measured before the dynamic graph, and the graph is
+restored to its all-active state afterward.
+
+The default benchmark discards one warm-up pair and reports the median of three
+measured pairs. Configure those counts with:
+
+```powershell
+--ilp-benchmark-warmup 1 --ilp-benchmark-repeats 3
+```
+
+The report includes:
+
+- full and dynamic median wall-clock time in milliseconds;
+- requested query concepts and effective active-concept counts;
+- predicates collected into each ILP problem;
+- milliseconds saved, percentage time reduction, and speedup ratio;
+- both native ILP answers and whether they agree.
+
+Timing is diagnostic rather than a pass/fail threshold because wall-clock
+results vary by CPU load and Gurobi environment. Answer agreement and the
+reduction in active concepts and ILP predicates provide the semantic and
+structural comparison.
 
 ## Constraint Translation
 

@@ -5,7 +5,9 @@ import copy
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from statistics import median
 import sys
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -43,6 +45,7 @@ class BuiltProgram:
     train_dataset: Any
     eval_dataset: Any
     query_namespace: dict[str, Any]
+    ilp_benchmark_sample: Any | None = None
 
 
 @dataclass
@@ -59,6 +62,28 @@ class AdHocComparison:
     results: dict[str, dict[str, Any]]
     answers_agree: bool
     types_agree: bool
+
+
+@dataclass(frozen=True)
+class ILPTiming:
+    durations_seconds: tuple[float, ...]
+    median_seconds: float
+    answer: Any
+    result_type: str
+    active_concepts: tuple[str, ...]
+    predicate_count: int
+
+
+@dataclass(frozen=True)
+class ILPGraphPerformance:
+    sample: dict[str, Any]
+    requested_concepts: tuple[str, ...]
+    full: ILPTiming
+    dynamic: ILPTiming
+    milliseconds_saved: float
+    reduction_percent: float
+    speedup: float
+    answers_agree: bool
 
 
 class SoftmaxClassifier(nn.Module):
@@ -107,7 +132,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gumbel-temp-start", type=float, default=1.0)
     parser.add_argument("--gumbel-temp-end", type=float, default=0.3)
     parser.add_argument("--hard-gumbel", action="store_true")
-    return parser.parse_args()
+    parser.add_argument(
+        "--ilp-benchmark-warmup",
+        type=int,
+        default=1,
+        help="Number of discarded full/dynamic ILP timing pairs.",
+    )
+    parser.add_argument(
+        "--ilp-benchmark-repeats",
+        type=int,
+        default=3,
+        help="Number of measured full/dynamic ILP timing pairs.",
+    )
+    args = parser.parse_args()
+    if args.ilp_benchmark_warmup < 0:
+        parser.error("--ilp-benchmark-warmup must be non-negative")
+    if args.ilp_benchmark_repeats < 1:
+        parser.error("--ilp-benchmark-repeats must be positive")
+    return args
 
 
 def resolve_device(device: str) -> str:
@@ -199,6 +241,29 @@ def filter_relation(property=None, arg1=None, arg2=None, **kwargs) -> bool:
     return len(values) < 2 or values[0].getAttribute("image_id") == values[1].getAttribute("image_id")
 
 
+def _select_simple_count_sample(
+    dataset: list[dict[str, Any]],
+    compiled: Any,
+) -> dict[str, Any]:
+    """Select the first deterministic count step without relation traversal."""
+    for index, item in enumerate(dataset):
+        functions = [
+            step.get("function", step.get("type"))
+            for step in item.get("program", ())
+        ]
+        if not functions or functions[-1] != "count":
+            continue
+        if all(
+            function in {"scene", "unique", "count"}
+            or (isinstance(function, str) and function.startswith("filter_"))
+            for function in functions
+        ):
+            return compiled[index]
+    raise ValueError(
+        "The ILP graph benchmark requires a relation-free count question"
+    )
+
+
 def build_program(
     name: str,
     program_cls: type,
@@ -254,6 +319,7 @@ def build_program(
         logic_label_keyword="logic_label",
         extra_namespace_values=attribute_names_dict,
     )
+    ilp_benchmark_sample = _select_simple_count_sample(dataset, compiled)
 
     if args.train_items is None:
         train_count = max(1, int(round(len(compiled) * 0.8)))
@@ -321,6 +387,7 @@ def build_program(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         query_namespace=query_namespace,
+        ilp_benchmark_sample=ilp_benchmark_sample,
     )
 
 
@@ -569,10 +636,12 @@ def infer_ad_hoc_example(
     device: str,
 ) -> tuple[dict[str, Any], AdHocComparison]:
     """Run and compare t-norm, circuit, and ILP ad hoc inference."""
-    if not built.eval_dataset:
+    if built.ilp_benchmark_sample is not None:
+        sample = built.ilp_benchmark_sample
+    elif built.eval_dataset:
+        sample = built.eval_dataset[0]
+    else:
         raise ValueError(f"{built.name} has no evaluation sample for an ad hoc query")
-
-    sample = built.eval_dataset[0]
     query = sample.get("logic_str")
     if not isinstance(query, str) or not query.strip():
         raise ValueError("The ad hoc CLEVR example requires a non-empty logic_str")
@@ -593,6 +662,7 @@ def infer_ad_hoc_example(
                 queries=query,
                 queryNamespace=built.query_namespace,
                 populate=False,
+                compiled=False,
             )
             mode_results[mode] = results["ADHOC0"]
 
@@ -607,6 +677,223 @@ def infer_ad_hoc_example(
         ),
     )
     return sample, comparison
+
+
+def _benchmark_executable_name(
+    built: BuiltProgram,
+    sample: dict[str, Any],
+) -> str:
+    names = [
+        key.removeprefix("_constraint_")
+        for key in sample
+        if isinstance(key, str) and key.startswith("_constraint_ELC")
+    ]
+    registered = [
+        name for name in names
+        if name in built.program.graph.executableLCs
+    ]
+    if len(registered) != 1:
+        raise ValueError(
+            "The ILP graph benchmark sample must activate exactly one "
+            f"registered executable constraint, found {registered}"
+        )
+    return registered[0]
+
+
+def _synchronize_device(device: str) -> None:
+    if str(device).startswith("cuda") and torch.cuda.is_available():
+        torch.cuda.synchronize(torch.device(device))
+
+
+def _measure_ilp_configuration(
+    built: BuiltProgram,
+    sample: dict[str, Any],
+    device: str,
+    executable_name: str,
+    requested_concepts: tuple[str, ...] | None,
+) -> tuple[float, dict[str, Any], tuple[str, ...], int]:
+    """Build a fresh DataNode, then time ``inferILPResults`` directly."""
+    graph = built.program.graph
+    graph.set_active_concepts(requested_concepts)
+
+    with torch.no_grad():
+        _mloss, _metric, _datanode, builder = built.program.model(sample)
+        datanode = builder.getDataNode(device=device)
+    if datanode is None:
+        raise RuntimeError("The learned model did not produce a DataNode")
+
+    constraint_dn = datanode._getExecutableConstraintDataNode()
+    if constraint_dn is None:
+        raise RuntimeError("The ILP benchmark sample has no constraint DataNode")
+    target_label = f"{executable_name}/label"
+    for key in list(constraint_dn.attributes):
+        if isinstance(key, str) and key.endswith("/label") and key != target_label:
+            del constraint_dn.attributes[key]
+    if target_label not in constraint_dn.attributes:
+        constraint_dn.attributes[target_label] = torch.tensor(
+            1, device=datanode.current_device
+        )
+
+    active_concepts = graph.get_active_concepts()
+    active_names = tuple(concept.name for concept in active_concepts)
+    _synchronize_device(device)
+    started = perf_counter()
+    datanode.inferILPResults()
+    _synchronize_device(device)
+    elapsed = perf_counter() - started
+    answer_key = f"{executable_name}/answer"
+    if answer_key not in constraint_dn.attributes:
+        raise RuntimeError(
+            f"inferILPResults did not persist an answer for {executable_name}"
+        )
+    result = {
+        "type": "count",
+        "answer": constraint_dn.attributes[answer_key],
+    }
+    predicate_count = len(datanode.collectedConceptsAndRelations or ())
+    return elapsed, result, active_names, predicate_count
+
+
+def _summarize_ilp_timings(
+    measured: list[tuple[float, dict[str, Any], tuple[str, ...], int]],
+) -> ILPTiming:
+    durations = tuple(row[0] for row in measured)
+    answers = [row[1]["answer"] for row in measured]
+    result_types = [row[1]["type"] for row in measured]
+    active_concepts = [row[2] for row in measured]
+    predicate_counts = [row[3] for row in measured]
+    if any(answer != answers[0] for answer in answers[1:]):
+        raise RuntimeError("ILP benchmark answers changed between repetitions")
+    if any(result_type != result_types[0] for result_type in result_types[1:]):
+        raise RuntimeError("ILP benchmark result types changed between repetitions")
+    if any(names != active_concepts[0] for names in active_concepts[1:]):
+        raise RuntimeError("ILP benchmark active concepts changed between repetitions")
+    if any(count != predicate_counts[0] for count in predicate_counts[1:]):
+        raise RuntimeError("ILP benchmark predicate count changed between repetitions")
+    return ILPTiming(
+        durations_seconds=durations,
+        median_seconds=float(median(durations)),
+        answer=answers[0],
+        result_type=result_types[0],
+        active_concepts=active_concepts[0],
+        predicate_count=predicate_counts[0],
+    )
+
+
+def benchmark_ilp_graph_activation(
+    built: BuiltProgram,
+    device: str,
+    *,
+    warmup: int = 1,
+    repeats: int = 3,
+) -> ILPGraphPerformance:
+    """Compare full and query-scoped ILP inference on one learned model."""
+    if warmup < 0:
+        raise ValueError("warmup must be non-negative")
+    if repeats < 1:
+        raise ValueError("repeats must be positive")
+    sample = built.ilp_benchmark_sample
+    if sample is None:
+        raise ValueError(f"{built.name} has no ILP benchmark sample")
+    query = sample.get("logic_str")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("The ILP graph benchmark requires a non-empty logic_str")
+
+    executable_name = _benchmark_executable_name(built, sample)
+    executable = built.program.graph.executableLCs[executable_name]
+    requested_concepts = tuple(sorted(executable.innerLC.getLcConcepts()))
+    if not requested_concepts:
+        raise ValueError("The ILP graph benchmark query references no concepts")
+
+    built.program.model.eval()
+    built.program.cmodel.eval()
+    full_measurements = []
+    dynamic_measurements = []
+    try:
+        for iteration in range(warmup + repeats):
+            full = _measure_ilp_configuration(
+                built,
+                sample,
+                device,
+                executable_name,
+                requested_concepts=None,
+            )
+            dynamic = _measure_ilp_configuration(
+                built,
+                sample,
+                device,
+                executable_name,
+                requested_concepts=requested_concepts,
+            )
+            if iteration >= warmup:
+                full_measurements.append(full)
+                dynamic_measurements.append(dynamic)
+    finally:
+        built.program.graph.set_active_concepts(None)
+
+    full_timing = _summarize_ilp_timings(full_measurements)
+    dynamic_timing = _summarize_ilp_timings(dynamic_measurements)
+    saved_seconds = full_timing.median_seconds - dynamic_timing.median_seconds
+    reduction_percent = (
+        100.0 * saved_seconds / full_timing.median_seconds
+        if full_timing.median_seconds
+        else 0.0
+    )
+    speedup = (
+        full_timing.median_seconds / dynamic_timing.median_seconds
+        if dynamic_timing.median_seconds
+        else float("inf")
+    )
+    return ILPGraphPerformance(
+        sample=sample,
+        requested_concepts=requested_concepts,
+        full=full_timing,
+        dynamic=dynamic_timing,
+        milliseconds_saved=saved_seconds * 1000.0,
+        reduction_percent=reduction_percent,
+        speedup=speedup,
+        answers_agree=full_timing.answer == dynamic_timing.answer,
+    )
+
+
+def print_post_training_ilp_benchmark(
+    built: BuiltProgram,
+    device: str,
+    *,
+    warmup: int,
+    repeats: int,
+) -> ILPGraphPerformance:
+    """Run and print the standard-model full/dynamic ILP comparison."""
+    comparison = benchmark_ilp_graph_activation(
+        built,
+        device,
+        warmup=warmup,
+        repeats=repeats,
+    )
+    print("\nPost-training ILP full-graph vs dynamic-graph benchmark")
+    print(f"{built.name}:")
+    print(f"  question={comparison.sample.get('question')!r}")
+    print(f"  expected={comparison.sample.get('answer')!r}")
+    print(f"  requested_concepts={list(comparison.requested_concepts)!r}")
+    print(
+        f"  full: median={comparison.full.median_seconds * 1000.0:.2f}ms, "
+        f"active_concepts={len(comparison.full.active_concepts)}, "
+        f"ilp_predicates={comparison.full.predicate_count}, "
+        f"answer={comparison.full.answer!r}"
+    )
+    print(
+        f"  dynamic: median={comparison.dynamic.median_seconds * 1000.0:.2f}ms, "
+        f"active_concepts={len(comparison.dynamic.active_concepts)}, "
+        f"ilp_predicates={comparison.dynamic.predicate_count}, "
+        f"answer={comparison.dynamic.answer!r}"
+    )
+    print(
+        f"  difference: saved={comparison.milliseconds_saved:.2f}ms, "
+        f"reduction={comparison.reduction_percent:.2f}%, "
+        f"speedup={comparison.speedup:.2f}x, "
+        f"answers_agree={comparison.answers_agree}"
+    )
+    return comparison
 
 
 def print_post_training_ad_hoc_results(
@@ -706,6 +993,12 @@ def main() -> None:
 
     print_comparison(before, after)
     print_post_training_ad_hoc_results(programs, device)
+    print_post_training_ilp_benchmark(
+        inference,
+        device,
+        warmup=args.ilp_benchmark_warmup,
+        repeats=args.ilp_benchmark_repeats,
+    )
 
 
 if __name__ == "__main__":
