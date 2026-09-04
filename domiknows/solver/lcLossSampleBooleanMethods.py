@@ -421,8 +421,23 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
                                         torch.tensor(-1, device=selected_indices.device))
             
             return selected_indices
+
+    def miotaVar(self, _, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        if self.ifNone(var):
+            return None
+        samples_list = []
+        for value in var:
+            if not torch.is_tensor(value):
+                continue
+            samples_list.append(value.unsqueeze(1) if value.dim() == 1 else value)
+        if not samples_list:
+            return None
+        return (torch.cat(samples_list, dim=1) >= threshold).to(self._get_dtype())
         
-    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None,
+                 onlyConstrains=False, temperature=1.0, multi_answer=False,
+                 threshold=None, logicMethodName="QUERY"):
         """
         Sample-based query operator for multiclass attribute selection.
 
@@ -473,17 +488,24 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         num_entities = len(subclass_data)
 
         # Build entity selection matrix [sample_size, num_entities]
-        sel_list = []
-        for v in selection_vars:
-            if torch.is_tensor(v):
-                sel_list.append(v.view(-1))  # [sample_size]
+        sel_list = [v for v in selection_vars if torch.is_tensor(v)]
         if not sel_list:
             if onlyConstrains:
                 return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+            if multi_answer:
+                return torch.empty(
+                    (self.sampleSize, 0, num_subclasses),
+                    device=self.current_device,
+                )
             return torch.full([self.sampleSize], -1, device=self.current_device, dtype=torch.long)
 
-        # sel_matrix: [sample_size, num_sel_vars]
-        sel_matrix = torch.stack(sel_list, dim=1).float()
+        # miotaL returns its complete [sample, candidate] selection as one
+        # tensor; legacy single-answer paths provide one [sample] tensor per
+        # candidate.
+        if multi_answer and len(sel_list) == 1 and sel_list[0].dim() == 2:
+            sel_matrix = sel_list[0].float()
+        else:
+            sel_matrix = torch.stack([v.view(-1) for v in sel_list], dim=1).float()
         sample_size = sel_matrix.shape[0]
 
         # Build subclass matrix [num_entities, num_subclasses, sample_size]
@@ -518,6 +540,11 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
             sel_matrix = torch.cat([sel_matrix, padding], dim=1)
         elif n_sel > num_entities:
             sel_matrix = sel_matrix[:, :num_entities]
+
+        if multi_answer:
+            # [sample, candidate, class], with zero rows for candidates not
+            # selected in that sample.
+            return sel_matrix.unsqueeze(-1) * sub_matrix
 
         # Per-sample: find selected entity, look up its subclass
         # sel_matrix is binary samples; exactly one entity should be 1

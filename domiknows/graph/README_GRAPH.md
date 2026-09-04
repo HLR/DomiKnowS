@@ -122,6 +122,29 @@ info = graph.findConceptInfo(person)
 # }
 ```
 
+#### `set_active_concepts(concepts)`
+
+Select the concepts that participate in subsequent graph execution without
+rebuilding the schema or model. Names and `Concept` objects can be mixed.
+Required `is_a` ancestors and `graph.constraint` are enabled automatically;
+all other concepts in this graph and its subgraphs are disabled.
+
+```python
+graph.set_active_concepts([red, "dog"])
+
+graph.is_concept_active(red)       # True
+graph.is_concept_active(cat)       # False
+graph.get_active_concepts()        # constraint, ancestors, red, dog
+
+graph.set_active_concepts(None)    # Restore the default: all concepts active
+```
+
+Inactive concept properties and sensors are skipped, and constraints that
+reference an inactive concept are treated as inactive. The explicit
+logical constraint `.active` flag remains independently writable. Concept activation is
+mutable graph state intended for sequential steps; synchronize externally if a
+graph is shared across concurrent executions.
+
 #### `visualize(filename, open_image=False)`
 ```python
 # Generate graph visualization using Graphviz
@@ -731,6 +754,57 @@ existsL(left('x', iotaL(andL(blue('y'), sphere('y')))))
 1. **Existence** — at least one entity must satisfy the condition (Σ cᵢ ≥ 1)
 2. **Uniqueness** — exactly one entity is selected (Σ sᵢ = 1, sᵢ ≤ cᵢ)
 
+#### `miotaL` - Multi-Answer Entity Selection
+
+`miotaL` keeps one independent membership probability for every grounded
+candidate and returns every candidate at or above its threshold. Its output is
+multi-hot rather than one-hot, and it does not require existence or uniqueness.
+
+```python
+from domiknows.graph import miotaL, andL
+
+# Returns a vector such as [1, 0, 0, 1, 0].
+miotaL(andL(red("x"), cube(path="x")), threshold=0.5)
+```
+
+The signature is `miotaL(*e, threshold=0.5, hard=False, ...)`. Soft mode keeps
+the unnormalized per-candidate probabilities for vector BCE training. With
+`hard=True`, the forward result is thresholded while gradients use the soft
+scores (a straight-through estimator). Selection is inclusive (`>=`), so an
+exactly `0.5` score is selected by the default threshold; an empty set is a
+valid result.
+
+Relational selectors remain aligned to the first bound variable. For example,
+to return objects that have a `left` pair ending at any ball:
+
+```python
+(pair_src, pair_dst) = pair.has_a(pair_src=object, pair_dst=object)
+
+iotaL(andL(
+    red("x"),
+    left("r", path=("x", pair_src.reversed)),
+    ball("y", path=("r", pair_dst)),
+))
+
+miotaL(andL(
+    object("x"),
+    left("r", path=("x", pair_src.reversed)),
+    ball("y", path=("r", pair_dst)),
+))
+```
+
+`.reversed` walks from an object to pair datanodes through the source role;
+the destination role then walks from each pair to its target object. Complete
+`(x, r, y)` groundings are conjoined first and fuzzy-OR aggregated for each
+`x`, so two matching balls never duplicate an object. Variable order is
+significant: put the desired answer variable first. `iotaL` applies uniqueness
+to this entity vector, whereas `miotaL` thresholds every membership
+independently.
+
+The selector can be nested into predicates, relations, Boolean constraints,
+and counting constraints. When it is the direct selector of `queryL`, the
+query returns one candidate-aligned class row per grounding.
+
 #### `queryL` - Query Multiclass Attribute of Selected Entity
 
 Given a multiclass concept (parent with subclasses via `is_a`, or `EnumConcept`) and an entity selection (typically from `iotaL`), returns which subclass the selected entity belongs to.
@@ -762,6 +836,34 @@ answer = queryL(
     iotaL(andL(small('x'), cube('x')))
 )
 ```
+
+With `miotaL`, `queryL` becomes candidate-aligned instead of pooling the
+selected entities into one answer:
+
+```python
+answer = queryL(
+    color,
+    miotaL(andL(large("x"), visible(path="x")), threshold=0.5),
+)
+```
+
+For `N` candidates and `K` classes, `queryDistribution` has shape `[N, K]`.
+Row `i` is the candidate membership probability multiplied by that candidate's
+conditional class distribution, so its row sum is the membership probability.
+`queryAnswer` is a length-`N` class-index vector and uses `-1` at positions
+below the nested `miotaL` threshold, for example `[2, -1, -1, 0, -1]`.
+
+Executable multi-answer query labels use the same candidate alignment and
+`-1` convention. Training applies joint negative log likelihood: a selected
+position supervises both membership and its class, while `-1` supervises the
+unselected state. Evaluation reports exact vector accuracy, per-position
+assignment accuracy, selection accuracy, and class accuracy over expected
+selected positions. An all-`-1` label and an empty candidate vector are valid.
+
+Multi-answer `queryL` requires exactly one direct `miotaL` selector. It is a
+value-returning head/executable expression and cannot itself be nested inside
+Boolean or counting constraints. Existing `queryL(attribute, iotaL(...))`
+continues to return one `[K]` class distribution and use a scalar class label.
 
 **First argument requirements** — the concept passed to `queryL` must be one of:
 
@@ -840,9 +942,21 @@ logic_dataset = graph.compile_executable(
     logic_keyword='constraint',
     logic_label_keyword='label',
     extra_namespace_values={},  # additional variables for eval namespace
-    verbose=False
+    verbose=False,
+    parameterize=True,  # optional structural template compilation
 )
 ```
+
+With `parameterize=True`, structurally equivalent expressions share one
+executable constraint and compiled traversal plan even when concept identifiers
+or alpha-equivalent logical-variable/path strings differ. Each `LogicDataset`
+row supplies its actual concept-slot bindings and label at runtime. Numeric,
+Boolean, and operator settings remain part of the template key. This mode
+requires `compile_lc=True` and `sample=False`.
+
+Use `deduplicate=True` when only canonically identical expressions should be
+interned. Both options default to `False` for callers that rely on a distinct
+executable identity for every row.
 
 **Parameters:**
 

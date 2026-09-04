@@ -3,6 +3,7 @@ import torch
 from collections import OrderedDict
 
 from domiknows.graph import fixedL, ifL, forAllL
+from domiknows.solver.compiled import CompiledModeExecutor
 
 class LogicalConstraintVerifier:
     """
@@ -38,8 +39,10 @@ class LogicalConstraintVerifier:
                    - myLogger/myLoggerTime: Logging facilities
         """
         self.solver = solver
+        self.compiled_executor = CompiledModeExecutor(solver)
     
-    def verifySingleConstraint(self, lc, myBooleanMethods, dn, key="/argmax", label=None):
+    def verifySingleConstraint(self, lc, myBooleanMethods, dn, key="/argmax",
+                               label=None, compiled=False):
         """
         Verify a single logical constraint against model predictions.
         
@@ -75,8 +78,14 @@ class LogicalConstraintVerifier:
         
         self.solver.constraintConstructor.current_device = dn.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
-        verifyList, lcVariables = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, myBooleanMethods, m, dn, p, key=key, headLC=True, verify=True, label=label)
+        if compiled:
+            verifyList, lcVariables = self.compiled_executor.construct(
+                lc, myBooleanMethods, dn, key=key, headLC=True,
+                label=label, model=m, p=p, verify=True)
+        else:
+            verifyList, lcVariables = self.solver.constraintConstructor.constructLogicalConstrains(
+                lc, myBooleanMethods, m, dn, p, key=key, headLC=True,
+                verify=True, label=label)
         result['verifyList'] = verifyList
         
         verifyListLen = 0
@@ -135,7 +144,7 @@ class LogicalConstraintVerifier:
         
         return result
         
-    def verifyResults(self, dn, key="/argmax"):
+    def verifyResults(self, dn, key="/argmax", compiled=False):
         """
         Verify results of logical constraints against model predictions.
         
@@ -200,7 +209,8 @@ class LogicalConstraintVerifier:
                     
                 lcCounter += 1
                 lcName = lc.lcName
-                lcVerifyResult[lcName] = self.verifySingleConstraint(lc, myBooleanMethods, dn, key)
+                lcVerifyResult[lcName] = self.verifySingleConstraint(
+                    lc, myBooleanMethods, dn, key, compiled=compiled)
         
         self.solver.myLogger.info('Processed %i logical constraints' % (lcCounter))
         self.solver.myLoggerTime.info('Processed %i logical constraints' % (lcCounter))

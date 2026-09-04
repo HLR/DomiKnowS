@@ -8,7 +8,8 @@ import torch
 from ...graph import DataNodeBuilder
 from ..metric import MetricTracker, MacroAverageTracker
 from domiknows import setup_logger, getProductionModeStatus
-from domiknows.graph.logicalConstrain import sumL
+from domiknows.graph.logicalConstrain import queryL, sumL
+from domiknows.solver.lossCalculator import multi_query_joint_nll
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
@@ -26,14 +27,28 @@ class LossModel(torch.nn.Module):
     """
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, 
+    #: Supported dual-optimization algorithms (R5 Phase A).
+    DUAL_ALGORITHMS = ('ascent', 'augmented')
+    #: Supported dual-variable granularities. 'constraint' = one dual per
+    #: constraint template (Phase A); 'amortized' = per-grounding duals from a
+    #: DualCritic network (Phase B).
+    DUAL_GRANULARITIES = ('constraint', 'amortized')
+
+    def __init__(self, graph,
                  tnorm='P',
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
-                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 compile_lc=False,
+                 dual_algorithm='ascent', dual_granularity='constraint',
+                 al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
+                 al_stagnation_tau=0.9,
+                 critic_embed_dim=8, critic_hidden=32,
+                 critic_fit_weight=1.0,
+                 exclude_constraints=None):
         """
         Initialize LossModel.
-        
+
         :param graph: Graph representing the logical constraints
         :param tnorm: T-norm type for fuzzy logic ('P' for product)
         :param counting_tnorm: T-norm for counting constraints (None uses tnorm)
@@ -44,55 +59,148 @@ class LossModel(torch.nn.Module):
         :param use_gumbel: If True, apply Gumbel-Softmax to local inference
         :param temperature: Gumbel-Softmax temperature (lower = more discrete)
         :param hard_gumbel: If True, use straight-through estimator
+        :param compile_lc: If True, evaluate the constraint loss with the compiled
+            evaluator instead of the per-datanode interpreter. Built-in and
+            custom ``LogicalConstrain`` subclasses use the common compiled
+            formula protocol. Fuzzy loss additionally batches probability
+            gathers; sampled loss keeps its native sampled-vector semantics.
+        :param dual_algorithm: 'ascent' (default) keeps the plain gradient-ascent
+            Lagrangian dual updated by the program's constraint optimizer.
+            'augmented' switches to an Augmented Lagrangian whose per-constraint
+            multipliers are updated in closed form (no constraint optimizer) and
+            adds a quadratic penalty ``(rho/2)*sum(v^2)``; see ``al_dual_update_``.
+        :param dual_granularity: 'constraint' (default) — one dual per constraint
+            template. 'amortized' — a DualCritic network predicts a per-grounding
+            multiplier from detached features (R5 Phase B). With
+            ``dual_algorithm='ascent'`` the critic is optimised by the program's
+            constraint optimizer; with ``'augmented'`` (R5 Phase F) it is instead
+            *regressed* onto the AL target ``lambda_c + rho_c * v_g``, since an
+            augmented Lagrangian moves its multipliers in closed form and so has
+            no ascent objective for a critic to maximise.
+        :param al_rho_init: Initial per-constraint penalty coefficient (augmented).
+        :param al_rho_growth: Multiplicative growth applied to a constraint's rho
+            when its violation fails to shrink by ``al_stagnation_tau`` (augmented).
+        :param al_rho_max: Upper bound on rho (augmented).
+        :param al_stagnation_tau: A constraint is "stagnating" when its mean
+            violation this dual window exceeds ``tau`` times the previous window's;
+            rho then grows (augmented).
+        :param critic_embed_dim: per-constraint embedding width for the DualCritic
+            (amortized granularity).
+        :param critic_hidden: hidden width of the DualCritic MLP (amortized).
         """
         super().__init__()
         self.graph = graph
         self.build = True
-        
+
         self.tnorm = tnorm
         self.counting_tnorm = counting_tnorm
+        self.compile_lc = compile_lc
         self.device = device
-        
+
+        if dual_algorithm not in self.DUAL_ALGORITHMS:
+            raise ValueError(
+                f"dual_algorithm must be one of {self.DUAL_ALGORITHMS}, got {dual_algorithm!r}")
+        if dual_granularity not in self.DUAL_GRANULARITIES:
+            raise ValueError(
+                f"dual_granularity must be one of {self.DUAL_GRANULARITIES}, got {dual_granularity!r}")
+        self.dual_algorithm = dual_algorithm
+        self.dual_granularity = dual_granularity
+        self.al_rho_growth = float(al_rho_growth)
+        self.al_rho_max = float(al_rho_max)
+        self.al_stagnation_tau = float(al_stagnation_tau)
+        self.critic_embed_dim = int(critic_embed_dim)
+        self.critic_hidden = int(critic_hidden)
+        #: Weight of the critic's regression onto the AL target (Phase F only).
+        self.critic_fit_weight = float(critic_fit_weight)
+
         self.sample = sample
         self.sampleSize = sampleSize
         self.sampleGlobalLoss = sampleGlobalLoss
-        
+
         # Gumbel-Softmax parameters
         self.use_gumbel = use_gumbel
         self.temperature = temperature
         self.hard_gumbel = hard_gumbel
-        
-        # Extract all logical constraints from the graph recursively
-        self.constr = OrderedDict(graph.allLogicalConstrainsRecursive)
+
+        # Extract all logical constraints from the graph recursively.
+        #
+        # ``exclude_constraints`` drops constraints that something else already
+        # guarantees — under an R3 factor-graph head a compiled hard constraint
+        # has zero mass *by construction*, so its violation is identically zero.
+        # Leaving it in would allocate a multiplier pinned at zero and feed
+        # ``al_dual_update_`` an all-zero window, i.e. a dual that can only ever
+        # learn nothing. Excluding it here keeps the dual system scoped to the
+        # constraints that are actually still being fought for.
+        self.exclude_constraints = set(exclude_constraints or ())
+        #: Optional ``callable() -> set`` of constraint names to skip *this*
+        #: step. Where ``exclude_constraints`` is a permanent construction-time
+        #: decision, this is consulted per forward, so a constraint whose
+        #: structural enforcement fell back at runtime gets its penalty back
+        #: automatically instead of being left unconstrained.
+        self.skip_provider = None
+        self.constr = OrderedDict(
+            (key, lc) for key, lc in graph.allLogicalConstrainsRecursive
+            if key not in self.exclude_constraints
+            and getattr(lc, 'lcName', key) not in self.exclude_constraints)
         nconstr = len(self.constr)
         if nconstr == 0:
             warnings.warn('No logical constraint detected in the graph. '
                           'PrimalDualModel will not generate any constraint loss.')
-            
-        # Initialize lambda (Lagrange multipliers) as learnable parameters for Primal-Dual optimization
-        # Each constraint gets its own lambda value that balances its contribution to the total loss
-        self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
-        
+
+        # Lagrange multipliers, one per constraint.
+        # - constraint x ascent: learnable Parameter, gradient ascent (copt).
+        # - constraint x augmented: buffer, closed-form update (al_dual_update_);
+        #   a buffer keeps it out of cmodel.parameters() so no copt is built and
+        #   it still round-trips via state_dict.
+        # - amortized x ascent: the multiplier is produced per grounding by a
+        #   DualCritic (below); lmbd is kept as an unused buffer so shared code
+        #   (reset_parameters/project_lmbd_/to) stays a harmless no-op.
+        self.dual_critic = None
+        if dual_granularity == 'amortized':
+            from domiknows.program.model.dualCritic import DualCritic
+            self.dual_critic = DualCritic(nconstr, embed_dim=self.critic_embed_dim,
+                                          hidden=self.critic_hidden)
+            self.register_buffer('lmbd', torch.ones(nconstr))
+            if dual_algorithm == 'augmented':
+                # R5 Phase F: the critic is regressed onto the AL target, so the
+                # same penalty/statistics state the constraint-granular AL keeps
+                # is needed here too.
+                self.register_buffer('rho', torch.full((nconstr,), float(al_rho_init)))
+                self.register_buffer('_al_viol_accum', torch.zeros(nconstr))
+                self.register_buffer('_al_viol_count', torch.zeros(nconstr))
+                self.register_buffer('_al_prev_mean_viol',
+                                     torch.full((nconstr,), float('nan')))
+        elif dual_algorithm == 'augmented':
+            self.register_buffer('lmbd', torch.empty(nconstr))
+            # Per-constraint quadratic-penalty coefficient and the running
+            # violation statistics consumed by al_dual_update_.
+            self.register_buffer('rho', torch.full((nconstr,), float(al_rho_init)))
+            self.register_buffer('_al_viol_accum', torch.zeros(nconstr))
+            self.register_buffer('_al_viol_count', torch.zeros(nconstr))
+            self.register_buffer('_al_prev_mean_viol', torch.full((nconstr,), float('nan')))
+        else:
+            self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
+
         # Penalty terms (upper bounds) for lambda values, derived from constraint priorities
         self.lmbd_p = torch.empty(nconstr)
-        
+
         # Mapping from constraint keys to their index positions in lambda tensors
         self.lmbd_index = {}
-        
+
         # Initialize penalty terms based on constraint priority values (p)
         for i, (key, lc) in enumerate(self.constr.items()):
             self.lmbd_index[key] = i
-            
+
             # Convert percentage priority to probability (0-1 range)
             p = float(lc.p) / 100.
-            
+
             # Avoid log(0) by capping probability just below 1
             if p == 1:
                 p = 0.999999999999999
-            
+
             # Compute penalty term: -log(1-p) ensures higher priority constraints have higher penalties
             self.lmbd_p[i] = -np.log(1 - p)
-            
+
         # Initialize lambda values (default: all set to 1.0)
         self.reset_parameters()
         
@@ -135,7 +243,146 @@ class LossModel(torch.nn.Module):
             self.loss.reset()
 
     def get_lmbd(self, key):
-        return self.lmbd[self.lmbd_index[key]].clamp(max=self.lmbd_p[self.lmbd_index[key]])
+        index = self.lmbd_index[key]
+        return self.lmbd[index].clamp(min=0, max=self.lmbd_p[index])
+
+    def project_lmbd_(self):
+        """Project learnable Lagrange multipliers to their valid range."""
+        if not hasattr(self, 'lmbd') or not hasattr(self, 'lmbd_p'):
+            return
+        with torch.no_grad():
+            upper = self.lmbd_p.to(device=self.lmbd.device, dtype=self.lmbd.dtype)
+            self.lmbd.clamp_(min=0)
+            self.lmbd.copy_(torch.minimum(self.lmbd, upper))
+
+    def _weighted_constraint_loss(self, key, lossTensor, groundingFeatures=None):
+        """Weight one constraint's per-grounding violation vector into a scalar.
+
+        constraint x ascent (default): reproduces the original behaviour exactly
+        — ``lambda_c * sum(clamp(v, 0))`` over the NaN-filtered violations.
+
+        constraint x augmented: Augmented-Lagrangian term ``lambda_c * S_c +
+        (rho_c/2) * Q_c`` with ``S_c = sum(v)`` and ``Q_c = sum(v^2)``, and
+        records ``S_c`` into the running statistics consumed by
+        ``al_dual_update_`` (lambda/rho are buffers, so this adds no autograd
+        path through the multipliers — the primal gradient stays
+        ``lambda_c * dS_c/dtheta + rho_c * sum(v * dv/dtheta)``).
+
+        amortized x ascent: ``sum_g lambda_g * v_g`` where ``lambda_g`` is the
+        DualCritic's per-grounding multiplier (bounded to ``[0, lmbd_p_c]``).
+        The critic reads *detached* features, so ``lambda_g`` carries gradient
+        only to the critic (used by the ascent step) while ``v_g`` carries the
+        primal gradient to the classifiers.
+        """
+        loss_value = lossTensor.clamp(min=0)
+        finite_mask = (loss_value == loss_value)  # drop NaN groundings
+        finite = loss_value[finite_mask]
+
+        index = self.lmbd_index[key]
+        # Some compiled boolean/counting operators materialize their final
+        # violation vector on CPU even when the classifier and dual model live
+        # on CUDA. Device transfer remains differentiable, so align the vector
+        # with the registered dual buffers before applying any multiplier.
+        dual_device = self.lmbd_p.device
+        if finite.device != dual_device:
+            finite = finite.to(dual_device)
+
+        if self.dual_granularity == 'amortized':
+            if finite.numel() == 0:
+                return loss_value.sum() * 0.0  # keeps a grad-connected zero
+            feats = None
+            if groundingFeatures is not None and torch.is_tensor(groundingFeatures):
+                gf = groundingFeatures
+                if gf.dim() == 1:
+                    gf = gf.unsqueeze(-1)
+                if gf.shape[0] != loss_value.shape[0]:
+                    raise ValueError(
+                        f"groundingFeatures has {gf.shape[0]} rows for "
+                        f"{loss_value.shape[0]} violations in {key}")
+                feature_mask = finite_mask
+                if feature_mask.device != gf.device:
+                    feature_mask = feature_mask.to(gf.device)
+                feats = gf[feature_mask]
+                if feats.device != dual_device:
+                    feats = feats.to(dual_device)
+            elif self.compile_lc:
+                raise RuntimeError(
+                    f"compiled amortized dual requires groundingFeatures for {key}")
+            lam = self.dual_critic(index, finite.detach(), feats)  # [G'] in (0,1)
+            lam = lam * self.lmbd_p[index]                          # scale to [0, lmbd_p]
+
+            if self.dual_algorithm != 'augmented':
+                return (lam * finite).sum()
+
+            # R5 Phase F — amortized x augmented. Ascent maximises the critic's
+            # own objective, which the AL has no equivalent of: its multipliers
+            # move in closed form. So the critic is *regressed* onto the AL
+            # target lambda_c + rho_c * v_g instead — the per-grounding value
+            # the closed-form update would assign — while the primal keeps the
+            # quadratic penalty. Both stay per-grounding, which is the point of
+            # combining them.
+            with torch.no_grad():
+                self._al_viol_accum[index] += finite.sum().detach()
+                self._al_viol_count[index] += 1
+                target = (self.lmbd[index] + self.rho[index] * finite.detach()
+                          ).clamp(min=0, max=float(self.lmbd_p[index]))
+
+            critic_fit = torch.nn.functional.mse_loss(lam, target)
+            quad = (finite * finite).sum()
+            # The critic term carries no primal gradient (``finite`` is detached
+            # inside the target and ``lam`` reaches only critic parameters), so
+            # adding it here trains the critic through the existing constraint
+            # optimizer without perturbing the learners' update.
+            return (lam.detach() * finite).sum() + 0.5 * self.rho[index] * quad \
+                + self.critic_fit_weight * critic_fit
+
+        loss_nansum = finite.sum()
+
+        if self.dual_algorithm != 'augmented':
+            return self.get_lmbd(key) * loss_nansum
+
+        with torch.no_grad():
+            self._al_viol_accum[index] += loss_nansum.detach()
+            self._al_viol_count[index] += 1
+
+        lmbd = self.lmbd[index].clamp(min=0, max=self.lmbd_p[index])
+        rho = self.rho[index]
+        quad = (finite * finite).sum()
+        return lmbd * loss_nansum + 0.5 * rho * quad
+
+    def al_dual_update_(self):
+        """Closed-form Augmented-Lagrangian multiplier update + penalty schedule.
+
+        Invoked by the program at its dual-update points (in place of the
+        gradient-ascent step). Consumes and resets the per-constraint violation
+        statistics accumulated across the forward passes since the previous
+        call. No-op unless ``dual_algorithm == 'augmented'``.
+        """
+        if self.dual_algorithm != 'augmented':
+            return
+        with torch.no_grad():
+            has_data = self._al_viol_count > 0
+            count = self._al_viol_count.clamp(min=1)
+            mean_viol = self._al_viol_accum / count  # mean S_c over this window
+
+            # Multiplier ascent, projected to [0, lmbd_p]; only touch constraints
+            # that were actually evaluated this window.
+            upper = self.lmbd_p.to(device=self.lmbd.device, dtype=self.lmbd.dtype)
+            new_lmbd = torch.clamp(self.lmbd + self.rho * mean_viol, min=0)
+            new_lmbd = torch.minimum(new_lmbd, upper)
+            self.lmbd.copy_(torch.where(has_data, new_lmbd, self.lmbd))
+
+            # Grow rho where the violation did not shrink by factor tau versus the
+            # previous window (never on the first window — prev is NaN there).
+            prev = self._al_prev_mean_viol
+            stagnated = has_data & ~torch.isnan(prev) & (mean_viol > self.al_stagnation_tau * prev)
+            grown = torch.minimum(self.rho * self.al_rho_growth,
+                                  torch.full_like(self.rho, self.al_rho_max))
+            self.rho.copy_(torch.where(stagnated, grown, self.rho))
+
+            self._al_prev_mean_viol.copy_(torch.where(has_data, mean_viol, prev))
+            self._al_viol_accum.zero_()
+            self._al_viol_count.zero_()
 
     def _apply_gumbel_softmax(self, datanode, temperature=None, hard=None):
         """
@@ -189,9 +436,10 @@ class LossModel(torch.nn.Module):
         
         constr_loss = datanode.calculateLcLoss(
             tnorm=self.tnorm,
-            counting_tnorm=self.counting_tnorm, 
-            sample=self.sample, 
-            sampleSize=self.sampleSize
+            counting_tnorm=self.counting_tnorm,
+            sample=self.sample,
+            sampleSize=self.sampleSize,
+            compiled=self.compile_lc
         )
 
         lmbd_loss = []
@@ -201,17 +449,24 @@ class LossModel(torch.nn.Module):
             dtype = getattr(datanode, 'current_dtype', torch.float32)
             lmbd_loss = torch.tensor(globalLoss, dtype=dtype, requires_grad=True)
         else:
+            skip = self.skip_provider() if self.skip_provider is not None else ()
             for key, loss in constr_loss.items():
                 if key not in self.constr:
                     continue
-                
+                if key in skip:
+                    # Enforced structurally this step: its violation is zero by
+                    # construction, so a penalty term would only add noise.
+                    continue
+
                 if loss['lossTensor'] is not None:
-                    loss_value = loss['lossTensor'].clamp(min=0)
-                    loss_nansum = loss_value[loss_value == loss_value].sum()
-                    loss_ = self.get_lmbd(key) * loss_nansum
+                    # Compiled execution guarantees one groundingFeatures row
+                    # per loss entry. Explicit interpreter mode has no gather
+                    # plan and retains the identity/violation-only critic input.
+                    features = loss.get('groundingFeatures') if isinstance(loss, dict) else None
+                    loss_ = self._weighted_constraint_loss(key, loss['lossTensor'], features)
                     self.loss[key](loss_)
                     lmbd_loss.append(loss_)
-               
+
             lmbd_loss = sum(lmbd_loss)
         
         self.lossModelLogger.info(f"Total loss: {lmbd_loss.item() if hasattr(lmbd_loss, 'item') else lmbd_loss}")
@@ -223,11 +478,17 @@ class PrimalDualModel(LossModel):
     """
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm='P', counting_tnorm=None, device='auto'):
+    def __init__(self, graph, tnorm='P', counting_tnorm=None, device='auto', compile_lc=False,
+                 dual_algorithm='ascent', dual_granularity='constraint',
+                 al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
+                 al_stagnation_tau=0.9,
+                 critic_embed_dim=8, critic_hidden=32,
+                 critic_fit_weight=1.0,
+                 exclude_constraints=None):
         """
         The above function is the constructor for a class that initializes an object with a graph,
         tnorm, and device parameters.
-        
+
         :param graph: The `graph` parameter is the input graph that the coding assistant is being
         initialized with. It represents the structure of the graph and can be used to perform various
         operations on the graph, such as adding or removing nodes and edges, calculating node and edge
@@ -238,8 +499,28 @@ class PrimalDualModel(LossModel):
         (optional)
         :param device: The `device` parameter specifies the device on which the computations will be
         performed. It can take the following values:, defaults to auto (optional)
+        :param compile_lc: If True, evaluate the constraint loss with the compiled
+            (batched-gather) formula protocol; unexpected runtime incompatibilities
+            fall back to the interpreter
+        :param dual_algorithm: 'ascent' (default) or 'augmented' (Augmented Lagrangian);
+            see :class:`LossModel`.
+        :param dual_granularity: 'constraint' (default) or 'amortized' (R5 Phase B,
+            per-grounding DualCritic; ascent only).
+        :param al_rho_init: Initial augmented-Lagrangian penalty coefficient.
+        :param al_rho_growth: rho growth factor on stagnation (augmented).
+        :param al_rho_max: rho upper bound (augmented).
+        :param al_stagnation_tau: stagnation threshold for rho growth (augmented).
+        :param critic_embed_dim: DualCritic per-constraint embedding width (amortized).
+        :param critic_hidden: DualCritic MLP hidden width (amortized).
         """
-        super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
+        super().__init__(graph, tnorm=tnorm, counting_tnorm=counting_tnorm, device=device,
+                         compile_lc=compile_lc,
+                         dual_algorithm=dual_algorithm, dual_granularity=dual_granularity,
+                         al_rho_init=al_rho_init, al_rho_growth=al_rho_growth,
+                         al_rho_max=al_rho_max, al_stagnation_tau=al_stagnation_tau,
+                         critic_embed_dim=critic_embed_dim, critic_hidden=critic_hidden,
+                         critic_fit_weight=critic_fit_weight,
+                         exclude_constraints=exclude_constraints)
         self._setup_primaldual_logger()
 
     def _setup_primaldual_logger(self):
@@ -262,6 +543,140 @@ class PrimalDualModel(LossModel):
         else:
             self.primalDualLogger.info("=== PrimalDualModel Operations Logger Initialized ===")
 
+
+class SemanticLossModel(LossModel):
+    """Constraint model using exact circuit weighted model counting.
+
+    The default objective is the direct sum of ``-log(WMC)`` values. Set
+    ``lambda_weighted=True`` to reuse :class:`LossModel`'s learned per-template
+    multipliers.
+    """
+
+    def __init__(
+        self,
+        graph,
+        *,
+        lambda_weighted=False,
+        circuit_backend=None,
+        circuit_max_nodes=None,
+        circuit_size_limit_action=None,
+        circuit_aggregation=None,
+        device="auto",
+        dual_algorithm='ascent',
+        dual_granularity='constraint',
+        al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
+        al_stagnation_tau=0.9,
+        critic_embed_dim=8, critic_hidden=32,
+        compile_lc=True,
+    ):
+        """
+        :param lambda_weighted: weight each constraint's exact loss with the
+            learned dual multipliers instead of summing raw ``-log(WMC)``. This
+            is what composes semantic loss with the R5 dual mechanisms.
+        :param circuit_aggregation: ``'joint'`` (default) or ``'per_grounding'``.
+            Per-grounding is required for ``dual_granularity='amortized'``
+            (R5B), which needs one violation entry per grounding.
+        :param dual_algorithm / dual_granularity / al_* / critic_*: forwarded to
+            :class:`LossModel`; they take effect only when ``lambda_weighted``.
+        """
+        if dual_granularity == 'amortized' and circuit_aggregation is None:
+            # The amortized critic attributes per grounding; a joint scalar
+            # would collapse it to a single row and defeat the mechanism.
+            circuit_aggregation = 'per_grounding'
+
+        super().__init__(
+            graph=graph, device=device,
+            compile_lc=compile_lc,
+            dual_algorithm=dual_algorithm, dual_granularity=dual_granularity,
+            al_rho_init=al_rho_init, al_rho_growth=al_rho_growth,
+            al_rho_max=al_rho_max, al_stagnation_tau=al_stagnation_tau,
+            critic_embed_dim=critic_embed_dim, critic_hidden=critic_hidden,
+        )
+        self.lambda_weighted = bool(lambda_weighted)
+        self.circuit_backend = circuit_backend
+        self.circuit_max_nodes = circuit_max_nodes
+        self.circuit_size_limit_action = circuit_size_limit_action
+        self.circuit_aggregation = circuit_aggregation
+        self.constraints_seen = 0
+        self.constraints_inexact = 0
+
+    def forward(self, builder, build=None, **_):
+        if build is None:
+            build = self.build
+        if not build and not isinstance(builder, DataNodeBuilder):
+            raise ValueError(
+                "SemanticLossModel must be invoked with `build` on or with "
+                "a provided DataNode Builder."
+            )
+
+        builder.createBatchRootDN()
+        datanode = builder.getDataNode(device=self.device)
+        datanode.inferLocal(keys=("softmax",))
+        constraint_losses = datanode.calculateLcLoss(
+            circuit=True,
+            circuitBackend=self.circuit_backend,
+            circuitMaxNodes=self.circuit_max_nodes,
+            circuitSizeLimitAction=self.circuit_size_limit_action,
+            circuitAggregation=self.circuit_aggregation,
+            compiled=self.compile_lc,
+        )
+        # Fraction of constraints that had to abandon the exact circuit and fall
+        # back to the Product t-norm (circuit budget exceeded). Surfaced so a
+        # run can report how much of its "exact" loss really was exact.
+        total_lc = 0
+        inexact_lc = 0
+
+        losses = []
+        for key, loss_info in constraint_losses.items():
+            constraint_key = key
+            if constraint_key not in self.constr:
+                constraint_key = getattr(loss_info.get("lc"), "lcName", key)
+            if constraint_key not in self.constr or loss_info.get("lossTensor") is None:
+                continue
+            loss_tensor = loss_info["lossTensor"]
+            total_lc += 1
+            if loss_info.get("exact") is False:
+                inexact_lc += 1
+            if self.lambda_weighted:
+                loss_value = self._weighted_constraint_loss(
+                    constraint_key,
+                    loss_tensor,
+                    loss_info.get('groundingFeatures'),
+                )
+            else:
+                loss_value = loss_tensor.mean()
+            self.loss[constraint_key](loss_value)
+            losses.append(loss_value)
+
+        # Running exactness tally across the epoch (reset by LossModel.reset()).
+        self.constraints_seen += total_lc
+        self.constraints_inexact += inexact_lc
+
+        if losses:
+            total = torch.stack([loss.reshape(()) for loss in losses]).sum()
+        else:
+            dtype = getattr(datanode, "current_dtype", torch.float32)
+            device = getattr(datanode, "current_device", self.device)
+            total = torch.zeros((), device=device, dtype=dtype)
+        return total, datanode, builder
+
+    @property
+    def exact_fraction(self):
+        """Fraction of evaluated constraints that used the exact circuit.
+
+        ``1.0`` means every constraint was compiled exactly; anything lower
+        means the circuit budget was exceeded and those constraints silently
+        degraded to the Product t-norm, so the reported loss is not fully exact.
+        """
+        if not self.constraints_seen:
+            return float('nan')
+        return 1.0 - (self.constraints_inexact / self.constraints_seen)
+
+    def reset(self):
+        super().reset()
+        self.constraints_seen = 0
+        self.constraints_inexact = 0
+
 class InferenceModel(LossModel):
     """
     Class used to train from the program execution loss.
@@ -271,10 +686,15 @@ class InferenceModel(LossModel):
     def __init__(self, graph,
                  tnorm='P',
                  loss=torch.nn.BCELoss,
+                 query_loss=None,
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
                  use_gumbel=False, temperature=1.0, hard_gumbel=False,
-                 pos_weight=1.0):
+                 compile_lc=True,
+                 pos_weight=1.0,
+                 include_global_constraint_loss=False,
+                 global_constraint_loss_weight=1.0,
+                 executable_constraint_loss_weight=1.0):
         """
         Initializes an instance of InferenceModel.
 
@@ -283,6 +703,8 @@ class InferenceModel(LossModel):
         :param tnorm: Sets the method used to perform the soft-logic translation of the logical expressions.
             Defaults to 'P' (Product).
         :param loss: Loss function to use for binary program outputs.
+        :param query_loss: Optional loss function for multiclass ``queryL``
+            outputs. When omitted, ``loss`` is used for backward compatibility.
         :counting_tnorm: Sets the method used to perform the soft-logic translation of the counting logical
             expressions. If set to None, uses the same method as `tnorm`. Defaults to None.
         :param sample: The `sample` parameter is a boolean flag that determines whether to use sampling
@@ -297,6 +719,14 @@ class InferenceModel(LossModel):
         global loss will be sampled. Otherwise, it will not be sampled, defaults to False (optional)
         :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
         be trained and evaluated. It can take the following values:, defaults to auto (optional)
+        :param compile_lc: Use the compiled batched-gather evaluator for the
+            labeled executable constraints and the optional graph-global
+            constraint loss. Defaults to True; custom formula subclasses use
+            the same protocol without registration in an operator allowlist.
+        :param include_global_constraint_loss: Include graph.logicalConstrains loss in addition to
+            executable constraint BCE loss.
+        :param global_constraint_loss_weight: Weight for graph-global constraint loss.
+        :param executable_constraint_loss_weight: Weight for executable BCE loss.
         """
         self.graph = graph
 
@@ -304,9 +734,13 @@ class InferenceModel(LossModel):
                          sample=sample, sampleSize=sampleSize, 
                          sampleGlobalLoss=sampleGlobalLoss, device=device,
                          use_gumbel=use_gumbel, temperature=temperature, 
-                         hard_gumbel=hard_gumbel)
+                         hard_gumbel=hard_gumbel, compile_lc=compile_lc)
 
         self.loss_func = loss()
+        self.query_loss_func = query_loss() if query_loss is not None else self.loss_func
+        self.include_global_constraint_loss = bool(include_global_constraint_loss)
+        self.global_constraint_loss_weight = float(global_constraint_loss_weight)
+        self.executable_constraint_loss_weight = float(executable_constraint_loss_weight)
         # pos_weight rebalances BCE against majority-class collapse on existsL
         # constraints. When the dataset's logic_label has a skewed Yes/No ratio
         # the unweighted BCE will drift toward the majority direction — setting
@@ -339,6 +773,92 @@ class InferenceModel(LossModel):
         else:
             self.inferenceLogger.info("=== InferenceModel Operations Logger Initialized ===")
 
+    def _tensor_device(self):
+        if self.device == 'auto' or self.device is None:
+            return None
+        return self.device
+
+    def _zero_loss(self, datanode, requires_grad=True):
+        dtype = getattr(datanode, 'current_dtype', torch.float32)
+        return torch.tensor(
+            0.0,
+            dtype=dtype,
+            device=self._tensor_device(),
+            requires_grad=requires_grad,
+        )
+
+    def _template_loss_sum(
+            self, loss_function, predicted, target, instance_count,
+            positive_weight=False):
+        """Apply the legacy loss once per executable row, then sum.
+
+        Tensorizing several bindings under one template must not turn the old
+        sum of per-row mean losses into one mean over every row.
+        """
+        if instance_count <= 1:
+            losses = (loss_function(predicted, target),)
+            targets = (target,)
+        else:
+            if predicted.dim() == 0 or predicted.shape[0] != instance_count:
+                raise ValueError(
+                    "Parameterized executable output has no instance axis "
+                    f"of length {instance_count}")
+            if target.dim() == 0 or target.shape[0] != instance_count:
+                raise ValueError(
+                    "Parameterized executable label has no instance axis "
+                    f"of length {instance_count}")
+            losses = tuple(
+                loss_function(predicted[index], target[index])
+                for index in range(instance_count)
+            )
+            targets = tuple(target[index] for index in range(instance_count))
+
+        weighted = []
+        for loss_value, target_value in zip(losses, targets):
+            if positive_weight and self.pos_weight != 1.0:
+                label_mean = target_value.float().mean()
+                sample_weight = (
+                    (self.pos_weight - 1.0) * label_mean + 1.0)
+                loss_value = loss_value * sample_weight
+            weighted.append(loss_value)
+        return sum(weighted)
+
+    def _calculate_global_constraint_loss(self, datanode, constraint_losses=None):
+        """Return graph-level constraint loss from graph.logicalConstrains only."""
+        constr_loss = constraint_losses
+        if constr_loss is None:
+            constr_loss = datanode.calculateLcLoss(
+                tnorm=self.tnorm,
+                counting_tnorm=self.counting_tnorm,
+                sample=self.sample,
+                sampleSize=self.sampleSize,
+                compiled=self.compile_lc,
+                # Keep this path per-constraint so executable constraints are not
+                # folded into the graph-global component.
+                sampleGlobalLoss=False,
+            )
+
+        losses = []
+        for key, loss in constr_loss.items():
+            if key not in self.constr or not isinstance(loss, dict):
+                continue
+            if loss.get('executableName') is not None:
+                # A shared compiled pass may contain both populations. The
+                # executable entries are consumed by the supervised objective.
+                continue
+            loss_tensor = loss.get('lossTensor')
+            if loss_tensor is None:
+                continue
+
+            loss_value = loss_tensor.clamp(min=0)
+            loss_sum = loss_value[loss_value == loss_value].sum()
+            self.loss[key](loss_sum)
+            losses.append(loss_sum)
+
+        if losses:
+            return sum(losses)
+        return self._zero_loss(datanode)
+
     def forward(self, builder, build=None, use_gumbel=None, temperature=None, hard_gumbel=None):
         use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
         temperature = temperature if temperature is not None else self.temperature
@@ -364,117 +884,280 @@ class InferenceModel(LossModel):
 
         # read executable constraint labels from datanode
         read_labels = datanode.getExecutableConstraintLabels()
-        if len(read_labels) == 0:
+        if len(read_labels) == 0 and not self.include_global_constraint_loss:
             raise ValueError('No active executable constraint labels found in datanode.')
 
-        # Prepare shared context for loss calculation
-        lc_context = datanode._prepareLcLossContext(
-            tnorm=self.tnorm,
-            counting_tnorm=self.counting_tnorm,
+        lc_context = None
+        compiled_constraint_losses = None
+        compile_executable = (
+            bool(read_labels)
+            and bool(getattr(self, 'compile_lc', False))
+            and not self.sample
         )
 
-        losses = []
-        for lcName, lc in self.constr.items():
-            if f'{lcName}/label' not in read_labels:
-                continue
-
-            if not lc.active:
-                continue
-
-            # Use datanode method to get the label
-            lbl = datanode.getExecutableConstraintLabel(lcName).float()
-            
-            loss_dict = datanode.calculateSingleLcLoss(
-                lcName,
+        if (
+            bool(read_labels)
+            and callable(getattr(
+                datanode, 'hasParameterizedExecutableBindings', None))
+            and datanode.hasParameterizedExecutableBindings()
+            and not compile_executable
+        ):
+            raise ValueError(
+                "Parameterized executable formulas require compile_lc=True "
+                "and sample=False so runtime concept slots use the compiled "
+                "formula plan."
+            )
+        if compile_executable:
+            # Evaluate all labeled executable constraints in one persistent
+            # compiled binding. When global loss is enabled, include it in this
+            # same pass so formula traversal and probability indexing happen
+            # only once for the data item.
+            compiled_constraint_losses = datanode.calculateLcLoss(
                 tnorm=self.tnorm,
                 counting_tnorm=self.counting_tnorm,
-                _context=lc_context
+                compiled=True,
+                includeExecutable=True,
+                includeGlobal=self.include_global_constraint_loss,
+                sampleGlobalLoss=False,
+            )
+        elif read_labels:
+            # Prepare shared interpreter context for executable loss calculation.
+            lc_context = datanode._prepareLcLossContext(
+                tnorm=self.tnorm,
+                counting_tnorm=self.counting_tnorm,
             )
 
-            if loss_dict.get('loss') is None:
-                continue
+        executable_losses = []
+        if read_labels:
+            # Iterate the labels present on this item, not every executable LC
+            # ever compiled into the union graph. Scene-grouped workloads may
+            # hold tens of thousands of templates but activate only a few
+            # dozen, so scanning ``self.constr`` here defeats dynamic dispatch.
+            active_executable_names = (
+                key[:-len('/label')]
+                for key in read_labels
+                if isinstance(key, str) and key.endswith('/label')
+            )
+            for lcName in active_executable_names:
+                lc = self.constr.get(lcName)
+                if lc is None:
+                    continue
+
+                if not lc.active:
+                    continue
+
+                # Use datanode method to get the label.
+                raw_lbl = datanode.getExecutableConstraintLabel(lcName)
                 
-            if MONITORING_AVAILABLE:
-                lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-                log_single_lc(
-                    constraint_name=lcName,
-                    loss_dict=loss_dict,
-                    label_tensor=lbl,
-                    lc_formulation=lcRepr
+                loss_dict = (
+                    compiled_constraint_losses.get(lcName)
+                    if compiled_constraint_losses is not None else None
                 )
-                
-            is_sumL = isinstance(lc, sumL)
-            if is_sumL:
-                lbl = torch.tensor(1.0, dtype=dtype, device=self.device, requires_grad=True)
-                
-            constr_out = loss_dict['conversionSigmoid']
-            #if torch.equal(constr_out, lbl):
-            #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
-            # Avoid BCELoss saturation cliff using a STRAIGHT-THROUGH clamp:
-            # forward sees a clamped value (no -inf log), but the gradient
-            # flows back as if no clamp existed. A vanilla `tensor.clamp(...)`
-            # would zero the gradient at saturation — which kills the recovery
-            # gradient when convSig=0 with lbl=1 (the most informative case
-            # for pushing atoms back up). Disabled if DOMIKNOWS_INFER_NO_CLAMP=1.
-            import os as _os
-            if _os.environ.get('DOMIKNOWS_INFER_NO_CLAMP', '0') != '1':
-                _eps = 1e-6
-                _co_clamped = constr_out.clamp(_eps, 1.0 - _eps)
-                # Straight-through: forward = clamped, backward = identity.
-                constr_out = constr_out + (_co_clamped - constr_out).detach()
-            constraint_loss = self.loss_func(constr_out.float(), lbl)
-
-            if self._diag_step < self._diag_budget:
-                try:
-                    co = constr_out.detach().float().flatten()
-                    lb = lbl.detach().float().flatten()
-                    cl = constraint_loss.detach().float().flatten()
-                    # Dump a handful of atom probabilities that feed into this
-                    # LC via _prepareLcLossContext, so we can see how close to
-                    # saturation the atoms are on this step.
-                    atom_summary = ""
-                    try:
-                        probs_ctx = None
-                        for k in ('probs', 'predictions', 'softmax', 'localPredictions'):
-                            if isinstance(lc_context, dict) and k in lc_context:
-                                probs_ctx = lc_context[k]
-                                break
-                        if isinstance(probs_ctx, dict):
-                            keys = list(probs_ctx.keys())[:3]
-                            bits = []
-                            for k in keys:
-                                v = probs_ctx[k]
-                                if hasattr(v, 'detach'):
-                                    vv = v.detach().float().flatten()
-                                    bits.append(f"{k}:{vv[:4].tolist()}")
-                            if bits:
-                                atom_summary = " atoms=[" + "; ".join(bits) + "]"
-                    except Exception:
-                        pass
-                    print(
-                        f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
-                        f"convSig={co.tolist()} lbl={lb.tolist()} "
-                        f"loss={cl.tolist()} is_sumL={is_sumL}{atom_summary}",
-                        flush=True,
+                if loss_dict is None:
+                    # Normally the compiled calculator already falls back per
+                    # unsupported constraint. Retain this defensive path for a
+                    # custom DataNode/calculator that omits an executable entry.
+                    if lc_context is None:
+                        lc_context = datanode._prepareLcLossContext(
+                            tnorm=self.tnorm,
+                            counting_tnorm=self.counting_tnorm,
+                        )
+                    loss_dict = datanode.calculateSingleLcLoss(
+                        lcName,
+                        tnorm=self.tnorm,
+                        counting_tnorm=self.counting_tnorm,
+                        _context=lc_context
                     )
-                except Exception as e:
-                    print(f"[INFER_DIAG error] {e}", flush=True)
 
-            # Up-weight the positive (label=1) class if pos_weight != 1.
-            # BCELoss has no pos_weight param (unlike BCEWithLogitsLoss), so we
-            # scale the already-computed loss by the per-sample weight.
-            if self.pos_weight != 1.0:
-                lbl_scalar = lbl.float().mean()  # lbl is 0-d or 1-d singleton here
-                sample_weight = (self.pos_weight - 1.0) * lbl_scalar + 1.0
-                constraint_loss = constraint_loss * sample_weight
+                template_instances = int(
+                    loss_dict.get('templateInstanceCount', 1))
 
-            losses.append(constraint_loss)
+                selection_distribution = loss_dict.get('selectionDistribution')
+                if selection_distribution is not None:
+                    predicted = selection_distribution.float()
+                    target = raw_lbl.float().to(predicted.device)
+                    if target.numel() != predicted.numel():
+                        raise ValueError(
+                            f"miotaL label for {lcName} has {target.numel()} values, "
+                            f"but the constraint grounded {predicted.numel()} candidates"
+                        )
+                    if not torch.all((target == 0) | (target == 1)):
+                        raise ValueError(
+                            f"miotaL label for {lcName} must be a binary multi-hot vector"
+                        )
+                    if predicted.numel() == 0:
+                        executable_losses.append(predicted.sum() * 0.0)
+                        continue
+                    eps = 1e-6
+                    clamped = predicted.clamp(eps, 1.0 - eps)
+                    predicted = predicted + (clamped - predicted).detach()
+                    constraint_loss = self._template_loss_sum(
+                        self.loss_func, predicted, target,
+                        template_instances)
+                    executable_losses.append(constraint_loss)
+                    continue
 
-        if len(losses) == 0:
-            dtype = getattr(datanode, 'current_dtype', torch.float32)
-            loss = torch.tensor(0.0, dtype=dtype, device=self.device, requires_grad=True)
+                if MONITORING_AVAILABLE and loss_dict.get('loss') is not None:
+                    lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
+                    log_single_lc(
+                        constraint_name=lcName,
+                        loss_dict=loss_dict,
+                        label_tensor=raw_lbl,
+                        lc_formulation=lcRepr
+                    )
+
+                query_distribution = loss_dict.get('queryDistribution')
+                if query_distribution is not None:
+                    inner_lc = getattr(lc, "innerLC", lc)
+                    if isinstance(inner_lc, queryL) and inner_lc.is_multi_answer:
+                        distribution = query_distribution.float()
+                        if template_instances > 1:
+                            constraint_loss = sum(
+                                multi_query_joint_nll(
+                                    distribution[index],
+                                    raw_lbl[index],
+                                    inner_lc.num_subclasses,
+                                    label_name=(
+                                        f"multi-answer queryL {lcName} "
+                                        f"instance {index}"),
+                                )[3]
+                                for index in range(template_instances)
+                            )
+                        else:
+                            _target, _chosen, _losses, constraint_loss = (
+                                multi_query_joint_nll(
+                                    distribution,
+                                    raw_lbl,
+                                    inner_lc.num_subclasses,
+                                    label_name=f"multi-answer queryL {lcName}",
+                                )
+                            )
+                        executable_losses.append(constraint_loss)
+                        continue
+                    try:
+                        constraint_loss = self._template_loss_sum(
+                            self.query_loss_func,
+                            query_distribution.float(), raw_lbl.long(),
+                            template_instances,
+                        )
+                    except Exception as exc:
+                        raise TypeError(
+                            "queryL executable constraints produce a multiclass distribution. "
+                            "Use a multiclass loss such as domiknows.program.loss.NBCrossEntropyLoss."
+                        ) from exc
+
+                    if self._diag_step < self._diag_budget:
+                        try:
+                            qd = query_distribution.detach().float().flatten()
+                            lb = raw_lbl.detach().long().flatten()
+                            cl = constraint_loss.detach().float().flatten()
+                            print(
+                                f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
+                                f"queryDistribution={qd.tolist()} lbl={lb.tolist()} "
+                                f"loss={cl.tolist()}",
+                                flush=True,
+                            )
+                        except Exception as e:
+                            print(f"[INFER_DIAG error] {e}", flush=True)
+
+                    executable_losses.append(constraint_loss)
+                    continue
+
+                if loss_dict.get('loss') is None:
+                    continue
+                    
+                inner_lc = getattr(lc, "innerLC", lc)
+                is_sumL = isinstance(inner_lc, sumL)
+                constr_out = loss_dict['conversionSigmoid']
+                if is_sumL:
+                    # The numeric label has already been consumed while
+                    # calculating the sum constraint.  conversionSigmoid is
+                    # the resulting satisfaction probability, so its training
+                    # target is true rather than the requested count itself.
+                    lbl = torch.ones_like(
+                        constr_out,
+                        dtype=constr_out.dtype,
+                        device=constr_out.device,
+                    )
+                else:
+                    lbl = raw_lbl.float().to(device=constr_out.device)
+                    if lbl.shape != constr_out.shape and lbl.numel() == 1:
+                        lbl = torch.ones_like(
+                            constr_out,
+                            dtype=constr_out.dtype,
+                            device=constr_out.device,
+                        ) * lbl.reshape(-1)[0]
+                #if torch.equal(constr_out, lbl):
+                #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
+                # Avoid BCELoss saturation cliff using a STRAIGHT-THROUGH clamp:
+                # forward sees a clamped value (no -inf log), but the gradient
+                # flows back as if no clamp existed. A vanilla `tensor.clamp(...)`
+                # would zero the gradient at saturation — which kills the recovery
+                # gradient when convSig=0 with lbl=1 (the most informative case
+                # for pushing atoms back up). Disabled if DOMIKNOWS_INFER_NO_CLAMP=1.
+                import os as _os
+                if not is_sumL and _os.environ.get('DOMIKNOWS_INFER_NO_CLAMP', '0') != '1':
+                    _eps = 1e-6
+                    _co_clamped = constr_out.clamp(_eps, 1.0 - _eps)
+                    # Straight-through: forward = clamped, backward = identity.
+                    constr_out = constr_out + (_co_clamped - constr_out).detach()
+                constraint_loss = self._template_loss_sum(
+                    self.loss_func, constr_out.float(), lbl.float(),
+                    template_instances,
+                    positive_weight=not is_sumL,
+                )
+
+                if self._diag_step < self._diag_budget:
+                    try:
+                        co = constr_out.detach().float().flatten()
+                        lb = lbl.detach().float().flatten()
+                        cl = constraint_loss.detach().float().flatten()
+                        # Dump a handful of atom probabilities that feed into this
+                        # LC via _prepareLcLossContext, so we can see how close to
+                        # saturation the atoms are on this step.
+                        atom_summary = ""
+                        try:
+                            probs_ctx = None
+                            for k in ('probs', 'predictions', 'softmax', 'localPredictions'):
+                                if isinstance(lc_context, dict) and k in lc_context:
+                                    probs_ctx = lc_context[k]
+                                    break
+                            if isinstance(probs_ctx, dict):
+                                keys = list(probs_ctx.keys())[:3]
+                                bits = []
+                                for k in keys:
+                                    v = probs_ctx[k]
+                                    if hasattr(v, 'detach'):
+                                        vv = v.detach().float().flatten()
+                                        bits.append(f"{k}:{vv[:4].tolist()}")
+                                if bits:
+                                    atom_summary = " atoms=[" + "; ".join(bits) + "]"
+                        except Exception:
+                            pass
+                        print(
+                            f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
+                            f"convSig={co.tolist()} lbl={lb.tolist()} "
+                            f"loss={cl.tolist()} is_sumL={is_sumL}{atom_summary}",
+                            flush=True,
+                        )
+                    except Exception as e:
+                        print(f"[INFER_DIAG error] {e}", flush=True)
+
+                executable_losses.append(constraint_loss)
+
+        executable_loss = sum(executable_losses) if executable_losses else self._zero_loss(datanode)
+        if self.include_global_constraint_loss:
+            global_loss = self._calculate_global_constraint_loss(
+                datanode, constraint_losses=compiled_constraint_losses)
         else:
-            loss = sum(losses)
+            global_loss = self._zero_loss(datanode)
+        loss = (
+            self.executable_constraint_loss_weight * executable_loss
+            + self.global_constraint_loss_weight * global_loss
+        )
+        self.last_executable_loss = executable_loss.detach() if torch.is_tensor(executable_loss) else executable_loss
+        self.last_global_loss = global_loss.detach() if torch.is_tensor(global_loss) else global_loss
+        self.last_total_constraint_loss = loss.detach() if torch.is_tensor(loss) else loss
             
         if MONITORING_AVAILABLE:
             log_memory() 
@@ -534,7 +1217,8 @@ class SampleLossModel(LossModel):
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
                  use_gumbel=False, temperature=1.0, hard_gumbel=False,
-                 temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003):
+                 temperature_schedule='constant', min_temperature=0.5,
+                 anneal_rate=0.0003, compile_lc=True):
         
         super().__init__(
             graph=graph,
@@ -546,7 +1230,8 @@ class SampleLossModel(LossModel):
             device=device,
             use_gumbel=use_gumbel,
             temperature=temperature,
-            hard_gumbel=hard_gumbel
+            hard_gumbel=hard_gumbel,
+            compile_lc=compile_lc,
         )
         
         # SampleLossModel-specific: temperature annealing
@@ -622,6 +1307,7 @@ class SampleLossModel(LossModel):
         """
         Forward pass with sampling-based loss calculation.
         """
+        explicit_temperature = temperature is not None
         use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
         temperature = temperature if temperature is not None else self.temperature
         hard_gumbel = hard_gumbel if hard_gumbel is not None else self.hard_gumbel
@@ -642,7 +1328,7 @@ class SampleLossModel(LossModel):
         
         # Apply Gumbel-Softmax if enabled using datanode's method
         if use_gumbel:
-            if self.training and temperature == self.temperature:
+            if self.training and not explicit_temperature:
                 self.anneal_temperature()
                 temperature = self.temperature
             
@@ -655,7 +1341,8 @@ class SampleLossModel(LossModel):
             tnorm=self.tnorm, 
             sample=self.sample, 
             sampleSize=self.sampleSize, 
-            sampleGlobalLoss=self.sampleGlobalLoss
+            sampleGlobalLoss=self.sampleGlobalLoss,
+            compiled=getattr(self, 'compile_lc', True),
         )
         
         lmbd_loss = []
@@ -691,7 +1378,11 @@ class SampleLossModel(LossModel):
                         loss_ = -1 * torch.log(loss_value)
                         key_loss += loss_
                 else:
-                    if constr_loss["globalSuccessCounter"] > 0:
+                    # Keep per-constraint successes when global aggregation is
+                    # disabled.  Previously this replacement happened whenever
+                    # a global-success sample existed, effectively making
+                    # ``sampleGlobalLoss=False`` behave like global sampling.
+                    if self.sampleGlobalLoss and constr_loss["globalSuccessCounter"] > 0:
                         lcSuccesses = constr_loss["globalSuccesses"]
                     if lossTensor.sum().item() != 0:
                         tidx = (lcSuccesses == 1).nonzero().squeeze(-1)

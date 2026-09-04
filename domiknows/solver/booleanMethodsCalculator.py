@@ -386,7 +386,25 @@ class booleanMethodsCalculator(constraintsProcessor):
                 # Violation: zero or multiple satisfy
                 return -1
 
-    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def miotaVar(self, _, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        values = []
+        for value in var:
+            if value is None:
+                values.append(0)
+            elif torch.is_tensor(value):
+                values.extend(
+                    int(item.item() >= threshold) for item in value.flatten()
+                )
+            elif hasattr(value, "item"):
+                values.append(int(value.item() >= threshold))
+            else:
+                values.append(int(float(value) >= threshold))
+        return values
+
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None,
+                 onlyConstrains=False, temperature=1.0, multi_answer=False,
+                 threshold=None, logicMethodName="QUERY"):
         """
         Query operator for multiclass attribute selection in verification mode.
 
@@ -440,7 +458,31 @@ class booleanMethodsCalculator(constraintsProcessor):
         if len(sel_vars_fixed) == 0:
             if onlyConstrains:
                 return 0
+            if multi_answer:
+                return []
             return [0] * num_subclasses
+
+        if multi_answer:
+            result_rows = []
+            for entity_index, selected in enumerate(sel_vars_fixed):
+                row = [0] * num_subclasses
+                if selected and subclass_data is not None and entity_index < len(subclass_data):
+                    entity_row = subclass_data[entity_index]
+                    if entity_row is not None:
+                        values = []
+                        for value in entity_row[:num_subclasses]:
+                            if value is None:
+                                values.append(0)
+                            elif torch.is_tensor(value):
+                                values.append(int(value.item() > 0.5))
+                            elif hasattr(value, 'item'):
+                                values.append(int(value.item() > 0.5))
+                            else:
+                                values.append(int(float(value) > 0.5))
+                        if any(values):
+                            row[values.index(1)] = 1
+                result_rows.append(row)
+            return result_rows
 
         # Find which entity is selected (has value 1)
         selected_idx = -1

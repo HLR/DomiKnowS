@@ -974,7 +974,14 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
         
         return select_vars
 
-    def queryVar(self, m, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def miotaVar(self, m, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        """ILP multi-selection is exactly the vector of condition literals."""
+        return [0 if value is None else value for value in var]
+
+    def queryVar(self, m, concept, subclasses, selection_vars, *, subclass_data=None,
+                 onlyConstrains=False, temperature=1.0, multi_answer=False,
+                 threshold=None, logicMethodName="QUERY"):
         """
         Query operator for multiclass attribute selection in ILP.
 
@@ -1034,10 +1041,32 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
                 self.myLogger.warning(f"{logicMethodName} called with empty selection_vars")
             if onlyConstrains:
                 return None
+            if multi_answer:
+                return []
             return [0] * num_subclasses
 
         if self.ifLog:
             self.myLogger.debug(f"{logicMethodName} called with {len(sel_vars_fixed)} selection vars, {num_subclasses} subclasses")
+
+        if multi_answer:
+            result_rows = []
+            for i, selection in enumerate(sel_vars_fixed):
+                entity_values = (
+                    subclass_data[i]
+                    if subclass_data is not None and i < len(subclass_data)
+                    and subclass_data[i] is not None
+                    else []
+                )
+                row = []
+                for j in range(num_subclasses):
+                    class_value = entity_values[j] if j < len(entity_values) else 0
+                    row.append(self.andVar(
+                        m, selection, class_value, onlyConstrains=False
+                    ))
+                result_rows.append(row)
+            if onlyConstrains:
+                return None
+            return result_rows
 
         # Check if all selection vars are constants
         all_constants = all(self.__varIsNumber(v) for v in sel_vars_fixed)

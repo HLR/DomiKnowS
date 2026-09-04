@@ -5,12 +5,96 @@ from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMetho
 import logging
 import warnings
 import torch
+import weakref
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
 V = namedtuple("V", ['name', 'v', 'relVarInfo'], defaults= [None, None, None])
 
+
+class _RevisionList(list):
+    """List that invalidates an owning logical element's compiled plan."""
+
+    def __init__(self, values, owner):
+        super().__init__(values)
+        self._owner_ref = weakref.ref(owner)
+
+    def _changed(self):
+        owner = self._owner_ref()
+        if owner is not None:
+            owner._touch_compile_revision()
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def append(self, value):
+        super().append(value)
+        self._changed()
+
+    def extend(self, values):
+        super().extend(values)
+        self._changed()
+
+    def insert(self, index, value):
+        super().insert(index, value)
+        self._changed()
+
+    def pop(self, index=-1):
+        value = super().pop(index)
+        self._changed()
+        return value
+
+    def remove(self, value):
+        super().remove(value)
+        self._changed()
+
+    def clear(self):
+        super().clear()
+        self._changed()
+
+    def reverse(self):
+        super().reverse()
+        self._changed()
+
+    def sort(self, *args, **kwargs):
+        super().sort(*args, **kwargs)
+        self._changed()
+
+    def __iadd__(self, values):
+        result = super().__iadd__(values)
+        self._changed()
+        return result
+
+    def __imul__(self, value):
+        result = super().__imul__(value)
+        self._changed()
+        return result
+
 class LcElement:
+    def _touch_compile_revision(self):
+        self._compile_revision = getattr(self, '_compile_revision', 0) + 1
+        graph = getattr(self, 'graph', None)
+        touch_graph = getattr(graph, '_touch_constraint_formula_revision', None)
+        if callable(touch_graph):
+            touch_graph()
+
+    @property
+    def e(self):
+        return self._e
+
+    @e.setter
+    def e(self, values):
+        # execute() deliberately aliases its inner constraint's elements. Keep
+        # that alias; the inner constraint owns the revision that compiled
+        # plans track.
+        self._e = values if isinstance(values, _RevisionList) else _RevisionList(values, self)
+        self._touch_compile_revision()
+
     def __init__(self, *e,  name = None):
         from .relation import Relation
 
@@ -140,6 +224,30 @@ class LcElement:
 class LogicalConstrain(LcElement):
     def __init__(self, *e, p=100, active = True, sampleEntries  = False, name = None):
         super().__init__(*e, name = name)
+
+        def contains_multi_query(value):
+            if isinstance(value, LogicalConstrain):
+                return getattr(value, "_multi_answer", False)
+            if isinstance(value, V):
+                return (
+                    contains_multi_query(value.v)
+                    or contains_multi_query(value.relVarInfo)
+                )
+            if isinstance(value, dict):
+                return any(contains_multi_query(item) for item in value.values())
+            if isinstance(value, (list, tuple)):
+                return any(contains_multi_query(item) for item in value)
+            return False
+
+        if not isinstance(self, queryL):
+            for e_item in self.e:
+                if not contains_multi_query(e_item):
+                    continue
+                raise ValueError(
+                    "multi-answer queryL is a value-returning expression and "
+                    "cannot be nested inside boolean, counting, predicate, "
+                    "relation, or selector constraints"
+                )
         
         self.headLC = True # Indicate that it is head constraint and should be process individually
         self.active = active
@@ -184,6 +292,33 @@ class LogicalConstrain(LcElement):
                 lcConcepts.add(eItem[0].name)
                 
         return lcConcepts
+
+    @property
+    def declared_active(self):
+        """The explicit activation flag, before graph concept filtering."""
+        return self._active
+
+    @property
+    def active(self):
+        """Whether this constraint is active in the current graph step."""
+        if not self._active:
+            return False
+        # A parameterized executable formula stores representative concepts in
+        # its immutable template. Its actual concepts are supplied per dataset
+        # item, so applying the graph's active-concept filter to the
+        # representative would incorrectly suppress valid runtime bindings.
+        if getattr(self, '_parameterized_executable', False):
+            return True
+        checker = getattr(self.graph, 'are_concepts_active', None)
+        return checker(self.getLcConcepts()) if callable(checker) else True
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+
+    def effective_active(self):
+        """Property-compatible callable for graph execution filtering."""
+        return self.active
         
     # Get string representation of  Logical Constraint
     def strEs(self):
@@ -784,17 +919,25 @@ class LogicalConstrain(LcElement):
             myLogger.error(f"{logicMethodName} has no variables")
             return []
         
-        lcVariableName0 = lcVariableNames[0]
-        lcVariableSet0 = v[lcVariableName0]
-        
         zVars = []
-        
-        condition_vars = []
-        for i, _ in enumerate(lcVariableSet0):
-            # Collect all condition variables for this grounding
-            condition_vars.extend(lcVariableSet0[i])
+        condition_vars = self._selectorConditionVars(
+            model, myConstraintVarProcessor, v, lcVariableNames
+        )
             
-        # Call the boolean processor's iotaVar method
+        # What an iotaL contributes depends on who consumes it.
+        #
+        # ``queryL`` needs the *selection distribution* — which entity was
+        # picked — so it can read that entity's attribute. Any other context
+        # consumes iotaL as a truth value inside a boolean combinator, and there
+        # the distribution is the wrong thing: it is a vector over this iota's
+        # own candidates, which generally has a different length from its
+        # siblings' groundings (e.g. entity-level 4 vs relation-level 16), so
+        # combining them raised a shape error. The well-defined truth value is
+        # the degree to which the definite description holds — "exactly one
+        # candidate satisfies phi" — which is a scalar and broadcasts against
+        # any sibling shape.
+        wants_selection = headConstrain or getattr(self, 'returnsSelection', False)
+
         result = myConstraintVarProcessor.iotaVar(
             model,
             *condition_vars,
@@ -802,7 +945,19 @@ class LogicalConstrain(LcElement):
             temperature=temperature,
             logicMethodName=logicMethodName,
         )
-        
+
+        if not wants_selection and torch.is_tensor(result) and result.numel() > 1:
+            # iotaVar(onlyConstrains=True) reports the presupposition *loss*;
+            # the satisfaction degree its boolean parent needs is 1 - loss.
+            uniqueness_loss = myConstraintVarProcessor.iotaVar(
+                model,
+                *condition_vars,
+                onlyConstrains=True,
+                temperature=temperature,
+                logicMethodName=logicMethodName,
+            )
+            result = 1.0 - uniqueness_loss
+
         if len(condition_vars) == 0:
             zVars.append([None])
     
@@ -815,7 +970,77 @@ class LogicalConstrain(LcElement):
             model.update()
         
         return zVars
+
+    def createMiotaSelection(self, model, myConstraintVarProcessor, v, headConstrain,
+                             integrate, threshold, hard, logicMethodName):
+        """Return independent membership scores for every grounded candidate."""
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if not lcVariableNames:
+            myLogger.error(f"{logicMethodName} has no variables")
+            return []
+
+        condition_vars = self._selectorConditionVars(
+            model, myConstraintVarProcessor, v, lcVariableNames
+        )
+
+        result = myConstraintVarProcessor.miotaVar(
+            model,
+            *condition_vars,
+            onlyConstrains=headConstrain,
+            threshold=threshold,
+            hard=hard,
+            logicMethodName=logicMethodName,
+        )
+        if result is None:
+            return [[None]] if not condition_vars else []
+        if isinstance(result, (list, tuple)):
+            return [list(result)]
+        return [[result]]
+
+    def _selectorConditionVars(self, model, processor, v, variable_names):
+        """Conjoin each entity-aligned selector row into one membership score."""
+        setups = self._collectVariableSetups(
+            variable_names[0], variable_names[1:], v
+        )
+        conditions = []
+        for row in setups:
+            row_conditions = []
+            for grounding in row:
+                valid = [value for value in grounding if value is not None]
+                if valid:
+                    row_conditions.append(processor.andVar(model, *valid))
+            if len(row_conditions) == 1:
+                conditions.append(row_conditions[0])
+            elif row_conditions:
+                conditions.append(processor.orVar(model, *row_conditions))
+        return conditions
    
+    def _warnIfNoSubclassData(self, subclass_data, logicMethodName):
+        """Flag a queryL whose attribute concept resolved to no datanodes.
+
+        ``queryVar`` degrades to a uniform distribution when it gets no
+        per-entity class predictions, which looks like a working answer but
+        carries no information. The usual cause is declaring the attribute as a
+        free-standing ``EnumConcept(name=...)``: with no ``is_a`` link to the
+        entity concept it owns no datanodes, so the gather finds nothing.
+        Declare it on the entity instead —
+        ``object_node(name='material', ConceptClass=EnumConcept, values=[...])``.
+        """
+        if subclass_data:
+            return
+        attrName = getattr(getattr(self, 'concept', None), 'name', 'attribute')
+        myLogger.warning(
+            "%s: attribute concept '%s' resolved to no datanodes, so the query "
+            "distribution is uninformative. Declare the attribute on its entity "
+            "concept, e.g. entity(name='%s', ConceptClass=EnumConcept, values=[...]), "
+            "rather than as a free-standing EnumConcept.",
+            logicMethodName, attrName, attrName,
+        )
+
     def createQuerySelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, integrate, temperature, logicMethodName):
             """Build query selection over attribute subclasses.
 
@@ -844,6 +1069,37 @@ class LogicalConstrain(LcElement):
             if not sel_var_names:
                 myLogger.error(f"{logicMethodName} has no selection variables")
                 return []
+
+            if not headConstrain:
+                selection_vars = []
+                for name in sel_var_names:
+                    for row in v[name]:
+                        if row:
+                            selection_vars.extend(row)
+
+                if len(selection_vars) == 0:
+                    zVars = [[None]]
+                    return zVars
+
+                subclass_data = None
+                if sub_var_names:
+                    subclass_data = self._collect_query_subclass_data(
+                        v, sub_var_names, 0, 1, len(subclasses))
+                    self._warnIfNoSubclassData(subclass_data, logicMethodName)
+
+                result = myConstraintVarProcessor.queryVar(
+                    model,
+                    concept,
+                    subclasses,
+                    selection_vars,
+                    subclass_data=subclass_data,
+                    onlyConstrains=False,
+                    temperature=temperature,
+                    multi_answer=getattr(self, '_multi_answer', False),
+                    threshold=getattr(self, 'threshold', None),
+                    logicMethodName=logicMethodName,
+                )
+                return [[result]]
 
             # Iterate over the *selection* variables' row count
             sel_var_0 = v[sel_var_names[0]]
@@ -876,6 +1132,8 @@ class LogicalConstrain(LcElement):
                     subclass_data=subclass_data,
                     onlyConstrains=headConstrain,
                     temperature=temperature,
+                    multi_answer=getattr(self, '_multi_answer', False),
+                    threshold=getattr(self, 'threshold', None),
                     logicMethodName=logicMethodName,
                 )
 
@@ -908,8 +1166,25 @@ class LogicalConstrain(LcElement):
         if num_sel_iterations == 1:
             # Verification / ILP mode — collect ALL entity rows
             if len(sub_var_names) == 1:
-                # EnumConcept: single var, K values per entity row
-                return [list(row) for row in v[sub_var_names[0]]]
+                # EnumConcept: single var, K values per entity row.
+                #
+                # In loss mode the variable is batched: one group holding K
+                # column tensors of length N (one entry per entity), rather than
+                # N rows of K scalars. Transpose it back, otherwise queryVar's
+                # per-row read keeps only entity 0 and the answer collapses to
+                # that single entity's class distribution.
+                rows = []
+                for group in v[sub_var_names[0]]:
+                    columns = list(group)
+                    batched = (columns
+                               and all(torch.is_tensor(c) and c.numel() > 1 for c in columns)
+                               and len({c.numel() for c in columns}) == 1)
+                    if batched:
+                        for entity in range(columns[0].numel()):
+                            rows.append([c.reshape(-1)[entity] for c in columns])
+                    else:
+                        rows.append(columns)
+                return rows
             else:
                 # is_a subtypes: K vars, 1 value per entity per var
                 num_entities = len(v[sub_var_names[0]])
@@ -1410,10 +1685,29 @@ class iotaL(LogicalConstrain):
                  sampleEntries=False, name=None):
         super().__init__(*e, p=p, active=active, 
                         sampleEntries=sampleEntries, name=name)
+        self._prepareEntitySelector()
         self.temperature = temperature
         # Mark as returning entity selection rather than boolean
         self._returns_selection = True
-        
+
+    def _prepareEntitySelector(self):
+        """Expose a selector condition and remember its output variable."""
+        condition = self.e[0] if len(self.e) == 1 and isinstance(self.e[0], andL) else None
+        condition_items = condition.e if condition is not None else self.e
+        relational = any(
+            isinstance(item, V)
+            and item.v is not None
+            for item in condition_items
+        )
+        if condition is not None and relational:
+            self.e = list(condition_items)
+
+        self.selection_variable = next(
+            (item.name for item in condition_items
+             if isinstance(item, V) and item.name is not None),
+            None,
+        )
+
     def __call__(self, model, myConstraintVarProcessor, v, 
                  headConstrain=False, integrate=False):
         with torch.set_grad_enabled(myConstraintVarProcessor.grad):
@@ -1426,14 +1720,53 @@ class iotaL(LogicalConstrain):
                 temperature=self.temperature,
                 logicMethodName=str(self),
             )
+
+class miotaL(LogicalConstrain):
+    """Multi-answer entity selector.
+
+    Unlike :class:`iotaL`, this operator has no existence or uniqueness
+    presupposition.  It retains one independent membership score per grounded
+    candidate and decodes every score greater than or equal to ``threshold``.
+    """
+
+    def __init__(self, *e, threshold=0.5, hard=False, p=100, active=True,
+                 sampleEntries=False, name=None):
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+            raise TypeError("miotaL: threshold must be a number in [0, 1]")
+        if not 0.0 <= float(threshold) <= 1.0:
+            raise ValueError("miotaL: threshold must be in [0, 1]")
+        if not isinstance(hard, bool):
+            raise TypeError("miotaL: hard must be a bool")
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+        iotaL._prepareEntitySelector(self)
+        self.threshold = float(threshold)
+        self.hard = hard
+        self._returns_selection = True
+
+    def __call__(self, model, myConstraintVarProcessor, v,
+                 headConstrain=False, integrate=False):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createMiotaSelection(
+                model,
+                myConstraintVarProcessor,
+                v,
+                headConstrain,
+                integrate,
+                threshold=self.threshold,
+                hard=self.hard,
+                logicMethodName=str(self),
+            )
     
 class queryL(LogicalConstrain):
         """
         Query constraint for multiclass attribute concepts.
         
-        Given a multiclass concept (parent with subclasses via is_a, or EnumConcept)
-        and an entity selection (typically from iotaL or other constraints), returns the most probable
-        subclass for the selected entity.
+        Given a multiclass concept (parent with subclasses via is_a, or
+        EnumConcept) and an entity selection, returns the most probable
+        subclass.  ``iotaL`` produces the historical single ``[K]`` answer;
+        one direct ``miotaL`` produces a candidate-aligned ``[N, K]`` joint
+        distribution and decodes unselected positions as ``-1``.
         
         Usage:
             # Define material as parent concept with subclasses
@@ -1454,6 +1787,31 @@ class queryL(LogicalConstrain):
                     sampleEntries=False, name=None):
             from domiknows.graph.concept import EnumConcept
 
+            def contains_miota(element):
+                return isinstance(element, miotaL) or (
+                    isinstance(element, LogicalConstrain)
+                    and any(contains_miota(child) for child in element.e)
+                )
+
+            direct_miota = [element for element in e if isinstance(element, miotaL)]
+            has_nested_miota = any(
+                contains_miota(element) and not isinstance(element, miotaL)
+                for element in e
+            )
+            if has_nested_miota:
+                raise ValueError(
+                    "multi-answer queryL requires one direct miotaL selector; "
+                    "miotaL cannot be nested indirectly inside another selector"
+                )
+            if direct_miota and (len(direct_miota) != 1 or len(e) != 1):
+                raise ValueError(
+                    "multi-answer queryL requires exactly one direct miotaL "
+                    "selector and no additional selector operands"
+                )
+
+            self._multi_answer = bool(direct_miota)
+            self._multi_selector = direct_miota[0] if direct_miota else None
+
             # Build concept variable bindings so the constraint constructor
             # collects per-entity subclass predictions into v.  This lets
             # queryVar see which subclass each entity actually has.
@@ -1473,12 +1831,31 @@ class queryL(LogicalConstrain):
 
             super().__init__(*e, *attr_elements, p=p, active=active,
                             sampleEntries=sampleEntries, name=name)
+
+            # queryL is the one consumer that needs an iotaL's *selection
+            # distribution* (which entity was picked) rather than a truth
+            # degree. Mark the iotaL operands so createIotaSelection knows to
+            # hand back the distribution; every other (boolean) context gets a
+            # broadcastable satisfaction scalar instead.
+            for element in self.e:
+                if isinstance(element, iotaL):
+                    element.returnsSelection = True
+
             self.concept = concept
             self.temperature = temperature
             self._returns_value = True
             self._subclasses = None
             self._subclass_names = None
             self._init_subclasses()
+
+        @property
+        def is_multi_answer(self):
+            return getattr(self, '_multi_answer', False)
+
+        @property
+        def threshold(self):
+            selector = getattr(self, '_multi_selector', None)
+            return selector.threshold if selector is not None else None
     
         def _init_subclasses(self):
             """Initialize subclass information from concept."""
@@ -1736,7 +2113,7 @@ class execute:
         
         # Copy relevant attributes from wrapped constraint
         self.headLC = self.innerLC.headLC
-        self.active = self.innerLC.active
+        self.active = self.innerLC.declared_active
         self.p = self.innerLC.p
         self.e = self.innerLC.e
         self.sampleEntries = self.innerLC.sampleEntries
@@ -1758,3 +2135,25 @@ class execute:
     def getLcConcepts(self):
         """Delegate to wrapped constraint's getLcConcepts method."""
         return self.innerLC.getLcConcepts()
+
+    @property
+    def declared_active(self):
+        """The wrapper's explicit activation flag before concept filtering."""
+        return self._active
+
+    @property
+    def active(self):
+        """Whether both the wrapper and its inner constraint are active."""
+        return self._active and self.innerLC.active
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+        # Executable wrappers and their inner constraint represent one logical
+        # activation flag.  Some established call paths update only the
+        # wrapper, while others update both explicitly.
+        self.innerLC.active = value
+
+    def effective_active(self):
+        """Property-compatible callable for graph execution filtering."""
+        return self.active

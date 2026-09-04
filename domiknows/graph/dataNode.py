@@ -1243,12 +1243,104 @@ class DataNode:
         return None
 
     # ----------------- Active Executable LC methods
+
+    def _getExecutableConstraintDataNode(self):
+        """Return this sample's constraint DataNode, if one exists.
+
+        Constraint DataNodes are normally direct children of the sample root.
+        The builder lookup is retained as a fallback for older construction
+        paths where the constraint node is registered but not linked through
+        ``contains``.
+
+        Raises:
+            ValueError: If the selected lookup path finds multiple constraint
+                DataNodes for this sample.
+        """
+        constraint_concept = self.graph.get_constraint_concept()
+        constraint_name = constraint_concept.name
+
+        direct_matches = self.getChildDataNodes(
+            conceptName=constraint_concept
+        ) or []
+        if len(direct_matches) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_name}) '
+                f'found: {len(direct_matches)}, expected one.'
+            )
+        if direct_matches:
+            return direct_matches[0]
+
+        if not self.myBuilder:
+            return None
+
+        builder_matches = self.myBuilder.findDataNodesInBuilder(
+            select=constraint_name
+        )
+        if len(builder_matches) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_name}) '
+                f'found: {len(builder_matches)}, expected one.'
+            )
+        if not builder_matches:
+            return None
+
+        return builder_matches[0]
+
+    def _clearExecutableConstraintAnswers(self):
+        """Remove persisted answers/confidences for executable constraints.
+
+        Returns:
+            bool: ``True`` when a constraint DataNode was found, otherwise
+                ``False``.
+        """
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name in self.graph.executableLCs:
+            constraint_dn.attributes.pop(f'{lc_name}/answer', None)
+            constraint_dn.attributes.pop(f'{lc_name}/probability', None)
+
+        return True
+
+    def _writeExecutableConstraintAnswers(self, answers):
+        """Write winning native hypothesis values to the constraint DataNode.
+
+        Args:
+            answers: Mapping from executable constraint name to its selected
+                hypothesis value.
+
+        Returns:
+            bool: ``True`` when the answers were written, otherwise ``False``.
+        """
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name, answer in answers.items():
+            constraint_dn.attributes[f'{lc_name}/answer'] = answer
+
+        return True
+
+    def _writeExecutableConstraintResults(self, results):
+        """Persist decoded non-ILP answers and their selected probabilities."""
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name, result in results.items():
+            constraint_dn.attributes[f'{lc_name}/answer'] = result['answer']
+            constraint_dn.attributes[f'{lc_name}/probability'] = float(
+                result['probability']
+            )
+
+        return True
     
     def getExecutableConstraintLabels(self):
         """Get all active executable constraint labels from the constraint datanode.
         
-        Finds the constraint concept's datanode via the builder and returns
-        its attributes dict (format: {'LC{n}/label': label_value, ...}).
+        Finds the constraint concept's DataNode and returns its attributes dict
+        (format: {'LC{n}/label': label_value, ...}).
         
         Returns:
             dict: Executable constraint labels dict, or empty dict if no constraint datanode found.
@@ -1256,21 +1348,11 @@ class DataNode:
         Raises:
             ValueError: If multiple constraint datanodes are found.
         """
-        if not self.myBuilder:
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
             return {}
 
-        constraint_concept = self.graph.get_constraint_concept()
-        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
-        
-        if len(constraint_dn_search) == 0:
-            return {}
-        elif len(constraint_dn_search) > 1:
-            raise ValueError(
-                f'Multiple constraint datanodes (for concept {constraint_concept.name}) '
-                f'found: {len(constraint_dn_search)}, expected one.'
-            )
-
-        return constraint_dn_search[0].getAttributes()
+        return constraint_dn.getAttributes()
 
     def getExecutableConstraintLabel(self, lcName):
         """Get the label for a specific active executable constraint.
@@ -1301,13 +1383,39 @@ class DataNode:
             set: Set of active executable constraint name strings.
         """
         read_labels = self.getExecutableConstraintLabels()
-        return set(x.split('/')[0] for x in read_labels)
+        return {
+            key[:-len('/label')]
+            for key in read_labels
+            if isinstance(key, str) and key.endswith('/label')
+        }
+
+    def getExecutableConstraintBindings(self, lcName):
+        """Return ordered concept-slot bindings for an executable template.
+
+        Bindings are control metadata carried by ``LogicDataset`` in the
+        original builder item; they are intentionally not tensorized into a
+        DataNode attribute. Non-parameterized datasets return an empty tuple.
+        """
+        from .executable import LogicDataset
+
+        builder = self.myBuilder
+        if builder is None:
+            return ()
+        data_item = builder.get('data_item', {})
+        binding_map = data_item.get(LogicDataset.BINDINGS_KEY, {})
+        return tuple(binding_map.get(lcName, ()))
+
+    def hasParameterizedExecutableBindings(self):
+        """Whether the current builder item contains template bindings."""
+        from .executable import LogicDataset
+
+        builder = self.myBuilder
+        if builder is None:
+            return False
+        return bool(
+            builder.get('data_item', {}).get(LogicDataset.BINDINGS_KEY))
     
     def setActiveExecutableLCs(self):
-        # If no builder or no executive LC datanode then return
-        if not self.myBuilder:
-            return
-
         read_labels = self.getExecutableConstraintLabels()
         if not read_labels:
             return
@@ -1317,17 +1425,28 @@ class DataNode:
         no_active_lcs = len(active_lc_names)
         _DataNode__Logger.info('Number of active executive LCs: %d' % (no_active_lcs))
 
-        # Set active/inactive executive LCs in the graph
-        lc_no = 0
-        for lc_name, lc in self.graph.executableLCs.items():
-            assert lc_name == str(lc)  # TODO: where does lc_name come from? is it == str(lc)?
-            lc_no += 1
-            if lc_name in active_lc_names:
-                lc.active = True
-                lc.innerLC.active = True
-            else:
-                lc.active = False
-                lc.innerLC.active = False
+        # Update only constraints whose state changed. The first call performs
+        # one full initialization; subsequent scene-grouped items touch at most
+        # the previous and current scene's small executable sets instead of
+        # rescanning every executable constraint in the union graph.
+        previous = getattr(self.graph, '_active_executable_lc_names', None)
+        if previous is None:
+            for lc_name, lc in self.graph.executableLCs.items():
+                is_active = lc_name in active_lc_names
+                lc.active = is_active
+                lc.innerLC.active = is_active
+        else:
+            for lc_name in previous - active_lc_names:
+                lc = self.graph.executableLCs.get(lc_name)
+                if lc is not None:
+                    lc.active = False
+                    lc.innerLC.active = False
+            for lc_name in active_lc_names - previous:
+                lc = self.graph.executableLCs.get(lc_name)
+                if lc is not None:
+                    lc.active = True
+                    lc.innerLC.active = True
+        self.graph._active_executable_lc_names = frozenset(active_lc_names)
 
         return read_labels
                 
@@ -1830,7 +1949,17 @@ class DataNode:
             # ---- loop through dns (LOCAL CALCULATION MODE)
             # IMPORTANT: Each datanode is processed INDEPENDENTLY without comparing across datanodes
             # Each datanode finds its own local argmax/softmax within its own values
-            dns = self.findDatanodes(select = cRoot)
+            # findDatanodes is a full graph traversal with quadratic membership
+            # checks; reuse the builder's per-root-concept cache (shared with
+            # domiknows.graph.candidates.findDatanodesForRootConcept).
+            cRootName = cRoot if isinstance(cRoot, str) else cRoot.name
+            dnsCache = self.myBuilder["DataNodesConcepts"] if (self.myBuilder is not None and "DataNodesConcepts" in self.myBuilder) else None
+            if dnsCache is not None and cRootName in dnsCache:
+                dns = dnsCache[cRootName]
+            else:
+                dns = self.findDatanodes(select = cRoot)
+                if dnsCache is not None:
+                    dnsCache[cRootName] = dns
             if not dns:
                 continue
 
@@ -2020,7 +2149,9 @@ class DataNode:
         elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
         self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
 
-    def inferILPResults(self, *_conceptsRelations, key=("local", "softmax"), fun=None, epsilon=0.00001, minimizeObjective=False, ignorePinLCs=False, Acc=None):
+    def inferILPResults(self, *_conceptsRelations, key=("local", "softmax"),
+                        fun=None, epsilon=0.00001, minimizeObjective=False,
+                        ignorePinLCs=False, Acc=None, compiled=True):
         """
         Calculate ILP (Integer Linear Programming) prediction for a data graph using this instance as the root.
         Based on the provided list of concepts and relations, it initiates ILP solving procedures.
@@ -2031,7 +2162,11 @@ class DataNode:
         - key: tuple, optional
             The key to specify the inference method, default is ("local", "softmax").
         - fun: function, optional
-            Additional function to be applied during ILP, default is None.
+            Function applied to objective probabilities. For hypothesis-aware
+            executable inference, ``None`` uses log probability so maximizing
+            the additive objective selects the MAP constrained world. For
+            legacy ILP without active executable constraints, ``None`` keeps
+            the established raw-probability objective.
         - epsilon: float, optional
             The small value used for any needed approximations, default is 0.00001.
         - minimizeObjective: bool, optional
@@ -2074,14 +2209,69 @@ class DataNode:
             keys = (key[1],)
             self.inferLocal(keys=keys, Acc=Acc)
 
+        def _infer_single_ilp_target(target_dn):
+            active_executable_names = (
+                target_dn.getActiveExecutableConstraintNames()
+            )
+            if not active_executable_names:
+                # A previous hypothesis-aware inference may have populated
+                # answers on a reused DataNode. Legacy inference has no
+                # executable answer, so remove those stale values first.
+                target_dn._clearExecutableConstraintAnswers()
+                myILPOntSolver.calculateILPSelection(
+                    target_dn,
+                    *conceptsRelations,
+                    key=key,
+                    fun=fun,
+                    epsilon=epsilon,
+                    minimizeObjective=minimizeObjective,
+                    ignorePinLCs=ignorePinLCs,
+                    compiled=compiled,
+                )
+                return
+
+            # Keep graph-level active flags synchronized for diagnostics and
+            # other executable-constraint consumers.  The label values
+            # themselves are not used to select an inference hypothesis.
+            target_dn.setActiveExecutableLCs()
+
+            from domiknows.solver.answerModule import AnswerSolver
+
+            _DataNode__Logger.info(
+                "Running hypothesis-aware ILP inference for active "
+                "executable constraints: %s",
+                sorted(active_executable_names),
+            )
+            answer_solver = AnswerSolver(
+                target_dn.graph,
+                solver=myILPOntSolver,
+                compiled=compiled,
+            )
+            answer_solver.solve_active_constraints(
+                target_dn,
+                active_executable_names,
+                conceptsRelations,
+                key=key,
+                fun=fun,
+                epsilon=epsilon,
+                minimize_objective=minimizeObjective,
+                ignore_pin_lcs=ignorePinLCs,
+                populate=True,
+                raise_on_infeasible=True,
+            )
+
         startILPInfer = perf_counter()
-        if self.graph.batch and self.ontologyNode == self.graph.batch and 'contains' in self.relationLinks:
+        if (
+            self.graph.batch is not None
+            and self.ontologyNode == self.graph.batch
+            and 'contains' in self.relationLinks
+        ):
             batchConcept = self.graph.batch
             self.myLoggerTime.info(f'Batch processing ILP for {batchConcept}')
 
             for batchIndex, dn in enumerate(self.relationLinks['contains']):
                 startILPBatchStepInfer = perf_counter()
-                myILPOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+                _infer_single_ilp_target(dn)
                 endILPBatchStepInfer = perf_counter()
 
                 elapsed = endILPBatchStepInfer - startILPBatchStepInfer
@@ -2090,7 +2280,7 @@ class DataNode:
                 else:
                     self.myLoggerTime.info(f'Finished step {batchIndex} for batch ILP Inference - time: {elapsed*1000:.2f}ms')
         else:
-            myILPOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+            _infer_single_ilp_target(self)
 
         endILPInfer = perf_counter()
 
@@ -2101,6 +2291,325 @@ class DataNode:
             self.myLoggerTime.info(f'Completed ILP Inference - total time: {elapsed*1000:.2f}ms')
 
         self.myLoggerTime.info('')
+
+    def inferExecutableResults(
+        self,
+        *_conceptsRelations,
+        mode='tnorm',
+        tnorm='P',
+        counting_tnorm=None,
+        threshold=0.5,
+        key=('local', 'softmax'),
+        constraints=None,
+        queries=None,
+        queryNamespace=None,
+        populate=True,
+        circuitBackend=None,
+        circuitMaxNodes=None,
+        circuitSizeLimitAction=None,
+        circuitAggregation='joint',
+        compiled=True,
+        Acc=None,
+        fun=None,
+        epsilon=0.00001,
+        minimizeObjective=False,
+        ignorePinLCs=False,
+    ):
+        """Infer executable answers through the selected inference backend.
+
+        The executable DSL is evaluated over the DataNode's local
+        probabilities. ``mode='tnorm'`` uses differentiable fuzzy traversal;
+        ``mode='circuit'`` uses exact weighted model counting; and
+        ``mode='ilp'`` delegates to :meth:`inferILPResults`. Active constraints
+        are selected by ``ELC*/label`` attributes unless ``constraints``
+        explicitly supplies one or more executable names. ``queries`` instead
+        accepts one temporary DSL string, logical constraint/executable object,
+        or an ordered mapping of public names to expressions. Temporary queries
+        exclude registered executable constraints and are removed before this
+        method returns.
+
+        Returns an ordered mapping per sample. Each entry includes a native
+        ``answer``, the selected answer's native-float ``probability``, and a
+        CPU tensor ``distribution``. ILP mode returns ``None`` for the latter
+        two fields because its optimization objective is not a calibrated
+        probability. For a configured batch root, returns a list of mappings
+        in batch order.
+
+        For registered queries, ``populate=True`` writes ``ELC*/answer`` and
+        ``ELC*/probability`` beside the activation label. ``populate`` does not
+        apply to ad hoc queries: they are always ephemeral and return-only.
+        The label value never forces the inferred answer.
+        """
+        if self.myBuilder:
+            self.myBuilder.createFullDataNode(self)
+
+        if queries is not None and constraints is not None:
+            raise ValueError("queries and constraints are mutually exclusive")
+        if queries is None and queryNamespace is not None:
+            raise ValueError(
+                "queryNamespace can only be used together with queries"
+            )
+
+        if queries is not None:
+            concepts_relations = self.collectConceptsAndRelations(
+                _conceptsRelations
+            )
+            if not concepts_relations:
+                raise DataNode.DataNodeError(
+                    f'No concepts or relations found for inference in {self}.'
+                )
+            solver, concepts_relations = self.getILPSolver(
+                concepts_relations
+            )
+
+            is_batch = (
+                self.graph.batch is not None
+                and self.ontologyNode == self.graph.batch
+                and 'contains' in self.relationLinks
+            )
+            targets = (
+                list(self.relationLinks['contains'])
+                if is_batch
+                else [self]
+            )
+
+            from domiknows.solver.executableInference import (
+                AdHocExecutableQueries,
+            )
+
+            with AdHocExecutableQueries(
+                self.graph,
+                targets,
+                solver,
+                queries,
+                query_namespace=queryNamespace,
+            ) as ad_hoc:
+                if mode == 'ilp':
+                    ad_hoc.prepare_ilp()
+
+                def infer_ad_hoc_target(target_dn):
+                    return target_dn.inferExecutableResults(
+                        *_conceptsRelations,
+                        mode=mode,
+                        tnorm=tnorm,
+                        counting_tnorm=counting_tnorm,
+                        threshold=threshold,
+                        key=key,
+                        constraints=tuple(
+                            ad_hoc.public_to_internal.values()
+                        ),
+                        populate=(mode == 'ilp'),
+                        circuitBackend=circuitBackend,
+                        circuitMaxNodes=circuitMaxNodes,
+                        circuitSizeLimitAction=circuitSizeLimitAction,
+                        circuitAggregation=circuitAggregation,
+                        compiled=compiled,
+                        Acc=Acc,
+                        fun=fun,
+                        epsilon=epsilon,
+                        minimizeObjective=minimizeObjective,
+                        ignorePinLCs=ignorePinLCs,
+                    )
+
+                if is_batch:
+                    # DataNode traversal follows both relation and impact links.
+                    # Detach the batch membership while evaluating so one row
+                    # cannot discover sibling samples through their parent.
+                    saved_children = list(self.relationLinks['contains'])
+                    saved_impacts = {
+                        target: list(target.impactLinks.get('contains', []))
+                        for target in targets
+                    }
+                    self.relationLinks['contains'] = []
+                    for target in targets:
+                        target.impactLinks['contains'] = [
+                            parent
+                            for parent in target.impactLinks.get('contains', [])
+                            if parent is not self
+                        ]
+                    try:
+                        internal_results = [
+                            infer_ad_hoc_target(target) for target in targets
+                        ]
+                    finally:
+                        self.relationLinks['contains'] = saved_children
+                        for target, impacts in saved_impacts.items():
+                            target.impactLinks['contains'] = impacts
+                else:
+                    internal_results = infer_ad_hoc_target(self)
+                return ad_hoc.remap_results(internal_results)
+
+        if constraints is None:
+            requested_names = None
+        elif isinstance(constraints, str):
+            requested_names = {constraints}
+        else:
+            requested_names = set(constraints)
+
+        if mode == 'ilp':
+            if not populate:
+                raise ValueError(
+                    "mode='ilp' requires populate=True because "
+                    "inferILPResults operates in place"
+                )
+
+            is_batch = (
+                self.graph.batch is not None
+                and self.ontologyNode == self.graph.batch
+                and 'contains' in self.relationLinks
+            )
+            targets = (
+                list(self.relationLinks['contains'])
+                if is_batch
+                else [self]
+            )
+
+            if requested_names is not None:
+                for target_dn in targets:
+                    active_names = (
+                        target_dn.getActiveExecutableConstraintNames()
+                    )
+                    if requested_names != active_names:
+                        raise ValueError(
+                            "mode='ilp' evaluates all constraints activated by "
+                            "ELC*/label; constraints must exactly match the "
+                            f"active names {sorted(active_names)}"
+                        )
+
+            self.inferILPResults(
+                *_conceptsRelations,
+                key=key,
+                fun=fun,
+                epsilon=epsilon,
+                minimizeObjective=minimizeObjective,
+                ignorePinLCs=ignorePinLCs,
+                Acc=Acc,
+                compiled=compiled,
+            )
+
+            def collect_ilp_results(target_dn):
+                from domiknows.graph.logicalConstrain import miotaL, queryL
+
+                active_names = (
+                    target_dn.getActiveExecutableConstraintNames()
+                )
+                constraint_dn = target_dn._getExecutableConstraintDataNode()
+                results = OrderedDict()
+                for name, executable in target_dn.graph.executableLCs.items():
+                    if name not in active_names:
+                        continue
+                    answer_key = f'{name}/answer'
+                    if (
+                        constraint_dn is None
+                        or answer_key not in constraint_dn.attributes
+                    ):
+                        raise RuntimeError(
+                            f"ILP inference did not persist an answer for {name}"
+                        )
+
+                    lc = executable.innerLC
+                    if isinstance(lc, sumL):
+                        result_type = 'count'
+                    else:
+                        if isinstance(lc, queryL):
+                            result_type = (
+                                'multi_query'
+                                if lc.is_multi_answer
+                                else 'query'
+                            )
+                        elif isinstance(lc, miotaL):
+                            result_type = 'selection'
+                        else:
+                            result_type = 'boolean'
+
+                    result = {
+                        'type': result_type,
+                        'answer': constraint_dn.attributes[answer_key],
+                        'probability': None,
+                        'distribution': None,
+                        'mode': 'ilp',
+                        'exact': None,
+                    }
+                    if isinstance(lc, queryL):
+                        result['classNames'] = list(lc._subclass_names)
+                    results[name] = result
+                return results
+
+            ilp_results = [
+                collect_ilp_results(target_dn) for target_dn in targets
+            ]
+            return ilp_results if is_batch else ilp_results[0]
+
+        concepts_relations = self.collectConceptsAndRelations(
+            _conceptsRelations
+        )
+        if not concepts_relations:
+            raise DataNode.DataNodeError(
+                f'No concepts or relations found for inference in {self}.'
+            )
+
+        solver, concepts_relations = self.getILPSolver(concepts_relations)
+
+        if isinstance(key, (tuple, list)) and 'local' in key:
+            local_key_index = key.index('local') + 1
+            if local_key_index < len(key):
+                self.inferLocal(keys=(key[local_key_index],), Acc=Acc)
+        elif isinstance(key, str) and 'local' in key:
+            self.inferLocal(Acc=Acc)
+
+        from domiknows.solver.executableInference import ExecutableInference
+
+        evaluator = ExecutableInference(
+            solver,
+            mode=mode,
+            tnorm=tnorm,
+            counting_tnorm=counting_tnorm,
+            threshold=threshold,
+            circuit_backend=circuitBackend,
+            circuit_max_nodes=circuitMaxNodes,
+            circuit_size_limit_action=circuitSizeLimitAction,
+            circuit_aggregation=circuitAggregation,
+            compiled=compiled,
+        )
+
+        def infer_target(target_dn):
+            if populate:
+                target_dn._clearExecutableConstraintAnswers()
+
+            if requested_names is None:
+                names = target_dn.getActiveExecutableConstraintNames()
+                target_dn.setActiveExecutableLCs()
+            else:
+                unknown = requested_names.difference(
+                    target_dn.graph.executableLCs
+                )
+                if unknown:
+                    raise ValueError(
+                        'Unknown executable constraints: '
+                        + ', '.join(sorted(unknown))
+                    )
+                names = requested_names
+                for name, executable in target_dn.graph.executableLCs.items():
+                    executable.active = name in names
+
+            results = evaluator.infer(
+                target_dn,
+                names,
+                concepts_relations,
+                key=key,
+            )
+            if populate:
+                target_dn._writeExecutableConstraintResults(results)
+            return results
+
+        if (
+            self.graph.batch is not None
+            and self.ontologyNode == self.graph.batch
+            and 'contains' in self.relationLinks
+        ):
+            return [infer_target(dn) for dn in self.relationLinks['contains']]
+
+        return infer_target(self)
 
     def inferGBIResults(self, *_conceptsRelations, model, kwargs):
         """
@@ -2143,7 +2652,7 @@ class DataNode:
         myGBIModel = GBIModel(self.graph, solver_model=model, **cmodelKwargs)
         myGBIModel.calculateGBISelection(self, _conceptsRelations)
 
-    def verifyResultsLC(self, key = "/local/argmax"):
+    def verifyResultsLC(self, key="/local/argmax", compiled=True):
         """
         Verify the results of ILP (Integer Linear Programming) by checking the percentage of
         results satisfying each logical constraint (LC).
@@ -2163,7 +2672,10 @@ class DataNode:
         """
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
         myilpOntSolver.current_device = self.current_device
-        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        verifier = getattr(myilpOntSolver, '_logical_constraint_verifier', None)
+        if verifier is None:
+            verifier = LogicalConstraintVerifier(myilpOntSolver)
+            myilpOntSolver._logical_constraint_verifier = verifier
         
         # Check if full data node is created and create it if not
         if self.myBuilder != None:
@@ -2176,11 +2688,12 @@ class DataNode:
         else:
             _DataNode__Logger.error("Not supported key %s for verifyResultsLC"%(key))
 
-        verifyResult = verifier.verifyResults(self, key = key)
+        verifyResult = verifier.verifyResults(self, key=key, compiled=compiled)
 
         return verifyResult
 
-    def verifySingleConstraint(self, lcName, key="/local/argmax", label = None):
+    def verifySingleConstraint(self, lcName, key="/local/argmax", label=None,
+                               compiled=True):
         """
         Verify a single logical constraint against model predictions.
         
@@ -2208,7 +2721,10 @@ class DataNode:
         """
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
         myilpOntSolver.current_device = self.current_device
-        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        verifier = getattr(myilpOntSolver, '_logical_constraint_verifier', None)
+        if verifier is None:
+            verifier = LogicalConstraintVerifier(myilpOntSolver)
+            myilpOntSolver._logical_constraint_verifier = verifier
         
         # Check if full data node is created and create it if not
         if self.myBuilder is not None:
@@ -2242,7 +2758,9 @@ class DataNode:
         myBooleanMethods = myilpOntSolver.booleanMethodsCalculator
         myBooleanMethods.current_device = self.current_device
         
-        return verifier.verifySingleConstraint(lc, myBooleanMethods, self, key, label=label)
+        return verifier.verifySingleConstraint(
+            lc, myBooleanMethods, self, key, label=label,
+            compiled=compiled)
    
     def _prepareLcLossContext(self, tnorm='P', counting_tnorm=None):
         """
@@ -2337,7 +2855,11 @@ class DataNode:
 
         return result
     
-    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
+    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0,
+                        sampleGlobalLoss=False, compiled=False, circuit=False,
+                        circuitBackend=None, circuitMaxNodes=None,
+                        circuitSizeLimitAction=None, circuitAggregation=None,
+                        includeExecutable=False, includeGlobal=True):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2352,6 +2874,32 @@ class DataNode:
             Default is 0.
         - sampleGlobalLoss: bool, optional
             Specifies whether to calculate the global loss in case of sampling. Default is False.
+        - compiled: bool, optional
+            Reuse compiled formula and candidate/path plans. Fuzzy loss also
+            batches probability gathers; sampling and circuit modes preserve
+            their native leaves while avoiding repeated formula traversal.
+        - circuit: bool, optional
+            Compile each active head constraint to an exact logical circuit and
+            return differentiable ``-log(weighted_model_count)`` losses.
+        - circuitBackend, circuitMaxNodes, circuitSizeLimitAction: optional
+            Configure the circuit implementation (``auto``, ``pysdd``, or
+            ``bdd``), node budget, and budget action (``raise`` or ``warn``).
+        - includeExecutable: bool, optional
+            Also score ``execute()``-wrapped constraints, which live in
+            ``graph.executableLCs`` and are excluded by default so
+            ``InferenceProgram`` does not double-count them. Enable when one
+            number must cover every constraint (e.g. comparing against the
+            exact-circuit path, which always iterates both populations).
+        - includeGlobal: bool, optional
+            Include constraints stored in ``graph.logicalConstrains``. Disable
+            this with ``includeExecutable=True`` for an executable-only pass.
+            Defaults to True.
+        - circuitAggregation: str, optional
+            ``'joint'`` (default) returns one ``-log P(all groundings hold)`` per
+            constraint, preserving dependence between groundings that share a
+            variable. ``'per_grounding'`` returns a ``[G]`` vector of
+            ``-log P(grounding)``, which keeps the loss scale independent of the
+            grounding count and is required by per-grounding dual mechanisms.
 
         Returns:
         - lcResult: object
@@ -2369,12 +2917,50 @@ class DataNode:
         """Calculate loss values for logical constraints."""
         start = perf_counter()
                 
-        if sample:
-            sampleCalculator = SampleLossCalculator(myilpOntSolver)
-            lcLosses = sampleCalculator.calculateSampleLoss(self, sampleSize, sampleGlobalLoss, conceptsRelations)
+        if sample and circuit:
+            raise ValueError("sample and circuit loss modes are mutually exclusive")
+        if circuit:
+            lcLosses = myilpOntSolver.calculateCircuitLoss(
+                self,
+                backend=circuitBackend,
+                max_nodes=circuitMaxNodes,
+                size_limit_action=circuitSizeLimitAction,
+                aggregation=circuitAggregation,
+                compiled=compiled,
+            )
+        elif sample:
+            sampleCalculator = None
+            if compiled:
+                sampleCalculator = getattr(
+                    myilpOntSolver, '_compiled_sample_loss_calculator', None)
+            if sampleCalculator is None:
+                sampleCalculator = SampleLossCalculator(myilpOntSolver)
+                if compiled:
+                    myilpOntSolver._compiled_sample_loss_calculator = (
+                        sampleCalculator)
+            lcLosses = sampleCalculator.calculateSampleLoss(
+                self, sampleSize, sampleGlobalLoss, conceptsRelations,
+                compiled=compiled)
+        elif compiled:
+            from domiknows.solver.compiled import CompiledLossCalculator
+            # Keep the graph-level formula plans on the solver across batches.
+            # The calculator rebinds those immutable plans to this DataNode's
+            # current prediction tensors for each call.
+            lossCalculator = getattr(
+                myilpOntSolver, '_compiled_loss_calculator', None)
+            if lossCalculator is None:
+                lossCalculator = CompiledLossCalculator(myilpOntSolver)
+                myilpOntSolver._compiled_loss_calculator = lossCalculator
+            lcLosses = lossCalculator.calculateLoss(
+                self, tnorm, counting_tnorm,
+                include_executable=includeExecutable,
+                include_global=includeGlobal)
         else:
             lossCalculator = LossCalculator(myilpOntSolver)
-            lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)
+            lcLosses = lossCalculator.calculateLoss(
+                self, tnorm, counting_tnorm,
+                include_executable=includeExecutable,
+                include_global=includeGlobal)
         
         end = perf_counter()
         elapsedInS = end - start
@@ -3681,6 +4267,18 @@ class DataNodeBuilder(dict):
 
         if isinstance(value, torch.Tensor) and dimV == 0: # It is a Tensor but also scalar value
             return ValueInfo(len = 1, value = value.item(), dim=0)
+
+        # Executable multi-answer labels are intentionally wrapped as [1, N]
+        # so the builder creates one constraint DataNode while retaining the
+        # N-position vector as that node's label value.
+        if (
+            keyDataName.startswith('ELC')
+            and keyDataName.endswith('/label')
+            and isinstance(value, torch.Tensor)
+            and dimV >= 2
+            and lenV == 1
+        ):
+            return ValueInfo(len=1, value=value.squeeze(0), dim=0)
 
         if (lenV == 1): # It is Tensor or list with length 1 - treat it as scalar
             if isinstance(value, list) and not isinstance(value[0], (torch.Tensor, list)) : # Unpack the value

@@ -13,37 +13,41 @@ dependency-light; HuggingFace decoding uses `torch`; spectral learning uses
 
 ## Main Pieces
 
-For a focused guide to training compact heads and using them after training,
-see [`README_learning.md`](README_learning.md).
+### Documentation Map
+The learner package overview is in [`learners/README.md`](learners/README.md).
 
-For graph-aware HMM and graph-constrained spectral automata learning, see
-[`README_graph_hmm.md`](README_graph_hmm.md).
+The detail learner-focused notes are:
+
+- model training and compact-head usage: [`learners/README_learning.md`](learners/README_learning.md)
+- graph-aware HMM and spectral automata: [`learners/README_graph_hmm.md`](learners/README_graph_hmm.md)
+- DFA and product-automaton tracing + debug server: [`dfa/visualization/README.md`](dfa/visualization/README.md)
+
 
 | Tool | Purpose |
 | --- | --- |
 | `GenerationEncoder` | Builds the common `text -> token -> generated_token` DomiKnowS graph shape. |
 | `HMMFactorGraphEncoder` | Builds the opt-in HMM factor graph with generated labels, latent states, adjacency, and optional DP factor concepts. |
-| `GenerationConstraint` classes | Declarative constraints such as EOS closure, max length, required tokens, forbidden tokens, ordered tokens, and conditional max length. |
-| `constraints_to_dfa(...)` | Compiles constraint objects into one product DFA. |
-| `discover_generation_constraints(...)` | Reads supported raw DomiKnowS graph constraints back into generation constraints. |
-| `discover_generation_enforcement(...)` | Routes graph constraints into hard DFA constraints and soft latent specs. |
+| DFA builders (`eos_closure_dfa`, `max_non_eos_dfa`, `required_token_dfa`, `forbidden_token_dfa`, `ordered_tokens_dfa`, `conditional_max_non_eos_dfa`, `token_set_count_dfa`, `after_token_allowed_dfa`) | Build the per-constraint DFA directly from a `TokenVocabulary`. |
+| `product_dfa(...)` / `union_dfa(...)` / `complement_dfa(...)` | Combine DFAs by intersection, union, and complement. |
+| `constraints_to_dfa_from_graph(...)` | Walks supported DomiKnowS graph constraints and returns one combined DFA. |
+| `declare_contextual_token_constraint(...)` / `bind_contextual_dfa(...)` | Declares token availability as a graph LC, then specializes the compiled DFA with per-example context facts. |
+| `analyze_generation_constraints(...)` | Inspects each head LC and reports which were compiled and why others were skipped. |
+| `discover_generation_enforcement(...)` | Routes graph constraints into the hard DFA and soft latent specs. |
 | `HuggingFaceGenerationAdapter` | Runs true hard constrained decoding by masking logits with a DFA. |
 | `OpenAIResponsesAdapter` | Calls the OpenAI Responses API, then encodes and verifies output post hoc. |
-| `latent_constraints.py` | Product t-norm soft losses over token/latent probability sequences. |
-| `automata` | DFA plus Torch-backed HMM/PFA, Hankel projection, WFA, and spectral WFA learning utilities. |
-| `graph_hmm` | DomiKnowS-aware constrained HMM/spectral learners plus PMD-compatible Torch heads that compile graph structure, static specs, dynamic hooks, and graph-valid Hankel projection into compact-symbol automata. |
-| `automata_heads.py` | Production Torch HMM/WFA compact-label heads, prompt-conditioned HMM/WFA heads, and auxiliary losses for `PrimalDualProgram` task loops. |
-| `hybrid.py` | Large-generator plus compact-head controller/scorer for candidate reranking, risk, repair, soft preferences, and constraint selection. |
-| `hmm_factor.py` | Explicit HMM factor-graph encoder, shared HMM head, DP factor projections, and NLL/diagnostic helpers. |
+| `latent/` | Soft enforcement discovery, product t-norm latent losses, transition potentials, compiler recipes, and generation-level loss aggregation. |
+| `learners/compact/` | Shared compact-label head protocol plus GRU, Transformer, neural n-gram, local energy, and CRF heads for PMD, DFA-constrained label decoding, and hybrid scoring. |
+| `dfa/` | DFA/product automata, vocabulary and graph-encoder helpers, constraint compilation/discovery, constrained decoders, tracing, DOT/export helpers, and the optional debug server. |
+| `learners/hmm/` | Canonical HMM tensors, graph-aware constrained HMM support, HMM Torch heads, and HMM factor projections. |
+| `learners/wfa/` | WFA/spectral learning, graph spectral automata, WFA Torch heads, prompt-conditioned heads, and WFA factor projections. |
+| `learners/common/` | Shared tensor utilities, prompt encoders, transition potential types, and auxiliary losses for `PrimalDualProgram` task loops. |
+| `applications/` | Backend generation adapters, hybrid/reranking controllers, and planning-domain graph adapters built on DFA, latent, and learner primitives. |
 
 The package has three related automata layers:
 
 - **Hard DFA decoding** masks invalid local HuggingFace tokens or compact labels during generation.
-- **Core automata** in `domiknows.generation.automata` provide reusable DFA, HMM/PFA, WFA, Hankel, spectral, and visualization primitives.
-- **Graph-aware HMM/spectral learning** in `domiknows.generation.graph_hmm` learns `P(x_1:T | G, C)` from compact sequences typed and restricted by DomiKnowS graph structure.
-
-For automata focused guide,
-see ['automata/README.md'](automata/README.md) 
+- **DFA infrastructure** in `domiknows.generation.dfa` provides reusable DFA primitives, vocabulary and graph-encoder helpers, hard constrained decoding, graph constraint discovery, compiler helpers, tracing, and visualization support.
+- **Graph-aware HMM/spectral learning** in `domiknows.generation.learners.hmm` and `domiknows.generation.learners.wfa` learns `P(x_1:T | G, C)` from compact sequences typed and restricted by DomiKnowS graph structure.
 
 ## Basic DFA Constraints
 
@@ -54,10 +58,10 @@ IDs outside the listed tokens.
 ```python
 from domiknows.generation import (
     TokenVocabulary,
-    constraints_to_dfa,
-    max_non_eos,
-    no_token_after_eos,
-    required_token,
+    eos_closure_dfa,
+    max_non_eos_dfa,
+    product_dfa,
+    required_token_dfa,
 )
 
 vocabulary = TokenVocabulary(
@@ -66,14 +70,14 @@ vocabulary = TokenVocabulary(
     tokenizer=tokenizer,
 )
 
-constraints = (
-    no_token_after_eos(),
-    max_non_eos(4),
-    required_token(" The"),
-    required_token(" slide"),
+dfa = product_dfa(
+    [
+        eos_closure_dfa(vocabulary),
+        max_non_eos_dfa(vocabulary, 4),
+        required_token_dfa(vocabulary, " The"),
+        required_token_dfa(vocabulary, " slide"),
+    ]
 )
-
-dfa = constraints_to_dfa(constraints, vocabulary)
 ```
 
 The resulting DFA accepts label sequences satisfying all constraints. For
@@ -96,9 +100,7 @@ tasks:
 ```python
 from domiknows.generation import (
     GenerationEncoder,
-    max_non_eos,
-    no_token_after_eos,
-    required_token,
+    apply_all_constraints,
 )
 
 encoder = GenerationEncoder(
@@ -108,14 +110,13 @@ encoder = GenerationEncoder(
     graph_name="main",
 )
 
-graph, bundle = encoder.build_graph(
-    constraints=[
-        no_token_after_eos(),
-        max_non_eos(4),
-        required_token(" The"),
-        required_token(" slide"),
-    ]
-)
+graph, bundle = encoder.build_graph()
+with graph:
+    apply_all_constraints(
+        bundle.context,
+        max_non_eos_count=4,
+        required_tokens=[" The", " slide"],
+    )
 ```
 
 `bundle` contains the graph concepts and the vocabulary:
@@ -129,9 +130,9 @@ bundle.is_before_rel
 bundle.vocabulary
 ```
 
-Constraints that support DomiKnowS compilation are also written into
-`graph.logicalConstrains`, so the same rule can participate in DomiKnowS
-verification/loss and DFA decoding.
+The `apply_*_constraint` helpers write standard DomiKnowS logical-constraint
+expressions into `graph.logicalConstrains`.  Call `constraints_to_dfa_from_graph(graph, bundle)`
+afterwards to compile the supported shapes into a single combined DFA.
 
 ## Auto-Picking Graph Constraints
 
@@ -154,16 +155,16 @@ dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="warn")
 
 Supported graph-discovery patterns in V1:
 
-| DomiKnowS shape | Generation constraint |
+| DomiKnowS shape | Compiled DFA |
 | --- | --- |
-| `ifL(is_before_rel, ifL(EOS(first), EOS(second)))` | `EosClosureConstraint` |
-| `atMostAL(notL(EOS("x")), n)` | `MaxNonEosConstraint(n)` |
-| `atLeastAL(token("x"), n)` | `RequiredTokenConstraint(token, n)` |
-| `existsAL(token("x"))` | `RequiredTokenConstraint(token, 1)` |
-| `atMostAL(token("x"), 0)` | `ForbiddenTokenConstraint(token)` |
-| `ifL(existsAL(token("x")), atMostAL(notL(EOS("y")), n))` | `ConditionalMaxNonEosConstraint(token, n)` |
-| `andL(supported_constraint, ...)` | all child constraints must hold |
-| `orL(supported_branch, ...)` | at least one branch must hold |
+| `ifL(is_before_rel, ifL(EOS(first), EOS(second)))` | EOS-closure |
+| `atMostAL(notL(EOS("x")), n)` | max-`n` non-EOS tokens |
+| `atLeastAL(token("x"), n)` | required-token (at least `n` occurrences) |
+| `existsAL(token("x"))` | required-token (at least one occurrence) |
+| `atMostAL(token("x"), 0)` | forbidden-token |
+| `ifL(existsAL(token("x")), atMostAL(notL(EOS("y")), n))` | conditional max non-EOS |
+| `andL(supported_constraint, ...)` | DFA intersection (all child constraints hold) |
+| `orL(supported_branch, ...)` | DFA union (at least one branch holds) |
 
 Unsupported generation-relevant graph constraints are skipped, warned, or
 raised depending on `on_unsupported="ignore" | "warn" | "error"`.
@@ -171,6 +172,46 @@ Boolean discovery supports nested `andL` / `orL` formulas over the supported
 generation leaves above.  `andL` is compiled as DFA intersection.  `orL` is
 compiled as DFA union, so every branch must be fully generation-supported;
 mixed non-generation or unsupported `orL` branches are not approximated.
+
+## Context-conditioned DFA constraints
+
+Use a contextual constraint when the policy shape is fixed but its facts vary
+per request—for example, an output object token is legal only if its type is
+available in the current world. The declaration remains in the DomiKnowS graph;
+the base DFA is compiled once and then cheaply bound to each example:
+
+```python
+from domiknows.generation import (
+    bind_contextual_dfa,
+    constraints_to_dfa_from_graph,
+    declare_contextual_token_constraint,
+)
+
+declare_contextual_token_constraint(
+    graph,
+    bundle,
+    tokens=["cup_1", "door_2"],
+    context_key="available_types",
+    token_to_value={"cup_1": "cup", "door_2": "door"},
+)
+base_dfa = constraints_to_dfa_from_graph(
+    graph, bundle, on_unsupported="raise"
+)
+request_dfa = bind_contextual_dfa(
+    base_dfa, graph, {"available_types": ("door",)}
+)
+```
+
+`request_dfa` implements the standard DFA surface (`step`, `accepts`,
+`allowed_tokens`, and bounded reachability). Consequently one bound artifact
+can be used consistently for greedy/beam decoding, rollout sampling, and
+differentiable trajectory rescoring. Missing context is allowed only when the
+declaration explicitly uses `allow_missing_context=True`.
+
+Pass `trigger_tokens=(...)` to make availability apply only to the token
+immediately following one of those triggers. This is useful when the same
+label is valid in an unrestricted navigation role but must be grounded after a
+world-changing action.
 
 ## Routing DFA vs Latent Enforcement
 
@@ -259,7 +300,7 @@ Custom compilers can also return `LatentTransitionPotential` objects or report
 
 ### Packaged Compiler Recipes
 
-`latent_compiler_recipes.py` provides opt-in factory helpers for common
+`latent/compiler_recipes.py` provides opt-in factory helpers for common
 downstream custom compilers. They are convenience wrappers over
 `GraphLatentCompiler`; they do not run unless passed explicitly.
 
@@ -306,10 +347,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from domiknows.generation import (
     GenerationEncoder,
     HuggingFaceGenerationAdapter,
+    apply_all_constraints,
     constraints_to_dfa_from_graph,
-    max_non_eos,
-    no_token_after_eos,
-    required_token,
 )
 
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-125M")
@@ -317,12 +356,13 @@ model = AutoModelForCausalLM.from_pretrained("roneneldan/TinyStories-1M")
 
 vocab = ["<|endoftext|>", " The", " slide"]
 encoder = GenerationEncoder(vocab, eos_token="<|endoftext|>", tokenizer=tokenizer)
-graph, bundle = encoder.build_graph([
-    no_token_after_eos(),
-    max_non_eos(4),
-    required_token(" The"),
-    required_token(" slide"),
-])
+graph, bundle = encoder.build_graph()
+with graph:
+    apply_all_constraints(
+        bundle.context,
+        max_non_eos_count=4,
+        required_tokens=[" The", " slide"],
+    )
 
 dfa = constraints_to_dfa_from_graph(graph, bundle)
 adapter = HuggingFaceGenerationAdapter(model, tokenizer, bundle.vocabulary)
@@ -377,6 +417,28 @@ Learned compact-label heads use the same DFA language but decode over
 `TokenVocabulary` labels directly. Greedy, beam search, and sampling all append
 the concrete tokenizer id for the chosen label before asking the head for the
 next label logits.
+
+The compact-label decoder is model-agnostic. Any head implementing the
+`CompactLabelSequenceModel` contract can be used here: HMM, WFA/spectral,
+graph-HMM, GRU, Transformer, neural n-gram, local energy scorer, exact CRF scorer, or a
+project-specific compact sequence model. The head supplies logits; the DFA
+supplies the hard validity mask.
+
+`NeuralNGramCompactLabelGenerationHead` is a fixed-window autoregressive model:
+it predicts the next compact label from the prompt summary plus the last
+`context_size` generated labels. It is lightweight and fast for local sequence
+patterns, but it does not directly model dependencies beyond that context
+window.
+
+`EnergyCompactLabelGenerationHead` is a local energy model: lower sequence
+energy means a better candidate, and `next_label_logits(...)` returns negative
+next-step energy for decoder compatibility.
+
+`CRFCompactLabelScorer` trains with exact global normalization, but
+`constrained_label_*` still uses its local next-label proposal interface.
+Exact constrained CRF decoding would require product-state Viterbi over
+`(CRF previous label, DFA state)`, for example a future
+`constrained_crf_viterbi_decode(...)`.
 
 ```python
 import torch
@@ -540,7 +602,7 @@ only some are good.
 
 ## Latent Constraint Losses
 
-`latent_constraints.py` implements product t-norm soft logic:
+`latent/constraints.py` implements product t-norm soft logic:
 
 - `soft_not(x) = 1 - x`
 - `soft_and(a, b) = a * b`
@@ -629,13 +691,14 @@ side of constrained generation research.
 ### HMM/PFA Checker
 
 ```python
-from domiknows.generation.automata import (
-    ProbabilisticAutomaton,
-    all_sequences,
+from itertools import product
+
+from domiknows.generation.learners import (
+    DiscreteHMM,
     compare_hmm_dfa,
 )
 
-hmm = ProbabilisticAutomaton(
+hmm = DiscreteHMM(
     transition=[[0.8, 0.2], [0.3, 0.7]],
     emission=[[0.9, 0.1], [0.2, 0.8]],
     initial=[0.9, 0.1],
@@ -643,13 +706,14 @@ hmm = ProbabilisticAutomaton(
 )
 
 dfa = hmm.extract_argmax_dfa()
-summary = compare_hmm_dfa(hmm, dfa, all_sequences(["a", "b"], max_length=3))
+corpus = [()] + [tuple(seq) for length in range(1, 4) for seq in product(["a", "b"], repeat=length)]
+summary = compare_hmm_dfa(hmm, dfa, corpus)
 ```
 
 Full discrete Baum-Welch training is available:
 
 ```python
-from domiknows.generation.automata import baum_welch_train
+from domiknows.generation.learners import baum_welch_train
 
 result = baum_welch_train(
     [["a", "a", "b"], ["b", "b", "a"]],
@@ -675,7 +739,7 @@ H_C(u, v) = 1[uv accepted by DFA] * P(uv)
 ```
 
 ```python
-from domiknows.generation.automata import (
+from domiknows.generation.learners import (
     WeightedFiniteAutomaton,
     constrained_hankel_matrix,
     hankel_matrix,
@@ -732,7 +796,7 @@ run_generation_debug_server(
 
 The viewer exposes `/`, `/api/trace`, `/api/summary`, `/api/dot`, and
 `/api/svg`. It is a local debugging utility, not a production service.
-See `README_vizualization.md` for a shorter runbook focused only on this
+See [`dfa/visualization/README.md`](dfa/visualization/README.md) for a shorter runbook focused only on this
 debug viewer.
 
 ### Spectral WFA Learning
@@ -741,7 +805,7 @@ Spectral learning reconstructs a signed WFA from finite Hankel blocks using
 Torch SVD.
 
 ```python
-from domiknows.generation.automata import (
+from domiknows.generation.learners import (
     build_spectral_basis,
     spectral_learn_from_oracle,
     spectral_learn_from_samples,
@@ -776,11 +840,8 @@ usable as DomiKnowS learning modules. They output log-probabilities shaped
 attached with `ModuleLearner` the same way as the compact HuggingFace head.
 
 ```python
-from domiknows.generation import (
-    HMMGenerationHead,
-    hmm_sequence_nll,
-    constrained_label_greedy_decode,
-)
+from domiknows.generation import constrained_label_greedy_decode
+from domiknows.generation.learners import HMMGenerationHead, hmm_sequence_nll
 from domiknows.sensor.pytorch.learners import ModuleLearner
 
 head = HMMGenerationHead(
@@ -818,7 +879,7 @@ DFA-allowed labels, but it is not a replacement for hard DFA decoding.
 
 ### Prompt-Conditioned Automata Heads
 
-`PromptConditionedHMMGenerationHead` and
+`HMMGenerationHead` (with `prompt_conditioning="initial"`) and
 `PromptConditionedSpectralWFAGenerationHead` make the small automata models
 learn a prompt-conditioned proposal:
 
@@ -829,21 +890,26 @@ prompt + generated prefix -> step-adaptive dynamics
 automaton state + dynamics -> output labels
 ```
 
-By default, current callers still get initial-state conditioning only. Pass
-`dynamics_conditioning="gated"` to let the prompt choose a mixture over several
-global dynamics experts. Expert 0 is the familiar base transition/emission
-parameter, so the automaton remains inspectable while becoming prompt-aware.
-Pass `step_dynamics_conditioning="prefix_gated"` with gated dynamics to
-recompute expert weights at each generated step from prompt features plus a
-mean-pooled learned embedding of generated labels seen so far.
+`HMMGenerationHead` is the single unified discrete-HMM head — pass
+`prompt_conditioning="none"` (default) for the vanilla unconditional head and
+`prompt_conditioning="initial"` to activate the prompt encoder and any of the
+gating modes below.
+
+Pass `dynamics_conditioning="gated"` to let the prompt choose a mixture over
+several global dynamics experts. Expert 0 is the familiar base
+transition/emission parameter, so the automaton remains inspectable while
+becoming prompt-aware. Pass `step_dynamics_conditioning="prefix_gated"` with
+gated dynamics to recompute expert weights at each generated step from prompt
+features plus a mean-pooled learned embedding of generated labels seen so far.
 
 ```python
-from domiknows.generation import PromptConditionedHMMGenerationHead, hmm_sequence_nll
+from domiknows.generation.learners import HMMGenerationHead, hmm_sequence_nll
 
-head = PromptConditionedHMMGenerationHead(
+head = HMMGenerationHead(
     label_count=bundle.vocabulary.label_count,
     state_count=3,
     label_to_token_id=label_token_id_map(bundle.vocabulary),
+    prompt_conditioning="initial",
     prompt_encoder_type="embedding",
     prompt_vocab_size=1024,
     dynamics_conditioning="gated",
@@ -914,7 +980,7 @@ logical consistency rules over these visible concepts, while Torch still owns
 the exact numeric forward/backward recurrence and likelihood.
 
 ```python
-from domiknows.generation import (
+from domiknows.generation.learners import (
     HMMFactorGraphEncoder,
     HMMFactorGraphHead,
     apply_hmm_dp_consistency_constraints,
@@ -973,7 +1039,7 @@ use normalized `log_softmax(...)` projections of signed state and pair scores.
 Exact WFA recurrence and energy scoring remain in Torch.
 
 ```python
-from domiknows.generation import (
+from domiknows.generation.learners import (
     SpectralWFAFactorGraphEncoder,
     SpectralWFAFactorGraphHead,
     apply_wfa_factor_consistency_constraints,
@@ -1052,7 +1118,7 @@ bridges around generation workflows.
   before-path implications, and simple ordered-token existence. Arbitrary
   DataNode traversal, `eqL` path filters, query/selection/sum constraints,
   comparative counts, custom predicates, and non-generation relations remain
-  solver-side unless explicitly marked with a supported `GenerationConstraint`.
+  solver-side unless reduced to one of the supported generation LC shapes.
 - HuggingFace hard decoding with constrained greedy, beam search, sampling,
   KV-cache use, and full-prefix fallback is implemented for single-prompt
   decoding. Batched constrained decoding and batched cache reordering are not
@@ -1060,6 +1126,10 @@ bridges around generation workflows.
 - Learned compact-label heads can be trained through the DomiKnowS-style
   learning path and decoded with DFA-constrained greedy, beam search, and
   sampling. Batched learned-head decoding remains out of scope.
+- `CRFCompactLabelScorer` supports exact globally normalized CRF training and
+  exact token marginals for PMD/DataNodes. Exact constrained CRF decoding is
+  future work because it needs CRF x DFA product-state Viterbi, not only local
+  next-label masking.
 - Hybrid controller/scorer support is implemented for HuggingFace,
   OpenAI-compatible, and precomputed candidates. It reranks and diagnoses
   candidates with compact heads, but does not turn hosted APIs into hard
@@ -1112,5 +1182,5 @@ bridges around generation workflows.
 - Add richer backend-native hybrid adapters for vLLM/llama.cpp/Ollama guided
   decoding and server-side logprob/candidate APIs.
 - Add benchmark scripts for CTRL-G-style lexical constraints.
-- Add documentation showing how to register custom `GenerationConstraint`
-  classes.
+- Add documentation showing how to register custom DFA builders / LC patterns
+  with `graph_discovery`.

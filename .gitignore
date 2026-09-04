@@ -277,3 +277,15 @@ domiknows/graph/graph_gen/test_graph1.py
 test_regr/examples/PMDExistL/relation_learning_tests/results_N_5.text
 results.txt
 domiknows/generation/README_notes.md
+
+# Local research notes (not tracked)
+domiknows/research/
+test_regr/EmbodiedAgentInterface/results/
+test_regr/tiny_dynamic_graph/results/
+test_regr/EmbodiedAgentInterface/data/
+Rethinkin constraints.md
+test_regr/EmbodiedAgentInterface/models/
+test_regr/VLABenchAgentInterface/data/
+test_regr/VLABenchAgentInterface/checkpoints/
+test_regr/VLABenchAgentInterface/models/
+test_regr/VLABenchAgentInterface/outputs/

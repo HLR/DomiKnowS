@@ -1,8 +1,8 @@
 import pytest
 
 from domiknows.generation import GenerationResult, TokenVocabulary
-from domiknows.generation.automata import DFA
-from domiknows.generation.adapters import OpenAIResponsesAdapter
+from domiknows.generation.dfa import DFA
+from domiknows.generation.applications.adapters import OpenAIResponsesAdapter
 
 
 class FakeResponses:

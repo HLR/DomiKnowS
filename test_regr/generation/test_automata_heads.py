@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import torch
 
-from domiknows.generation import (
+from domiknows.generation.dfa._constraints import (
+    eos_closure_dfa,
+    required_token_dfa,
+)
+from domiknows.generation.dfa import product_dfa
+from domiknows.generation.dfa.vocabulary import TokenVocabulary
+from domiknows.generation.learners import (
+    DiscreteHMM,
     HMMGenerationHead,
     SpectralWFAGenerationHead,
-    TokenVocabulary,
+    WeightedFiniteAutomaton,
     allowed_mass_loss,
-    constraints_to_dfa,
     hmm_sequence_nll,
-    no_token_after_eos,
-    required_token,
     wfa_sequence_energy_loss,
 )
-from domiknows.generation.automata import ProbabilisticAutomaton, WeightedFiniteAutomaton
 
 
 def test_hmm_head_returns_valid_log_probs():
@@ -38,8 +41,8 @@ def test_hmm_head_exposes_batched_production_core():
     assert torch.allclose(core.transition, head.transition_probs)
 
 
-def test_hmm_head_can_wrap_existing_probabilistic_automaton():
-    hmm = ProbabilisticAutomaton(
+def test_hmm_head_can_wrap_existing_discrete_hmm():
+    hmm = DiscreteHMM(
         transition=((0.7, 0.3), (0.2, 0.8)),
         emission=((0.6, 0.3, 0.1), (0.1, 0.4, 0.5)),
         initial=(0.8, 0.2),
@@ -122,7 +125,7 @@ def test_wfa_auxiliary_loss_is_finite_and_differentiable():
 
 def test_allowed_mass_loss_is_finite_and_differentiable():
     vocab = TokenVocabulary(["<eos>", " A"], eos_token="<eos>")
-    dfa = constraints_to_dfa([no_token_after_eos(), required_token(" A")], vocab)
+    dfa = product_dfa([eos_closure_dfa(vocab), required_token_dfa(vocab, " A")])
     logits = torch.tensor(
         [
             [0.1, 3.0, -1.0],

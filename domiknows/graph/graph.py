@@ -10,6 +10,63 @@ else:
     from .property import Property
 
 
+class _RevisionOrderedDict(OrderedDict):
+    """Ordered mapping with an O(1) structural revision token."""
+
+    def __init__(self, *args, **kwargs):
+        self.revision = 0
+        super().__init__()
+        if args or kwargs:
+            self.update(*args, **kwargs)
+
+    def _changed(self):
+        self.revision += 1
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def clear(self):
+        if self:
+            super().clear()
+            self._changed()
+
+    def pop(self, key, *default):
+        existed = key in self
+        value = super().pop(key, *default)
+        if existed:
+            self._changed()
+        return value
+
+    def popitem(self, last=True):
+        value = super().popitem(last=last)
+        self._changed()
+        return value
+
+    def setdefault(self, key, default=None):
+        if key in self:
+            return self[key]
+        self[key] = default
+        return default
+
+    def update(self, *args, **kwargs):
+        values = OrderedDict(*args, **kwargs)
+        for key, value in values.items():
+            self[key] = value
+
+    def move_to_end(self, key, last=True):
+        super().move_to_end(key, last=last)
+        self._changed()
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
     """
@@ -58,15 +115,39 @@ class Graph(BaseGraphTree):
         self.auto_constraint = auto_constraint
         self.reuse_model = reuse_model
         self._concepts = OrderedDict()
-        self._logicalConstrains = OrderedDict()
+        self._logicalConstrains = _RevisionOrderedDict()
         self._relations = OrderedDict()
         self._batch = None
         self.cacheRootConcepts = {}
         self.executableLCsLabels = {}
-        self._executableLCs = OrderedDict()
+        self._executableLCs = _RevisionOrderedDict()
+        self._constraint_formula_revision = 0
         self.varContext = None # None before calling `with graph...`, dictionary after
         self.constraint = None  # Will hold the constraint concept
         self._processed_lcs = set()  # Track which LCs have been processed
+        # ``None`` preserves the historical behavior: every declared concept is
+        # active.  A frozenset is installed by ``set_active_concepts`` when a
+        # caller opts into per-step schema activation.
+        self._active_concepts = None
+        # Concept activation is queried once for every property during model
+        # population.  Building this index on each query makes dynamic graphs
+        # quadratic in the size of their union vocabulary, so retain it until
+        # the graph structure changes.
+        self._activation_concepts_cache = None
+        self._activation_concept_members = frozenset()
+
+    @property
+    def constraint_revision(self):
+        """O(1) token for structural or formula changes to constraints."""
+
+        return (
+            self._logicalConstrains.revision,
+            self._executableLCs.revision,
+            self._constraint_formula_revision,
+        )
+
+    def _touch_constraint_formula_revision(self):
+        self._constraint_formula_revision += 1
 
 
     def __iter__(self):
@@ -379,6 +460,193 @@ class Graph(BaseGraphTree):
         )
         return list(all_concepts.keys())
 
+    def _activation_concepts(self):
+        """Return concepts whose activation is managed by this graph.
+
+        Activation follows the same boundary as graph execution: this graph and
+        its subgraphs, never its parent or siblings.  Unlike
+        :meth:`collectAllConcepts`, this traversal must retain concepts with the
+        same local name in sibling subgraphs.  Such names are common when two
+        independently useful generation schemas (for example, ``text`` and
+        ``token`` concepts) are attached beneath one execution root.
+
+        Unique concepts remain addressable by their short name.  Colliding
+        concepts use their qualified ``fullname``; callers that already hold a
+        Concept object are unaffected.
+        """
+        cached = self._activation_concepts_cache
+        if cached is not None:
+            return cached
+
+        concepts = []
+
+        def collect(graph):
+            concepts.extend(graph.concepts.values())
+            for subgraph in graph.subgraphs.values():
+                collect(subgraph)
+
+        collect(self)
+        counts = {}
+        for concept in concepts:
+            counts[concept.name] = counts.get(concept.name, 0) + 1
+
+        available = OrderedDict()
+        for concept in concepts:
+            key = concept.name if counts[concept.name] == 1 else concept.fullname
+            available[key] = concept
+        self._activation_concepts_cache = available
+        self._activation_concept_members = frozenset(concepts)
+        return available
+
+    def _invalidate_activation_concepts(self):
+        """Invalidate this graph's activation index and every parent index."""
+        graph = self
+        while isinstance(graph, Graph):
+            graph._activation_concepts_cache = None
+            graph._activation_concept_members = frozenset()
+            graph = graph.sup
+
+    def _resolve_activation_concept(self, concept, available):
+        from .concept import Concept
+
+        if isinstance(concept, str):
+            try:
+                return available[concept]
+            except KeyError:
+                raise ValueError(
+                    f"Unknown concept {concept!r} for graph {self.name!r}. "
+                    f"Available concepts: {list(available)}"
+                ) from None
+
+        if not isinstance(concept, Concept):
+            raise TypeError(
+                "Active concepts must be specified as concept names or Concept "
+                f"instances, got {type(concept).__name__}."
+            )
+
+        # ``available`` normally comes from ``_activation_concepts``.  Its
+        # companion set makes validation O(1) for Concept objects, which are
+        # the overwhelmingly common input while iterating active properties.
+        members = self._activation_concept_members
+        if concept not in members:
+            raise ValueError(
+                f"Concept {concept.name!r} does not belong to graph {self.name!r} "
+                "or one of its subgraphs."
+            )
+        return concept
+
+    def _activation_controller(self):
+        """Return the nearest graph that defines an activation set."""
+        graph = self
+        while isinstance(graph, Graph):
+            if graph._active_concepts is not None:
+                return graph
+            graph = graph.sup
+        return None
+
+    def set_active_concepts(self, concepts=None):
+        """Replace the concepts active for subsequent sequential execution.
+
+        ``concepts`` may contain concept names and/or :class:`Concept` objects.
+        Transitive ``is_a`` ancestors and the graph's constraint concept are
+        enabled automatically.  Passing ``None`` restores the default in which
+        every concept is active.
+
+        The activation set is mutable graph state.  Callers sharing a graph
+        concurrently must provide their own synchronization.
+
+        Returns:
+            tuple: Active concepts in graph declaration order.
+        """
+        if concepts is None:
+            self._active_concepts = None
+            return self.get_active_concepts()
+
+        if isinstance(concepts, (str, bytes)):
+            raise TypeError(
+                "set_active_concepts expects an iterable of concept names or "
+                "Concept instances, not a single string."
+            )
+
+        try:
+            requested = list(concepts)
+        except TypeError:
+            raise TypeError(
+                "set_active_concepts expects an iterable of concept names or "
+                "Concept instances, or None."
+            ) from None
+
+        available = self._activation_concepts()
+        available_values = set(available.values())
+        active = set()
+        pending = [self._resolve_activation_concept(item, available) for item in requested]
+
+        while pending:
+            concept = pending.pop()
+            if concept in active:
+                continue
+            active.add(concept)
+            for relation in concept.is_a():
+                if relation.dst in available_values:
+                    pending.append(relation.dst)
+
+        for concept in available_values:
+            owner = concept.getOntologyGraph()
+            if isinstance(owner, Graph) and owner.constraint is concept:
+                active.add(concept)
+
+        self._active_concepts = frozenset(active)
+        return self.get_active_concepts()
+
+    def get_active_concepts(self):
+        """Return active concepts in graph declaration order."""
+        available = self._activation_concepts()
+        controller = self._activation_controller()
+        if controller is None:
+            return tuple(available.values())
+        return tuple(
+            concept for concept in available.values()
+            if concept in controller._active_concepts
+        )
+
+    def is_concept_active(self, concept):
+        """Return whether a graph concept is active for the current step."""
+        controller = self._activation_controller()
+        if controller is not None and controller is not self:
+            return controller.is_concept_active(concept)
+        available = self._activation_concepts()
+        resolved = self._resolve_activation_concept(concept, available)
+        return controller is None or resolved in controller._active_concepts
+
+    def are_concepts_active(self, concepts):
+        """Return whether every supplied concept or concept name is active."""
+        controller = self._activation_controller()
+        if controller is None:
+            return True
+        return all(controller.is_concept_active(concept) for concept in concepts)
+
+    def is_property_active(self, prop):
+        """Return whether a property should participate in this graph step."""
+        from .concept import Concept
+
+        prop_name = getattr(prop, 'prop_name', None)
+        if isinstance(prop_name, Concept) and not self.is_concept_active(prop_name):
+            return False
+
+        owner = getattr(prop, 'sup', None)
+        if isinstance(owner, Concept) and not self.is_concept_active(owner):
+            return False
+
+        get_lc_concepts = getattr(prop_name, 'getLcConcepts', None)
+        if (
+            callable(get_lc_concepts)
+            and not getattr(prop_name, '_parameterized_executable', False)
+            and not self.are_concepts_active(get_lc_concepts())
+        ):
+            return False
+
+        return True
+
     def findConceptInfo(self, concept):
         '''Finds and returns various information related to a given concept.
     
@@ -528,6 +796,14 @@ class Graph(BaseGraphTree):
         '''
         return list(chain(*(prop.find(*tests) for prop in self.get_properties())))
 
+    def get_active_properties(self, *tests):
+        """Return properties enabled by the current concept activation set."""
+        return [prop for prop in self.get_properties(*tests) if self.is_property_active(prop)]
+
+    def get_active_sensors(self, *tests):
+        """Return sensors attached to currently active properties."""
+        return list(chain(*(prop.find(*tests) for prop in self.get_active_properties())))
+
     def get_apply(self, name):
         '''Finds and returns the concept or relation with the given name.
     
@@ -568,8 +844,10 @@ class Graph(BaseGraphTree):
         # TODO: what if a concept has same name with a subgraph?
         if isinstance(sub, Graph):
             BaseGraphTree.set_apply(self, name, sub)
+            self._invalidate_activation_concepts()
         elif isinstance(sub, Concept):
             self.concepts[name] = sub
+            self._invalidate_activation_concepts()
             if sub.get_batch():
                 self.batch = sub
         elif isinstance(sub, Relation):
@@ -577,6 +855,12 @@ class Graph(BaseGraphTree):
         else:
             # TODO: what are other cases
             pass
+
+    def del_apply(self, name):
+        """Remove a subgraph and invalidate cached activation metadata."""
+        result = BaseGraphTree.del_apply(self, name)
+        self._invalidate_activation_concepts()
+        return result
 
     def visualize(self, filename, open_image=False):
         '''Visualizes the graph using Graphviz.
@@ -812,7 +1096,9 @@ class Graph(BaseGraphTree):
         logic_keyword='constraint',
         logic_label_keyword='label',
         extra_namespace_values={},
-        verbose=False
+        verbose=False,
+        deduplicate=False,
+        parameterize=False,
     ):
         """
         Takes a dataset containing logical constraint expressions and compiles them
@@ -822,17 +1108,34 @@ class Graph(BaseGraphTree):
         Args:
             data: Iterable of dicts containing keys specified by logic_keyword and logic_label_keyword
             logic_keyword: Key in data items containing constraint string expression
-            logic_label_keyword: Key in data items containing the label (True/False)
+            logic_label_keyword: Key in data items containing the label. Boolean
+                constraints use True/False; miotaL uses a multi-hot vector.
             extra_namespace_values: Additional variables to add to evaluation namespace
             verbose: If True, print debug information during compilation
+            deduplicate: If True, compile each canonical formula once within
+                this call and let repeated rows reference the shared executable
+                constraint. Runtime labels remain row-specific. Defaults to
+                False for compatibility with callers that require a distinct
+                executable constraint identity per row.
+            parameterize: If True, structurally equivalent formulas share one
+                executable template even when their concept identifiers or
+                alpha-equivalent logical-variable/path strings differ. This
+                mode requires compiled executable loss evaluation. It implies
+                canonical deduplication and defaults to False.
             
         Returns:
             List of executable constraint names (e.g., ['ELC0', 'ELC1', ...])
         """
         from .executable import get_full_funcs, LogicDataset
         import importlib
+
+        # Newly compiled executable constraints have not yet participated in
+        # the incremental active-state tracker.
+        self._active_executable_lc_names = None
         
         elc_name_list = []
+        concept_bindings = []
+        formula_pool = {} if (deduplicate or parameterize) else None
         
         # Ensure we're in graph context for constraint creation
         cls = type(self)
@@ -842,24 +1145,48 @@ class Graph(BaseGraphTree):
             with self:
                 self._process_executable(
                     data, logic_keyword, logic_label_keyword, 
-                    extra_namespace_values, verbose, elc_name_list
+                    extra_namespace_values, verbose, elc_name_list,
+                    formula_pool=formula_pool,
+                    concept_bindings=concept_bindings,
+                    parameterize=parameterize,
                 )
         else:
             self._process_executable(
                 data, logic_keyword, logic_label_keyword, 
-                extra_namespace_values, verbose, elc_name_list
+                extra_namespace_values, verbose, elc_name_list,
+                formula_pool=formula_pool,
+                concept_bindings=concept_bindings,
+                parameterize=parameterize,
             )
     
+        from .logicalConstrain import miotaL, queryL
+        vector_label_names = {
+            name for name in elc_name_list
+            if (
+                isinstance(self.executableLCs[name].innerLC, miotaL)
+                or (
+                    isinstance(self.executableLCs[name].innerLC, queryL)
+                    and self.executableLCs[name].innerLC.is_multi_answer
+                )
+            )
+        }
         return LogicDataset(
                 data,
                 elc_name_list,
                 logic_keyword=logic_keyword,
-                logic_label_keyword=logic_label_keyword
+                logic_label_keyword=logic_label_keyword,
+                vector_label_names=vector_label_names,
+                deduplicated=(deduplicate or parameterize),
+                concept_bindings=concept_bindings,
+                parameterized=parameterize,
             )
 
     def _process_executable(
             self, data, logic_keyword, logic_label_keyword, 
-            extra_namespace_values, verbose, elc_name_list
+            extra_namespace_values, verbose, elc_name_list,
+            formula_pool=None,
+            concept_bindings=None,
+            parameterize=False,
         ):
         """
         Internal method that processes each data item to create executable constraints.
@@ -868,7 +1195,7 @@ class Graph(BaseGraphTree):
         1. Reads the constraint string expression
         2. Compiles and evaluates to create LogicalConstrain
         3. Wraps with execute() if not already wrapped
-        4. Stores label in executableLCsLabels dictionary
+        4. Stores the scalar or vector label in executableLCsLabels
         
         Args:
             data: Iterable of data items
@@ -877,8 +1204,19 @@ class Graph(BaseGraphTree):
             extra_namespace_values: Additional namespace variables
             verbose: Debug output flag
             elc_name_list: List to accumulate created constraint names
+            formula_pool: Optional canonical-key to executable mapping. When
+                provided, repeated formulas reuse the first executable object.
+            concept_bindings: Parallel output list containing each row's
+                ordered concept-slot bindings.
+            parameterize: Build keys with concept slots and alpha-normalized
+                logical-variable literals.
         """
-        from .executable import get_full_funcs, LogicDataset
+        from .executable import (
+            canonical_executable_key,
+            get_full_funcs,
+            LogicDataset,
+            parameterized_executable_key,
+        )
         from .logicalConstrain import execute
         import importlib
         from ..sensor.pytorch.sensors import ReaderSensor
@@ -887,6 +1225,16 @@ class Graph(BaseGraphTree):
         if self.varContext is None or not self.varContext:
             frame = inspect.currentframe().f_back.f_back
             self._populate_var_context(frame)
+
+        # The namespace is immutable for this compilation call. Building it
+        # once is especially important when thousands of rows share templates.
+        target_namespace = {
+            'domiknows': importlib.import_module('domiknows'),
+            **(self.varContext or {}),
+            **(extra_namespace_values or {}),
+            'path': lambda *args: args,
+        }
+        normalized_formula_cache = {} if formula_pool is not None else None
         
         for i, data_item in enumerate(data):
             # --- Step 1: Validate data item has required keys ---
@@ -906,17 +1254,44 @@ class Graph(BaseGraphTree):
             
             # --- Step 4: Convert to fully qualified names ---
             # e.g., "execute(andL(...))" -> "domiknows.graph.logicalConstrain.execute(...)"
-            lc_string_fmt = get_full_funcs(lc_string)
+            normalized = (
+                normalized_formula_cache.get(lc_string)
+                if normalized_formula_cache is not None else None
+            )
+            if normalized is None:
+                lc_string_fmt = get_full_funcs(lc_string)
+                if parameterize:
+                    formula_key, row_concepts = parameterized_executable_key(
+                        lc_string_fmt, target_namespace)
+                else:
+                    formula_key = (
+                        canonical_executable_key(lc_string_fmt)
+                        if formula_pool is not None else None
+                    )
+                    row_concepts = None
+                if normalized_formula_cache is not None:
+                    normalized_formula_cache[lc_string] = (
+                        lc_string_fmt, formula_key, row_concepts)
+            else:
+                lc_string_fmt, formula_key, row_concepts = normalized
             
-            # --- Step 5: Build namespace for evaluation ---
-            # Includes domiknows module, graph variables, and any extra values
-            target_namespace = {
-                'domiknows': importlib.import_module('domiknows'),
-                **(self.varContext or {}),
-                **(extra_namespace_values or {}),
-                'path': lambda *args: args,
-            }
-            
+            if formula_pool is not None and formula_key in formula_pool:
+                pooled = formula_pool[formula_key]
+                elc = pooled[0] if parameterize else pooled
+                if verbose:
+                    print(f'Reusing constraint {i} as {elc.lcName}: {lc_string_fmt}')
+                if logic_label_keyword in data_item:
+                    # This mapping is legacy graph metadata. The actual label
+                    # is injected by LogicDataset for the current row, so keep
+                    # the first value rather than overwriting shared-template
+                    # metadata with whichever duplicate happened to be last.
+                    self.executableLCsLabels.setdefault(
+                        elc.lcName, data_item[logic_label_keyword])
+                elc_name_list.append(elc.lcName)
+                if concept_bindings is not None:
+                    concept_bindings.append(row_concepts)
+                continue
+
             if verbose:
                 print(f'Compiling constraint {i}: {lc_string_fmt}')
             
@@ -937,6 +1312,17 @@ class Graph(BaseGraphTree):
                     f"Failed to evaluate constraint '{lc_string_fmt}'. "
                     f"Error: {str(e)}"
                 ) from e
+
+            if formula_pool is not None:
+                if parameterize:
+                    formula_pool[formula_key] = (elc, row_concepts)
+                    elc.template_concepts = row_concepts
+                    elc.parameterized = True
+                    elc._parameterized_executable = True
+                    elc.innerLC._template_concepts = row_concepts
+                    elc.innerLC._parameterized_executable = True
+                else:
+                    formula_pool[formula_key] = elc
             
             # --- Step 7: Store label in executableLCsLabels ---
             # Labels indicate expected satisfaction (True/False) for supervised training
@@ -945,6 +1331,8 @@ class Graph(BaseGraphTree):
                 self.executableLCsLabels[elc.lcName] = label
             
             elc_name_list.append(elc.lcName)
+            if concept_bindings is not None:
+                concept_bindings.append(row_concepts)
             
             new_lc_name = str(elc)
             

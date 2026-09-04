@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 
-from domiknows.generation import AnyOfGenerationConstraint, constraints_to_dfa, discover_generation_enforcement
+from domiknows.generation import discover_generation_enforcement
 
 
 def import_task_module(name: str):
@@ -17,8 +17,7 @@ def test_hf_generation_graph_builds_and_discovers_constraints():
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
 
     assert bundle.vocabulary.tokens == tuple(graph_module.VOCAB)
-    assert len(enforcement.dfa_constraints) >= 5
-    assert any(isinstance(constraint, AnyOfGenerationConstraint) for constraint in enforcement.dfa_constraints)
+    assert enforcement.dfa is not None
 
 
 def test_hf_generation_graph_constraints_compile_to_dfa():
@@ -27,7 +26,7 @@ def test_hf_generation_graph_constraints_compile_to_dfa():
 
     graph, bundle = graph_module.build_generation_graph(mock_hf.MockTokenizer())
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     labels = bundle.vocabulary.labels_for_token_ids
     tokenizer = mock_hf.MockTokenizer()
@@ -56,7 +55,7 @@ def test_hf_generation_graph_accepts_real_hf_eos_token():
         eos_token="<|endoftext|>",
     )
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     assert bundle.vocabulary.eos_token == "<|endoftext|>"
     assert bundle.vocabulary.token_id_for_token("<|endoftext|>") == 6
@@ -67,7 +66,7 @@ def test_hf_generation_demo_runs_mock_modes_without_downloads():
     run_demo = import_task_module("run_demo")
 
     results = run_demo.run_all_modes(prompt="Once", max_new_tokens=4)
-    dfa = constraints_to_dfa(results["constraints"], results["vocabulary"])
+    dfa = results["dfa"]
 
     for mode in ("greedy", "beam", "sample"):
         result = results[mode]

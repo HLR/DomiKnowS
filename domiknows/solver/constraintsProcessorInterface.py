@@ -270,6 +270,35 @@ class constraintsProcessor(object, metaclass=abc.ABCMeta):
             Exception: In ILP mode, if model is infeasible (no entity can satisfy)
         """
 
+    @abc.abstractmethod
+    def miotaVar(
+        self,
+        m,
+        *_var,
+        onlyConstrains: bool = False,
+        threshold: float = 0.5,
+        hard: bool = False,
+        logicMethodName: str = "MIOTA",
+    ):
+        """Return one independent membership value for every candidate."""
+
+    @abc.abstractmethod
+    def queryVar(
+        self,
+        m,
+        concept,
+        subclasses,
+        selection_vars,
+        *,
+        subclass_data=None,
+        onlyConstrains: bool = False,
+        temperature: float = 1.0,
+        multi_answer: bool = False,
+        threshold: float = None,
+        logicMethodName: str = "QUERY",
+    ):
+        """Resolve the subclass of an entity selection produced by iotaL."""
+
     # ------------------------------------------------------------------
     # Same Attribute (sameL / differentL support)
     # ------------------------------------------------------------------

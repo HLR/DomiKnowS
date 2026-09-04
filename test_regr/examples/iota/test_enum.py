@@ -224,10 +224,96 @@ def test_enum_queryL_verifySingleConstraint(program_enum, dataset_enum):
 
     for datanode in program_enum.populate(dataset=dataset_enum):
         print("\n=== verifySingleConstraint for queryL (EnumConcept) ===")
-        
+
         sat_count, total, sat_rate = datanode.verifySingleConstraint(
             the_material_answer.name, key="/local/argmax"
         )
         print(f"{the_material_answer.name}: {sat_count}/{total} = {sat_rate:.2%}")
+
+
+
+def _fresh_dataset():
+    """A fresh dataset list.
+
+    The module-scoped ``dataset_enum`` fixture returns a *generator*, so the
+    first test to iterate it exhausts it and later tests silently see nothing.
+    Tests that must actually get a datanode build their own list.
+    """
+    from .reader import VisualQAReader
+    return list(VisualQAReader().run())
+
+# =====================================================================
+# t-norm loss (previously impossible — a nested iotaL returned a
+# selection distribution whose length differed from its siblings'
+# groundings, so andVar raised a shape mismatch)
+# =====================================================================
+
+@pytest.mark.parametrize("tnorm", ["P", "G", "L"])
+def test_enum_iotaL_queryL_tnorm_loss_computes(program_enum, dataset_enum, tnorm):
+    """iotaL/queryL must produce a t-norm loss value at all, not crash."""
+    import torch
+    from .graph_enum import the_material_answer
+
+    datanode = next(program_enum.populate(dataset=_fresh_dataset()))
+    results = datanode.calculateLcLoss(tnorm=tnorm)
+
+    assert the_material_answer.lcName in results, \
+        f"queryL produced no result for tnorm={tnorm}"
+    distribution = results[the_material_answer.lcName]["queryDistribution"]
+    assert distribution is not None
+    assert distribution.shape == (2,), f"expected 2 materials, got {tuple(distribution.shape)}"
+    assert torch.isfinite(distribution).all()
+    assert distribution.sum().item() == pytest.approx(1.0, abs=1e-5)
+
+
+@pytest.mark.parametrize("tnorm", ["P", "G", "L"])
+def test_enum_iotaL_queryL_compiled_matches_interpreter(program_enum, dataset_enum, tnorm):
+    """R1's compiled path must reproduce iotaL/queryL exactly.
+
+    This is the parity case that gates their membership in
+    SUPPORTED_LC_TYPES — without it the compiled path would be claiming
+    support it had never been measured against.
+    """
+    import torch
+
+    datanode = next(program_enum.populate(dataset=_fresh_dataset()))
+    reference = datanode.calculateLcLoss(tnorm=tnorm)
+    compiled = datanode.calculateLcLoss(tnorm=tnorm, compiled=True)
+
+    assert set(reference.keys()) == set(compiled.keys())
+    for name in reference:
+        ref_q = reference[name].get("queryDistribution")
+        cmp_q = compiled[name].get("queryDistribution")
+        if ref_q is None or cmp_q is None:
+            assert ref_q is None and cmp_q is None, f"{name}: one path produced None"
+        else:
+            assert torch.allclose(ref_q, cmp_q, atol=1e-6), \
+                f"{name}: query distributions differ\n{ref_q}\n{cmp_q}"
+
+        ref_l = reference[name].get("lossTensor")
+        cmp_l = compiled[name].get("lossTensor")
+        if ref_l is None or cmp_l is None:
+            assert ref_l is None and cmp_l is None, f"{name}: one path produced None loss"
+        else:
+            assert ref_l.shape == cmp_l.shape
+            assert torch.allclose(ref_l, cmp_l, atol=1e-6, equal_nan=True)
+
+
+def test_enum_queryL_godel_selects_metal(program_enum, dataset_enum):
+    """The answer must reflect the model, not a degenerate uniform default.
+
+    Godel picks the argmax entity, so the answer is that entity's material —
+    'metal' (index 0) for the target object. A uniform [0.5, 0.5] here means
+    the attribute gather found no datanodes (the failure mode a free-standing
+    EnumConcept produces).
+    """
+    from .graph_enum import the_material_answer
+
+    datanode = next(program_enum.populate(dataset=_fresh_dataset()))
+    distribution = datanode.calculateLcLoss(tnorm="G")[
+        the_material_answer.lcName]["queryDistribution"]
+
+    assert distribution[0].item() > distribution[1].item(), \
+        f"expected 'metal' to win, got {distribution}"
 
 

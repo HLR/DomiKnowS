@@ -1,21 +1,22 @@
 import torch
 import pytest
 
-from domiknows.generation import (
-    HuggingFaceGenerationAdapter,
-    TokenVocabulary,
-    constraints_to_dfa,
-    required_token,
+from domiknows.generation.dfa._constraints import (
+    accept_all_dfa,
+    required_token_dfa,
 )
-from domiknows.generation.decoder import (
-    constrained_beam_search_decode,
+from domiknows.generation.dfa.vocabulary import TokenVocabulary
+from domiknows.generation.dfa.decoder import (
     constrained_greedy_decode,
+    constrained_beam_search_decode,
     constrained_label_beam_search_decode,
     constrained_label_greedy_decode,
     constrained_label_sample_decode,
     constrained_sample_decode,
     mask_label_logits_for_dfa,
 )
+from domiknows.generation.dfa.stop_policy import StopPolicy
+from domiknows.generation.applications import HuggingFaceGenerationAdapter
 
 
 class FakeTokenizer:
@@ -162,7 +163,7 @@ class UncloneableCacheModel(CacheAwareModel):
 def test_constrained_greedy_masks_logits_to_satisfy_dfa():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_greedy_decode(
         FakeModel(),
@@ -181,7 +182,7 @@ def test_constrained_greedy_masks_logits_to_satisfy_dfa():
 def test_constrained_greedy_uses_kv_cache_when_available():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     model = CacheAwareModel()
 
     result = constrained_greedy_decode(
@@ -202,7 +203,7 @@ def test_constrained_greedy_uses_kv_cache_when_available():
 def test_constrained_greedy_can_disable_kv_cache():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     model = CacheAwareModel()
 
     result = constrained_greedy_decode(
@@ -223,7 +224,7 @@ def test_constrained_greedy_can_disable_kv_cache():
 def test_constrained_greedy_falls_back_when_model_omits_past_key_values():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     model = CacheIgnoringModel()
 
     result = constrained_greedy_decode(
@@ -257,7 +258,7 @@ def test_mask_label_logits_for_dfa_rejects_empty_allowed_set():
 def test_constrained_label_greedy_masks_compact_head_logits_to_satisfy_dfa():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_label_greedy_decode(
         FakeLabelModel(),
@@ -276,7 +277,7 @@ def test_constrained_label_greedy_masks_compact_head_logits_to_satisfy_dfa():
 def test_constrained_label_beam_search_masks_invalid_high_logit_label():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_label_beam_search_decode(
         FakeLabelModel(),
@@ -296,7 +297,7 @@ def test_constrained_label_beam_search_masks_invalid_high_logit_label():
 def test_constrained_label_beam_search_keeps_separate_dfa_states():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_label_beam_search_decode(
         BranchingLabelModel(),
@@ -318,7 +319,7 @@ def test_constrained_label_beam_search_keeps_separate_dfa_states():
 def test_constrained_label_beam_search_returns_unaccepted_when_no_solution_reached():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_label_beam_search_decode(
         FakeLabelModel(),
@@ -335,7 +336,7 @@ def test_constrained_label_beam_search_returns_unaccepted_when_no_solution_reach
 def test_constrained_label_sampling_never_emits_dfa_disallowed_labels():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_label_sample_decode(
         FakeLabelModel(),
@@ -354,7 +355,7 @@ def test_constrained_label_sampling_never_emits_dfa_disallowed_labels():
 def test_constrained_label_sampling_is_deterministic_with_generator():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([], vocab)
+    dfa = accept_all_dfa(vocab)
 
     first = constrained_label_sample_decode(
         BranchingLabelModel(),
@@ -380,7 +381,7 @@ def test_constrained_label_sampling_is_deterministic_with_generator():
 def test_constrained_label_sampling_validates_sampling_arguments():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     with pytest.raises(ValueError, match="temperature"):
         constrained_label_sample_decode(FakeLabelModel(), [1], vocab, dfa, 1, temperature=0.0)
@@ -393,7 +394,7 @@ def test_constrained_label_sampling_validates_sampling_arguments():
 def test_constrained_label_sampling_filters_after_dfa_mask():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_label_sample_decode(
         FakeLabelModel(),
@@ -413,7 +414,7 @@ def test_constrained_label_sampling_filters_after_dfa_mask():
 def test_constrained_label_decoders_forward_next_label_kwargs():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     model = KwargLabelModel()
 
     greedy = constrained_label_greedy_decode(
@@ -451,7 +452,7 @@ def test_constrained_label_decoders_forward_next_label_kwargs():
 def test_constrained_beam_search_masks_logits_to_satisfy_dfa():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_beam_search_decode(
         FakeModel(),
@@ -472,7 +473,7 @@ def test_constrained_beam_search_masks_logits_to_satisfy_dfa():
 def test_constrained_beam_search_keeps_separate_dfa_states():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_beam_search_decode(
         BranchingModel(),
@@ -495,7 +496,7 @@ def test_constrained_beam_search_keeps_separate_dfa_states():
 def test_constrained_beam_search_uses_separate_kv_cache_per_beam():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     model = CacheAwareModel()
 
     result = constrained_beam_search_decode(
@@ -520,7 +521,7 @@ def test_constrained_beam_search_uses_separate_kv_cache_per_beam():
 def test_constrained_beam_search_reports_uncloneable_cache():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([], vocab)
+    dfa = accept_all_dfa(vocab)
 
     with pytest.raises(ValueError, match="clone past_key_values"):
         constrained_beam_search_decode(
@@ -537,7 +538,7 @@ def test_constrained_beam_search_reports_uncloneable_cache():
 def test_constrained_beam_search_returns_unaccepted_when_no_solution_reached():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_beam_search_decode(
         FakeModel(),
@@ -555,7 +556,7 @@ def test_constrained_beam_search_returns_unaccepted_when_no_solution_reached():
 def test_constrained_sampling_masks_invalid_highest_logit():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_sample_decode(
         FakeModel(),
@@ -575,7 +576,7 @@ def test_constrained_sampling_masks_invalid_highest_logit():
 def test_constrained_sampling_is_deterministic_with_generator():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([], vocab)
+    dfa = accept_all_dfa(vocab)
 
     first = constrained_sample_decode(
         BranchingModel(),
@@ -603,7 +604,7 @@ def test_constrained_sampling_is_deterministic_with_generator():
 def test_constrained_sampling_uses_kv_cache_and_stays_deterministic():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     first_model = CacheAwareModel()
     second_model = CacheAwareModel()
 
@@ -635,7 +636,7 @@ def test_constrained_sampling_uses_kv_cache_and_stays_deterministic():
 def test_constrained_sampling_validates_sampling_arguments():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     with pytest.raises(ValueError, match="temperature"):
         constrained_sample_decode(FakeModel(), [1], vocab, dfa, 1, temperature=0.0)
@@ -648,7 +649,7 @@ def test_constrained_sampling_validates_sampling_arguments():
 def test_constrained_sampling_filters_after_dfa_mask():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
 
     result = constrained_sample_decode(
         FakeModel(),
@@ -669,14 +670,14 @@ def test_constrained_sampling_filters_after_dfa_mask():
 def test_huggingface_adapter_exposes_beam_and_sampling():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     adapter = HuggingFaceGenerationAdapter(FakeModel(), tokenizer, vocab)
 
     beam = adapter.constrained_beam_search(torch.tensor([[1]]), dfa, max_new_tokens=1, beam_size=2)
     sample = adapter.constrained_sample(
         torch.tensor([[1]]),
         dfa,
-        max_new_tokens=1,
+            max_new_tokens=1,
         generator=torch.Generator().manual_seed(5),
     )
 
@@ -689,7 +690,7 @@ def test_huggingface_adapter_exposes_beam_and_sampling():
 def test_huggingface_adapter_forwards_use_cache_flag():
     tokenizer = FakeTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     model = CacheAwareModel()
     adapter = HuggingFaceGenerationAdapter(model, tokenizer, vocab)
 
@@ -697,3 +698,78 @@ def test_huggingface_adapter_forwards_use_cache_flag():
 
     assert result.accepted
     assert [call["length"] for call in model.calls] == [1, 2]
+
+
+class EosFirstModel:
+    """Tiny model whose highest-logit token is always EOS (id 0)."""
+
+    def __call__(self, input_ids):
+        logits = torch.zeros((1, input_ids.shape[1], 3))
+        logits[0, -1, 0] = 10.0
+        logits[0, -1, 1] = 1.0
+        logits[0, -1, 2] = 1.0
+        return FakeOutput(logits)
+
+
+def test_stop_policy_unbounded_eos_only():
+    """An unbounded StopPolicy with EOS-stop must terminate on first accepting EOS.
+
+    Verifies the refactor's core promise: without a ``max_steps`` budget the
+    decoder loop still halts when ``stop_on_eos_if_accepting=True`` and the
+    next emitted token is EOS while the DFA is accepting.
+    """
+    tokenizer = FakeTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    dfa = accept_all_dfa(vocab)  # every state is accepting; EOS is allowed from start.
+
+    result = constrained_greedy_decode(
+        EosFirstModel(),
+        torch.tensor([[1]]),
+        vocab,
+        dfa,
+        eos_token_id=tokenizer.eos_token_id,
+        stop_policy=StopPolicy(stop_on_eos_if_accepting=True),
+    )
+
+    # Exactly one new token (EOS) is emitted, the DFA is accepting, and the
+    # decoder did not run off into an infinite loop.
+    assert result.token_ids[-1] == 0
+    assert result.labels == [vocab.label_for_token("<eos>")]
+    assert result.accepted
+
+
+def test_stop_policy_legacy_max_new_tokens_still_works():
+    """Legacy ``max_new_tokens=N`` keeps the historic behaviour after the refactor."""
+    tokenizer = FakeTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    dfa = required_token_dfa(vocab, "B")
+
+    result = constrained_greedy_decode(
+        FakeModel(),
+        torch.tensor([[1]]),
+        vocab,
+        dfa,
+        max_new_tokens=1,
+        eos_token_id=tokenizer.eos_token_id,
+    )
+
+    assert result.token_ids[-1] == 2
+    assert result.accepted
+
+
+def test_stop_policy_and_max_new_tokens_mutually_exclusive():
+    """Passing both legacy ``max_new_tokens=`` and new ``stop_policy=`` is a ValueError."""
+    tokenizer = FakeTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    dfa = accept_all_dfa(vocab)
+
+    with pytest.raises(ValueError, match="Pass either"):
+        constrained_greedy_decode(
+            EosFirstModel(),
+            torch.tensor([[1]]),
+            vocab,
+            dfa,
+            max_new_tokens=2,
+            eos_token_id=tokenizer.eos_token_id,
+            stop_policy=StopPolicy(max_steps=2),
+        )

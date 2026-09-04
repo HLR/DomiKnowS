@@ -1,7 +1,7 @@
 name: CI - Continuous Integration
 on:
   push: 
-    branches: [develop-CLEVER-relations, main]
+    branches: [develop, main]
   workflow_dispatch:
 
 # Prevent multiple runs of the same branch overlapping
@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -90,6 +92,7 @@ jobs:
             'vizual'
             'fixes'
             'generation'
+            'Reinforcement'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"

@@ -13,7 +13,7 @@ meaning of a symbol can depend on what has been observed so far.
 import pytest
 import torch
 
-from domiknows.generation.graph_hmm import DynamicConstraintContext, GraphSpectralAutomaton
+from domiknows.generation.learners import DynamicConstraintContext, GraphSpectralAutomaton
 
 
 def _fit_dynamic_spectral(**kwargs):

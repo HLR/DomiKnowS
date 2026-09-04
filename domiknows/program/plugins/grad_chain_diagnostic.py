@@ -1,7 +1,7 @@
 """
 One-shot gradient chain diagnostic.
 
-Hooks into the REAL training backward pass (inside GumbelInferenceProgram.train_epoch)
+Hooks into the REAL training backward pass (inside InferenceProgram.train_epoch)
 by temporarily patching torch.Tensor.backward to trace the loss computation graph
 before it's freed.
 

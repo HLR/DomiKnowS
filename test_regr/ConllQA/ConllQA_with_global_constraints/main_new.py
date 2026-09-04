@@ -17,7 +17,7 @@ from domiknows import setProductionLogMode
 setProductionLogMode()
 
 from domiknows.program import CallbackProgram
-from domiknows.program.lossprogram import GumbelInferenceProgram
+from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import PoiModel
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, TorchSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
@@ -220,12 +220,12 @@ class Classifier(torch.nn.Sequential):
         self.to(device)
 
 
-class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
+class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
     """InferenceProgram with callback support and proper loss dict handling."""
     
     def default_after_train_step(self, output=None):
-        """Override to do nothing - GumbelInferenceProgram already handles backward."""
-        # GumbelInferenceProgram.train_epoch already calls loss.backward() and opt.step()
+        """Override to do nothing - InferenceProgram already handles backward."""
+        # InferenceProgram.train_epoch already calls loss.backward() and opt.step()
         # So we don't need to do it again here
         pass
     

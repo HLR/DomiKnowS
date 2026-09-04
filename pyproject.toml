@@ -23,7 +23,6 @@ dependencies = [
     "setuptools>=68",
     "click>=8.1.0",
     "spacy>=3.8.0",
-    "tokenizers>=0.22.0",
     "transformers>=4.56.1",
     "colorama",
     "pillow>=11.3.0",
@@ -44,7 +43,9 @@ dev = [
     "flaky>=3.8.0",
     "black[jupyter]>=24.10.0",
     "isort>=5.12.0",
-    "mypy>=1.3.0"
+    "mypy>=1.3.0",
+    "datasets>=3.14.0",
+    "hf_xet>=1.1.0",
 ]
 
 cpu = [
@@ -58,6 +59,10 @@ cu128 = [
 cu126 = [
   "torch==2.11.*",
   "torchvision==0.26.*"
+]
+cu132 = [
+  "torch==2.13.*",
+  "torchvision==0.28.*"
 ]
 xpu = [
   "torch==2.8.*",
@@ -82,6 +87,10 @@ generation-guided = [
   "openai>=1.0.0",
 ]
 
+semantic-loss = [
+  "pysdd>=1.0.0",
+]
+
 [tool.uv]
 conflicts = [
     # Torch flavors are mutually exclusive
@@ -89,6 +98,7 @@ conflicts = [
         { extra = "cpu" },
         { extra = "cu128" },
         { extra = "cu126" },
+        { extra = "cu132" },
         { extra = "xpu" },
     ],
     # vllm only works with cu128 (needs matching torch+torchvision)
@@ -103,6 +113,10 @@ conflicts = [
     [
         { extra = "vllm" },
         { extra = "xpu" },
+    ],
+    [
+        { extra = "vllm" },
+        { extra = "cu132" },
     ],
 ]
 

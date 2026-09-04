@@ -12,7 +12,7 @@ These utilities are fundamental to enforcing DomiKnows constraints during infere
 import torch
 import pytest
 
-from domiknows.generation.graph_hmm import combine_masks, project_distribution, project_matrix, project_matrix_rows, validate_mask
+from domiknows.generation.learners import combine_masks, project_distribution, project_matrix, project_matrix_rows, validate_mask
 
 
 def test_project_distribution_preserves_forbidden_entries():

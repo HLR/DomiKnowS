@@ -1,0 +1,1 @@
+"""Generic hard example package."""

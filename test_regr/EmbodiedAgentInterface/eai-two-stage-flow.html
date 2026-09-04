@@ -1,0 +1,1675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Eai Two Stage Flow</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Eai Two Stage Flow" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Eai Two Stage Flow&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --radius: var(--border-radius-lg, 12.5px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: 5px;
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: superellipse(1.5);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress {
+  display: flex;
+  height: 6px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 6px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: superellipse(1.5);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;eai-two-stage-flow&quot; data-mode=&quot;both&quot;&gt;
+  &lt;style&gt;
+    #eai-two-stage-flow { color: var(--foreground); width: 100%; display: flex; flex-direction: column; }
+    #eai-two-stage-flow .topline { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; order: 0; }
+    #eai-two-stage-flow .topline h1 { margin: 0; }
+    #eai-two-stage-flow .stage-shell { display: grid; gap: 28px; order: 2; margin-top: 26px; }
+    #eai-two-stage-flow .stage-shell[data-mode=&quot;both&quot;] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #eai-two-stage-flow .stage-shell[data-mode=&quot;stage1&quot;] .stage2,
+    #eai-two-stage-flow .stage-shell[data-mode=&quot;stage2&quot;] .stage1 { display: none; }
+    #eai-two-stage-flow .stage-shell[data-mode=&quot;stage1&quot;],
+    #eai-two-stage-flow .stage-shell[data-mode=&quot;stage2&quot;] { grid-template-columns: minmax(0, 1fr); }
+    #eai-two-stage-flow .stage { min-width: 0; }
+    #eai-two-stage-flow .stage-title { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
+    #eai-two-stage-flow .stage-title h2 { margin: 0; }
+    #eai-two-stage-flow .pipeline { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); gap: 8px; align-items: stretch; margin-top: 14px; }
+    #eai-two-stage-flow .lane { min-width: 0; }
+    #eai-two-stage-flow .lane h3 { margin: 0 0 8px; color: var(--muted-foreground); }
+    #eai-two-stage-flow .node-stack { display: grid; gap: 8px; }
+    #eai-two-stage-flow .node-stack .btn { width: 100%; justify-content: flex-start; text-align: left; white-space: normal; }
+    #eai-two-stage-flow .arrow-column { display: flex; align-items: center; justify-content: center; color: var(--muted-foreground); }
+    #eai-two-stage-flow .decision-flow { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); gap: 8px; align-items: stretch; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+    #eai-two-stage-flow .decision-flow .decision-side { min-width: 0; }
+    #eai-two-stage-flow .detail-card { margin-top: 22px; order: 4; }
+    #eai-two-stage-flow .detail-card h3 { margin-top: 0; }
+    #eai-two-stage-flow .detail-grid { display: grid; grid-template-columns: minmax(120px, .35fr) minmax(0, 1fr); gap: 8px 18px; }
+    #eai-two-stage-flow .detail-grid dt { color: var(--muted-foreground); }
+    #eai-two-stage-flow .detail-grid dd { margin: 0; }
+    #eai-two-stage-flow .stage1 .stage-title { border-color: var(--viz-series-1); }
+    #eai-two-stage-flow .stage2 .stage-title { border-color: var(--viz-series-2); }
+    #eai-two-stage-flow .handoff { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 20px 0 0; color: var(--muted-foreground); order: 3; }
+    #eai-two-stage-flow .example-trace { padding-bottom: 18px; border-bottom: 2px solid var(--border); order: 1; }
+    #eai-two-stage-flow .trace-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+    #eai-two-stage-flow .trace-heading h2 { margin: 0; }
+    #eai-two-stage-flow .trace-context { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px 22px; margin-top: 12px; }
+    #eai-two-stage-flow .trace-context [hidden] { display: none !important; }
+    #eai-two-stage-flow .trace-context p { margin: 0; }
+    #eai-two-stage-flow .trace-context pre { margin: 5px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #eai-two-stage-flow .trace-tokens { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 16px 0; }
+    #eai-two-stage-flow .trace-token { display: inline-flex; align-items: center; gap: 7px; }
+    #eai-two-stage-flow .trace-token[data-active=&quot;true&quot;] code { color: var(--primary); }
+    #eai-two-stage-flow .trace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; }
+    #eai-two-stage-flow .trace-cell h3 { margin: 0 0 5px; color: var(--muted-foreground); }
+    #eai-two-stage-flow .trace-cell p { margin: 0; }
+    #eai-two-stage-flow .trace-card h3 { margin-top: 0; }
+    #eai-two-stage-flow[data-mode=&quot;stage1&quot;] .trace-stage2,
+    #eai-two-stage-flow[data-mode=&quot;stage1&quot;] .trace-reward,
+    #eai-two-stage-flow[data-mode=&quot;stage2&quot;] .trace-stage1 { display: none; }
+    @media (max-width: 820px) {
+      #eai-two-stage-flow .stage-shell[data-mode=&quot;both&quot;] { grid-template-columns: 1fr; }
+      #eai-two-stage-flow .handoff { display: none; }
+    }
+    @media (max-width: 520px) {
+      #eai-two-stage-flow .pipeline,
+      #eai-two-stage-flow .decision-flow { grid-template-columns: 1fr; }
+      #eai-two-stage-flow .arrow-column { transform: rotate(90deg); min-height: 22px; }
+      #eai-two-stage-flow .detail-grid { grid-template-columns: 1fr; }
+      #eai-two-stage-flow .trace-context,
+      #eai-two-stage-flow .trace-grid { grid-template-columns: 1fr; }
+    }
+  &lt;/style&gt;
+
+  &lt;div class=&quot;topline&quot;&gt;
+    &lt;div&gt;
+      &lt;h1&gt;EAI two-stage learning flow&lt;/h1&gt;
+      &lt;div class=&quot;text-muted&quot;&gt;Advance the book trajectory, then select a highlighted node to inspect its concrete value.&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;viz-controls&quot; role=&quot;group&quot; aria-label=&quot;Visible training stages&quot;&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; data-mode=&quot;both&quot; aria-pressed=&quot;true&quot;&gt;Both stages&lt;/button&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-mode=&quot;stage1&quot; aria-pressed=&quot;false&quot;&gt;Stage 1&lt;/button&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-mode=&quot;stage2&quot; aria-pressed=&quot;false&quot;&gt;Stage 2&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;stage-shell&quot; data-mode=&quot;both&quot;&gt;
+    &lt;section class=&quot;stage stage1&quot; aria-labelledby=&quot;eai-stage1-title&quot;&gt;
+      &lt;div class=&quot;stage-title&quot;&gt;
+        &lt;span class=&quot;viz-badge&quot;&gt;1&lt;/span&gt;
+        &lt;h2 id=&quot;eai-stage1-title&quot;&gt;Supervised exact match&lt;/h2&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;pipeline&quot;&gt;
+        &lt;div class=&quot;lane&quot;&gt;
+          &lt;h3&gt;Task data&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;instruction&quot;&gt;Instruction text&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;world-input&quot;&gt;Initial facts, entities, types&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;temporal-goal&quot;&gt;SimpleTL goal&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;gold-plan&quot;&gt;Gold action-object tokens&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;arrow-column&quot; aria-hidden=&quot;true&quot;&gt;→&lt;/div&gt;
+        &lt;div class=&quot;lane&quot;&gt;
+          &lt;h3&gt;Graph and model&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;generation-graph&quot;&gt;Generation graph&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;compiled-dfa&quot;&gt;Graph-compiled policy DFA&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;qwen-adapter&quot;&gt;Qwen3 + LoRA + label adapter&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;solver-poi&quot;&gt;SolverPOI teacher forcing&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;decision-flow&quot;&gt;
+        &lt;div class=&quot;decision-side&quot;&gt;
+          &lt;h3&gt;Training decisions&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;stage1-loss&quot;&gt;EOS-masked cross entropy&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;semantic-selection&quot;&gt;Best semantic epoch&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;exploration-gate&quot;&gt;Stage 2 exploration gate&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;arrow-column&quot; aria-hidden=&quot;true&quot;&gt;→&lt;/div&gt;
+        &lt;div class=&quot;decision-side&quot;&gt;
+          &lt;h3&gt;Outputs&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;stage1-metrics&quot;&gt;Sequence and semantic metrics&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;stage1-checkpoint&quot;&gt;Restored Stage 1 checkpoint&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;stage stage2&quot; aria-labelledby=&quot;eai-stage2-title&quot;&gt;
+      &lt;div class=&quot;stage-title&quot;&gt;
+        &lt;span class=&quot;viz-badge&quot;&gt;2&lt;/span&gt;
+        &lt;h2 id=&quot;eai-stage2-title&quot;&gt;Reinforcement fine-tuning&lt;/h2&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;pipeline&quot;&gt;
+        &lt;div class=&quot;lane&quot;&gt;
+          &lt;h3&gt;Shared and sampled data&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;shared-lifecycle&quot;&gt;Same head, graphs, vocabulary, DFA&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;rollouts&quot;&gt;8 batched KV-cached rollouts&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;simulator&quot;&gt;Simulator states and action events&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;world-materialization&quot;&gt;World graph trajectory&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;arrow-column&quot; aria-hidden=&quot;true&quot;&gt;→&lt;/div&gt;
+        &lt;div class=&quot;lane&quot;&gt;
+          &lt;h3&gt;Reward and optimization&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;dense-task-reward&quot;&gt;Recall × temporal progress&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;world-constraints&quot;&gt;Precondition constraint modulation&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;reinforce&quot;&gt;On-policy REINFORCE&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;microbatch&quot;&gt;Microbatch rescore and gradient accumulation&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;decision-flow&quot;&gt;
+        &lt;div class=&quot;decision-side&quot;&gt;
+          &lt;h3&gt;Per-trajectory decisions&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;dfa-decision&quot;&gt;Which token is legal next?&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;reward-decision&quot;&gt;How much task progress?&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;update-decision&quot;&gt;Increase or decrease probability?&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;arrow-column&quot; aria-hidden=&quot;true&quot;&gt;→&lt;/div&gt;
+        &lt;div class=&quot;decision-side&quot;&gt;
+          &lt;h3&gt;Outputs&lt;/h3&gt;
+          &lt;div class=&quot;node-stack&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;stage2-update&quot;&gt;One optimizer step per 8 rollouts&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;stage2-metrics&quot;&gt;Goal, temporal, constraint metrics&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn viz-tile stage-node&quot; data-node=&quot;stage2-checkpoint&quot;&gt;Two-stage model checkpoint&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;handoff&quot; aria-label=&quot;Stage handoff&quot;&gt;
+    &lt;span&gt;Stage 1 best semantic checkpoint&lt;/span&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;span&gt;Stage 2 shared model lifecycle&lt;/span&gt;
+  &lt;/div&gt;
+
+  &lt;section class=&quot;example-trace&quot; aria-labelledby=&quot;eai-trace-title&quot;&gt;
+    &lt;div class=&quot;trace-heading&quot;&gt;
+      &lt;div&gt;
+        &lt;h2 id=&quot;eai-trace-title&quot;&gt;Example trajectory through both stages&lt;/h2&gt;
+        &lt;div class=&quot;text-muted&quot; id=&quot;eai-trace-counter&quot;&gt;Step 1 of 8 · task input&lt;/div&gt;
+        &lt;div class=&quot;text-muted&quot; id=&quot;eai-trace-active&quot;&gt;8 related elements activated below&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;viz-controls&quot; aria-label=&quot;Example trajectory step controls&quot;&gt;
+        &lt;button type=&quot;button&quot; class=&quot;btn&quot; id=&quot;eai-trace-prev&quot; disabled&gt;Previous&lt;/button&gt;
+        &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; id=&quot;eai-trace-next&quot;&gt;Next&lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class=&quot;trace-context&quot; aria-live=&quot;polite&quot;&gt;
+      &lt;div data-context=&quot;prompt&quot;&gt;&lt;strong id=&quot;eai-context-prompt-title&quot;&gt;Current Qwen prompt&lt;/strong&gt;&lt;pre&gt;&lt;code id=&quot;eai-context-prompt&quot;&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      &lt;p data-context=&quot;world&quot;&gt;&lt;strong id=&quot;eai-context-world-title&quot;&gt;Task-world data used now&lt;/strong&gt;&lt;br&gt;&lt;code id=&quot;eai-context-world&quot;&gt;&lt;/code&gt;&lt;/p&gt;
+      &lt;p data-context=&quot;goal&quot;&gt;&lt;strong id=&quot;eai-context-goal-title&quot;&gt;SimpleTL used now&lt;/strong&gt;&lt;br&gt;&lt;code id=&quot;eai-context-goal&quot;&gt;&lt;/code&gt;&lt;/p&gt;
+      &lt;p data-context=&quot;gold&quot; data-context-stage=&quot;stage1&quot;&gt;&lt;strong id=&quot;eai-context-gold-title&quot;&gt;Stage 1 supervision used now&lt;/strong&gt;&lt;br&gt;&lt;code id=&quot;eai-context-gold&quot;&gt;&lt;/code&gt;&lt;/p&gt;
+    &lt;/div&gt;
+
+    &lt;div class=&quot;trace-tokens&quot; aria-label=&quot;Example generated token sequence&quot;&gt;
+      &lt;span class=&quot;trace-token&quot; data-token-step=&quot;1&quot;&gt;&lt;code&gt;find&lt;/code&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;trace-token&quot; data-token-step=&quot;2&quot;&gt;&lt;code&gt;novel_1000&lt;/code&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;trace-token&quot; data-token-step=&quot;3&quot;&gt;&lt;code&gt;grab&lt;/code&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;trace-token&quot; data-token-step=&quot;4&quot;&gt;&lt;code&gt;novel_1000&lt;/code&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;trace-token&quot; data-token-step=&quot;5&quot;&gt;&lt;code&gt;read&lt;/code&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;trace-token&quot; data-token-step=&quot;6&quot;&gt;&lt;code&gt;novel_1000&lt;/code&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;trace-token&quot; data-token-step=&quot;7&quot;&gt;&lt;code&gt;&amp;lt;eos&amp;gt;&lt;/code&gt;&lt;/span&gt;
+    &lt;/div&gt;
+
+    &lt;div class=&quot;card trace-card&quot; aria-live=&quot;polite&quot;&gt;
+      &lt;h3 id=&quot;eai-trace-step-title&quot;&gt;Task row enters the pipeline&lt;/h3&gt;
+      &lt;div class=&quot;trace-grid&quot;&gt;
+        &lt;div class=&quot;trace-cell&quot;&gt;
+          &lt;h3&gt;Graph decision&lt;/h3&gt;
+          &lt;p id=&quot;eai-trace-graph&quot;&gt;Build the task-specific policy from graph constraints and entity context.&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;trace-cell trace-stage1&quot;&gt;
+          &lt;h3&gt;Stage 1&lt;/h3&gt;
+          &lt;p id=&quot;eai-trace-stage1&quot;&gt;Qwen receives the instruction and shifted gold prefix; SolverPOI prepares exact-match targets.&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;trace-cell trace-stage2&quot;&gt;
+          &lt;h3&gt;Stage 2&lt;/h3&gt;
+          &lt;p id=&quot;eai-trace-stage2&quot;&gt;The restored Stage 1 head receives the same prompt, vocabulary and graph-compiled DFA.&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;trace-cell trace-reward&quot;&gt;
+          &lt;h3&gt;State and reward&lt;/h3&gt;
+          &lt;p id=&quot;eai-trace-reward&quot;&gt;Initial simulator state. Goal recall 0.00 · temporal progress 0.00 · task reward 0.00.&lt;/p&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class=&quot;card detail-card&quot; aria-live=&quot;polite&quot; aria-labelledby=&quot;eai-detail-title&quot;&gt;
+    &lt;h3 id=&quot;eai-detail-title&quot;&gt;Instruction text&lt;/h3&gt;
+    &lt;dl class=&quot;detail-grid&quot;&gt;
+      &lt;dt&gt;Component&lt;/dt&gt;&lt;dd id=&quot;eai-detail-kind&quot;&gt;Dataset field&lt;/dd&gt;
+      &lt;dt&gt;Concrete input&lt;/dt&gt;&lt;dd id=&quot;eai-detail-input&quot;&gt;&lt;code&gt;Find the book, grab it, then read it.&lt;/code&gt;&lt;/dd&gt;
+      &lt;dt&gt;Concrete output / decision&lt;/dt&gt;&lt;dd id=&quot;eai-detail-output&quot;&gt;A structured user message followed by one Qwen assistant-generation marker and the growing label prefix&lt;/dd&gt;
+      &lt;dt&gt;Rule / authority&lt;/dt&gt;&lt;dd id=&quot;eai-detail-authority&quot;&gt;&lt;code&gt;natural_language_description&lt;/code&gt; from task &lt;code&gt;book_demo&lt;/code&gt;; the SimpleTL field separately defines reward success&lt;/dd&gt;
+    &lt;/dl&gt;
+  &lt;/section&gt;
+
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&#x27;eai-two-stage-flow&#x27;);
+      const shell = root.querySelector(&#x27;.stage-shell&#x27;);
+      const details = {
+        instruction: [&#x27;Dataset field&#x27;, &#x27;task_id=book_demo; task, instruction, SimpleTL goal and available entity types remain separate named fields&#x27;, &#x27;Qwen user message: Task: Find and read a book\nInstruction: Find the book, grab it, then read it.\nSimpleTL goal: (exists x0. (GRAB(x0))) then exists x0. (READ(x0))\nAvailable entity types: novel&#x27;, &#x27;The tokenizer chat template renders this message; SimpleTL separately defines reward success&#x27;],
+        &#x27;world-input&#x27;: [&#x27;Prepared task world&#x27;, &#x27;entities={character, novel_1000}; generation_entity_types={novel}; initial_state=∅&#x27;, &#x27;novel_1000 is available to contextual object constraints and the simulator starts at state s0=∅&#x27;, &#x27;These facts come from task objects/types, never from a gold candidate mask&#x27;],
+        &#x27;temporal-goal&#x27;: [&#x27;SimpleTL specification&#x27;, &#x27;(exists x0. (GRAB(x0))) then exists x0. (READ(x0))&#x27;, &#x27;Grounded requirements: action(grab, novel_1000) followed later by action(read, novel_1000)&#x27;, &#x27;This expression is the authoritative task-success and temporal-order specification&#x27;],
+        &#x27;gold-plan&#x27;: [&#x27;Stage 1 supervision&#x27;, &#x27;[find, novel_1000, grab, novel_1000, read, novel_1000, &lt;eos&gt;]&#x27;, &#x27;Seven next-label targets through the first EOS&#x27;, &#x27;Used for teacher forcing only; reward is evaluated from SimpleTL&#x27;],
+        &#x27;generation-graph&#x27;: [&#x27;DomiKnowS generation graph&#x27;, &#x27;Positions p0…p6; action labels {find, grab, read}; object label {novel_1000}; EOS; next-position and sequence-start roles&#x27;, &#x27;For this task: p0 must be an action; find/grab/read require an immediate object; novel_1000 permits the next action or EOS&#x27;, &#x27;The graph is the single declarative authority for hard generation policy&#x27;],
+        &#x27;compiled-dfa&#x27;: [&#x27;Compiled graph policy&#x27;, &#x27;q0 --find→ q_argument --novel_1000→ q_open --grab→ q_argument --novel_1000→ q_open --read→ q_argument --novel_1000→ q_open --&lt;eos&gt;→ q_accept&#x27;, &#x27;The displayed trajectory is accepted; object-first, immediate EOS, missing arguments and clean bathtub_35 are rejected&#x27;, &#x27;The same DFA masks greedy evaluation, rollout sampling and differentiable rescoring&#x27;],
+        &#x27;qwen-adapter&#x27;: [&#x27;Qwen3 policy&#x27;, &#x27;Native chat template with add_generation_prompt=true and enable_thinking=false, plus assistant prefixes ∅, find, find novel_1000, …&#x27;, &#x27;Teacher forcing and rescoring use identical token IDs and prefix boundaries; no_grad sampling evaluates all eight prefixes together and carries Qwen KV state between label decisions&#x27;, &#x27;Base Qwen is frozen; LoRA, residual adapter, bias and temperature are trainable&#x27;],
+        &#x27;solver-poi&#x27;: [&#x27;Teacher forcing&#x27;, &#x27;BOS→find; find→novel_1000; find novel_1000→grab; …; read novel_1000→EOS&#x27;, &#x27;One masked vocabulary-logit vector for each of the seven concrete targets&#x27;, &#x27;Stage 1 sees gold prefixes; Stage 2 rollouts do not&#x27;],
+        &#x27;stage1-loss&#x27;: [&#x27;Supervised objective&#x27;, &#x27;CE(find)+CE(novel_1000)+CE(grab)+CE(novel_1000)+CE(read)+CE(novel_1000)+CE(EOS)&#x27;, &#x27;The seven terms are averaged; any EOS padding after the first EOS contributes zero&#x27;, &#x27;Exact-match pretraining optimizes the complete concrete label sequence&#x27;],
+        &#x27;semantic-selection&#x27;: [&#x27;Checkpoint decision&#x27;, &#x27;Recorded epoch: recall=0.850, success=0.761, positive_reward_rate=0.932, exact=0.227, supervised_loss=0.724&#x27;, &#x27;That epoch is retained as the best semantic Stage 1 checkpoint&#x27;, &#x27;Selection prioritizes semantic recall/success, rather than lowest loss alone&#x27;],
+        &#x27;exploration-gate&#x27;: [&#x27;Stage gate&#x27;, &#x27;positive_reward_rate=0.932 and success=0.761 on validation&#x27;, &#x27;The positive-reward requirement is satisfied, so Stage 2 may start from the restored checkpoint&#x27;, &#x27;If no validation trajectory had positive task reward, RL would be skipped&#x27;],
+        &#x27;stage1-metrics&#x27;: [&#x27;Example output&#x27;, &#x27;Greedy prediction=[find, novel_1000, grab, novel_1000, read, novel_1000, &lt;eos&gt;]&#x27;, &#x27;For this illustrated row: exact=1, nonempty=1, goal_success=1, recall=1.00, temporal_progress=1.00&#x27;, &#x27;These row values are aggregated over validation for checkpoint selection&#x27;],
+        &#x27;stage1-checkpoint&#x27;: [&#x27;Stage handoff&#x27;, &#x27;eai_qwen3_8b_lora.stage1.pth with Qwen/LoRA, label adapter, vocabulary and graph metadata&#x27;, &#x27;Restores the policy that produced the concrete book sequence before RL sampling begins&#x27;, &#x27;Stage 2 must reuse this head and compiled graph policy&#x27;],
+        &#x27;shared-lifecycle&#x27;: [&#x27;Restored Stage 1 objects&#x27;, &#x27;Same exact book prompt, label adapter, generation graph, world graph, vocabulary and policy DFA&#x27;, &#x27;Stage 2 samples new sequences for book_demo without replacing the trained classifier&#x27;, &#x27;No random head and no decoder-local policy overlay are introduced&#x27;],
+        rollouts: [&#x27;Batched on-policy samples&#x27;, &#x27;Eight samples for book_demo; shown rollout r0=[find, novel_1000, grab, novel_1000, read, novel_1000, &lt;eos&gt;]&#x27;, &#x27;One no_grad Qwen batch produces all eight next-label distributions; equal-width label chunks advance the shared batch KV cache, while unequal widths cause one batched rebuild&#x27;, &#x27;Each row keeps its own DFA state and generated prefix; the other seven rewards provide r0 its within-task baseline&#x27;],
+        simulator: [&#x27;Symbolic transition simulator&#x27;, &#x27;s0=∅; find(novel_1000); grab(novel_1000); read(novel_1000)&#x27;, &#x27;s1=∅ after find; s2={holds_rh(character, novel_1000)} after grab; s3 keeps that state after read, while the read action event is recorded&#x27;, &#x27;reward.py deterministically applies only benchmark-goal-relevant effects&#x27;],
+        &#x27;world-materialization&#x27;: [&#x27;DomiKnowS world trajectory&#x27;, &#x27;steps={s0,s1,s2,s3}; entities={character, novel_1000, absent_argument}; events={find,grab,read}&#x27;, &#x27;next_step(s0,s1), next_step(s1,s2), next_step(s2,s3); holds_rh is true at s2/s3; each event links source/result/actor/argument&#x27;, &#x27;This graph is separate from token generation and exists to verify world constraints&#x27;],
+        &#x27;dense-task-reward&#x27;: [&#x27;SimpleTL reward&#x27;, &#x27;After grab: recall=0.50 and temporal_progress=0.50. After read: recall=1.00 and temporal_progress=1.00&#x27;, &#x27;Partial task reward=0.50×0.50=0.25; final task reward=1.00×1.00=1.00&#x27;, &#x27;Reversing read and grab keeps facts but lowers temporal progress, so cannot receive full reward&#x27;],
+        &#x27;world-constraints&#x27;: [&#x27;Precondition modulation&#x27;, &#x27;For find/grab/read, argument novel_1000 has type novel and novel is present in generation_entity_types&#x27;, &#x27;Applicable preconditions are satisfied, so constraint_score=1.00 and final_reward=1.00×(0.75+0.25×1.00)=1.00&#x27;, &#x27;A violation can discount task progress but cannot create reward when task_reward=0&#x27;],
+        reinforce: [&#x27;Policy-gradient objective&#x27;, &#x27;Shown rollout reward r0=1.00; advantage A0=1.00−mean(r0…r7) after all eight rewards are known&#x27;, &#x27;If A0&gt;0 its masked sequence log-probability is increased; if A0&lt;0 it is decreased; if A0=0 it contributes no RL gradient&#x27;, &#x27;The reward is detached; only the differentiable rescore carries gradient&#x27;],
+        microbatch: [&#x27;Memory-safe differentiable rescore&#x27;, &#x27;After no_grad batched sampling, replay [find, novel_1000, grab, novel_1000, read, novel_1000, &lt;eos&gt;] through the same DFA with teacher forcing&#x27;, &#x27;Accumulate A0 times the seven masked log-probabilities, release this Qwen graph, then rescore r1…r7 before one optimizer step&#x27;, &#x27;KV caching changes sampling only; this gradient calculation and the eight-sample estimator are unchanged&#x27;],
+        &#x27;dfa-decision&#x27;: [&#x27;Per-token hard decision&#x27;, &#x27;BOS allows actions; after find/grab/read only task-valid objects are allowed; after novel_1000 actions or EOS are allowed&#x27;, &#x27;The concrete legal choices are find at p0, novel_1000 after each chosen object-taking action, grab/read after completed pairs, then EOS&#x27;, &#x27;These masks are compiled from marked DomiKnowS graph constraints&#x27;],
+        &#x27;reward-decision&#x27;: [&#x27;Per-trajectory semantic decision&#x27;, &#x27;events=[find(novel_1000), grab(novel_1000), read(novel_1000)]; SimpleTL=GRAB then READ; constraint_score=1.00&#x27;, &#x27;success=1; recall=1.00; temporal_progress=1.00; task_reward=1.00; RL reward=1.00&#x27;, &#x27;SimpleTL remains the success authority; constraints only modulate its task progress&#x27;],
+        &#x27;update-decision&#x27;: [&#x27;Per-rollout learning decision&#x27;, &#x27;r0=1.00 and baseline=mean(r0…r7)&#x27;, &#x27;advantage A0=1.00−baseline determines whether the exact shown sequence becomes more or less likely&#x27;, &#x27;The direction cannot be decided from r0 alone; it depends on the seven sibling rollouts&#x27;],
+        &#x27;stage2-update&#x27;: [&#x27;Optimizer output&#x27;, &#x27;Eight rollout gradients, including the shown r0 term, plus 0.5× the supervised loss on the gold book sequence&#x27;, &#x27;One Adam step updates LoRA and the label adapter at the Stage 2 learning rate&#x27;, &#x27;The supervised anchor protects find→grab→read behavior from destructive policy drift&#x27;],
+        &#x27;stage2-metrics&#x27;: [&#x27;Evaluation output&#x27;, &#x27;Greedy prediction for book_demo is simulated and compared with the same SimpleTL expression after the RL update&#x27;, &#x27;Reports exact/token metrics plus success, recall, temporal progress, constraint score and final reward for this row before aggregation&#x27;, &#x27;The aggregate is compared directly with the restored Stage 1 checkpoint&#x27;],
+        &#x27;stage2-checkpoint&#x27;: [&#x27;Final output&#x27;, &#x27;eai_qwen3_8b_lora.pth containing the shared Qwen/LoRA and label-adapter state plus compatibility metadata&#x27;, &#x27;Reusable policy that receives the same concrete prompt format and graph-defined constraints at inference&#x27;, &#x27;Saved after the configured Stage 2 run completes&#x27;]
+      };
+
+      const title = root.querySelector(&#x27;#eai-detail-title&#x27;);
+      const kind = root.querySelector(&#x27;#eai-detail-kind&#x27;);
+      const input = root.querySelector(&#x27;#eai-detail-input&#x27;);
+      const output = root.querySelector(&#x27;#eai-detail-output&#x27;);
+      const authority = root.querySelector(&#x27;#eai-detail-authority&#x27;);
+
+      root.querySelectorAll(&#x27;[data-mode]&#x27;).forEach(button =&gt; {
+        if (!button.matches(&#x27;button&#x27;)) return;
+        button.addEventListener(&#x27;click&#x27;, () =&gt; {
+          const mode = button.dataset.mode;
+          shell.dataset.mode = mode;
+          root.dataset.mode = mode;
+          root.querySelectorAll(&#x27;button[data-mode]&#x27;).forEach(peer =&gt; {
+            const selected = peer === button;
+            peer.setAttribute(&#x27;aria-pressed&#x27;, String(selected));
+            peer.classList.toggle(&#x27;btn-primary&#x27;, selected);
+          });
+          updateTrace();
+        });
+      });
+
+      root.querySelectorAll(&#x27;.stage-node&#x27;).forEach(button =&gt; {
+        button.setAttribute(&#x27;aria-pressed&#x27;, &#x27;false&#x27;);
+        button.addEventListener(&#x27;click&#x27;, () =&gt; {
+          const value = details[button.dataset.node];
+          if (!value) return;
+          root.querySelectorAll(&#x27;.stage-node&#x27;).forEach(peer =&gt; peer.setAttribute(&#x27;aria-pressed&#x27;, String(peer === button)));
+          title.textContent = button.textContent.trim();
+          kind.textContent = value[0];
+          input.textContent = value[1];
+          output.textContent = value[2];
+          authority.textContent = value[3];
+        });
+      });
+
+      const traceSteps = [
+        {
+          label: &#x27;task input&#x27;,
+          nodes: [&#x27;instruction&#x27;, &#x27;world-input&#x27;, &#x27;temporal-goal&#x27;, &#x27;gold-plan&#x27;, &#x27;generation-graph&#x27;, &#x27;qwen-adapter&#x27;, &#x27;solver-poi&#x27;, &#x27;shared-lifecycle&#x27;],
+          title: &#x27;Task row enters the pipeline&#x27;,
+          graph: &#x27;Build the task-specific policy from graph constraints and entity context.&#x27;,
+          stage1: &#x27;Qwen receives the instruction and shifted gold prefix; SolverPOI prepares exact-match targets.&#x27;,
+          stage2: &#x27;The restored Stage 1 head receives the same prompt, vocabulary and graph-compiled DFA.&#x27;,
+          reward: &#x27;Initial simulator state. Goal recall 0.00 · temporal progress 0.00 · task reward 0.00.&#x27;
+        },
+        {
+          label: &#x27;action find&#x27;,
+          nodes: [&#x27;generation-graph&#x27;, &#x27;compiled-dfa&#x27;, &#x27;qwen-adapter&#x27;, &#x27;solver-poi&#x27;, &#x27;stage1-loss&#x27;, &#x27;rollouts&#x27;, &#x27;dfa-decision&#x27;],
+          title: &#x27;Generate action token: find&#x27;,
+          graph: &#x27;sequence_start requires an action; find is legal and cannot terminate the plan yet.&#x27;,
+          stage1: &#x27;Cross entropy compares the action logits with the gold find label.&#x27;,
+          stage2: &#x27;Each rollout samples find from the DFA-masked action distribution under no_grad.&#x27;,
+          reward: &#x27;The action is pending until its object argument arrives; simulator state is unchanged.&#x27;
+        },
+        {
+          label: &#x27;object novel_1000&#x27;,
+          nodes: [&#x27;world-input&#x27;, &#x27;generation-graph&#x27;, &#x27;compiled-dfa&#x27;, &#x27;qwen-adapter&#x27;, &#x27;solver-poi&#x27;, &#x27;stage1-loss&#x27;, &#x27;rollouts&#x27;, &#x27;simulator&#x27;, &#x27;dfa-decision&#x27;],
+          title: &#x27;Complete event: find(novel_1000)&#x27;,
+          graph: &#x27;The immediate-successor rule requires an object, and task context confirms novel_1000 exists.&#x27;,
+          stage1: &#x27;The native Qwen label adapter is trained toward the novel_1000 object label.&#x27;,
+          stage2: &#x27;The simulator records the find event and its resulting snapshot.&#x27;,
+          reward: &#x27;The temporal goal begins with GRAB, so recall 0.00 · temporal progress 0.00 · task reward 0.00.&#x27;
+        },
+        {
+          label: &#x27;action grab&#x27;,
+          nodes: [&#x27;generation-graph&#x27;, &#x27;compiled-dfa&#x27;, &#x27;qwen-adapter&#x27;, &#x27;solver-poi&#x27;, &#x27;stage1-loss&#x27;, &#x27;rollouts&#x27;, &#x27;dfa-decision&#x27;],
+          title: &#x27;Generate action token: grab&#x27;,
+          graph: &#x27;After an object, the graph permits another action or EOS; grab is compatible with the book type.&#x27;,
+          stage1: &#x27;Teacher forcing supplies the preceding find pair and trains the next action decision.&#x27;,
+          stage2: &#x27;The rollout samples grab; the action remains pending until its argument is generated.&#x27;,
+          reward: &#x27;No new event is simulated at the action token alone.&#x27;
+        },
+        {
+          label: &#x27;object novel_1000&#x27;,
+          nodes: [&#x27;generation-graph&#x27;, &#x27;compiled-dfa&#x27;, &#x27;stage1-loss&#x27;, &#x27;simulator&#x27;, &#x27;world-materialization&#x27;, &#x27;world-constraints&#x27;, &#x27;dense-task-reward&#x27;, &#x27;reward-decision&#x27;],
+          title: &#x27;Complete event: grab(novel_1000)&#x27;,
+          graph: &#x27;The action-object constraint admits novel_1000 as the required grab argument.&#x27;,
+          stage1: &#x27;EOS-masked cross entropy trains this object position without learning from later padding.&#x27;,
+          stage2: &#x27;The source-state precondition checks object availability and hand capacity before applying grab.&#x27;,
+          reward: &#x27;GRAB is the first ordered clause: recall 0.50 × temporal progress 0.50 = task reward 0.25.&#x27;
+        },
+        {
+          label: &#x27;action read&#x27;,
+          nodes: [&#x27;generation-graph&#x27;, &#x27;compiled-dfa&#x27;, &#x27;qwen-adapter&#x27;, &#x27;solver-poi&#x27;, &#x27;stage1-loss&#x27;, &#x27;rollouts&#x27;, &#x27;dfa-decision&#x27;],
+          title: &#x27;Generate action token: read&#x27;,
+          graph: &#x27;The object successor returns the DFA to an action-or-EOS state; read is task-relevant and legal.&#x27;,
+          stage1: &#x27;The supervised target teaches the transition from holding the book to the read action.&#x27;,
+          stage2: &#x27;The rollout samples read; its source state will be checked when the object completes the event.&#x27;,
+          reward: &#x27;The completed temporal prefix remains 1 of 2 clauses until read receives its argument.&#x27;
+        },
+        {
+          label: &#x27;object novel_1000&#x27;,
+          nodes: [&#x27;generation-graph&#x27;, &#x27;compiled-dfa&#x27;, &#x27;stage1-loss&#x27;, &#x27;simulator&#x27;, &#x27;world-materialization&#x27;, &#x27;world-constraints&#x27;, &#x27;dense-task-reward&#x27;, &#x27;reward-decision&#x27;, &#x27;reinforce&#x27;, &#x27;microbatch&#x27;, &#x27;update-decision&#x27;],
+          title: &#x27;Complete event: read(novel_1000)&#x27;,
+          graph: &#x27;The DFA requires an object after read and restricts it to a compatible task-world entity.&#x27;,
+          stage1: &#x27;The gold object label completes the teacher-forced semantic action pair.&#x27;,
+          stage2: &#x27;The read precondition is satisfied because the source snapshot contains the held book.&#x27;,
+          reward: &#x27;Both ordered clauses hold: recall 1.00 × temporal progress 1.00; constraint factor 1.00; RL reward 1.00.&#x27;
+        },
+        {
+          label: &#x27;EOS closure&#x27;,
+          nodes: [&#x27;compiled-dfa&#x27;, &#x27;stage1-loss&#x27;, &#x27;semantic-selection&#x27;, &#x27;exploration-gate&#x27;, &#x27;stage1-metrics&#x27;, &#x27;stage1-checkpoint&#x27;, &#x27;reinforce&#x27;, &#x27;microbatch&#x27;, &#x27;stage2-update&#x27;, &#x27;stage2-metrics&#x27;, &#x27;stage2-checkpoint&#x27;],
+          title: &#x27;Close the accepted trajectory with EOS&#x27;,
+          graph: &#x27;After a complete object argument, EOS is legal and the compiled DFA enters an accepting state.&#x27;,
+          stage1: &#x27;The first EOS is supervised; all later padded EOS positions are excluded from the loss.&#x27;,
+          stage2: &#x27;The rollout stops. Its reward becomes one member of the 8-sample REINFORCE estimate.&#x27;,
+          reward: &#x27;The trajectory retains task reward 1.00; microbatch rescoring accumulates its gradient before one optimizer step.&#x27;
+        }
+      ];
+      const promptBase = &#x27;[Qwen user message]\nPredict an embodied-agent action plan one label at a time.\nTask: Find and read a book\nInstruction: Find the book, grab it, then read it.\nSimpleTL goal: (exists x0. (GRAB(x0))) then exists x0. (READ(x0))\nAvailable entity types: novel\nReturn only action or entity labels; do not explain.\n\n[Qwen assistant generation marker · thinking disabled]\n&#x27;;
+      const promptPrefixes = [
+        &#x27;&#x27;,
+        &#x27;&#x27;,
+        &#x27;find&#x27;,
+        &#x27;find novel_1000&#x27;,
+        &#x27;find novel_1000 grab&#x27;,
+        &#x27;find novel_1000 grab novel_1000&#x27;,
+        &#x27;find novel_1000 grab novel_1000 read&#x27;,
+        &#x27;find novel_1000 grab novel_1000 read novel_1000&#x27;
+      ];
+      const contextByStep = [
+        {
+          show: [&#x27;prompt&#x27;, &#x27;world&#x27;, &#x27;goal&#x27;, &#x27;gold&#x27;],
+          world: &#x27;entities={character, novel_1000}; types={novel}; initial_state=∅&#x27;,
+          goal: &#x27;Prepare: (exists x0. (GRAB(x0))) then exists x0. (READ(x0))&#x27;,
+          gold: &#x27;Full target: find novel_1000 grab novel_1000 read novel_1000 &lt;eos&gt;&#x27;
+        },
+        {
+          show: [&#x27;prompt&#x27;, &#x27;gold&#x27;],
+          gold: &#x27;Target now: find&#x27;
+        },
+        {
+          show: [&#x27;prompt&#x27;, &#x27;world&#x27;, &#x27;gold&#x27;],
+          world: &#x27;Object gate: novel_1000 has type novel; novel is available in this task&#x27;,
+          gold: &#x27;Gold prefix: find → target now: novel_1000&#x27;
+        },
+        {
+          show: [&#x27;prompt&#x27;, &#x27;gold&#x27;],
+          gold: &#x27;Gold prefix: find novel_1000 → target now: grab&#x27;
+        },
+        {
+          show: [&#x27;prompt&#x27;, &#x27;world&#x27;, &#x27;goal&#x27;, &#x27;gold&#x27;],
+          goalStage: &#x27;stage2&#x27;,
+          world: &#x27;Source s1=∅; novel_1000 is a task entity; grab creates holds_rh(character, novel_1000)&#x27;,
+          goal: &#x27;After grab: recall=0.50; ordered prefix=0.50; dense task reward=0.25&#x27;,
+          gold: &#x27;Gold prefix: find novel_1000 grab → target now: novel_1000&#x27;
+        },
+        {
+          show: [&#x27;prompt&#x27;, &#x27;gold&#x27;],
+          gold: &#x27;Gold prefix: find novel_1000 grab novel_1000 → target now: read&#x27;
+        },
+        {
+          show: [&#x27;prompt&#x27;, &#x27;world&#x27;, &#x27;goal&#x27;, &#x27;gold&#x27;],
+          goalStage: &#x27;stage2&#x27;,
+          world: &#x27;Source s2={holds_rh(character, novel_1000)}; read(novel_1000) is applicable&#x27;,
+          goal: &#x27;After read: GRAB then READ satisfied; recall=1.00; temporal progress=1.00; task reward=1.00&#x27;,
+          gold: &#x27;Gold prefix: find novel_1000 grab novel_1000 read → target now: novel_1000&#x27;
+        },
+        {
+          show: [&#x27;prompt&#x27;, &#x27;goal&#x27;, &#x27;gold&#x27;],
+          goalStage: &#x27;stage2&#x27;,
+          goal: &#x27;Final verification: success=1; task reward=1.00; constraint score=1.00; RL reward=1.00&#x27;,
+          gold: &#x27;Gold prefix: find novel_1000 grab novel_1000 read novel_1000 → target now: &lt;eos&gt;&#x27;
+        }
+      ];
+      let traceIndex = 0;
+      const tracePrev = root.querySelector(&#x27;#eai-trace-prev&#x27;);
+      const traceNext = root.querySelector(&#x27;#eai-trace-next&#x27;);
+      const traceCounter = root.querySelector(&#x27;#eai-trace-counter&#x27;);
+      const traceActive = root.querySelector(&#x27;#eai-trace-active&#x27;);
+      const traceTitle = root.querySelector(&#x27;#eai-trace-step-title&#x27;);
+      const traceGraph = root.querySelector(&#x27;#eai-trace-graph&#x27;);
+      const traceStage1 = root.querySelector(&#x27;#eai-trace-stage1&#x27;);
+      const traceStage2 = root.querySelector(&#x27;#eai-trace-stage2&#x27;);
+      const traceReward = root.querySelector(&#x27;#eai-trace-reward&#x27;);
+      const traceHeadingTitle = root.querySelector(&#x27;#eai-trace-title&#x27;);
+      const contextPromptTitle = root.querySelector(&#x27;#eai-context-prompt-title&#x27;);
+      const contextPrompt = root.querySelector(&#x27;#eai-context-prompt&#x27;);
+      const contextWorld = root.querySelector(&#x27;#eai-context-world&#x27;);
+      const contextGoal = root.querySelector(&#x27;#eai-context-goal&#x27;);
+      const contextGold = root.querySelector(&#x27;#eai-context-gold&#x27;);
+
+      function updateTrace() {
+        const step = traceSteps[traceIndex];
+        const mode = root.dataset.mode || &#x27;both&#x27;;
+        const modeTitle = mode === &#x27;stage1&#x27; ? &#x27;Stage 1&#x27; : mode === &#x27;stage2&#x27; ? &#x27;Stage 2&#x27; : &#x27;both stages&#x27;;
+        traceHeadingTitle.textContent = `Example trajectory through ${modeTitle}`;
+        traceCounter.textContent = `Step ${traceIndex + 1} of ${traceSteps.length} · ${step.label}`;
+        traceTitle.textContent = step.title;
+        traceGraph.textContent = step.graph;
+        traceStage1.textContent = step.stage1;
+        traceStage2.textContent = step.stage2;
+        traceReward.textContent = step.reward;
+        const currentContext = contextByStep[traceIndex];
+        const prefix = promptPrefixes[traceIndex];
+        contextPromptTitle.textContent = traceIndex === 0
+          ? &#x27;Qwen chat prompt assembled from the task row&#x27;
+          : `Qwen chat prompt used to predict ${step.label}`;
+        contextPrompt.textContent = prefix ? `${promptBase} ${prefix}` : promptBase;
+        contextWorld.textContent = currentContext.world || &#x27;&#x27;;
+        contextGoal.textContent = currentContext.goal || &#x27;&#x27;;
+        contextGold.textContent = currentContext.gold || &#x27;&#x27;;
+        root.querySelectorAll(&#x27;[data-context]&#x27;).forEach(panel =&gt; {
+          const stage = panel.dataset.context === &#x27;goal&#x27;
+            ? currentContext.goalStage
+            : panel.dataset.contextStage;
+          const visibleForMode = !stage || mode === &#x27;both&#x27; || mode === stage;
+          panel.hidden = !currentContext.show.includes(panel.dataset.context) || !visibleForMode;
+        });
+        tracePrev.disabled = traceIndex === 0;
+        traceNext.disabled = traceIndex === traceSteps.length - 1;
+        traceNext.textContent = traceIndex === traceSteps.length - 1 ? &#x27;Complete&#x27; : &#x27;Next&#x27;;
+        root.querySelectorAll(&#x27;[data-token-step]&#x27;).forEach(token =&gt; {
+          token.dataset.active = String(Number(token.dataset.tokenStep) === traceIndex);
+        });
+        let activeCount = 0;
+        let firstActiveNode = null;
+        root.querySelectorAll(&#x27;.stage-node&#x27;).forEach(node =&gt; {
+          const nodeMode = node.closest(&#x27;.stage1&#x27;) ? &#x27;stage1&#x27; : &#x27;stage2&#x27;;
+          const visibleForMode = mode === &#x27;both&#x27; || mode === nodeMode;
+          const active = visibleForMode &amp;&amp; step.nodes.includes(node.dataset.node);
+          if (active) {
+            activeCount += 1;
+            if (!firstActiveNode) firstActiveNode = node;
+          }
+          node.setAttribute(&#x27;aria-pressed&#x27;, String(active));
+          node.setAttribute(&#x27;aria-label&#x27;, `${node.textContent.trim()}${active ? &#x27;, active for current trajectory step&#x27; : &#x27;&#x27;}`);
+        });
+        traceActive.textContent = `${activeCount} related elements activated below`;
+        if (firstActiveNode) {
+          const value = details[firstActiveNode.dataset.node];
+          title.textContent = firstActiveNode.textContent.trim();
+          kind.textContent = value[0];
+          input.textContent = value[1];
+          output.textContent = value[2];
+          authority.textContent = value[3];
+        }
+      }
+      tracePrev.addEventListener(&#x27;click&#x27;, () =&gt; {
+        if (traceIndex &gt; 0) traceIndex -= 1;
+        updateTrace();
+      });
+      traceNext.addEventListener(&#x27;click&#x27;, () =&gt; {
+        if (traceIndex &lt; traceSteps.length - 1) traceIndex += 1;
+        updateTrace();
+      });
+      updateTrace();
+    })();
+  &lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handleLeave = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

@@ -1,29 +1,13 @@
+from itertools import product
+
 import pytest
 import torch
 
-from domiknows.generation.automata.hmm import (
+from domiknows.generation.learners.hmm.discrete.discreteHMM import (
     DiscreteHMM,
-    ProbabilisticAutomaton,
-    all_sequences,
     baum_welch_train,
     compare_hmm_dfa,
 )
-
-
-def test_toy_hmm_extracts_argmax_dfa_and_compares_sequences():
-    hmm = ProbabilisticAutomaton(
-        transition=[[0.8, 0.2], [0.3, 0.7]],
-        emission=[[0.9, 0.1], [0.2, 0.8]],
-        initial=[0.9, 0.1],
-        symbols=["a", "b"],
-    )
-    dfa = hmm.extract_argmax_dfa()
-
-    assert dfa.accepts(["a", "b"])
-    summary = compare_hmm_dfa(hmm, dfa, all_sequences(["a", "b"], max_length=2))
-    assert 0.0 <= summary["precision"] <= 1.0
-    assert 0.0 <= summary["recall"] <= 1.0
-    assert summary["mean_hmm_probability"] > 0.0
 
 
 def test_discrete_hmm_batched_forward_backward_viterbi_and_serialization(tmp_path):
@@ -87,27 +71,6 @@ def test_baum_welch_fixed_seed_is_deterministic():
     assert torch.allclose(second.model.emission, first.model.emission)
 
 
-def test_baum_welch_accepts_explicit_initial_model():
-    init = ProbabilisticAutomaton(
-        transition=[[0.9, 0.1], [0.1, 0.9]],
-        emission=[[0.8, 0.2], [0.2, 0.8]],
-        initial=[0.5, 0.5],
-        symbols=["a", "b"],
-    )
-
-    result = baum_welch_train(
-        [["a", "a", "a"], ["a", "a", "b"], ["b", "b", "b"], ["b", "b", "a"]],
-        symbols=["a", "b"],
-        state_count=2,
-        max_iter=5,
-        init=init,
-    )
-
-    assert result.model.symbols == ("a", "b")
-    assert result.model.emission[0, 0] > result.model.emission[0, 1]
-    assert result.model.emission[1, 1] > result.model.emission[1, 0]
-
-
 def test_trained_model_still_extracts_dfa_and_compares_with_checker():
     result = baum_welch_train(
         [["a", "a", "a"], ["a", "b", "a"], ["b", "b", "b"]],
@@ -118,7 +81,8 @@ def test_trained_model_still_extracts_dfa_and_compares_with_checker():
     )
 
     dfa = result.model.extract_argmax_dfa()
-    summary = compare_hmm_dfa(result.model, dfa, all_sequences(["a", "b"], max_length=3))
+    corpus = [()] + [tuple(seq) for length in range(1, 4) for seq in product(["a", "b"], repeat=length)]
+    summary = compare_hmm_dfa(result.model, dfa, corpus)
 
     assert dfa.accepts(["a"])
     assert 0.0 <= summary["precision"] <= 1.0

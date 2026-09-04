@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 
 from domiknows.generation import (
-    PromptConditionedHMMGenerationHead,
+    HMMGenerationHead,
     PromptConditionedSpectralWFAGenerationHead,
     hmm_sequence_nll,
     wfa_sequence_energy_loss,
@@ -17,14 +17,29 @@ def _head_kwargs():
         "state_count": 3,
         "pad_size": 4,
         "label_to_token_id": (0, 1, 2, 3, 4),
+        "prompt_conditioning": "initial",
         "prompt_vocab_size": 8,
         "prompt_hidden_size": 6,
         "random_seed": 7,
     }
 
 
+def _hmm_head_kwargs(**overrides):
+    """HMM-specific kwargs (prompt-conditioned) merged with WFA-shared defaults."""
+    base = _head_kwargs()
+    base.update(overrides)
+    return base
+
+
+def _wfa_head_kwargs():
+    """WFA kwargs use the shared defaults but the WFA head doesn't accept prompt_conditioning."""
+    base = _head_kwargs()
+    base.pop("prompt_conditioning", None)
+    return base
+
+
 def test_prompt_conditioned_hmm_returns_normalized_log_probs():
-    head = PromptConditionedHMMGenerationHead(**_head_kwargs())
+    head = HMMGenerationHead(**_head_kwargs())
 
     log_probs = head(None, torch.tensor([[5]]), torch.tensor([1, 2, 3, 0]))
 
@@ -34,7 +49,7 @@ def test_prompt_conditioned_hmm_returns_normalized_log_probs():
 
 
 def test_prompt_conditioned_wfa_returns_finite_log_probs():
-    head = PromptConditionedSpectralWFAGenerationHead(**_head_kwargs())
+    head = PromptConditionedSpectralWFAGenerationHead(**_wfa_head_kwargs())
 
     log_probs = head(None, torch.tensor([[5]]), torch.tensor([1, 2, 3, 0]))
 
@@ -43,8 +58,46 @@ def test_prompt_conditioned_wfa_returns_finite_log_probs():
     assert torch.allclose(log_probs.exp().sum(dim=-1), torch.ones(4), atol=1e-5)
 
 
+def test_prompt_conditioned_hmm_random_seed_covers_prompt_and_dynamics_modules():
+    kwargs = {
+        **_head_kwargs(),
+        "dynamics_conditioning": "gated",
+        "dynamics_expert_count": 3,
+        "step_dynamics_conditioning": "prefix_gated",
+    }
+    first = HMMGenerationHead(**kwargs)
+    second = HMMGenerationHead(**kwargs)
+    other = HMMGenerationHead(**{**kwargs, "random_seed": 8})
+
+    for name, parameter in first.named_parameters():
+        assert torch.allclose(parameter, dict(second.named_parameters())[name]), name
+    assert any(
+        not torch.allclose(parameter, dict(other.named_parameters())[name])
+        for name, parameter in first.named_parameters()
+    )
+
+
+def test_prompt_conditioned_wfa_random_seed_covers_prompt_and_dynamics_modules():
+    kwargs = {
+        **_wfa_head_kwargs(),
+        "dynamics_conditioning": "gated",
+        "dynamics_expert_count": 3,
+        "step_dynamics_conditioning": "prefix_gated",
+    }
+    first = PromptConditionedSpectralWFAGenerationHead(**kwargs)
+    second = PromptConditionedSpectralWFAGenerationHead(**kwargs)
+    other = PromptConditionedSpectralWFAGenerationHead(**{**kwargs, "random_seed": 8})
+
+    for name, parameter in first.named_parameters():
+        assert torch.allclose(parameter, dict(second.named_parameters())[name]), name
+    assert any(
+        not torch.allclose(parameter, dict(other.named_parameters())[name])
+        for name, parameter in first.named_parameters()
+    )
+
+
 def test_different_prompts_change_hmm_initial_state_and_logits():
-    head = PromptConditionedHMMGenerationHead(**_head_kwargs())
+    head = HMMGenerationHead(**_head_kwargs())
 
     state_a = head.prompt_initial_probs(torch.tensor([[5]]))
     state_b = head.prompt_initial_probs(torch.tensor([[6]]))
@@ -56,7 +109,7 @@ def test_different_prompts_change_hmm_initial_state_and_logits():
 
 
 def test_different_prompts_change_wfa_initial_state_and_logits():
-    head = PromptConditionedSpectralWFAGenerationHead(**_head_kwargs())
+    head = PromptConditionedSpectralWFAGenerationHead(**_wfa_head_kwargs())
 
     state_a = head.prompt_initial_state(torch.tensor([[5]]))
     state_b = head.prompt_initial_state(torch.tensor([[6]]))
@@ -69,7 +122,7 @@ def test_different_prompts_change_wfa_initial_state_and_logits():
 
 def test_frozen_backbone_prompt_encoder_keeps_backbone_frozen():
     backbone = MockFrozenBackbone(vocab_size=8, hidden_size=6)
-    head = PromptConditionedHMMGenerationHead(
+    head = HMMGenerationHead(
         label_count=5,
         state_count=3,
         pad_size=4,
@@ -87,7 +140,7 @@ def test_frozen_backbone_prompt_encoder_keeps_backbone_frozen():
 
 
 def test_embedding_prompt_encoder_is_trainable_in_offline_mode():
-    head = PromptConditionedSpectralWFAGenerationHead(**_head_kwargs())
+    head = PromptConditionedSpectralWFAGenerationHead(**_wfa_head_kwargs())
 
     names = head.trainable_parameter_names()
 
@@ -97,8 +150,8 @@ def test_embedding_prompt_encoder_is_trainable_in_offline_mode():
 
 
 def test_prompt_conditioned_losses_accept_instruction_tokens():
-    hmm = PromptConditionedHMMGenerationHead(**_head_kwargs())
-    wfa = PromptConditionedSpectralWFAGenerationHead(**_head_kwargs())
+    hmm = HMMGenerationHead(**_head_kwargs())
+    wfa = PromptConditionedSpectralWFAGenerationHead(**_wfa_head_kwargs())
     labels = torch.tensor([1, 2, 3, 0])
     prompt = torch.tensor([[5]])
 
@@ -113,7 +166,7 @@ def test_prompt_conditioned_losses_accept_instruction_tokens():
 
 
 def test_gated_hmm_returns_normalized_dynamics_weights_and_matrices():
-    head = PromptConditionedHMMGenerationHead(
+    head = HMMGenerationHead(
         **_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=3,
@@ -134,7 +187,7 @@ def test_gated_hmm_returns_normalized_dynamics_weights_and_matrices():
 
 
 def test_gated_hmm_prompts_change_transition_and_emission_matrices():
-    head = PromptConditionedHMMGenerationHead(
+    head = HMMGenerationHead(
         **_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=3,
@@ -150,7 +203,7 @@ def test_gated_hmm_prompts_change_transition_and_emission_matrices():
 
 
 def test_gated_hmm_single_expert_matches_initial_only_base_dynamics():
-    head = PromptConditionedHMMGenerationHead(
+    head = HMMGenerationHead(
         **_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=1,
@@ -162,7 +215,7 @@ def test_gated_hmm_single_expert_matches_initial_only_base_dynamics():
 
 
 def test_none_dynamics_uses_initial_only_base_dynamics():
-    head = PromptConditionedHMMGenerationHead(**_head_kwargs(), dynamics_conditioning="none")
+    head = HMMGenerationHead(**_head_kwargs(), dynamics_conditioning="none")
 
     assert torch.allclose(head.prompt_dynamics_weights(torch.tensor([[5]])), torch.ones(1))
     assert torch.allclose(head.prompt_transition_probs(torch.tensor([[5]])), head.transition_probs)
@@ -171,7 +224,7 @@ def test_none_dynamics_uses_initial_only_base_dynamics():
 
 def test_gated_wfa_returns_finite_signed_dynamics():
     head = PromptConditionedSpectralWFAGenerationHead(
-        **_head_kwargs(),
+        **_wfa_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=3,
     )
@@ -192,7 +245,7 @@ def test_gated_wfa_returns_finite_signed_dynamics():
 
 def test_gated_wfa_prompts_change_transition_and_final_scores():
     head = PromptConditionedSpectralWFAGenerationHead(
-        **_head_kwargs(),
+        **_wfa_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=3,
     )
@@ -207,7 +260,7 @@ def test_gated_wfa_prompts_change_transition_and_final_scores():
 
 
 def test_step_adaptive_hmm_returns_finite_log_probs_and_prefix_changes_dynamics():
-    head = PromptConditionedHMMGenerationHead(
+    head = HMMGenerationHead(
         **_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=3,
@@ -234,7 +287,7 @@ def test_step_adaptive_hmm_returns_finite_log_probs_and_prefix_changes_dynamics(
 
 def test_step_adaptive_wfa_returns_finite_log_probs_and_prefix_changes_dynamics():
     head = PromptConditionedSpectralWFAGenerationHead(
-        **_head_kwargs(),
+        **_wfa_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=3,
         step_dynamics_conditioning="prefix_gated",
@@ -259,7 +312,7 @@ def test_step_adaptive_wfa_returns_finite_log_probs_and_prefix_changes_dynamics(
 
 
 def test_step_adaptive_weights_change_with_prompt_and_next_logits_change_with_prefix():
-    head = PromptConditionedHMMGenerationHead(
+    head = HMMGenerationHead(
         **_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=3,
@@ -277,7 +330,7 @@ def test_step_adaptive_weights_change_with_prompt_and_next_logits_change_with_pr
 
 def test_step_adaptive_requires_gated_dynamics():
     try:
-        PromptConditionedHMMGenerationHead(
+        HMMGenerationHead(
             **_head_kwargs(),
             dynamics_conditioning="none",
             step_dynamics_conditioning="prefix_gated",
@@ -289,7 +342,7 @@ def test_step_adaptive_requires_gated_dynamics():
 
 
 def test_step_adaptive_single_expert_is_valid_noop():
-    head = PromptConditionedHMMGenerationHead(
+    head = HMMGenerationHead(
         **_head_kwargs(),
         dynamics_conditioning="gated",
         dynamics_expert_count=1,

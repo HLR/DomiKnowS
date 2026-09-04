@@ -4,23 +4,17 @@ import pytest
 import torch
 
 from domiknows.generation import (
-    AnyOfGenerationConstraint,
     HMMFactorGraphEncoder,
     LabelRef,
     GenerationEncoder,
     GraphLatentCompilerResult,
     LatentWindowSpec,
     LatentTransitionPotential,
-    RequiredTokenConstraint,
-    constraints_to_dfa,
     discover_generation_enforcement,
     discover_latent_window_specs,
     discover_transition_potentials,
     graph_latent_compiler_result,
-    mark_for_both,
-    mark_for_dfa,
     mark_for_latent,
-    required_token,
     window_formula_loss,
 )
 from domiknows.graph.logicalConstrain import andL, atLeastAL, existsAL, ifL, notL, orL
@@ -40,21 +34,6 @@ def build_bundle():
     return encoder.build_graph()
 
 
-def test_mark_for_dfa_routes_explicit_constraint():
-    graph, bundle = build_bundle()
-    with graph:
-        lc = andL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "x"))
-        mark_for_dfa(lc, required_token("A"))
-
-    enforcement = discover_generation_enforcement(graph, bundle)
-
-    assert any(
-        isinstance(constraint, RequiredTokenConstraint) and constraint.token == "A"
-        for constraint in enforcement.dfa_constraints
-    )
-    assert enforcement.latent_specs == ()
-
-
 def test_mark_for_latent_routes_only_to_latent_specs():
     graph, bundle = build_bundle()
     a = bundle.vocabulary.label_for_token("A")
@@ -69,25 +48,6 @@ def test_mark_for_latent_routes_only_to_latent_specs():
 
     enforcement = discover_generation_enforcement(graph, bundle)
 
-    assert enforcement.dfa_constraints == ()
-    assert enforcement.latent_specs == (spec,)
-
-
-def test_mark_for_both_routes_to_dfa_and_latent():
-    graph, bundle = build_bundle()
-    a = bundle.vocabulary.label_for_token("A")
-    b = bundle.vocabulary.label_for_token("B")
-    spec = LatentWindowSpec(if_label=a, formula=b, window=2)
-    with graph:
-        lc = atLeastAL(bundle.context.token_value("A", "x"), 1)
-        mark_for_both(lc, constraint=required_token("A"), spec=spec)
-
-    enforcement = discover_generation_enforcement(graph, bundle)
-
-    assert any(
-        isinstance(constraint, RequiredTokenConstraint) and constraint.token == "A"
-        for constraint in enforcement.dfa_constraints
-    )
     assert enforcement.latent_specs == (spec,)
 
 
@@ -97,7 +57,7 @@ def test_auto_discovered_dfa_constraints_still_work_with_enforcement():
         atLeastAL(bundle.context.token_value("A", "x"), 1)
 
     enforcement = discover_generation_enforcement(graph, bundle)
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
     a = bundle.vocabulary.label_for_token("A")
     eos = bundle.vocabulary.label_for_token("<eos>")
 
@@ -114,10 +74,7 @@ def test_auto_discovered_boolean_dfa_constraints_work_with_enforcement():
         )
 
     enforcement = discover_generation_enforcement(graph, bundle)
-
-    assert len(enforcement.dfa_constraints) == 1
-    assert isinstance(enforcement.dfa_constraints[0], AnyOfGenerationConstraint)
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
     a = bundle.vocabulary.label_for_token("A")
     b = bundle.vocabulary.label_for_token("B")
     eos = bundle.vocabulary.label_for_token("<eos>")

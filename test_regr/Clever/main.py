@@ -71,7 +71,7 @@ except ImportError:
 from domiknows import setProductionLogMode, setup_step_notebook, StepNotebook
 
 from domiknows.program import CallbackProgram
-from domiknows.program.lossprogram import GumbelInferenceProgram, InferenceProgram
+from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
 import torch.nn as nn
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
@@ -208,28 +208,6 @@ class InferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, InferenceP
     
     def __init__(self, graph, Model, loss=None, **kwargs):
         """Initialize callback-enabled InferenceProgram."""
-        super().__init__(graph, Model, loss=loss, **kwargs)
-        self._init_callback_hooks()
-
-
-class GumbelInferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, GumbelInferenceProgram):
-    """GumbelInferenceProgram with callback support."""
-    
-    def default_after_train_step(self, output=None):
-        """Override to do nothing - GumbelInferenceProgram already handles backward."""
-        pass
-    
-    def __init__(self, graph, Model, loss=None, **kwargs):
-        """
-        Initialize with proper handling of loss parameter.
-        
-        Args:
-            graph: Knowledge graph
-            Model: Model class (e.g., PoiModel, SolverModel)
-            loss: Loss function (optional, primarily for PoiModel)
-            **kwargs: Additional arguments
-        """
-        # Standard initialization
         super().__init__(graph, Model, loss=loss, **kwargs)
         self._init_callback_hooks()
 
@@ -954,8 +932,6 @@ def program_declaration(train, dev, args, device='cpu'):
     import torch.nn as nn
     loss_func = nn.BCELoss
     
-    ProgramClass = GumbelInferenceProgramWithCallbacks if args.use_gumbel else InferenceProgramWithCallbacks
-
     program_kwargs = {
         'loss': loss_func,
         'poi': poi,
@@ -973,7 +949,7 @@ def program_declaration(train, dev, args, device='cpu'):
             'hard_gumbel': args.hard_gumbel,
         })
 
-    program = ProgramClass(graph, SolverModel, **program_kwargs)
+    program = InferenceProgramWithCallbacks(graph, SolverModel, **program_kwargs)
 
     return program, train_dataset, dev_dataset, attribute_names_dict
 

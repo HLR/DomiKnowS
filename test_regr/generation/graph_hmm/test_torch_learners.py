@@ -16,14 +16,14 @@ Generation heads enable constraint-respecting neural text generation by combinin
 import torch
 
 from domiknows.generation import constrained_label_greedy_decode
-from domiknows.generation.automata import DFA
-from domiknows.generation.graph_hmm import (
+from domiknows.generation.dfa import DFA
+from domiknows.generation.learners import (
     DomiKnowSAwareHMM,
     GraphHMMGenerationHead,
     GraphSpectralAutomaton,
     GraphSpectralGenerationHead,
 )
-from domiknows.generation.vocabulary import TokenVocabulary
+from domiknows.generation.dfa.vocabulary import TokenVocabulary
 
 
 def test_graph_hmm_generation_head_forward_and_masks_are_finite():
@@ -78,6 +78,55 @@ def test_graph_hmm_generation_head_from_fitted_hmm_copies_parameters():
     assert head.trainable_parameter_names() == []
 
 
+def test_graph_hmm_generation_head_from_fitted_hmm_accepts_random_seed():
+    learner = DomiKnowSAwareHMM(
+        graph=None,
+        n_hidden_states=2,
+        state_names=["A", "B"],
+        symbols=[0, 1],
+        transition_mask=torch.tensor([[1.0, 1.0], [0.0, 1.0]], dtype=torch.float64),
+        emission_mask=torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64),
+        random_seed=3,
+    ).fit([[0, 1], [0, 1, 1]], max_iter=2)
+
+    first = GraphHMMGenerationHead.from_graph_hmm(
+        learner,
+        trainable=True,
+        pad_size=3,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        random_seed=7,
+    )
+    second = GraphHMMGenerationHead.from_graph_hmm(
+        learner,
+        trainable=True,
+        pad_size=3,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        random_seed=7,
+    )
+    other = GraphHMMGenerationHead.from_graph_hmm(
+        learner,
+        trainable=True,
+        pad_size=3,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        random_seed=8,
+    )
+
+    assert torch.allclose(first.initial_logits, second.initial_logits)
+    assert torch.allclose(first.transition_logits, second.transition_logits)
+    assert torch.allclose(first.emission_logits, second.emission_logits)
+    assert torch.allclose(first.prompt_embedding.weight, second.prompt_embedding.weight)
+    assert not torch.allclose(first.initial_logits, other.initial_logits)
+    assert not torch.allclose(first.transition_logits, other.transition_logits)
+    assert not torch.allclose(first.emission_logits, other.emission_logits)
+    assert not torch.allclose(first.prompt_embedding.weight, other.prompt_embedding.weight)
+
+
 def test_graph_hmm_to_torch_learner_factory():
     """Test the factory method that converts DomiKnowSAwareHMM directly to GraphHMMGenerationHead."""
     learner = DomiKnowSAwareHMM(
@@ -85,6 +134,8 @@ def test_graph_hmm_to_torch_learner_factory():
         n_hidden_states=2,
         state_names=["A", "B"],
         symbols=[0, 1],
+        transition_mask=torch.ones((2, 2), dtype=torch.float64),
+        emission_mask=torch.ones((2, 2), dtype=torch.float64),
         random_seed=5,
     ).fit([[0, 1], [0, 0]], max_iter=1)
 
@@ -92,6 +143,39 @@ def test_graph_hmm_to_torch_learner_factory():
 
     assert isinstance(head, GraphHMMGenerationHead)
     assert head.trainable_parameter_names()
+
+
+def test_graph_hmm_generation_head_can_condition_initial_state_on_prompt():
+    """Prompt-conditioned graph-HMM heads should let prompt ids change label probabilities."""
+    head = GraphHMMGenerationHead(
+        n_hidden_states=2,
+        label_count=2,
+        initial=torch.tensor([0.5, 0.5]),
+        transition=torch.eye(2),
+        emission=torch.eye(2),
+        emission_mask=torch.eye(2),
+        pad_size=2,
+        trainable=True,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        label_to_token_id=(0, 1),
+    )
+    with torch.no_grad():
+        head.prompt_initial_projector.weight.zero_()
+        head.prompt_initial_projector.bias.zero_()
+        head.prompt_embedding.weight.zero_()
+        head.prompt_embedding.weight[2, 0] = 10.0
+        head.prompt_embedding.weight[3, 0] = -10.0
+        head.prompt_initial_projector.weight[0, 0] = 1.0
+        head.prompt_initial_projector.weight[1, 0] = -1.0
+
+    prompt_two = head.next_label_logits(torch.tensor([2]))
+    prompt_three = head.next_label_logits(torch.tensor([3]))
+
+    assert prompt_two[0] > prompt_two[1]
+    assert prompt_three[1] > prompt_three[0]
+    assert "prompt_embedding.weight" in head.trainable_parameter_names()
 
 
 def test_graph_hmm_generation_head_decodes_with_label_dfa():
@@ -186,6 +270,27 @@ def test_graph_spectral_generation_head_from_fitted_automaton():
     assert torch.allclose(head.final, automaton.final.float())
     assert head.operators.shape == (2, 2, 2)
     assert head.trainable_parameter_names() == []
+
+
+def test_graph_spectral_generation_head_from_fitted_automaton_accepts_random_seed():
+    automaton = GraphSpectralAutomaton(symbols=[0, 1])
+    automaton.fit(
+        [[0], [1], [0, 1], [0, 1]],
+        prefixes=[(), (0,), (1,)],
+        suffixes=[(), (0,), (1,)],
+        rank=2,
+    )
+
+    first = GraphSpectralGenerationHead.from_graph_spectral(automaton, trainable=True, pad_size=3, random_seed=7)
+    second = GraphSpectralGenerationHead.from_graph_spectral(automaton, trainable=True, pad_size=3, random_seed=7)
+    other = GraphSpectralGenerationHead.from_graph_spectral(automaton, trainable=True, pad_size=3, random_seed=8)
+
+    assert torch.allclose(first.initial, second.initial)
+    assert torch.allclose(first.final, second.final)
+    assert torch.allclose(first.operators, second.operators)
+    assert not torch.allclose(first.initial, other.initial)
+    assert not torch.allclose(first.final, other.final)
+    assert not torch.allclose(first.operators, other.operators)
 
 
 def test_graph_spectral_to_torch_learner_factory():
