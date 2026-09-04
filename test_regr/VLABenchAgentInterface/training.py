@@ -220,7 +220,12 @@ def train_controller_epoch(
             if plan_context is not None:
                 inputs += (plan_context.to(device),)
             prediction = model(*inputs)
-            loss, metrics = controller_loss(prediction, target)
+            loss, metrics = controller_loss(
+                prediction,
+                target,
+                state=state,
+                pose_step_scale=getattr(model, "pose_step_scale", None),
+            )
             scaled_loss = loss / max(1, grad_accumulation)
         scaled_loss.backward()
         if steps % max(1, grad_accumulation) == 0:
@@ -280,7 +285,12 @@ def train_controller_steps(
         if plan_context is not None:
             inputs += (plan_context.to(device),)
         with _autocast(device, mixed_precision):
-            loss, metrics = controller_loss(model(*inputs), target)
+            loss, metrics = controller_loss(
+                model(*inputs),
+                target,
+                state=state,
+                pose_step_scale=getattr(model, "pose_step_scale", None),
+            )
             scaled_loss = loss / max(1, grad_accumulation)
         scaled_loss.backward()
         if step % max(1, grad_accumulation) == 0:
@@ -552,6 +562,7 @@ def save_joint_checkpoint(
     stage: str,
     epoch: int,
     metrics: Mapping[str, Any] | None = None,
+    next_round: int | None = None,
 ) -> Path:
     """Atomically save the complete hierarchical training state."""
     path = Path(path).resolve()
@@ -575,6 +586,10 @@ def save_joint_checkpoint(
         "torch_rng": torch.get_rng_state(),
         "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
     }
+    if next_round is not None:
+        if int(next_round) < 0:
+            raise ValueError("next reinforcement round cannot be negative")
+        payload["next_round"] = int(next_round)
     torch.save(payload, temporary)
     os.replace(temporary, path)
     return path

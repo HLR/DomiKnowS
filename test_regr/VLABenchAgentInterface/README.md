@@ -158,16 +158,24 @@ The control loader preserves the official LeRobot `task_index` values for all
 therefore retain distinct controller conditions instead of being collapsed
 into one primitive skill-pattern ID. Online execution resolves the environment
 instruction through the same metadata and rejects unknown instructions.
-The controller additionally receives the active graph skill, grounded entity
-pointer, and operation position; demonstration phase supplies this context in
-Stage 1 and the selected plan cursor supplies it online.
+The controller additionally receives the active graph skill and operation
+position; demonstration phase supplies this context in Stage 1 and the
+selected plan cursor supplies it online. The entity-context slot remains at
+its padding value because demonstrations do not identify a stable
+segmentation-to-graph pointer correspondence; this avoids selecting untrained
+entity embedding rows online. Simulator
+progress/intention advances that cursor when available; normalized episode
+phase is the fallback when those signals stay flat, matching the
+demonstration-window convention.
 The controller samples six bounded local end-effector deltas from
 tanh-transformed Normal distributions
 and the gripper from a Bernoulli distribution. Its pose head predicts bounded
 local xyz/Euler increments, cumulatively integrates the chunk around the last
 observed pose, and exposes the resulting absolute end-effector targets to the
 existing dataset, PPO, and simulator interfaces. Position and rotation have
-separate physical exploration-noise scales. PPO uses `gamma=0.99`, GAE
+separate physical exploration-noise scales. Behavior cloning compares these
+wrapped pose deltas in the same physically scaled space instead of regressing
+large absolute coordinates. PPO uses `gamma=0.99`, GAE
 `lambda=0.95`, clip `0.2`, four PPO epochs, value weight `0.5`, and entropy
 weight `0.01`; a `0.05` behavior-cloning anchor is retained. The bounded
 critic uses clipped targets and Smooth L1 loss without changing shared actor
@@ -185,13 +193,17 @@ update. The controller executes four actions before replanning. Each action
 translation and 0.10 radians of rotation per simulator action. IK uses a
 `5e-3` convergence tolerance and at most 200 iterations; the hierarchical
 program retries a failed target at `0.5`, `0.25`, and `0.125` scale. A
-hold-position command is not counted as recovery. Exhausted retries truncate
-the rollout without erasing reward accumulated by earlier valid actions and
-provide a controller feasibility penalty.
+hold-position command is not counted as recovery. Exhausted retries reject the
+current action chunk and provide a controller feasibility penalty. The policy
+resamples from the unchanged observation up to three consecutive rejected
+chunks by default; only then does it truncate the rollout, without erasing
+reward accumulated by earlier valid actions. Override this bounded retry
+budget with `--max-consecutive-ik-rejections`.
 
 The canonical 24 GB GPU command runs both stages, samples all ten tasks
 uniformly, configures four planner samples and eight simulator rollouts per
-update, and writes an epoch checkpoint after Stage 1 and each RL epoch:
+update, and writes an epoch checkpoint after Stage 1 and each RL epoch. It also
+atomically refreshes `agent_rl_progress.pt` after every RL round:
 
 ```powershell
 uv run python -m test_regr.VLABenchAgentInterface.main train-agent --two-stage `
@@ -236,8 +248,11 @@ uv run python -m test_regr.VLABenchAgentInterface.main train-agent --two-stage `
 
 Resume is rejected before training if the graph-derived domain checksum,
 vocabulary, or graph-decoder configuration differs. Checkpoints from the old
-prefix-reprompt planner must restart Stage 1. Stage 1 resumes at boundaries; a reinforcement
-checkpoint restores the next RL epoch and both optimizer/RNG states.
+prefix-reprompt planner must restart Stage 1. Stage 1 resumes at boundaries; an
+epoch reinforcement checkpoint restores the next RL epoch, while
+`agent_rl_progress.pt` restores the next unfinished round in the current epoch.
+Both forms restore optimizer and RNG states. A resumed partial RL epoch does
+not repeat the fixed-seed baseline evaluation.
 
 For debugging, component commands remain available:
 
@@ -290,8 +305,9 @@ R = clip(
 
 Invalid plans never reach the controller. Non-finite actions give both
 policies zero simulator return. An unrecoverable IK target is never executed;
-the rollout terminates at the last valid state, retains earlier shaped reward,
-and records an explicit feasibility cost for controller learning.
+the action chunk is retained as negative feasibility evidence and resampled
+from the last valid state. Reaching the bounded consecutive-rejection budget
+terminates the rollout while retaining earlier shaped reward.
 
 The controller receives these chunk rewards through PPO and GAE. Each selected
 planner decision receives the simulator return-to-go from that decision onward

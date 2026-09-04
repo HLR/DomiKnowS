@@ -42,7 +42,11 @@ from test_regr.VLABenchAgentInterface.models import (
     resolve_vision_language_loader,
     vision_language_hidden_size,
 )
-from test_regr.VLABenchAgentInterface.main import build_parser
+from test_regr.VLABenchAgentInterface.main import (
+    _aggregate_task_metrics,
+    _reinforcement_resume_position,
+    build_parser,
+)
 from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
     PlannerReplayDecision,
@@ -552,6 +556,27 @@ def test_control_windows_controller_loss_and_training(tmp_path):
     assert payload["epoch"] == 0
 
 
+def test_controller_delta_loss_uses_execution_scales_and_wraps_euler_angles():
+    state = torch.zeros(1, 1, 7)
+    state[..., 3] = torch.pi - 0.05
+    target = torch.zeros(1, 1, 7)
+    target[..., 0] = 0.02
+    target[..., 3] = -torch.pi + 0.05
+    target[..., -1] = 1.0
+    prediction = target.clone()
+    prediction[..., -1] = 20.0
+
+    loss, metrics = controller_loss(
+        prediction,
+        target,
+        state=state,
+        pose_step_scale=(0.02, 0.02, 0.02, 0.10, 0.10, 0.10),
+    )
+
+    assert metrics["pose_loss"] == pytest.approx(0.0, abs=1e-7)
+    assert loss.item() < 1e-6
+
+
 def test_control_task_metadata_preserves_language_condition_ids(tmp_path):
     metadata = tmp_path / "meta"
     metadata.mkdir()
@@ -694,6 +719,53 @@ def test_standalone_agent_uses_bounded_report_defaults():
     assert args.rl_rounds_per_epoch == 10
     assert args.eval_rollouts_per_task == 1
     assert args.ik_tolerance == pytest.approx(5e-3)
+    assert args.max_consecutive_ik_rejections == 3
+
+
+def test_reinforcement_round_metrics_aggregate_repeated_tasks():
+    rounds = [
+        {"per_task": {"select_book": {
+            "episodes": 2, "successes": 1, "valid_rate": 1.0,
+            "return": 0.5, "steps": 10.0, "ik_failures": 4,
+            "ik_recoveries": 1, "ik_truncation_rate": 0.5,
+            "execution_complete_rate": 0.5,
+        }}},
+        {"per_task": {"select_book": {
+            "episodes": 1, "successes": 1, "valid_rate": 0.0,
+            "return": 0.2, "steps": 4.0, "ik_failures": 2,
+            "ik_recoveries": 1, "ik_truncation_rate": 0.0,
+            "execution_complete_rate": 1.0,
+        }}},
+    ]
+
+    metrics = _aggregate_task_metrics(rounds)["select_book"]
+
+    assert metrics["episodes"] == 3
+    assert metrics["success_rate"] == pytest.approx(2 / 3)
+    assert metrics["valid_rate"] == pytest.approx(2 / 3)
+    assert metrics["return"] == pytest.approx(0.4)
+    assert metrics["ik_failures"] == 6
+    assert metrics["ik_recovery_rate"] == pytest.approx(2 / 6)
+    assert metrics["execution_complete_rate"] == pytest.approx(2 / 3)
+
+
+def test_reinforcement_resume_supports_round_and_legacy_epoch_checkpoints():
+    partial = {
+        "stage": "reinforcement",
+        "epoch": 1,
+        "next_round": 4,
+        "metrics": {"rounds": [{"episodes": 2}] * 4},
+    }
+    assert _reinforcement_resume_position(partial, 10) == (
+        1, 4, partial["metrics"]["rounds"]
+    )
+    complete_rounds = {**partial, "next_round": 10, "metrics": {"rounds": [{}] * 10}}
+    assert _reinforcement_resume_position(complete_rounds, 10)[0:2] == (1, 10)
+    assert _reinforcement_resume_position(
+        {"stage": "reinforcement", "epoch": 1}, 10
+    ) == (2, 0, [])
+    with pytest.raises(ValueError, match="inconsistent"):
+        _reinforcement_resume_position({**partial, "next_round": 5}, 10)
 
 
 class TinyCompactPlanner(torch.nn.Module):
@@ -1104,7 +1176,7 @@ def test_joint_rewards_telescope_and_planner_uses_return_to_go():
     assert episode.total_return == pytest.approx(0.95)
     assert sum(item.reward for item in episode.controller) == pytest.approx(episode.total_return)
     assert episode.planner_returns == pytest.approx([episode.total_return])
-    assert episode.controller[0].plan_context.tolist() == [[1, 1, 1]]
+    assert episode.controller[0].plan_context.tolist() == [[1, 0, 1]]
     assert torch.max(torch.abs(episode.controller[0].actions[0, 0, :3])).item() <= 0.05 + 1e-6
     assert torch.isfinite(episode.controller[0].old_logprob)
 
@@ -1204,7 +1276,53 @@ def test_failed_ik_action_receives_zero_and_is_not_executed():
     assert episode.valid
     assert episode.total_return == 0.0
     assert simulator.count == 0
-    assert episode.controller[0].feasibility_cost == 4.0
+    assert len(episode.controller) == 3
+    assert all(item.feasibility_cost == 4.0 for item in episode.controller)
+    assert episode.ik_failures == 12
+    assert episode.termination_reason == "ik_failure"
+
+
+def test_flat_progress_uses_episode_phase_to_advance_operation_context():
+    world = build_vlabench_world_graph("test_phase_context_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_phase_context"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class RecordingController(MultiViewController):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.contexts = []
+
+        def sample_action_chunk(self, images, state, task_index, plan_context=None):
+            self.contexts.append(plan_context.detach().clone())
+            return super().sample_action_chunk(images, state, task_index, plan_context)
+
+    controller = RecordingController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: FakeSimulator(success=False),
+        execute_horizon=1,
+        max_steps=4,
+        num_samples=1,
+        ppo_epochs=1,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+
+    episode = program.collect_episode({"task": "select_book"})
+
+    assert episode.steps == 4
+    assert len(controller.contexts) == 4
+    assert torch.equal(controller.contexts[0], controller.contexts[1])
+    assert not torch.equal(controller.contexts[1], controller.contexts[2])
+    assert torch.equal(controller.contexts[2], controller.contexts[3])
 
 
 def test_ik_recovery_retries_a_smaller_bounded_delta():
@@ -1367,6 +1485,8 @@ def test_joint_checkpoint_restores_rng_and_rejects_domain_mismatch(tmp_path):
         runtime=runtime,
         stage="reinforcement",
         epoch=3,
+        next_round=4,
+        metrics={"rounds": [{"episodes": 2}] * 4},
     )
     expected_random = torch.rand(4)
     planner.preference.data.add_(5.0)
@@ -1380,6 +1500,8 @@ def test_joint_checkpoint_restores_rng_and_rejects_domain_mismatch(tmp_path):
         runtime=runtime,
     )
     assert payload["stage"] == "reinforcement" and payload["epoch"] == 3
+    assert payload["next_round"] == 4
+    assert len(payload["metrics"]["rounds"]) == 4
     assert torch.equal(planner.preference, saved_preference)
     assert torch.equal(torch.rand(4), expected_random)
     payload["domain_checksum"] = "bad"

@@ -362,6 +362,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         max_rotation_step: float = 0.10,
         ik_tolerance: float = 1e-3,
         ik_max_steps: int = 200,
+        max_consecutive_ik_rejections: int = 3,
         simulator_init_retries: int = 3,
         progress_callback: Callable[[str], None] | None = None,
     ):
@@ -417,6 +418,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             raise ValueError("IK tolerance must be finite and positive")
         if self.ik_max_steps <= 0:
             raise ValueError("IK max steps must be positive")
+        self.max_consecutive_ik_rejections = int(max_consecutive_ik_rejections)
+        if self.max_consecutive_ik_rejections <= 0:
+            raise ValueError("maximum consecutive IK rejections must be positive")
         self.simulator_init_retries = max(1, int(simulator_init_retries))
         self.progress_callback = progress_callback
         self._entity_dfa_cache: dict[int, Any] = {}
@@ -478,6 +482,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         transitions: list[ControllerTransition] = []
         valid, success, steps = True, False, 0
         operation_cursor = 0
+        consecutive_ik_rejections = 0
         ik_failures = ik_recoveries = 0
         termination_reason = "max_steps"
         previous_progress = previous_intention = 0.0
@@ -602,12 +607,28 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if controller_task_index is not None
                     else condition_index_for_pattern(subtasks[0]) if subtasks else 0
                 )
-                operation_cursor = min(operation_cursor, max(0, len(plan) - 1))
+                # VLABench's progress/intention signals are often flat until a
+                # primitive completes.  Without a fallback the controller is
+                # conditioned on `pick` for the entire rollout, although the
+                # demonstration windows switch operation context by episode
+                # phase.  Keep semantic advancement when available and use the
+                # same normalized phase convention as the offline dataset.
+                phase_cursor = min(
+                    max(0, len(plan) - 1),
+                    int(steps * max(1, len(plan)) / max(1, self.max_steps)),
+                )
+                operation_cursor = max(operation_cursor, phase_cursor)
                 inputs = _controller_inputs(
                     observations,
                     task_index,
                     self.device_name,
-                    plan_context=controller_plan_context(plan, operation_cursor, entities),
+                    # Offline control demonstrations have no segmentation-to-
+                    # graph pointer correspondence and therefore train the
+                    # entity padding row.  Feeding numbered online pointers
+                    # here selects otherwise untrained embedding rows.  The
+                    # language task id and images retain object identity while
+                    # skill and operation position remain graph-conditioned.
+                    plan_context=controller_plan_context(plan, operation_cursor),
                 )
                 try:
                     try:
@@ -678,12 +699,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 ik_failures += 1
                                 chunk_ik_failures += 1
                         if command is None:
-                            self._report_progress(
-                                f"VLABench rollout IK-truncated task={descriptor.get('task', 'unknown')} "
-                                f"step={steps} after bounded retries: {last_ik_error}"
+                            consecutive_ik_rejections += 1
+                            ik_truncated = (
+                                consecutive_ik_rejections
+                                >= self.max_consecutive_ik_rejections
                             )
-                            ik_truncated = True
-                            termination_reason = "ik_failure"
+                            if ik_truncated:
+                                self._report_progress(
+                                    f"VLABench rollout IK-truncated task={descriptor.get('task', 'unknown')} "
+                                    f"step={steps} after {consecutive_ik_rejections} rejected chunks: "
+                                    f"{last_ik_error}"
+                                )
+                                termination_reason = "ik_failure"
+                            else:
+                                self._report_progress(
+                                    f"VLABench IK rejected action chunk task={descriptor.get('task', 'unknown')} "
+                                    f"step={steps} attempt={consecutive_ik_rejections}/"
+                                    f"{self.max_consecutive_ik_rejections}; resampling"
+                                )
                             break
                     except (ValueError, TypeError, AttributeError, KeyError) as exc:
                         self._report_progress(
@@ -694,6 +727,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         termination_reason = "invalid_action"
                         break
                     timestep = env.step(command)
+                    consecutive_ik_rejections = 0
                     steps += 1
                     executed += 1
                     observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
@@ -895,7 +929,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         if plan_context is not None:
             inputs += (plan_context.to(self.device_name),)
         prediction = self.controller(*inputs)
-        return controller_loss(prediction, batch["actions"].to(self.device_name))[0]
+        return controller_loss(
+            prediction,
+            batch["actions"].to(self.device_name),
+            state=inputs[1],
+            pose_step_scale=getattr(self.controller, "pose_step_scale", None),
+        )[0]
 
     def _update_controller(self, episodes: Sequence[JointEpisode]) -> float:
         # PPO and the behavior-cloning anchor construct fresh autograd graphs.

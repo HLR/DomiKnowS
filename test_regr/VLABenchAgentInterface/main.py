@@ -57,6 +57,69 @@ def _status(message: str) -> None:
     print(f"[vlabench-data] {message}", file=sys.stderr, flush=True)
 
 
+def _aggregate_task_metrics(round_metrics):
+    totals = {}
+    for round_item in round_metrics:
+        for task, item in round_item.get("per_task", {}).items():
+            episodes = int(item.get("episodes", 0))
+            task_totals = totals.setdefault(task, {
+                "episodes": 0,
+                "successes": 0,
+                "valid": 0.0,
+                "return": 0.0,
+                "steps": 0.0,
+                "ik_failures": 0,
+                "ik_recoveries": 0,
+                "ik_truncations": 0.0,
+                "execution_complete": 0.0,
+            })
+            task_totals["episodes"] += episodes
+            task_totals["successes"] += int(item.get("successes", 0))
+            task_totals["valid"] += float(item.get("valid_rate", 0.0)) * episodes
+            task_totals["return"] += float(item.get("return", 0.0)) * episodes
+            task_totals["steps"] += float(item.get("steps", 0.0)) * episodes
+            task_totals["ik_failures"] += int(item.get("ik_failures", 0))
+            task_totals["ik_recoveries"] += int(item.get("ik_recoveries", 0))
+            task_totals["ik_truncations"] += float(item.get("ik_truncation_rate", 0.0)) * episodes
+            task_totals["execution_complete"] += float(item.get("execution_complete_rate", 0.0)) * episodes
+    return {
+        task: {
+            "episodes": item["episodes"],
+            "successes": item["successes"],
+            "success_rate": item["successes"] / max(1, item["episodes"]),
+            "valid_rate": item["valid"] / max(1, item["episodes"]),
+            "return": item["return"] / max(1, item["episodes"]),
+            "steps": item["steps"] / max(1, item["episodes"]),
+            "ik_failures": item["ik_failures"],
+            "ik_recoveries": item["ik_recoveries"],
+            "ik_recovery_rate": item["ik_recoveries"] / max(1, item["ik_failures"]),
+            "ik_truncation_rate": item["ik_truncations"] / max(1, item["episodes"]),
+            "execution_complete_rate": item["execution_complete"] / max(1, item["episodes"]),
+        }
+        for task, item in sorted(totals.items())
+    }
+
+
+def _reinforcement_resume_position(payload, rounds_per_epoch):
+    """Return epoch, next round, and completed metrics for old/new checkpoints."""
+    if payload.get("stage") != "reinforcement":
+        return 0, 0, []
+    if "next_round" not in payload:
+        return int(payload["epoch"]) + 1, 0, []
+    next_round = int(payload["next_round"])
+    if next_round < 0 or next_round > int(rounds_per_epoch):
+        raise ValueError(
+            "checkpoint round exceeds --rl-rounds-per-epoch; resume with the original setting"
+        )
+    round_metrics = list(payload.get("metrics", {}).get("rounds", ()))
+    if len(round_metrics) != next_round:
+        raise ValueError("reinforcement progress checkpoint has inconsistent round metrics")
+    # next_round == rounds_per_epoch still needs to aggregate/evaluate and
+    # write the durable epoch checkpoint if interruption happened immediately
+    # after the final round checkpoint.
+    return int(payload["epoch"]), next_round, round_metrics
+
+
 def _device(value: str | None) -> torch.device:
     return torch.device(value or ("cuda" if torch.cuda.is_available() else "cpu"))
 
@@ -271,6 +334,8 @@ def command_train_agent(args) -> None:
     runtime.vocabulary.save(output / "vocab.json")
     resume_stage = None
     start_rl_epoch = 0
+    start_rl_round = 0
+    resumed_round_metrics = []
     if args.resume:
         payload = load_joint_checkpoint(
             args.resume,
@@ -283,7 +348,9 @@ def command_train_agent(args) -> None:
         )
         resume_stage = payload["stage"]
         if resume_stage == "reinforcement":
-            start_rl_epoch = int(payload["epoch"]) + 1
+            start_rl_epoch, start_rl_round, resumed_round_metrics = (
+                _reinforcement_resume_position(payload, args.rl_rounds_per_epoch)
+            )
 
     if resume_stage is None:
         stage1 = create_stage1_program(runtime, planner, device=device)
@@ -364,8 +431,14 @@ def command_train_agent(args) -> None:
         max_rotation_step=args.max_rotation_step,
         ik_tolerance=args.ik_tolerance,
         ik_max_steps=args.ik_max_steps,
+        max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
+        progress_callback=_status,
     )
-    if args.eval_rollouts_per_task > 0 and start_rl_epoch == 0:
+    if (
+        args.eval_rollouts_per_task > 0
+        and start_rl_epoch == 0
+        and resume_stage != "reinforcement"
+    ):
         baseline = stage2.evaluate_rollouts(
             descriptors,
             rollouts_per_task=args.eval_rollouts_per_task,
@@ -384,8 +457,10 @@ def command_train_agent(args) -> None:
             metrics={"simulator_evaluation": baseline},
         )
     for epoch in range(start_rl_epoch, args.rl_epochs):
-        round_metrics = []
-        for round_index in range(args.rl_rounds_per_epoch):
+        continuing_partial_epoch = epoch == start_rl_epoch and start_rl_round > 0
+        round_metrics = list(resumed_round_metrics) if continuing_partial_epoch else []
+        first_round = start_rl_round if continuing_partial_epoch else 0
+        for round_index in range(first_round, args.rl_rounds_per_epoch):
             descriptor = descriptors[
                 (epoch * args.rl_rounds_per_epoch + round_index) % len(descriptors)
             ]
@@ -397,6 +472,22 @@ def command_train_agent(args) -> None:
             round_metrics.append(stage2.train_joint_epoch(
                 [descriptor], rollouts_per_update=args.rollouts_per_update
             ))
+            progress_checkpoint = save_joint_checkpoint(
+                output / "agent_rl_progress.pt",
+                planner=planner,
+                controller=controller,
+                planner_optimizer=planner_optimizer,
+                controller_optimizer=controller_optimizer,
+                runtime=runtime,
+                stage="reinforcement",
+                epoch=epoch,
+                next_round=round_index + 1,
+                metrics={"rounds": round_metrics},
+            )
+            _status(
+                f"saved reinforcement progress checkpoint={progress_checkpoint} "
+                f"next_round={round_index + 1}"
+            )
         episode_count = sum(int(item["episodes"]) for item in round_metrics)
         training_metrics = {
             "rounds": round_metrics,
@@ -404,11 +495,11 @@ def command_train_agent(args) -> None:
             "return": sum(float(item["return"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
             "success_rate": sum(float(item["success_rate"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
             "valid_rate": sum(float(item["valid_rate"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
-            "per_task": {
-                task: metrics
-                for item in round_metrics
-                for task, metrics in item.get("per_task", {}).items()
-            },
+            "ik_failures": sum(int(item.get("ik_failures", 0)) for item in round_metrics),
+            "ik_recoveries": sum(int(item.get("ik_recoveries", 0)) for item in round_metrics),
+            "ik_truncation_rate": sum(float(item.get("ik_truncation_rate", 0.0)) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
+            "execution_complete_rate": sum(float(item.get("execution_complete_rate", 0.0)) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
+            "per_task": _aggregate_task_metrics(round_metrics),
         }
         metrics = training_metrics
         if args.eval_rollouts_per_task > 0:
@@ -615,6 +706,12 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--max-rotation-step", type=float, default=0.10)
     agent.add_argument("--ik-tolerance", type=float, default=5e-3)
     agent.add_argument("--ik-max-steps", type=int, default=200)
+    agent.add_argument(
+        "--max-consecutive-ik-rejections",
+        type=int,
+        default=3,
+        help="resample this many infeasible action chunks before truncating an episode",
+    )
     agent.add_argument("--eval-rollouts-per-task", type=int, default=1)
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)

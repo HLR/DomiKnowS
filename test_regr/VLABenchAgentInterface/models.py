@@ -391,10 +391,44 @@ class MultiViewController(nn.Module):
         return actions
 
 
-def controller_loss(prediction: torch.Tensor, target: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+def controller_loss(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    state: torch.Tensor | None = None,
+    pose_step_scale: Sequence[float] | None = None,
+) -> tuple[torch.Tensor, dict[str, float]]:
     if prediction.shape != target.shape:
         raise ValueError(f"controller prediction {prediction.shape} does not match target {target.shape}")
-    pose = F.smooth_l1_loss(prediction[..., :-1], target[..., :-1].float())
+    target = target.float()
+    if state is None or pose_step_scale is None:
+        pose = F.smooth_l1_loss(prediction[..., :-1], target[..., :-1])
+    else:
+        if state.ndim != 3 or state.shape[0] != prediction.shape[0] or state.shape[-1] < 6:
+            raise ValueError("controller state must be [batch, history, >=6] for delta loss")
+        scale = prediction.new_tensor(tuple(pose_step_scale)).view(1, 1, 6)
+        if scale.numel() != 6 or not bool(torch.isfinite(scale).all()) or bool((scale <= 0).any()):
+            raise ValueError("controller pose step scale must contain six finite positive values")
+        base = state[:, -1, :6].to(device=prediction.device, dtype=prediction.dtype).unsqueeze(1)
+        predicted_previous = torch.cat((base, prediction[:, :-1, :6]), dim=1)
+        target_previous = torch.cat((base, target[:, :-1, :6]), dim=1)
+        predicted_delta = prediction[..., :6] - predicted_previous
+        target_delta = target[..., :6] - target_previous
+        predicted_delta = torch.cat((
+            predicted_delta[..., :3],
+            torch.atan2(torch.sin(predicted_delta[..., 3:]), torch.cos(predicted_delta[..., 3:])),
+        ), dim=-1)
+        target_delta = torch.cat((
+            target_delta[..., :3],
+            torch.atan2(torch.sin(target_delta[..., 3:]), torch.cos(target_delta[..., 3:])),
+        ), dim=-1)
+        # The deployed policy can only emit one bounded step per action.  Fit
+        # the same normalized delta representation used by sampling instead of
+        # allowing large absolute coordinates to dominate behavior cloning.
+        pose = F.smooth_l1_loss(
+            predicted_delta / scale,
+            (target_delta / scale).clamp(-1.0, 1.0),
+        )
     gripper = F.binary_cross_entropy_with_logits(prediction[..., -1], target[..., -1].float())
     loss = pose + gripper
     return loss, {"loss": float(loss.detach()), "pose_loss": float(pose.detach()), "gripper_loss": float(gripper.detach())}
