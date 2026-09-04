@@ -79,7 +79,9 @@ After the selected Stage 1 checkpoint is restored, the controller receives a
 dedicated behavior-cloning warm-up (20,000 updates by default) without changing
 either planner head or the shared LoRA. This is intentionally separate from
 the balanced domain rounds so extra controller supervision does not increase
-VLABench planner weight. The completed warm-up is saved as
+VLABench planner weight. Pose supervision uses wrapped local deltas normalized
+by the same translation/rotation scales as the deployed controller, rather
+than regressing absolute end-effector coordinates. The completed warm-up is saved as
 `joint_controller_warmup.pt`; resume from that file skips both Stage 1 and the
 already-completed warm-up. Configure or disable it with
 `--controller-warmup-steps N` (use `0` to disable).
@@ -99,9 +101,12 @@ exact same `JointQwenVLPlanner`:
 The controller uses the official LeRobot `task_index` for all 128 language
 instructions from `meta/tasks.parquet`; it does not collapse distinct target
 objects into a shared primitive-pattern ID. It also consumes the active
-graph-plan skill, grounded entity pointer, and operation position. Stage 1
+graph-plan skill and operation position. The entity slot stays on its padding
+row because demonstrations do not provide stable segmentation-to-graph
+pointer labels. Stage 1
 derives the operation from normalized demonstration phase; Stage 2 uses the
-actual cursor in the selected planner trajectory. During rollout, the environment
+simulator progress cursor with normalized episode phase as a fallback when
+progress remains flat. During rollout, the environment
 instruction must resolve to exactly one of those IDs before controller
 execution. The controller uses tanh-transformed Normal distributions for six end-effector coordinates, a
 Bernoulli gripper, learned log standard deviation, and a value head. Its actor
@@ -123,6 +128,10 @@ log probability. Likelihood ratios are bounded before exponentiation, and repeat
 PPO epochs stop after the mean per-action log-ratio leaves the trust region.
 This keeps the importance ratio tied to the behavior policy and prevents one
 stale trajectory from producing a catastrophic controller update.
+An infeasible action is retried at smaller Cartesian scales. If all scales
+fail, the unchanged observation is resampled up to three consecutive chunks
+by default before the rollout is IK-truncated; each rejection remains negative
+feasibility evidence for the controller.
 Online actions are limited to 2 cm translation and 0.10 radians rotation per
 simulator step before IK. IK uses a practical `5e-3` convergence tolerance and
 up to 200 iterations. These defaults are configurable through
@@ -211,6 +220,13 @@ evaluation rollouts; the update-producing rollouts remain under
 `vlabench_training` in the checkpoint metrics. Increase this to at least three
 for a final report with `--stage2-eval-rollouts-per-task 3`, or set it to `0`
 for a fast diagnostic run that intentionally uses training-rollout metrics.
+The pre-RL evaluation is also a controller preflight: by default it requires no
+more than `0.50` IK truncation. Failure writes `stage2-skipped` before any
+multi-hour RL epoch. Success and task-coverage thresholds are available but
+default to zero because the default ten-rollout baseline is too small for a
+reliable success gate.
+Configure the three thresholds with the `--stage2-preflight-*` options. Setting
+evaluation rollouts to zero intentionally disables this gate.
 
 Override the relative paths when necessary:
 
@@ -236,7 +252,8 @@ python -m test_regr.VLABenchAgentInterface.main train-agent --help
 
 ## Checkpoints and resume
 
-Every epoch writes a resumable joint checkpoint. It identifies the immutable
+Every epoch writes a resumable joint checkpoint, and every Stage 2 round
+atomically refreshes `joint_stage2_progress.pt`. It identifies the immutable
 shared backbone through its checked model configuration and stores its
 trainable LoRA parameters once, both label heads, controller and value head,
 both optimizer states, stage, epoch, round-robin cursor,
@@ -245,6 +262,11 @@ activation-profile version, model configuration, and the individual and
 combined domain checksums. Frozen bitsandbytes NF4 base weights and their
 loader-specific quantization buffers are reconstructed from the configured
 backbone instead of being duplicated in every epoch checkpoint.
+The progress checkpoint additionally records the next round, accumulated
+training metrics, and any previously eligible best epoch. Resuming it does not
+repeat completed simulator rollouts; if interruption occurs after the last
+round but before evaluation, resume performs the missing evaluation and epoch
+checkpoint.
 
 An epoch is eligible to become `joint_stage2_best.pt` only when its aggregate
 VLABench rollout success is at least `0.10`, at least three task families have
@@ -273,6 +295,13 @@ python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
   --resume test_regr\JointEmbodiedAgentInterface\checkpoints\joint_controller_warmup.pt
 ```
 
+During Stage 2, prefer the latest round checkpoint after an interruption:
+
+```powershell
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
+  --resume test_regr\JointEmbodiedAgentInterface\checkpoints\joint_stage2_progress.pt
+```
+
 Loading rejects a checkpoint when either domain definition, vocabulary, DFA,
 activation profile, graph-decoder architecture, controller action
 representation, or model configuration
@@ -284,6 +313,12 @@ be resumed only from Stage 1. Loading resets that obsolete policy head and its
 optimizer moments, then the configured controller warm-up retrains the local
 chunk head and language/graph-operation embeddings. An old `joint_controller_warmup.pt` or Stage 2 checkpoint is
 rejected because it has already crossed the migration boundary.
+The physically scaled delta-BC objective is likewise compatibility-versioned:
+an older Stage 1 or structurally compatible warm-up checkpoint resets and
+re-warms the controller, while an older Stage 2 checkpoint is rejected rather
+than silently retaining the absolute-coordinate objective.
+Controller migration rejects `--controller-warmup-steps 0` because proceeding
+with the reset, untrained action head would invalidate the simulator run.
 Checkpoints with the correct language-conditioned actor but the former
 unbounded critic are migrated at any stage by resetting only the critic and
 controller optimizer moments; the learned action policy is preserved.

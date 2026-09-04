@@ -97,22 +97,104 @@ def test_task_defaults_keep_global_constraints_downweighted(monkeypatch):
     assert args.executable_constraint_loss_weight == 1.0
     assert args.ilp_benchmark_warmup == 1
     assert args.ilp_benchmark_repeats == 3
+    assert args.ilp_benchmark_items == 0
+    assert args.ilp_benchmark_only is False
 
 
-def test_ilp_benchmark_selects_first_relation_free_count_sample():
+def test_ilp_benchmark_selects_relation_free_count_samples():
     items = clevr_main.load_items()
 
-    selected = clevr_main._select_simple_count_sample(items, items)
+    selected = clevr_main._select_relation_free_count_samples(items, items)
 
-    assert selected["question"] == "What number of tiny cyan cylinders are there?"
-    assert selected["program"][-1]["function"] == "count"
-    assert all(
-        step["function"] == "scene"
-        or step["function"] == "count"
-        or step["function"] == "unique"
-        or step["function"].startswith("filter_")
-        for step in selected["program"]
+    assert [sample["question"] for sample in selected] == [
+        "What number of tiny cyan cylinders are there?",
+        "What number of objects are either cubes or big matte things?",
+        "How many things are either cyan spheres or tiny brown shiny blocks?",
+        "How many red rubber objects are there?",
+    ]
+    for sample in selected:
+        assert sample["program"][-1]["function"] == "count"
+        assert all(
+            step["function"] in {
+                "scene",
+                "count",
+                "unique",
+                "union",
+                "intersect",
+            }
+            or step["function"].startswith("filter_")
+            for step in sample["program"]
+        )
+
+    assert clevr_main._select_simple_count_sample(items, items) is selected[0]
+
+
+def test_main_benchmark_only_skips_comparison_and_ad_hoc(monkeypatch):
+    args = SimpleNamespace(
+        device="cpu",
+        disable_global_constraint_loss=False,
+        global_constraint_loss_weight=0.1,
+        executable_constraint_loss_weight=1.0,
+        ilp_benchmark_only=True,
+        ilp_benchmark_warmup=2,
+        ilp_benchmark_repeats=4,
+        ilp_benchmark_items=3,
     )
+    built = object()
+    calls = []
+    monkeypatch.setattr(clevr_main, "parse_args", lambda: args)
+    monkeypatch.setattr(clevr_main, "load_items", lambda: ["sample"])
+
+    def fake_build(name, program_cls, items, parsed_args, device, **kwargs):
+        calls.append(("build", name, program_cls, items, parsed_args, device, kwargs))
+        return built
+
+    monkeypatch.setattr(clevr_main, "build_program", fake_build)
+    monkeypatch.setattr(
+        clevr_main,
+        "train_program",
+        lambda program, parsed_args, device: calls.append(
+            ("train", program, parsed_args, device)
+        ),
+    )
+    monkeypatch.setattr(
+        clevr_main,
+        "print_post_training_ilp_benchmark",
+        lambda program, device, **kwargs: calls.append(
+            ("benchmark", program, device, kwargs)
+        ),
+    )
+    monkeypatch.setattr(
+        clevr_main,
+        "evaluate",
+        lambda *_args, **_kwargs: pytest.fail("benchmark-only evaluated models"),
+    )
+    monkeypatch.setattr(
+        clevr_main,
+        "print_post_training_ad_hoc_results",
+        lambda *_args, **_kwargs: pytest.fail("benchmark-only ran ad hoc inference"),
+    )
+
+    clevr_main.main()
+
+    assert calls == [
+        (
+            "build",
+            "InferenceProgram",
+            clevr_main.InferenceProgram,
+            ["sample"],
+            args,
+            "cpu",
+            {},
+        ),
+        ("train", built, args, "cpu"),
+        (
+            "benchmark",
+            built,
+            "cpu",
+            {"warmup": 2, "repeats": 4, "items": 3},
+        ),
+    ]
 
 
 def test_post_training_example_uses_ephemeral_ad_hoc_query():
@@ -351,6 +433,189 @@ def test_ilp_benchmark_uses_fresh_full_then_dynamic_datanodes(monkeypatch):
     assert graph._active_concepts is None
 
 
+def test_ilp_benchmark_suite_runs_multiple_questions_and_aggregates(monkeypatch):
+    samples = tuple(
+        {"question": f"question {index}", "answer": index}
+        for index in range(1, 4)
+    )
+    built = SimpleNamespace(
+        name="learned",
+        ilp_benchmark_sample=samples[0],
+        ilp_benchmark_samples=samples,
+    )
+    calls = []
+
+    def fake_benchmark(
+        actual_built,
+        device,
+        *,
+        warmup,
+        repeats,
+        sample,
+    ):
+        calls.append((actual_built, device, warmup, repeats, sample))
+        index = samples.index(sample) + 1
+        full = clevr_main.ILPTiming(
+            durations_seconds=(float(index * 2),),
+            median_seconds=float(index * 2),
+            answer=index,
+            result_type="count",
+            active_concepts=("all",),
+            predicate_count=5,
+        )
+        dynamic = clevr_main.ILPTiming(
+            durations_seconds=(float(index) / 2.0,),
+            median_seconds=float(index) / 2.0,
+            answer=index,
+            result_type="count",
+            active_concepts=("query",),
+            predicate_count=2,
+        )
+        return clevr_main.ILPGraphPerformance(
+            sample=sample,
+            requested_concepts=("query",),
+            full=full,
+            dynamic=dynamic,
+            milliseconds_saved=float(index) * 1500.0,
+            reduction_percent=75.0,
+            speedup=4.0,
+            answers_agree=True,
+        )
+
+    monkeypatch.setattr(
+        clevr_main,
+        "benchmark_ilp_graph_activation",
+        fake_benchmark,
+    )
+
+    report = clevr_main.benchmark_ilp_graph_activations(
+        built,
+        "cpu",
+        warmup=1,
+        repeats=3,
+        items=2,
+    )
+
+    assert [call[-1] for call in calls] == list(samples[:2])
+    assert all(call[2:4] == (1, 3) for call in calls)
+    assert report.comparisons[0].sample is samples[0]
+    assert report.comparisons[1].sample is samples[1]
+    assert report.attempted == 2
+    assert report.failures == ()
+    assert len(report.question_types) == 1
+    assert report.question_types[0].question_type == "unknown"
+    assert report.question_types[0].attempted == 2
+    assert report.question_types[0].succeeded == 2
+    assert report.question_types[0].failed == 0
+    assert report.question_types[0].full_average_seconds == pytest.approx(3.0)
+    assert report.question_types[0].dynamic_average_seconds == pytest.approx(0.75)
+    assert report.full_workload_seconds == pytest.approx(6.0)
+    assert report.dynamic_workload_seconds == pytest.approx(1.5)
+    assert report.milliseconds_saved == pytest.approx(4500.0)
+    assert report.reduction_percent == pytest.approx(75.0)
+    assert report.speedup == pytest.approx(4.0)
+    assert report.answers_agree is True
+
+
+def test_ilp_benchmark_zero_item_limit_runs_all_compatible_questions(monkeypatch):
+    samples = ({"question": "one"}, {"question": "two"})
+    built = SimpleNamespace(
+        name="learned",
+        ilp_benchmark_sample=samples[0],
+        ilp_benchmark_samples=samples,
+    )
+    visited = []
+    timing = clevr_main.ILPTiming(
+        durations_seconds=(1.0,),
+        median_seconds=1.0,
+        answer=1,
+        result_type="count",
+        active_concepts=("obj",),
+        predicate_count=1,
+    )
+
+    def fake_benchmark(_built, _device, **kwargs):
+        visited.append(kwargs["sample"])
+        return clevr_main.ILPGraphPerformance(
+            sample=kwargs["sample"],
+            requested_concepts=("obj",),
+            full=timing,
+            dynamic=timing,
+            milliseconds_saved=0.0,
+            reduction_percent=0.0,
+            speedup=1.0,
+            answers_agree=True,
+        )
+
+    monkeypatch.setattr(
+        clevr_main,
+        "benchmark_ilp_graph_activation",
+        fake_benchmark,
+    )
+
+    report = clevr_main.benchmark_ilp_graph_activations(
+        built, "cpu", warmup=0, repeats=1, items=0
+    )
+
+    assert visited == list(samples)
+    assert len(report.comparisons) == 2
+
+
+def test_ilp_benchmark_suite_reports_failure_and_continues(monkeypatch):
+    samples = (
+        {"question": "fails", "program": [{"function": "query_color"}]},
+        {"question": "works", "program": [{"function": "count"}]},
+    )
+    built = SimpleNamespace(
+        name="learned",
+        ilp_benchmark_sample=samples[0],
+        ilp_benchmark_samples=samples,
+    )
+    timing = clevr_main.ILPTiming(
+        durations_seconds=(1.0,),
+        median_seconds=1.0,
+        answer=1,
+        result_type="count",
+        active_concepts=("obj",),
+        predicate_count=1,
+    )
+
+    def fake_benchmark(_built, _device, **kwargs):
+        if kwargs["sample"] is samples[0]:
+            raise RuntimeError("all hypotheses infeasible")
+        return clevr_main.ILPGraphPerformance(
+            sample=kwargs["sample"],
+            requested_concepts=("obj",),
+            full=timing,
+            dynamic=timing,
+            milliseconds_saved=0.0,
+            reduction_percent=0.0,
+            speedup=1.0,
+            answers_agree=True,
+        )
+
+    monkeypatch.setattr(
+        clevr_main,
+        "benchmark_ilp_graph_activation",
+        fake_benchmark,
+    )
+
+    report = clevr_main.benchmark_ilp_graph_activations(
+        built, "cpu", warmup=0, repeats=1, items=0
+    )
+
+    assert report.attempted == 2
+    assert len(report.comparisons) == 1
+    assert len(report.failures) == 1
+    assert report.failures[0].question_type == "query_color"
+    assert report.failures[0].error_type == "RuntimeError"
+    assert report.answers_agree is True
+    query_summary, count_summary = report.question_types
+    assert (query_summary.attempted, query_summary.succeeded, query_summary.failed) == (1, 0, 1)
+    assert query_summary.full_average_seconds is None
+    assert (count_summary.attempted, count_summary.succeeded, count_summary.failed) == (1, 1, 0)
+
+
 def test_ilp_benchmark_restores_full_graph_after_failure(monkeypatch):
     built, graph, _events, _datanodes = _mock_ilp_benchmark(fail_dynamic=True)
     clock = iter((0.0, 0.5, 1.0, 1.1))
@@ -382,12 +647,12 @@ def test_post_training_ad_hoc_query_supports_circuit_and_ilp_modes():
         hard_gumbel=False,
     )
     all_items = clevr_main.load_items()
-    # Both examples are simple count questions, keeping backend inference
-    # focused on dispatch instead of relation grounding.
+    # Start with two count questions for the three-mode check, then include a
+    # relational attribute query as a direct-ILP grounding regression.
     built = clevr_main.build_program(
         "backend-smoke",
         clevr_main.InferenceProgram,
-        [all_items[38], all_items[20]],
+        [all_items[38], all_items[20], all_items[0]],
         args,
         "cpu",
     )
@@ -439,4 +704,25 @@ def test_post_training_ad_hoc_query_supports_circuit_and_ilp_modes():
         performance.full.active_concepts
     )
     assert performance.dynamic.predicate_count < performance.full.predicate_count
+    assert built.program.graph._active_concepts is None
+
+    relational_query = built.ilp_benchmark_samples[2]
+    relational_performance = clevr_main.benchmark_ilp_graph_activation(
+        built,
+        "cpu",
+        warmup=0,
+        repeats=1,
+        sample=relational_query,
+    )
+    assert relational_performance.full.result_type == "query"
+    assert relational_performance.dynamic.result_type == "query"
+    assert isinstance(relational_performance.full.answer, str)
+    assert (
+        relational_performance.full.answer
+        == relational_performance.dynamic.answer
+    )
+    assert relational_performance.answers_agree is True
+    assert relational_performance.dynamic.predicate_count < (
+        relational_performance.full.predicate_count
+    )
     assert built.program.graph._active_concepts is None

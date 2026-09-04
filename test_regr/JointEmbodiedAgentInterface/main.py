@@ -117,6 +117,42 @@ def stage2_checkpoint_eligible(
     )
 
 
+def stage2_preflight_eligible(
+    metrics,
+    *,
+    min_vlabench_success_rate: float = 0.0,
+    min_successful_tasks: int = 0,
+    max_ik_truncation_rate: float = 0.50,
+) -> bool:
+    """Reject a controller that lacks basic fixed-seed execution competence."""
+
+    return stage2_checkpoint_eligible(
+        {"vlabench": metrics},
+        min_vlabench_success_rate=min_vlabench_success_rate,
+        min_successful_tasks=min_successful_tasks,
+        max_ik_truncation_rate=max_ik_truncation_rate,
+    )
+
+
+def _stage2_resume_position(payload, rounds_per_epoch):
+    """Resolve old epoch checkpoints and new within-epoch progress checkpoints."""
+
+    if payload.get("stage") != "stage2":
+        return 0, 0, None, None
+    if "next_round" not in payload:
+        return int(payload["epoch"]) + 1, 0, None, None
+    next_round = int(payload["next_round"])
+    if next_round < 0 or next_round > int(rounds_per_epoch):
+        raise ValueError(
+            "checkpoint round exceeds --stage2-rounds-per-epoch; resume with the original setting"
+        )
+    metrics = payload.get("metrics", {})
+    partial = metrics.get("partial_training")
+    if not isinstance(partial, dict) or int(partial.get("rounds", -1)) != next_round:
+        raise ValueError("Stage 2 progress checkpoint has inconsistent round metrics")
+    return int(payload["epoch"]), next_round, partial, metrics.get("prior_best")
+
+
 def _unit_interval(value: str) -> float:
     parsed = float(value)
     if not 0.0 <= parsed <= 1.0:
@@ -261,6 +297,10 @@ def command_train_agent(args):
     resume_stage = None
     resume_payload = None
     start_stage1 = start_stage2 = 0
+    start_stage2_round = 0
+    resumed_stage2_metrics = None
+    resumed_prior_best = None
+    controller_rewarm_required = False
     cursor = 0
     if args.resume:
         payload = load_joint_checkpoint(
@@ -273,9 +313,10 @@ def command_train_agent(args):
             map_location=device,
         )
         if payload.get("controller_migration_required"):
+            controller_rewarm_required = True
             _status(
-                "migrated legacy absolute-pose controller; the local action head "
-                "will be rebuilt by controller warm-up"
+                "migrated legacy controller training semantics; the local action "
+                "head will be rebuilt by controller warm-up"
             )
         if payload.get("controller_critic_migration_required"):
             _status(
@@ -290,7 +331,12 @@ def command_train_agent(args):
         elif resume_stage == "controller_warmup":
             start_stage1 = args.stage1_epochs
         elif resume_stage == "stage2":
-            start_stage2 = int(payload["epoch"]) + 1
+            (
+                start_stage2,
+                start_stage2_round,
+                resumed_stage2_metrics,
+                resumed_prior_best,
+            ) = _stage2_resume_position(payload, args.stage2_rounds_per_epoch)
         else:
             raise ValueError(f"unknown joint checkpoint stage {resume_stage!r}")
 
@@ -371,7 +417,15 @@ def command_train_agent(args):
             ):
                 _json({"stage": "stage2-skipped", "reason": "EAI exploration gate", "eai": eai_metrics})
                 return
-            if args.controller_warmup_steps > 0 and resume_stage != "controller_warmup":
+            if controller_rewarm_required and args.controller_warmup_steps <= 0:
+                raise ValueError(
+                    "the resumed checkpoint requires controller migration; "
+                    "--controller-warmup-steps must be positive"
+                )
+            if (
+                args.controller_warmup_steps > 0
+                and (resume_stage != "controller_warmup" or controller_rewarm_required)
+            ):
                 _status(
                     f"controller behavior-cloning warm-up steps={args.controller_warmup_steps}"
                 )
@@ -436,9 +490,14 @@ def command_train_agent(args):
         max_rotation_step=args.max_rotation_step,
         ik_tolerance=args.ik_tolerance,
         ik_max_steps=args.ik_max_steps,
+        max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
     )
     stage2.round_robin_cursor = cursor
-    if args.stage2_eval_rollouts_per_task > 0 and start_stage2 == 0:
+    if (
+        args.stage2_eval_rollouts_per_task > 0
+        and start_stage2 == 0
+        and resume_stage != "stage2"
+    ):
         _status(
             "evaluating the Stage 1/controller-warm-up baseline on fixed-seed "
             f"VLABench rollouts={args.stage2_eval_rollouts_per_task} per task"
@@ -448,10 +507,49 @@ def command_train_agent(args):
             rollouts_per_task=args.stage2_eval_rollouts_per_task,
             seed=args.seed + 100000,
         )
-        _json({"stage": "stage2-baseline-evaluation", "vlabench": baseline})
+        eai_baseline = _evaluate_eai(
+            planner,
+            runtime,
+            eai_valid,
+            limit=args.validation_limit,
+        )
+        preflight_eligible = stage2_preflight_eligible(
+            baseline,
+            min_vlabench_success_rate=args.stage2_preflight_min_vlabench_success_rate,
+            min_successful_tasks=args.stage2_preflight_min_successful_tasks,
+            max_ik_truncation_rate=args.stage2_preflight_max_ik_truncation_rate,
+        )
+        _json({
+            "stage": "stage2-baseline-evaluation",
+            "eai": eai_baseline,
+            "vlabench": baseline,
+            "preflight_eligible": preflight_eligible,
+        })
+        if not preflight_eligible:
+            _json({
+                "stage": "stage2-skipped",
+                "reason": "VLABench controller preflight gate",
+                "minimum_vlabench_success_rate": args.stage2_preflight_min_vlabench_success_rate,
+                "minimum_successful_vlabench_tasks": args.stage2_preflight_min_successful_tasks,
+                "maximum_ik_truncation_rate": args.stage2_preflight_max_ik_truncation_rate,
+                "vlabench": baseline,
+            })
+            return
     best_key = None
     best_path = None
-    if resume_stage == "stage2" and resume_payload is not None:
+    if resumed_prior_best is not None:
+        candidate_path = Path(str(resumed_prior_best.get("path", "")))
+        candidate_key = resumed_prior_best.get("key")
+        if candidate_path.is_file() and isinstance(candidate_key, (list, tuple)):
+            best_path = candidate_path.resolve()
+            best_key = tuple(float(value) for value in candidate_key)
+        else:
+            _status("prior best Stage 2 checkpoint metadata could not be restored")
+    if (
+        resume_stage == "stage2"
+        and resume_payload is not None
+        and "next_round" not in resume_payload
+    ):
         if stage2_checkpoint_eligible(
             resume_payload["metrics"],
             min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
@@ -468,11 +566,43 @@ def command_train_agent(args):
             )
     for epoch in range(start_stage2, args.stage2_epochs):
         _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} training")
+        continuing_epoch = epoch == start_stage2 and start_stage2_round > 0
+        first_round = start_stage2_round if continuing_epoch else 0
+        initial_metrics = resumed_stage2_metrics if continuing_epoch else None
+
+        def save_round_progress(next_round, partial_metrics, *, current_epoch=epoch):
+            prior_best = None
+            if best_path is not None and best_key is not None:
+                prior_best = {"path": str(best_path), "key": list(best_key)}
+            progress_path = save_joint_checkpoint(
+                output / "joint_stage2_progress.pt",
+                runtime=runtime,
+                planner=planner,
+                controller=controller,
+                planner_optimizer=planner_optimizer,
+                controller_optimizer=controller_optimizer,
+                stage="stage2",
+                epoch=current_epoch,
+                next_round=next_round,
+                round_robin_cursor=stage2.round_robin_cursor,
+                metrics={
+                    "partial_training": dict(partial_metrics),
+                    "prior_best": prior_best,
+                },
+            )
+            _status(
+                f"saved Stage 2 progress checkpoint={progress_path} "
+                f"next_round={next_round}"
+            )
+
         metrics = stage2.train_alternating_epoch(
             eai_train,
             descriptors,
             rounds=args.stage2_rounds_per_epoch,
             vlabench_rollouts_per_update=args.vlabench_rollouts,
+            start_round=first_round,
+            initial_metrics=initial_metrics,
+            round_callback=save_round_progress,
         )
         if args.stage2_eval_rollouts_per_task > 0:
             metrics["eai_training"] = metrics["eai"]
@@ -602,6 +732,24 @@ def build_parser():
         default=0.25,
         help="maximum fraction of VLABench rollouts terminated by unrecoverable IK",
     )
+    agent.add_argument(
+        "--stage2-preflight-min-vlabench-success-rate",
+        type=_unit_interval,
+        default=0.0,
+        help="minimum fixed-seed baseline success required before Stage 2",
+    )
+    agent.add_argument(
+        "--stage2-preflight-min-successful-tasks",
+        type=int,
+        default=0,
+        help="minimum task families with baseline success required before Stage 2",
+    )
+    agent.add_argument(
+        "--stage2-preflight-max-ik-truncation-rate",
+        type=_unit_interval,
+        default=0.50,
+        help="maximum fixed-seed baseline IK truncation allowed before Stage 2",
+    )
     agent.add_argument("--eai-samples", type=int, default=8)
     agent.add_argument("--vlabench-planner-samples", type=int, default=4)
     agent.add_argument("--vlabench-rollouts", type=int, default=8)
@@ -625,6 +773,12 @@ def build_parser():
     agent.add_argument("--max-rotation-step", type=float, default=0.10)
     agent.add_argument("--ik-tolerance", type=float, default=5e-3)
     agent.add_argument("--ik-max-steps", type=int, default=200)
+    agent.add_argument(
+        "--max-consecutive-ik-rejections",
+        type=int,
+        default=3,
+        help="resample this many infeasible action chunks before truncating a rollout",
+    )
     agent.add_argument("--max-entities", type=int, default=64)
     agent.add_argument("--max-operations", type=int, default=8)
     # Existing VLABench controller loader/model settings.

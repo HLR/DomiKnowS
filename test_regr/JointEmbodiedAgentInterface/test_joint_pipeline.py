@@ -27,9 +27,11 @@ from .checkpoint import (
     save_joint_checkpoint,
 )
 from .main import (
+    _stage2_resume_position,
     build_parser,
     stage1_selection_key,
     stage2_checkpoint_eligible,
+    stage2_preflight_eligible,
     stage2_selection_key,
 )
 from .models import JointQwenVLPlanner
@@ -428,6 +430,41 @@ def test_stage1_controller_updates_only_on_vlabench_turn(joint_fixture):
     assert not torch.equal(before, controller.action)
 
 
+def test_joint_controller_step_uses_scaled_delta_behavior_cloning(joint_fixture, monkeypatch):
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    controller.pose_step_scale = (0.02, 0.02, 0.02, 0.10, 0.10, 0.10)
+    program = JointSolverPOIProgram(
+        runtime,
+        planner,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.05),
+        controller=controller,
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.1),
+    )
+    observed = {}
+
+    def fake_controller_loss(prediction, target, **kwargs):
+        observed.update(kwargs)
+        return (prediction - target).square().mean(), {}
+
+    monkeypatch.setattr(
+        "test_regr.JointEmbodiedAgentInterface.program.controller_loss",
+        fake_controller_loss,
+    )
+    batch = {
+        "images": torch.zeros(1, 2, 1, 3, 4, 4),
+        "state": torch.ones(1, 2, 7),
+        "task_index": torch.zeros(1, dtype=torch.long),
+        "actions": torch.ones(1, 2, 7),
+    }
+
+    program._controller_step(batch)
+
+    torch.testing.assert_close(observed["state"], batch["state"])
+    assert observed["pose_step_scale"] == controller.pose_step_scale
+
+
 def test_controller_bc_warmup_runs_requested_steps_and_only_updates_controller(joint_fixture):
     examples, runtime = joint_fixture
     planner = make_planner(runtime)
@@ -584,6 +621,62 @@ def test_stage2_reports_balanced_per_task_rollout_metrics(joint_fixture):
     assert metrics["vlabench"]["per_task"]["task_b"]["success_rate"] == 0.0
 
 
+def test_stage2_round_metrics_resume_without_repeating_completed_work(joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    program = JointReinforcementProgram(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.01),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: None,
+        ppo_epochs=1,
+    )
+    program.train_eai_update = lambda _item: {
+        "loss": 0.1, "reward": 0.2, "goal_recall": 0.3, "success": 0.4,
+    }
+    seen = []
+
+    def fake_vlabench(descriptors, *, rollouts_per_update):
+        task = descriptors[0]["task"]
+        seen.append(task)
+        return {
+            "planner_loss": 0.1, "controller_loss": 0.2,
+            "return": 0.3, "success_rate": 0.5, "valid_rate": 1.0,
+            "steps": 4.0, "episodes": rollouts_per_update,
+            "ik_truncation_rate": 0.0, "execution_complete_rate": 1.0,
+            "per_task": {task: {
+                "episodes": rollouts_per_update, "successes": 1,
+                "success_rate": 0.5, "valid_rate": 1.0, "return": 0.3,
+                "steps": 4.0, "ik_failures": 0, "ik_recoveries": 0,
+                "ik_truncation_rate": 0.0,
+            }},
+        }
+
+    program.train_vlabench_update = fake_vlabench
+    first = program.train_alternating_epoch(
+        [{}], [{"task": "task_a"}, {"task": "task_b"}],
+        rounds=1, vlabench_rollouts_per_update=2,
+    )
+    snapshots = []
+    resumed = program.train_alternating_epoch(
+        [{}], [{"task": "task_a"}, {"task": "task_b"}],
+        rounds=2,
+        start_round=1,
+        initial_metrics=first,
+        vlabench_rollouts_per_update=2,
+        round_callback=lambda completed, metrics: snapshots.append((completed, metrics)),
+    )
+
+    assert seen == ["task_a", "task_b"]
+    assert resumed["rounds"] == 2
+    assert resumed["vlabench"]["episodes"] == 4
+    assert set(resumed["vlabench"]["per_task"]) == {"task_a", "task_b"}
+    assert snapshots[0][0] == 2
+
+
 def test_joint_stage2_invalid_vlabench_plan_never_executes_controller(joint_fixture):
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)
@@ -661,6 +754,7 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
         stage="stage1",
         epoch=4,
         round_robin_cursor=17,
+        next_round=3,
     )
     expected_python = random.random()
     expected_numpy = float(np.random.rand())
@@ -689,6 +783,7 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
         if "step" in state
     )
     assert payload["round_robin_cursor"] == 17
+    assert payload["next_round"] == 3
     assert runtime.active_domain is None
     assert random.random() == expected_python
     assert float(np.random.rand()) == expected_numpy
@@ -769,6 +864,54 @@ def test_legacy_unbounded_critic_migrates_without_resetting_actor(tmp_path, join
     assert restored["controller_critic_migration_required"] is True
     assert torch.equal(actor_before, controller.policy_head.weight)
     assert optimizer.state == {}
+
+
+def test_legacy_behavior_cloning_checkpoint_requires_stage1_rewarmup(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = MultiViewController(
+        TinyImageEncoder(), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    optimizer = torch.optim.Adam(controller.parameters(), lr=0.01)
+    path = save_joint_checkpoint(
+        tmp_path / "legacy_bc.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=optimizer,
+        stage="stage1",
+        epoch=0,
+        round_robin_cursor=0,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["compatibility"]["controller_configuration"].pop("behavior_cloning_version")
+    torch.save(payload, path)
+
+    restored = load_joint_checkpoint(
+        path,
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        controller_optimizer=optimizer,
+    )
+
+    assert restored["controller_migration_required"] is True
+    assert restored["controller_migration_reason"] == "behavior_cloning"
+    assert optimizer.state == {}
+    payload["stage"] = "controller_warmup"
+    torch.save(payload, path)
+    restored_warmup = load_joint_checkpoint(
+        path,
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+    )
+    assert restored_warmup["controller_migration_required"] is True
+    payload["stage"] = "stage2"
+    torch.save(payload, path)
+    with pytest.raises(ValueError, match="controller_configuration"):
+        load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
 
 
 def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joint_fixture):
@@ -962,6 +1105,34 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
         min_successful_tasks=3,
         max_ik_truncation_rate=0.25,
     )
+    assert stage2_preflight_eligible({
+        "success_rate": 0.05,
+        "successful_task_count": 1,
+        "ik_truncation_rate": 0.25,
+    })
+    assert not stage2_preflight_eligible({
+        "success_rate": 0.05,
+        "successful_task_count": 1,
+        "ik_truncation_rate": 0.75,
+    })
+    partial = {
+        "stage": "stage2",
+        "epoch": 1,
+        "next_round": 4,
+        "metrics": {
+            "partial_training": {"rounds": 4},
+            "prior_best": {"path": "best.pt", "key": [0.1, 0.2]},
+        },
+    }
+    assert _stage2_resume_position(partial, 10) == (
+        1,
+        4,
+        partial["metrics"]["partial_training"],
+        partial["metrics"]["prior_best"],
+    )
+    assert _stage2_resume_position({"stage": "stage2", "epoch": 1}, 10) == (
+        2, 0, None, None
+    )
     assert not stage2_checkpoint_eligible(
         {"vlabench": {"success_rate": 0.20, "successful_task_count": 3, "ik_truncation_rate": 0.30}},
         min_vlabench_success_rate=0.10,
@@ -979,7 +1150,11 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.stage2_min_vlabench_success_rate == pytest.approx(0.10)
     assert args.stage2_min_successful_tasks == 3
     assert args.stage2_max_ik_truncation_rate == pytest.approx(0.25)
+    assert args.stage2_preflight_min_vlabench_success_rate == pytest.approx(0.0)
+    assert args.stage2_preflight_min_successful_tasks == 0
+    assert args.stage2_preflight_max_ik_truncation_rate == pytest.approx(0.50)
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)
     assert args.ik_tolerance == pytest.approx(5e-3)
     assert args.ik_max_steps == 200
+    assert args.max_consecutive_ik_rejections == 3

@@ -7,8 +7,8 @@ from gurobipy import GRB, Model, Env
 import torch
 
 from domiknows.graph.logicalConstrain import (
-    LogicalConstrain, queryL, miotaL, existsL, sumL, greaterL, atLeastL, exactL,
-    notL, andL,
+    LogicalConstrain, queryL, miotaL, existsL, sumL, greaterL, lessL,
+    equalCountsL, atLeastL, exactL, notL, andL,
 )
 from domiknows.utils import setup_logger
 
@@ -284,7 +284,22 @@ class AnswerSolver:
         if isinstance(lc, queryL):
             subclass_names = list(lc._subclass_names)
             subclasses = list(lc._subclasses)
-            iota_elements = list(lc.e)
+            iota_elements = list(
+                getattr(lc, '_selector_elements', lc.e)
+            )
+            selector_variable = next(
+                (
+                    element.selection_variable
+                    for element in iota_elements
+                    if hasattr(element, 'selection_variable')
+                ),
+                None,
+            )
+            if selector_variable is None:
+                raise ValueError(
+                    f"queryL {getattr(elc, 'lcName', elc)} has no bound "
+                    "selector variable"
+                )
 
             def build_query(subclass_name):
                 idx = subclass_names.index(subclass_name)
@@ -301,9 +316,22 @@ class AnswerSolver:
                 else:
                     subclass_tuple = (concept, concept.name, None, 1)
 
+                # Bind the candidate class to the same logical variable that
+                # the iotaL selector returns. A bare concept tuple has no
+                # grounding identity; on relational selectors it was combined
+                # with every candidate row and made otherwise valid class
+                # hypotheses structurally infeasible.
+                binding_concept = (
+                    lc.concept
+                    if isinstance(lc.concept, EnumConcept)
+                    else concept
+                )
+                subclass_binding = list(binding_concept(selector_variable))
+                subclass_binding[0] = subclass_tuple
+
                 return self._compile_hypothesis(
                     andL,
-                    [subclass_tuple] + iota_elements,
+                    [subclass_binding] + iota_elements,
                     graph,
                 )
 
@@ -326,7 +354,10 @@ class AnswerSolver:
 
             return list(range(0, max_count + 1)), build_sum
 
-        if isinstance(lc, (existsL, greaterL, atLeastL, exactL)):
+        if isinstance(
+            lc,
+            (existsL, greaterL, lessL, equalCountsL, atLeastL, exactL),
+        ):
             lc_class = type(lc)
             constructor_kwargs = {}
             explicit_limit = getattr(lc, '_explicitLimit', None)
@@ -358,14 +389,16 @@ class AnswerSolver:
         processor.current_device = dn.current_device
         self.solver.constraintConstructor.current_device = dn.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
-        if self.compiled:
-            output, _ = self.compiled_executor.construct(
-                lc, processor, dn, key=key_text, headLC=False, loss=True)
-        else:
-            output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
-                lc, processor, None, dn, 0, key=key_text,
-                headLC=False, loss=True, sample=False,
-            )
+        # Decode through the interpreter after the winning world is selected.
+        # The compiled selector plan is optimized for loss construction and
+        # can reuse a primary-axis layout cached before the fresh ILP models;
+        # on relation-backed miotaL this collapsed true paths to zero. The
+        # interpreter rebuilds the candidate/path correlation from this
+        # DataNode without changing the optimized ILP world.
+        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, processor, None, dn, 0, key=key_text,
+            headLC=False, loss=True, sample=False,
+        )
         tensors = []
 
         def collect(value):

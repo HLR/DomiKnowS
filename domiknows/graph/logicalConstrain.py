@@ -1811,6 +1811,10 @@ class queryL(LogicalConstrain):
 
             self._multi_answer = bool(direct_miota)
             self._multi_selector = direct_miota[0] if direct_miota else None
+            # Keep the caller-supplied selector separate from the synthetic
+            # subclass bindings appended below. ILP hypothesis construction
+            # must not accidentally require every mutually exclusive class.
+            self._selector_elements = list(e)
 
             # Build concept variable bindings so the constraint constructor
             # collects per-entity subclass predictions into v.  This lets

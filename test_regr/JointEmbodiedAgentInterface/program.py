@@ -7,7 +7,7 @@ import sys
 import time
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import torch
 
@@ -41,12 +41,20 @@ def _emit_progress(message: str) -> None:
 
 
 class _TrainingProgress:
-    def __init__(self, label: str, total: int, *, interval_seconds: float = 30.0):
+    def __init__(
+        self,
+        label: str,
+        total: int,
+        *,
+        initial: int = 0,
+        interval_seconds: float = 30.0,
+    ):
         self.label = label
         self.total = max(0, int(total))
+        self.initial = min(max(0, int(initial)), self.total)
         self.interval_seconds = max(0.0, float(interval_seconds))
         self.started = self.last_report = time.monotonic()
-        _emit_progress(f"{self.label}: 0/{self.total} started")
+        _emit_progress(f"{self.label}: {self.initial}/{self.total} started")
 
     def update(self, completed: int, **metrics: float) -> None:
         now = time.monotonic()
@@ -54,7 +62,7 @@ class _TrainingProgress:
         if completed < self.total and completed != 1 and now - self.last_report < self.interval_seconds:
             return
         elapsed = max(now - self.started, 1e-9)
-        rate = completed / elapsed
+        rate = max(0, completed - self.initial) / elapsed
         remaining = max(0, self.total - completed)
         eta = remaining / rate if rate > 0 else float("inf")
         values = " ".join(f"{key}={value:.4f}" for key, value in metrics.items())
@@ -202,7 +210,12 @@ class JointSolverPOIProgram(SolverPOIProgram):
             if plan_context is not None:
                 controller_inputs += (plan_context.to(device),)
             prediction = self.controller(*controller_inputs)
-            loss = controller_loss(prediction, batch["actions"].to(device))[0]
+            loss = controller_loss(
+                prediction,
+                batch["actions"].to(device),
+                state=controller_inputs[1],
+                pose_step_scale=getattr(self.controller, "pose_step_scale", None),
+            )[0]
             self.controller_optimizer.zero_grad(set_to_none=True)
             if not bool(torch.isfinite(loss)):
                 raise ValueError("controller behavior-cloning loss is non-finite")
@@ -451,9 +464,22 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         *,
         rounds: int = 10,
         vlabench_rollouts_per_update: int = 8,
+        start_round: int = 0,
+        initial_metrics: Mapping[str, Any] | None = None,
+        round_callback: Callable[[int, Mapping[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         if not eai_examples or not vlabench_descriptors:
             raise ValueError("joint Stage 2 requires both domain sources")
+        rounds = int(rounds)
+        start_round = int(start_round)
+        if rounds <= 0:
+            raise ValueError("joint Stage 2 requires a positive round count")
+        if start_round < 0 or start_round > rounds:
+            raise ValueError("Stage 2 resume round is outside the current epoch")
+        if start_round and initial_metrics is None:
+            raise ValueError("Stage 2 resume requires accumulated round metrics")
+        if initial_metrics is not None and int(initial_metrics.get("rounds", 0)) != start_round:
+            raise ValueError("Stage 2 resume metrics do not match the next round")
         self.joint_planner.train()
         self.controller.train()
         eai_totals = {"loss": 0.0, "reward": 0.0, "goal_recall": 0.0, "success": 0.0}
@@ -469,16 +495,73 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         }
         vla_task_totals: dict[str, dict[str, float]] = {}
         vla_episode_count = 0
-        start_cursor = self.round_robin_cursor
-        progress = _TrainingProgress("Stage 2 rounds", int(rounds))
-        for offset in range(int(rounds)):
-            _emit_progress(f"Stage 2 round {offset + 1}/{rounds}: EAI policy update")
+        vla_ik_failures = 0
+        vla_ik_recoveries = 0
+        if initial_metrics is not None:
+            for key in eai_totals:
+                eai_totals[key] = float(initial_metrics.get("eai", {}).get(key, 0.0)) * start_round
+            for key in vla_totals:
+                vla_totals[key] = float(initial_metrics.get("vlabench", {}).get(key, 0.0)) * start_round
+            vla_episode_count = int(initial_metrics.get("vlabench", {}).get("episodes", 0))
+            vla_ik_failures = int(initial_metrics.get("vlabench", {}).get("ik_failures", 0))
+            vla_ik_recoveries = int(initial_metrics.get("vlabench", {}).get("ik_recoveries", 0))
+            for task_name, task_metrics in initial_metrics.get("vlabench", {}).get("per_task", {}).items():
+                episodes = int(task_metrics.get("episodes", 0))
+                vla_task_totals[task_name] = {
+                    "episodes": float(episodes),
+                    "successes": float(task_metrics.get("successes", 0)),
+                    "valid": float(task_metrics.get("valid_rate", 0.0)) * episodes,
+                    "return": float(task_metrics.get("return", 0.0)) * episodes,
+                    "steps": float(task_metrics.get("steps", 0.0)) * episodes,
+                    "ik_failures": float(task_metrics.get("ik_failures", 0)),
+                    "ik_recoveries": float(task_metrics.get("ik_recoveries", 0)),
+                    "ik_truncations": float(task_metrics.get("ik_truncation_rate", 0.0)) * episodes,
+                    "execution_complete": float(task_metrics.get("execution_complete_rate", 0.0)) * episodes,
+                }
+
+        def completed_metrics(completed: int) -> dict[str, Any]:
+            count = max(1, int(completed))
+            per_task = {
+                task_name: {
+                    "episodes": int(totals["episodes"]),
+                    "successes": int(totals["successes"]),
+                    "success_rate": totals["successes"] / max(1.0, totals["episodes"]),
+                    "valid_rate": totals["valid"] / max(1.0, totals["episodes"]),
+                    "return": totals["return"] / max(1.0, totals["episodes"]),
+                    "steps": totals["steps"] / max(1.0, totals["episodes"]),
+                    "ik_failures": int(totals["ik_failures"]),
+                    "ik_recoveries": int(totals["ik_recoveries"]),
+                    "ik_recovery_rate": totals["ik_recoveries"] / max(1.0, totals["ik_failures"]),
+                    "ik_truncation_rate": totals["ik_truncations"] / max(1.0, totals["episodes"]),
+                    "execution_complete_rate": totals["execution_complete"] / max(1.0, totals["episodes"]),
+                }
+                for task_name, totals in sorted(vla_task_totals.items())
+            }
+            return {
+                "eai": {key: value / count for key, value in eai_totals.items()},
+                "vlabench": {
+                    **{key: value / count for key, value in vla_totals.items()},
+                    "episodes": vla_episode_count,
+                    "ik_failures": vla_ik_failures,
+                    "ik_recoveries": vla_ik_recoveries,
+                    "successful_task_count": sum(
+                        int(metrics["successes"] > 0) for metrics in per_task.values()
+                    ),
+                    "per_task": per_task,
+                },
+                "rounds": int(completed),
+                "round_robin_cursor": self.round_robin_cursor,
+            }
+
+        progress = _TrainingProgress("Stage 2 rounds", rounds, initial=start_round)
+        for round_index in range(start_round, rounds):
+            _emit_progress(f"Stage 2 round {round_index + 1}/{rounds}: EAI policy update")
             eai = self.train_eai_update(random.choice(eai_examples))
             descriptor = vlabench_descriptors[
-                (start_cursor + offset) % len(vlabench_descriptors)
+                self.round_robin_cursor % len(vlabench_descriptors)
             ]
             _emit_progress(
-                f"Stage 2 round {offset + 1}/{rounds}: "
+                f"Stage 2 round {round_index + 1}/{rounds}: "
                 f"VLABench task={descriptor.get('task', 'unknown')} "
                 f"rollouts={vlabench_rollouts_per_update}"
             )
@@ -491,6 +574,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             for key in vla_totals:
                 vla_totals[key] += float(vla.get(key, 0.0))
             vla_episode_count += int(vla["episodes"])
+            vla_ik_failures += int(vla.get("ik_failures", 0))
+            vla_ik_recoveries += int(vla.get("ik_recoveries", 0))
             for task_name, task_metrics in vla.get("per_task", {}).items():
                 episodes = int(task_metrics["episodes"])
                 totals = vla_task_totals.setdefault(
@@ -504,6 +589,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                         "ik_failures": 0.0,
                         "ik_recoveries": 0.0,
                         "ik_truncations": 0.0,
+                        "execution_complete": 0.0,
                     },
                 )
                 totals["episodes"] += episodes
@@ -514,42 +600,17 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 totals["ik_failures"] += float(task_metrics.get("ik_failures", 0))
                 totals["ik_recoveries"] += float(task_metrics.get("ik_recoveries", 0))
                 totals["ik_truncations"] += float(task_metrics.get("ik_truncation_rate", 0.0)) * episodes
+                totals["execution_complete"] += float(task_metrics.get("execution_complete_rate", 0.0)) * episodes
             self.round_robin_cursor += 1
+            completed = round_index + 1
             progress.update(
-                offset + 1,
-                eai_reward=eai_totals["reward"] / (offset + 1),
-                vlabench_return=vla_totals["return"] / (offset + 1),
+                completed,
+                eai_reward=eai_totals["reward"] / completed,
+                vlabench_return=vla_totals["return"] / completed,
             )
-        count = max(1, int(rounds))
-        per_task = {
-            task_name: {
-                "episodes": int(totals["episodes"]),
-                "successes": int(totals["successes"]),
-                "success_rate": totals["successes"] / totals["episodes"],
-                "valid_rate": totals["valid"] / totals["episodes"],
-                "return": totals["return"] / totals["episodes"],
-                "steps": totals["steps"] / totals["episodes"],
-                "ik_failures": int(totals["ik_failures"]),
-                "ik_recoveries": int(totals["ik_recoveries"]),
-                "ik_recovery_rate": totals["ik_recoveries"] / max(1.0, totals["ik_failures"]),
-                "ik_truncation_rate": totals["ik_truncations"] / totals["episodes"],
-                "execution_complete_rate": 1.0 - totals["ik_truncations"] / totals["episodes"],
-            }
-            for task_name, totals in sorted(vla_task_totals.items())
-        }
-        return {
-            "eai": {key: value / count for key, value in eai_totals.items()},
-            "vlabench": {
-                **{key: value / count for key, value in vla_totals.items()},
-                "episodes": vla_episode_count,
-                "successful_task_count": sum(
-                    int(metrics["successes"] > 0) for metrics in per_task.values()
-                ),
-                "per_task": per_task,
-            },
-            "rounds": int(rounds),
-            "round_robin_cursor": self.round_robin_cursor,
-        }
+            if round_callback is not None:
+                round_callback(completed, completed_metrics(completed))
+        return completed_metrics(rounds)
 
 
 assert issubclass(JointReinforcementProgram, ReinforcementProgram)

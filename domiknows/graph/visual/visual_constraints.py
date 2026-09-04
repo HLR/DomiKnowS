@@ -45,8 +45,8 @@ def apply_opposite_constraints(ctx, *, pairs=None):
         if r1 is None or r2 is None:
             continue
         nandL(
-            r1('a', 'b'),
-            r2('a', 'b'),
+            r1('pair'),
+            r2(path=('pair',)),
             name=f"opp_{r1.name}_{r2.name}",
         )
 

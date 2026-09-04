@@ -615,7 +615,7 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
             self.fillPathBindings(useLcVariables, lcVariableVs,
                                   lcVariablesDns, lcVariableBindings)
             useLcVariables = self.reduceSelectorToPrimaryGrounding(
-                lc, useLcVariables, lcVariableBindings, booleanProcessor, None)
+                lc, useLcVariables, lcVariableBindings, booleanProcessor, model)
 
         if isinstance(lc, CandidateSelection):
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)

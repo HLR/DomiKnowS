@@ -242,6 +242,9 @@ def _controller_configuration(controller) -> Mapping[str, Any]:
         "action_representation_version": int(
             getattr(controller, "action_representation_version", 1)
         ),
+        "behavior_cloning_version": int(
+            getattr(controller, "behavior_cloning_version", 1)
+        ),
         "critic_version": int(getattr(controller, "critic_version", 1)),
         "plan_conditioning_version": int(
             getattr(controller, "plan_conditioning_version", 0)
@@ -287,6 +290,7 @@ def save_joint_checkpoint(
     epoch: int,
     round_robin_cursor: int,
     metrics: Mapping[str, Any] | None = None,
+    next_round: int | None = None,
 ) -> Path:
     """Save backbone/LoRA once, both heads, PPO state, optimizers, and RNG."""
     target = Path(path).resolve()
@@ -308,6 +312,10 @@ def save_joint_checkpoint(
         "torch_rng": torch.get_rng_state(),
         "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
     }
+    if next_round is not None:
+        if int(next_round) < 0:
+            raise ValueError("next Stage 2 round cannot be negative")
+        payload["next_round"] = int(next_round)
     torch.save(payload, temporary)
     os.replace(temporary, target)
     return target
@@ -362,9 +370,24 @@ def load_joint_checkpoint(
         if saved_controller is not None else 1
     )
     current_representation = int(current_controller["action_representation_version"])
+    saved_behavior_cloning = (
+        int(saved_controller.get("behavior_cloning_version", 1))
+        if saved_controller is not None else 1
+    )
+    current_behavior_cloning = int(current_controller["behavior_cloning_version"])
+    controller_stage = payload.get("stage")
+    can_migrate_behavior_cloning = (
+        controller_stage == "controller_warmup"
+        and saved_controller is not None
+        and saved_representation == current_representation
+        and saved_behavior_cloning < current_behavior_cloning
+    )
     migrate_legacy_controller = (
-        payload.get("stage") == "stage1"
-        and saved_representation < current_representation
+        (controller_stage == "stage1" or can_migrate_behavior_cloning)
+        and (
+            saved_representation < current_representation
+            or saved_behavior_cloning < current_behavior_cloning
+        )
         and (
             saved_controller is None
             or all(
@@ -436,6 +459,11 @@ def load_joint_checkpoint(
         if controller_optimizer is not None:
             controller_optimizer.state.clear()
         payload["controller_migration_required"] = True
+        payload["controller_migration_reason"] = (
+            "behavior_cloning"
+            if saved_representation == current_representation
+            else "action_representation"
+        )
     elif migrate_legacy_critic:
         reset = getattr(controller, "reset_critic_for_migration", None)
         if callable(reset):

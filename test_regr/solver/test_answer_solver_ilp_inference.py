@@ -10,9 +10,11 @@ from domiknows.graph import (
     Relation,
     andL,
     execute,
+    equalCountsL,
     existsL,
     iotaL,
     queryL,
+    lessL,
     sumL,
 )
 from domiknows.graph.concept import EnumConcept
@@ -454,6 +456,44 @@ class _ProbabilityWorldSolver:
 
     def populateILPSelection(self, dn, concepts_relations, values):
         self.populated = values
+
+
+@pytest.mark.parametrize(
+    "graph_name, executable_factory",
+    (
+        (
+            "equal_counts_answer",
+            lambda concept: execute(
+                equalCountsL(concept("x"), concept("y"))
+            ),
+        ),
+        (
+            "less_counts_answer",
+            lambda concept: execute(lessL(concept("x"), concept("y"))),
+        ),
+    ),
+)
+def test_count_comparison_executables_use_boolean_hypotheses(
+    graph_name,
+    executable_factory,
+):
+    graph, root, _, flag = _binary_scene(
+        graph_name,
+        executable_factory=executable_factory,
+    )
+    constraint_child = _add_constraint_child(root, "ELC0")
+
+    result = AnswerSolver(
+        graph,
+        solver=_SequencedSolver([2.0, 1.0]),
+    ).solve_active_constraints(
+        root,
+        {"ELC0"},
+        ((flag, flag.name, None, 1),),
+    )
+
+    assert result["hypotheses"]["ELC0"] is True
+    assert constraint_child.attributes["ELC0/answer"] is True
 
 
 def test_hypothesis_objective_defaults_to_log_probability_map():
