@@ -37,7 +37,8 @@ class PlannerConstraintRuntime:
     max_tokens: int
 
 
-STANDALONE_CHECKPOINT_VERSION = 2
+STANDALONE_CHECKPOINT_VERSION = 3
+SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS = {2, STANDALONE_CHECKPOINT_VERSION}
 
 
 def _planner_configuration(planner: torch.nn.Module) -> dict[str, Any]:
@@ -45,6 +46,37 @@ def _planner_configuration(planner: torch.nn.Module) -> dict[str, Any]:
         "class": type(planner).__name__,
         "graph_decoder_version": getattr(planner, "graph_decoder_version", None),
         "decoder_hidden_size": getattr(planner, "decoder_hidden_size", None),
+    }
+
+
+def _controller_configuration(controller: torch.nn.Module) -> dict[str, Any]:
+    """Fingerprint controller semantics that cannot be inferred from tensors."""
+
+    return {
+        "class": type(controller).__name__,
+        "action_representation_version": int(
+            getattr(controller, "action_representation_version", 1)
+        ),
+        "behavior_cloning_version": int(
+            getattr(controller, "behavior_cloning_version", 1)
+        ),
+        "critic_version": int(getattr(controller, "critic_version", 1)),
+        "plan_conditioning_version": int(
+            getattr(controller, "plan_conditioning_version", 0)
+        ),
+        "state_dim": getattr(controller, "state_dim", None),
+        "action_dim": getattr(controller, "action_dim", None),
+        "action_horizon": getattr(controller, "action_horizon", None),
+        "pose_step_scale": tuple(getattr(controller, "pose_step_scale", ())),
+        "controller_skill_count": getattr(
+            getattr(controller, "skill_embedding", None), "num_embeddings", 0
+        ),
+        "controller_entity_count": getattr(
+            getattr(controller, "entity_embedding", None), "num_embeddings", 0
+        ),
+        "controller_operation_count": getattr(
+            getattr(controller, "operation_embedding", None), "num_embeddings", 0
+        ),
     }
 
 
@@ -576,6 +608,7 @@ def save_joint_checkpoint(
         "vocabulary": asdict(runtime.vocabulary),
         "vocabulary_checksum": runtime.vocabulary.checksum,
         "planner_configuration": _planner_configuration(planner),
+        "controller_configuration": _controller_configuration(controller),
         "planner": _planner_trainable_state(planner),
         "controller": controller.state_dict(),
         "planner_optimizer": planner_optimizer.state_dict() if planner_optimizer is not None else None,
@@ -610,7 +643,7 @@ def load_joint_checkpoint(
         map_location=_checkpoint_map_location(map_location),
         weights_only=False,
     )
-    if payload.get("standalone_checkpoint_version") != STANDALONE_CHECKPOINT_VERSION:
+    if payload.get("standalone_checkpoint_version") not in SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS:
         raise ValueError(
             "checkpoint predates the efficient standalone graph decoder; restart Stage 1"
         )
@@ -620,12 +653,86 @@ def load_joint_checkpoint(
         raise ValueError("checkpoint vocabulary checksum differs from the current graph vocabulary")
     if payload.get("planner_configuration") != _planner_configuration(planner):
         raise ValueError("checkpoint planner configuration differs from the current graph decoder")
+    saved_controller = payload.get("controller_configuration")
+    current_controller = _controller_configuration(controller)
+    stage = payload.get("stage")
+    saved_representation = (
+        int(saved_controller.get("action_representation_version", 1))
+        if saved_controller is not None else 1
+    )
+    saved_behavior_cloning = (
+        int(saved_controller.get("behavior_cloning_version", 1))
+        if saved_controller is not None else 1
+    )
+    current_representation = int(current_controller["action_representation_version"])
+    current_behavior_cloning = int(current_controller["behavior_cloning_version"])
+    structurally_compatible = (
+        saved_controller is None
+        or all(
+            saved_controller.get(key) == current_controller.get(key)
+            for key in (
+                "class",
+                "state_dim",
+                "action_dim",
+                "action_horizon",
+                "pose_step_scale",
+            )
+        )
+    )
+    migrate_legacy_controller = (
+        stage == "supervised"
+        and structurally_compatible
+        and (
+            saved_controller is None
+            or saved_representation < current_representation
+            or saved_behavior_cloning < current_behavior_cloning
+        )
+    )
+    if saved_controller is None and not migrate_legacy_controller:
+        raise ValueError(
+            "standalone checkpoint predates versioned controller semantics; "
+            "resume a supervised checkpoint so controller warm-up can migrate it"
+        )
+    migrate_legacy_critic = (
+        saved_controller is not None
+        and int(saved_controller.get("critic_version", 1))
+        < int(current_controller["critic_version"])
+        and all(
+            saved_controller.get(key) == current_controller.get(key)
+            for key in current_controller
+            if key != "critic_version"
+        )
+    )
+    if (
+        saved_controller is not None
+        and saved_controller != current_controller
+        and not migrate_legacy_controller
+        and not migrate_legacy_critic
+    ):
+        raise ValueError(
+            "checkpoint controller_configuration differs from the current controller: "
+            f"saved={saved_controller!r}, current={current_controller!r}"
+        )
     _load_planner_trainable_state(planner, payload["planner"])
-    controller.load_state_dict(payload["controller"])
+    if migrate_legacy_controller:
+        result = controller.load_state_dict(payload["controller"], strict=False)
+        if result.unexpected_keys:
+            raise RuntimeError(
+                "legacy controller checkpoint has unexpected state: "
+                + ", ".join(result.unexpected_keys[:5])
+            )
+    else:
+        controller.load_state_dict(payload["controller"])
     if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])
-    if controller_optimizer is not None and payload.get("controller_optimizer") is not None:
+    if (
+        not migrate_legacy_controller
+        and controller_optimizer is not None
+        and payload.get("controller_optimizer") is not None
+    ):
         controller_optimizer.load_state_dict(payload["controller_optimizer"])
+    # Restore RNG before migration resets so rebuilding the action head is
+    # reproducible from the checkpoint rather than the caller's process state.
     random.setstate(payload["python_rng"])
     np.random.set_state(payload["numpy_rng"])
     torch.set_rng_state(_cpu_rng_state(payload["torch_rng"]))
@@ -634,4 +741,26 @@ def load_joint_checkpoint(
             list(payload["cuda_rng"])[: torch.cuda.device_count()]
         ):
             torch.cuda.set_rng_state(_cpu_rng_state(state), device=device)
+    if migrate_legacy_controller:
+        reset = getattr(controller, "reset_for_action_representation_migration", None)
+        if not callable(reset):
+            raise ValueError("controller cannot reset its legacy action representation")
+        reset()
+        if controller_optimizer is not None:
+            controller_optimizer.state.clear()
+        payload["controller_migration_required"] = True
+        payload["controller_migration_reason"] = (
+            "behavior_cloning"
+            if saved_controller is not None
+            and saved_representation == current_representation
+            else "action_representation"
+        )
+    elif migrate_legacy_critic:
+        reset = getattr(controller, "reset_critic_for_migration", None)
+        if not callable(reset):
+            raise ValueError("controller cannot reset its legacy critic")
+        reset()
+        if controller_optimizer is not None:
+            controller_optimizer.state.clear()
+        payload["controller_critic_migration_required"] = True
     return payload

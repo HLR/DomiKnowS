@@ -46,6 +46,9 @@ from test_regr.VLABenchAgentInterface.main import (
     _aggregate_task_metrics,
     _reinforcement_resume_position,
     build_parser,
+    reinforcement_checkpoint_eligible,
+    reinforcement_preflight_eligible,
+    reinforcement_selection_key,
 )
 from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
@@ -717,9 +720,67 @@ def test_standalone_agent_uses_bounded_report_defaults():
     assert args.validation_limit == 32
     assert args.rl_epochs == 3
     assert args.rl_rounds_per_epoch == 10
+    assert args.rl_min_success_rate == pytest.approx(0.10)
+    assert args.rl_min_successful_tasks == 3
+    assert args.rl_max_ik_truncation_rate == pytest.approx(0.25)
+    assert args.rl_preflight_min_success_rate == pytest.approx(0.0)
+    assert args.rl_preflight_min_successful_tasks == 0
+    assert args.rl_preflight_max_ik_truncation_rate == pytest.approx(0.50)
     assert args.eval_rollouts_per_task == 1
     assert args.ik_tolerance == pytest.approx(5e-3)
     assert args.max_consecutive_ik_rejections == 3
+
+
+def test_standalone_reinforcement_gates_use_fixed_seed_evaluation():
+    metrics = {
+        "training": {
+            "success_rate": 0.75,
+            "successful_task_count": 8,
+            "ik_truncation_rate": 0.05,
+        },
+        "evaluation": {
+            "success_rate": 0.0,
+            "successful_task_count": 0,
+            "return": 0.0,
+            "steps": 200.0,
+            "execution_complete_rate": 0.1,
+            "ik_truncation_rate": 0.9,
+        },
+    }
+    assert not reinforcement_checkpoint_eligible(
+        metrics,
+        min_success_rate=0.10,
+        min_successful_tasks=3,
+        max_ik_truncation_rate=0.25,
+    )
+    assert not reinforcement_preflight_eligible(metrics["evaluation"])
+    assert not reinforcement_preflight_eligible({
+        "success_rate": 0.0,
+        "successful_task_count": 0,
+        "ik_truncation_rate": 16 / 30,
+    })
+    assert reinforcement_preflight_eligible({
+        "success_rate": 0.0,
+        "successful_task_count": 0,
+        "ik_truncation_rate": 0.50,
+    })
+    better = {
+        "success_rate": 0.20,
+        "successful_task_count": 3,
+        "return": 0.1,
+        "steps": 100.0,
+        "execution_complete_rate": 0.8,
+        "ik_truncation_rate": 0.2,
+    }
+    assert reinforcement_checkpoint_eligible(
+        better,
+        min_success_rate=0.10,
+        min_successful_tasks=3,
+        max_ik_truncation_rate=0.25,
+    )
+    assert reinforcement_selection_key(better) > reinforcement_selection_key(
+        metrics["evaluation"]
+    )
 
 
 def test_reinforcement_round_metrics_aggregate_repeated_tasks():
@@ -1509,3 +1570,99 @@ def test_joint_checkpoint_restores_rng_and_rejects_domain_mismatch(tmp_path):
     torch.save(payload, bad)
     with pytest.raises(ValueError, match="domain checksum"):
         load_joint_checkpoint(bad, planner=planner, controller=controller, runtime=runtime)
+
+
+def test_standalone_checkpoint_versions_controller_semantics_and_migrates_supervised(tmp_path):
+    world = build_vlabench_world_graph("test_standalone_controller_migration_world")
+    runtime = build_constraint_runtime(
+        world,
+        max_entities=2,
+        max_operations=2,
+        name_prefix="test_standalone_controller_migration",
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    optimizer = torch.optim.Adam(controller.parameters(), lr=0.01)
+    path = save_joint_checkpoint(
+        tmp_path / "supervised.pt",
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=optimizer,
+        runtime=runtime,
+        stage="supervised",
+        epoch=0,
+    )
+    payload = torch.load(path, weights_only=False)
+    assert payload["standalone_checkpoint_version"] == 3
+    assert payload["controller_configuration"]["behavior_cloning_version"] == 2
+
+    payload["controller_configuration"].pop("behavior_cloning_version")
+    torch.save(payload, path)
+    restored = load_joint_checkpoint(
+        path,
+        planner=planner,
+        controller=controller,
+        controller_optimizer=optimizer,
+        runtime=runtime,
+    )
+    assert restored["controller_migration_required"] is True
+    assert restored["controller_migration_reason"] == "behavior_cloning"
+    assert optimizer.state == {}
+
+    payload["stage"] = "reinforcement"
+    torch.save(payload, path)
+    with pytest.raises(ValueError, match="controller_configuration"):
+        load_joint_checkpoint(
+            path,
+            planner=planner,
+            controller=controller,
+            runtime=runtime,
+        )
+
+
+def test_standalone_version2_checkpoint_migrates_only_before_reinforcement(tmp_path):
+    world = build_vlabench_world_graph("test_standalone_v2_migration_world")
+    runtime = build_constraint_runtime(
+        world,
+        max_entities=2,
+        max_operations=2,
+        name_prefix="test_standalone_v2_migration",
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    path = save_joint_checkpoint(
+        tmp_path / "legacy.pt",
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        runtime=runtime,
+        stage="supervised",
+        epoch=0,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["standalone_checkpoint_version"] = 2
+    payload.pop("controller_configuration")
+    torch.save(payload, path)
+    restored = load_joint_checkpoint(
+        path,
+        planner=planner,
+        controller=controller,
+        runtime=runtime,
+    )
+    assert restored["controller_migration_required"] is True
+
+    payload["stage"] = "reinforcement"
+    torch.save(payload, path)
+    with pytest.raises(ValueError, match="versioned controller semantics"):
+        load_joint_checkpoint(
+            path,
+            planner=planner,
+            controller=controller,
+            runtime=runtime,
+        )

@@ -229,12 +229,24 @@ and evaluation metrics remain separate. Use at least
 `--eval-rollouts-per-task 3` for the six-setting report, or `0` only for a
 short diagnostic run. Setting `--rl-epochs 0` produces the supervised-only
 VLABench setting and still writes `agent_stage1_evaluated.pt`.
+The pre-RL evaluation is also a controller feasibility gate. By default, more
+than `0.50` IK truncation writes `reinforcement-skipped` and stops before a
+multi-hour RL run. Configure success, task-coverage, and IK thresholds with
+the `--rl-preflight-*` options. Setting evaluation rollouts to zero
+intentionally disables this gate.
+
+Every RL epoch is retained for diagnosis, but only an epoch with at least
+`0.10` fixed-seed success, three successful task families, and no more than
+`0.25` IK truncation can become `agent_rl_best.pt`. Configure those thresholds
+with `--rl-min-success-rate`, `--rl-min-successful-tasks`, and
+`--rl-max-ik-truncation-rate`. Training-rollout success cannot override a
+failed fixed-seed evaluation.
 TorchCodec decoders use a per-task LRU capped at eight open videos by default;
 override it with `--video-decoder-cache-size` if the process has an unusually
 low file-descriptor limit.
 
-Standalone checkpoint version 2 contains trainable LoRA/graph-decoder state,
-controller, value head, both optimizer
+Standalone checkpoint version 3 contains trainable LoRA/graph-decoder state,
+versioned controller semantics, controller, value head, both optimizer
 states, stage/epoch, Python/NumPy/PyTorch RNG states, graph vocabulary, and the
 world-domain checksum. Resume at either stage boundary with:
 
@@ -243,7 +255,7 @@ uv run python -m test_regr.VLABenchAgentInterface.main train-agent --two-stage `
   --planning-dir test_regr\VLABenchAgentInterface\data\planning `
   --control-source test_regr\VLABenchAgentInterface\data\control `
   --output test_regr\VLABenchAgentInterface\checkpoints\agent `
-  --resume test_regr\VLABenchAgentInterface\checkpoints\agent\agent_rl_epoch_003.pt
+  --resume test_regr\VLABenchAgentInterface\checkpoints\agent\agent_rl_epoch_002.pt
 ```
 
 Resume is rejected before training if the graph-derived domain checksum,
@@ -252,7 +264,12 @@ prefix-reprompt planner must restart Stage 1. Stage 1 resumes at boundaries; an
 epoch reinforcement checkpoint restores the next RL epoch, while
 `agent_rl_progress.pt` restores the next unfinished round in the current epoch.
 Both forms restore optimizer and RNG states. A resumed partial RL epoch does
-not repeat the fixed-seed baseline evaluation.
+not repeat the fixed-seed baseline evaluation and carries forward any prior
+eligible best epoch. A version-2 supervised checkpoint resets and re-warms its
+controller under the physically scaled delta-BC objective. A version-2 RL
+checkpoint is rejected because it has already crossed that migration boundary.
+Controller migration cannot proceed when both `--controller-warmup-steps` and
+`--controller-epochs` are zero.
 
 For debugging, component commands remain available:
 
