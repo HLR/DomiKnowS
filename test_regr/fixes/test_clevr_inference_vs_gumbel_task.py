@@ -515,6 +515,92 @@ def test_ilp_benchmark_suite_runs_multiple_questions_and_aggregates(monkeypatch)
     assert report.reduction_percent == pytest.approx(75.0)
     assert report.speedup == pytest.approx(4.0)
     assert report.answers_agree is True
+    table = clevr_main._question_type_table(report)
+    assert all(
+        heading in table[0]
+        for heading in (
+            "Question type",
+            "Success/total",
+            "Full avg.",
+            "Dynamic avg.",
+            "Speedup",
+        )
+    )
+    assert table[2].split() == [
+        "unknown",
+        "2/2",
+        "3000.00",
+        "ms",
+        "750.00",
+        "ms",
+        "4.00\N{MULTIPLICATION SIGN}",
+    ]
+    assert table[-1].split() == [
+        "Successful-question",
+        "aggregate",
+        "2/2",
+        "3000.00",
+        "ms",
+        "750.00",
+        "ms",
+        "4.00\N{MULTIPLICATION SIGN}",
+    ]
+
+
+def test_question_type_table_ignores_only_gurobi_license_limits():
+    summary = clevr_main.ILPQuestionTypePerformance(
+        question_type="query_color",
+        attempted=4,
+        succeeded=2,
+        failed=2,
+        full_average_seconds=1.0,
+        dynamic_average_seconds=0.25,
+        milliseconds_saved=750.0,
+        reduction_percent=75.0,
+        speedup=4.0,
+        answers_agree=True,
+        full_average_predicates=27.0,
+        dynamic_average_predicates=8.0,
+    )
+    report = clevr_main.ILPBenchmarkReport(
+        comparisons=(object(), object()),
+        failures=(
+            clevr_main.ILPBenchmarkFailure(
+                sample={},
+                question_type="query_color",
+                error_type="GurobiError",
+                error=(
+                    "Model too large for size-limited license; "
+                    "visit gurobi.com/unrestricted"
+                ),
+            ),
+            clevr_main.ILPBenchmarkFailure(
+                sample={},
+                question_type="query_color",
+                error_type="RuntimeError",
+                error="all hypotheses infeasible",
+            ),
+        ),
+        question_types=(summary,),
+        attempted=4,
+        full_workload_seconds=2.0,
+        dynamic_workload_seconds=0.5,
+        milliseconds_saved=1500.0,
+        reduction_percent=75.0,
+        speedup=4.0,
+        answers_agree=True,
+    )
+
+    table = clevr_main._question_type_table(report)
+
+    # The license-limited sample is omitted from the denominator, while the
+    # genuine inference failure remains: two successes out of three runs.
+    assert table[2].split()[:2] == ["query_color", "2/3"]
+    assert table[-1].split()[:3] == [
+        "Successful-question",
+        "aggregate",
+        "2/2",
+    ]
 
 
 def test_ilp_benchmark_zero_item_limit_runs_all_compatible_questions(monkeypatch):
