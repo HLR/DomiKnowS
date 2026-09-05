@@ -1077,6 +1077,86 @@ def benchmark_ilp_graph_activations(
     )
 
 
+def _is_gurobi_license_limit(failure: ILPBenchmarkFailure) -> bool:
+    """Return whether a benchmark failure is only the free-license size cap."""
+    message = failure.error.lower()
+    return (
+        failure.error_type == "GurobiError"
+        and "size-limited license" in message
+        and "model too large" in message
+    )
+
+
+def _question_type_table(report: ILPBenchmarkReport) -> tuple[str, ...]:
+    """Format the per-question-type benchmark summary as a console table."""
+    headers = (
+        "Question type",
+        "Success/total",
+        "Full avg.",
+        "Dynamic avg.",
+        "Speedup",
+    )
+    rows = []
+    for summary in report.question_types:
+        ignored = sum(
+            1
+            for failure in report.failures
+            if failure.question_type == summary.question_type
+            and _is_gurobi_license_limit(failure)
+        )
+        effective_total = summary.attempted - ignored
+        if summary.succeeded:
+            full_average = f"{summary.full_average_seconds * 1000.0:.2f} ms"
+            dynamic_average = (
+                f"{summary.dynamic_average_seconds * 1000.0:.2f} ms"
+            )
+            speedup = f"{summary.speedup:.2f}\N{MULTIPLICATION SIGN}"
+        else:
+            full_average = dynamic_average = speedup = "n/a"
+        rows.append(
+            (
+                summary.question_type,
+                f"{summary.succeeded}/{effective_total}",
+                full_average,
+                dynamic_average,
+                speedup,
+            )
+        )
+
+    successful = len(report.comparisons)
+    aggregate_row = None
+    if successful:
+        aggregate_row = (
+            "Successful-question aggregate",
+            f"{successful}/{successful}",
+            f"{report.full_workload_seconds * 1000.0 / successful:.2f} ms",
+            f"{report.dynamic_workload_seconds * 1000.0 / successful:.2f} ms",
+            f"{report.speedup:.2f}\N{MULTIPLICATION SIGN}",
+        )
+
+    width_rows = rows + ([aggregate_row] if aggregate_row else [])
+    widths = [
+        max(len(headers[column]), *(len(row[column]) for row in width_rows))
+        for column in range(len(headers))
+    ]
+
+    def format_row(row: tuple[str, ...]) -> str:
+        return "  ".join(
+            value.ljust(widths[column])
+            for column, value in enumerate(row)
+        ).rstrip()
+
+    separator = format_row(tuple("-" * width for width in widths))
+    lines = [
+        format_row(headers),
+        separator,
+        *(format_row(row) for row in rows),
+    ]
+    if aggregate_row:
+        lines.extend((separator, format_row(aggregate_row)))
+    return tuple(lines)
+
+
 def print_post_training_ilp_benchmark(
     built: BuiltProgram,
     device: str,
@@ -1093,10 +1173,22 @@ def print_post_training_ilp_benchmark(
         repeats=repeats,
         items=items,
     )
+    license_skips = tuple(
+        failure
+        for failure in report.failures
+        if _is_gurobi_license_limit(failure)
+    )
+    inference_failures = tuple(
+        failure
+        for failure in report.failures
+        if not _is_gurobi_license_limit(failure)
+    )
     print(
         "\nPost-training ILP full-graph vs dynamic-graph benchmark "
         f"({report.attempted} questions: "
-        f"{len(report.comparisons)} succeeded, {len(report.failures)} failed)"
+        f"{len(report.comparisons)} succeeded, "
+        f"{len(license_skips)} skipped by Gurobi license, "
+        f"{len(inference_failures)} failed)"
     )
     print(f"{built.name}:")
     for index, comparison in enumerate(report.comparisons, start=1):
@@ -1121,9 +1213,15 @@ def print_post_training_ilp_benchmark(
             f"speedup={comparison.speedup:.2f}x, "
             f"answers_agree={comparison.answers_agree}"
         )
-    for index, failure in enumerate(report.failures, start=1):
+    for index, failure in enumerate(license_skips, start=1):
         print(
-            f"  failed question {index}/{len(report.failures)}="
+            f"  license-skipped question {index}/{len(license_skips)}="
+            f"{failure.sample.get('question')!r}"
+        )
+        print(f"    type={failure.question_type}, reason={failure.error}")
+    for index, failure in enumerate(inference_failures, start=1):
+        print(
+            f"  failed question {index}/{len(inference_failures)}="
             f"{failure.sample.get('question')!r}"
         )
         print(
@@ -1131,36 +1229,8 @@ def print_post_training_ilp_benchmark(
             f"error={failure.error_type}: {failure.error}"
         )
     print("  averages by question type (successful questions):")
-    for summary in report.question_types:
-        if summary.succeeded:
-            print(
-                f"    {summary.question_type}: attempted={summary.attempted}, "
-                f"succeeded={summary.succeeded}, failed={summary.failed}, "
-                f"full_avg={summary.full_average_seconds * 1000.0:.2f}ms, "
-                f"dynamic_avg={summary.dynamic_average_seconds * 1000.0:.2f}ms, "
-                f"saved_avg={summary.milliseconds_saved:.2f}ms, "
-                f"reduction={summary.reduction_percent:.2f}%, "
-                f"speedup={summary.speedup:.2f}x, "
-                f"ilp_predicates_avg="
-                f"{summary.full_average_predicates:.1f}->"
-                f"{summary.dynamic_average_predicates:.1f}, "
-                f"answers_agree={summary.answers_agree}"
-            )
-        else:
-            print(
-                f"    {summary.question_type}: attempted={summary.attempted}, "
-                f"succeeded=0, failed={summary.failed}, averages=n/a"
-            )
-    print("  aggregate (successful questions; sum of per-question medians):")
-    print(
-        f"    full={report.full_workload_seconds * 1000.0:.2f}ms, "
-        f"dynamic={report.dynamic_workload_seconds * 1000.0:.2f}ms, "
-        f"saved={report.milliseconds_saved:.2f}ms, "
-        f"reduction={report.reduction_percent:.2f}%, "
-        f"speedup={report.speedup:.2f}x, "
-        f"all_successful_answers_agree={report.answers_agree}, "
-        f"complete={not report.failures}"
-    )
+    for line in _question_type_table(report):
+        print(f"    {line}")
     return report
 
 

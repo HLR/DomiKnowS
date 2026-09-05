@@ -251,10 +251,12 @@ The report includes:
 After the per-question results, the report groups questions by their terminal
 CLEVR operation (`query_color`, `query_shape`, `query_size`, `query_material`,
 `count`, `exist`, `equal_size`, `equal_integer`, or `less_than`). Each group
-shows attempted, successful, and failed question counts; average full and
-dynamic runtime; average savings; reduction; speedup; average ILP predicate
-counts; and answer agreement. The final aggregate row reports the sum of the
-per-question medians for successful questions.
+shows successful/total question counts, average full and dynamic runtime, and
+speedup. Questions rejected only because the local size-limited Gurobi license
+cannot hold the full model are reported as license-skipped and omitted from the
+total; genuine inference failures remain in the denominator. The final
+`Successful-question aggregate` row averages the per-question medians over all
+successfully completed questions.
 
 Every question is attempted. If an executable query shape is unsupported or
 infeasible, the benchmark records its exception, continues with the remaining
