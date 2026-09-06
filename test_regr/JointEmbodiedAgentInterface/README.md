@@ -120,14 +120,16 @@ separate exploration-noise scales. It runs four-action receding-horizon chunks. 
 (closed) finger commands. PPO uses `gamma=0.99`, GAE `lambda=0.95`, clip
 `0.2`, four epochs, value weight `0.5`, and entropy weight `0.01`.
 The critic is bounded to `[-1,1]`, uses clipped return targets and Smooth L1
-loss, and cannot backpropagate through the actor's shared features. Rollouts
-with zero total simulator return still train the critic and `0.05` BC anchor,
-but do not apply PPO or entropy gradients to failed sampled actions.
+loss, and cannot backpropagate through the actor's shared features. A batch
+with zero total simulator return trains only the critic; PPO, entropy,
+feasibility, and the `0.05` BC anchor cannot change its actor. Mixed-return
+batches contrast successful and unsuccessful valid executions, and a singleton
+positive advantage remains uncentered so sparse success is preserved.
 PPO stores the bounded sampled action and its change-of-variables-corrected
-log probability. Likelihood ratios are bounded before exponentiation, and repeated
-PPO epochs stop after the mean per-action log-ratio leaves the trust region.
-This keeps the importance ratio tied to the behavior policy and prevents one
-stale trajectory from producing a catastrophic controller update.
+log probability. Likelihood ratios are bounded before exponentiation, and every
+actor-changing objective is checked against the mean per-action log-ratio after
+the final PPO pass as well as between passes. A trust-region violation restores
+the complete pre-update controller and clears stale optimizer moments.
 An infeasible action is retried at smaller Cartesian scales. If all scales
 fail, the unchanged observation is resampled up to three consecutive chunks
 by default before the rollout is IK-truncated; each rejection remains negative
@@ -141,9 +143,9 @@ up to 200 iterations. These defaults are configurable through
 Constraint-invalid plans never reach the controller. Non-finite actions receive
 zero and are not sent to the environment. An IK failure is retried at `0.5`,
 `0.25`, and `0.125` of the bounded delta. A hold-position command is not
-misreported as recovery; exhausted retries truncate the rollout. Recovery and truncation
-counts are reported per task, and a feasibility penalty reduces the likelihood
-of sampled actions that needed recovery without erasing earlier shaping reward.
+misreported as recovery; exhausted retries reject that sampled action. Recovery
+and truncation counts are reported per task, and a feasibility penalty targets
+the exact fully rejected action rather than an executable chunk prefix.
 
 ## Reward separation
 
@@ -220,12 +222,12 @@ evaluation rollouts; the update-producing rollouts remain under
 `vlabench_training` in the checkpoint metrics. Increase this to at least three
 for a final report with `--stage2-eval-rollouts-per-task 3`, or set it to `0`
 for a fast diagnostic run that intentionally uses training-rollout metrics.
-The pre-RL evaluation is also a controller preflight: by default it requires no
-more than `0.50` IK truncation. Failure writes `stage2-skipped` before any
-multi-hour RL epoch. Success and task-coverage thresholds are available but
-default to zero because the default ten-rollout baseline is too small for a
-reliable success gate.
-Configure the three thresholds with the `--stage2-preflight-*` options. Setting
+The pre-RL evaluation is also a controller preflight: by default it requires at
+least a `0.01` positive-return rate and no more than `0.50` IK truncation.
+Failure writes `stage2-skipped` before any multi-hour RL epoch. Success and
+task-coverage thresholds remain available but default to zero because the
+default ten-rollout baseline is too small for a reliable success gate.
+Configure these thresholds with the `--stage2-preflight-*` options. Setting
 evaluation rollouts to zero intentionally disables this gate.
 
 Override the relative paths when necessary:
@@ -275,11 +277,20 @@ acceptance gates with `--stage2-min-vlabench-success-rate`,
 `--stage2-min-successful-tasks`, and `--stage2-max-ik-truncation-rate`.
 Epoch checkpoints are always written even when they miss a gate. If every epoch misses them, training reports
 `stage2-best-skipped` and does not label a weak epoch as the best model.
+If fixed-seed VLABench evaluation loses the preflight task-signal or feasibility
+gate, Stage 2 aborts remaining epochs and restores the last eligible Stage 2
+checkpoint or the Stage 1/controller-warm-up checkpoint. That failed epoch is
+kept for diagnosis but marked non-resumable by the checkpoint loader.
 
 The controller-only warm-up additionally writes
 `joint_controller_warmup.pt`. When resuming an existing Stage 1 checkpoint,
 the warm-up runs before Stage 2. If the process stops later, resume the warm-up
 checkpoint to avoid repeating those controller updates.
+Joint checkpoint version 7 rejects older Stage 2 checkpoints, whose controller
+updates predate exact IK-failure credit assignment and transactional PPO.
+It also rejects current Stage 2 epoch checkpoints that failed their fixed-seed
+retention gate. Older Stage 1 and controller-warm-up checkpoints remain valid
+resume sources.
 
 Resume with:
 

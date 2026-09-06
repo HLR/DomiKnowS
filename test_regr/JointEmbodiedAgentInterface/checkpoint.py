@@ -15,8 +15,8 @@ import torch
 from .world_graph import JointDomainRuntime
 
 
-JOINT_CHECKPOINT_VERSION = 6
-SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, 4, 5, JOINT_CHECKPOINT_VERSION})
+JOINT_CHECKPOINT_VERSION = 7
+SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, 4, 5, 6, JOINT_CHECKPOINT_VERSION})
 
 
 def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
@@ -337,8 +337,25 @@ def load_joint_checkpoint(
         map_location=_checkpoint_staging_location(map_location),
         weights_only=False,
     )
-    if payload.get("joint_checkpoint_version") not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
+    checkpoint_version = payload.get("joint_checkpoint_version")
+    if checkpoint_version not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
         raise ValueError("unsupported or standalone checkpoint; a joint checkpoint is required")
+    stage = payload.get("stage")
+    if int(checkpoint_version) < JOINT_CHECKPOINT_VERSION and stage == "stage2":
+        raise ValueError(
+            "joint Stage 2 checkpoint predates transactional PPO and corrected "
+            "IK credit assignment; resume a Stage 1 or controller-warm-up checkpoint"
+        )
+    metrics = payload.get("metrics")
+    if (
+        stage == "stage2"
+        and isinstance(metrics, Mapping)
+        and metrics.get("retention_eligible") is False
+    ):
+        raise ValueError(
+            "joint Stage 2 checkpoint failed its fixed-seed retention gate; "
+            "resume the Stage 1/controller-warm-up checkpoint or an eligible Stage 2 checkpoint"
+        )
     expected = _compatibility(runtime, planner, controller)
     actual = payload.get("compatibility", {})
     for key in (

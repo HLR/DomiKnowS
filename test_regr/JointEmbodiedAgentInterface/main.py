@@ -122,16 +122,24 @@ def stage2_preflight_eligible(
     *,
     min_vlabench_success_rate: float = 0.0,
     min_successful_tasks: int = 0,
+    min_positive_return_rate: float = 0.01,
     max_ik_truncation_rate: float = 0.50,
 ) -> bool:
-    """Reject a controller that lacks basic fixed-seed execution competence."""
+    """Require learnable VLABench task signal and execution competence."""
 
-    return stage2_checkpoint_eligible(
+    eligible = stage2_checkpoint_eligible(
         {"vlabench": metrics},
         min_vlabench_success_rate=min_vlabench_success_rate,
         min_successful_tasks=min_successful_tasks,
         max_ik_truncation_rate=max_ik_truncation_rate,
     )
+    positive_return_rate = float(
+        metrics.get(
+            "positive_return_rate",
+            float(float(metrics.get("return", 0.0)) > 1e-6),
+        )
+    )
+    return eligible and positive_return_rate >= float(min_positive_return_rate)
 
 
 def _stage2_resume_position(payload, rounds_per_epoch):
@@ -345,6 +353,19 @@ def command_train_agent(args):
         if resume_stage in {"stage1", "controller_warmup"}
         else None
     )
+    if resume_stage == "stage2" and resume_payload is not None:
+        saved_fallback = resume_payload.get("metrics", {}).get("fallback_path")
+        if saved_fallback and Path(str(saved_fallback)).is_file():
+            best_stage1 = Path(str(saved_fallback)).resolve()
+        else:
+            warmup_fallback = output / "joint_controller_warmup.pt"
+            if warmup_fallback.is_file():
+                best_stage1 = warmup_fallback.resolve()
+            else:
+                _status(
+                    "resume checkpoint has no available Stage 1/controller-warm-up fallback; "
+                    "a failed retention gate will abort without restoring an older policy"
+                )
     if resume_stage != "stage2":
         stage1 = JointSolverPOIProgram(
             runtime,
@@ -517,6 +538,7 @@ def command_train_agent(args):
             baseline,
             min_vlabench_success_rate=args.stage2_preflight_min_vlabench_success_rate,
             min_successful_tasks=args.stage2_preflight_min_successful_tasks,
+            min_positive_return_rate=args.stage2_preflight_min_positive_return_rate,
             max_ik_truncation_rate=args.stage2_preflight_max_ik_truncation_rate,
         )
         _json({
@@ -531,6 +553,7 @@ def command_train_agent(args):
                 "reason": "VLABench controller preflight gate",
                 "minimum_vlabench_success_rate": args.stage2_preflight_min_vlabench_success_rate,
                 "minimum_successful_vlabench_tasks": args.stage2_preflight_min_successful_tasks,
+                "minimum_positive_return_rate": args.stage2_preflight_min_positive_return_rate,
                 "maximum_ik_truncation_rate": args.stage2_preflight_max_ik_truncation_rate,
                 "vlabench": baseline,
             })
@@ -564,6 +587,7 @@ def command_train_agent(args):
                 f"VLABench success={float(resume_payload['metrics']['vlabench']['success_rate']):.3f} "
                 f"requires {args.stage2_min_vlabench_success_rate:.3f}"
             )
+    stage2_aborted = False
     for epoch in range(start_stage2, args.stage2_epochs):
         _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} training")
         continuing_epoch = epoch == start_stage2 and start_stage2_round > 0
@@ -588,6 +612,9 @@ def command_train_agent(args):
                 metrics={
                     "partial_training": dict(partial_metrics),
                     "prior_best": prior_best,
+                    "fallback_path": (
+                        str(best_stage1) if best_stage1 is not None else None
+                    ),
                 },
             )
             _status(
@@ -624,6 +651,19 @@ def command_train_agent(args):
                 rollouts_per_task=args.stage2_eval_rollouts_per_task,
                 seed=args.seed + 100000,
             )
+        retention_eligible = True
+        if args.stage2_eval_rollouts_per_task > 0:
+            retention_eligible = stage2_preflight_eligible(
+                metrics["vlabench"],
+                min_vlabench_success_rate=args.stage2_preflight_min_vlabench_success_rate,
+                min_successful_tasks=args.stage2_preflight_min_successful_tasks,
+                min_positive_return_rate=args.stage2_preflight_min_positive_return_rate,
+                max_ik_truncation_rate=args.stage2_preflight_max_ik_truncation_rate,
+            )
+        metrics["retention_eligible"] = retention_eligible
+        metrics["fallback_path"] = (
+            str(best_stage1) if best_stage1 is not None else None
+        )
         path = save_joint_checkpoint(
             output / f"joint_stage2_epoch_{epoch:03d}.pt",
             runtime=runtime,
@@ -637,7 +677,7 @@ def command_train_agent(args):
             metrics=metrics,
         )
         key = stage2_selection_key(metrics)
-        eligible = stage2_checkpoint_eligible(
+        eligible = retention_eligible and stage2_checkpoint_eligible(
             metrics,
             min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
             min_successful_tasks=args.stage2_min_successful_tasks,
@@ -650,11 +690,36 @@ def command_train_agent(args):
             "epoch": epoch,
             "checkpoint": path,
             "best_candidate_eligible": eligible,
+            "retention_eligible": retention_eligible,
             "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
             "minimum_successful_vlabench_tasks": args.stage2_min_successful_tasks,
             "maximum_ik_truncation_rate": args.stage2_max_ik_truncation_rate,
             "metrics": metrics,
         })
+        if not retention_eligible:
+            restore_path = best_path or best_stage1
+            if restore_path is not None:
+                restored = load_joint_checkpoint(
+                    restore_path,
+                    runtime=runtime,
+                    planner=planner,
+                    controller=controller,
+                    planner_optimizer=planner_optimizer,
+                    controller_optimizer=controller_optimizer,
+                    map_location=device,
+                )
+                stage2.round_robin_cursor = int(restored["round_robin_cursor"])
+            _json({
+                "stage": "stage2-aborted",
+                "reason": "fixed-seed VLABench evaluation lost task signal or controller feasibility",
+                "rejected_checkpoint": path,
+                "restored_checkpoint": restore_path,
+                "minimum_positive_return_rate": args.stage2_preflight_min_positive_return_rate,
+                "maximum_ik_truncation_rate": args.stage2_preflight_max_ik_truncation_rate,
+                "vlabench": metrics["vlabench"],
+            })
+            stage2_aborted = True
+            break
     if best_path is not None:
         payload = load_joint_checkpoint(
             best_path,
@@ -678,7 +743,7 @@ def command_train_agent(args):
             metrics=payload.get("metrics", {}),
         )
         _json({"stage": "stage2-best", "checkpoint": selected, "source": best_path})
-    else:
+    elif not stage2_aborted:
         _json({
             "stage": "stage2-best-skipped",
             "reason": "no epoch met all VLABench success, task-coverage, and IK-feasibility gates",
@@ -743,6 +808,12 @@ def build_parser():
         type=int,
         default=0,
         help="minimum task families with baseline success required before Stage 2",
+    )
+    agent.add_argument(
+        "--stage2-preflight-min-positive-return-rate",
+        type=_unit_interval,
+        default=0.01,
+        help="minimum fixed-seed fraction with positive VLABench task signal before Stage 2",
     )
     agent.add_argument(
         "--stage2-preflight-max-ik-truncation-rate",

@@ -179,14 +179,18 @@ large absolute coordinates. PPO uses `gamma=0.99`, GAE
 `lambda=0.95`, clip `0.2`, four PPO epochs, value weight `0.5`, and entropy
 weight `0.01`; a `0.05` behavior-cloning anchor is retained. The bounded
 critic uses clipped targets and Smooth L1 loss without changing shared actor
-features. A zero-return rollout trains the critic and supervised anchor but
-does not reinforce or entropy-expand its failed sampled actions. The controller
+features. A batch with no positive task return trains only the detached critic;
+it cannot change the actor through PPO, entropy, feasibility, or the supervised
+anchor. Once a batch has task signal, PPO contrasts successful and unsuccessful
+valid executions. A singleton positive advantage remains uncentered so sparse
+success is not erased. The controller
 stores the bounded policy sample and its change-of-variables-corrected behavior
 log probability for PPO; an independent Cartesian envelope protects custom or
-legacy controllers. Likelihood ratios are bounded before
-exponentiation, and later PPO epochs stop when the mean per-action log-ratio
-leaves the configured trust region, so one stale chunk cannot dominate an
-update. The controller executes four actions before replanning. Each action
+legacy controllers. Likelihood ratios are bounded before exponentiation. Every
+actor-changing objective participates in the mean per-action log-ratio check,
+including the final PPO pass. Crossing the trust region restores the complete
+pre-update controller and clears stale optimizer moments. The controller
+executes four actions before replanning. Each action
 `[x,y,z,roll,pitch,yaw,gripper]` is converted with
 `get_qpos_from_ee_pos`; the gripper becomes two `0.04` (open) or `0.0`
 (closed) finger commands. The default safety envelope permits at most 2 cm of
@@ -194,7 +198,9 @@ translation and 0.10 radians of rotation per simulator action. IK uses a
 `5e-3` convergence tolerance and at most 200 iterations; the hierarchical
 program retries a failed target at `0.5`, `0.25`, and `0.125` scale. A
 hold-position command is not counted as recovery. Exhausted retries reject the
-current action chunk and provide a controller feasibility penalty. The policy
+current action chunk and provide a controller feasibility penalty on the exact
+rejected action, not an earlier executable prefix. Recovered targets are not
+counted as rejected policy actions. The policy
 resamples from the unchanged observation up to three consecutive rejected
 chunks by default; only then does it truncate the rollout, without erasing
 reward accumulated by earlier valid actions. Override this bounded retry
@@ -229,9 +235,11 @@ and evaluation metrics remain separate. Use at least
 `--eval-rollouts-per-task 3` for the six-setting report, or `0` only for a
 short diagnostic run. Setting `--rl-epochs 0` produces the supervised-only
 VLABench setting and still writes `agent_stage1_evaluated.pt`.
-The pre-RL evaluation is also a controller feasibility gate. By default, more
-than `0.50` IK truncation writes `reinforcement-skipped` and stops before a
-multi-hour RL run. Configure success, task-coverage, and IK thresholds with
+The pre-RL evaluation is also a learning-signal and controller-feasibility
+gate. By default, at least `0.01` of fixed-seed episodes must produce positive
+task return and no more than `0.50` may truncate at IK. Failure writes
+`reinforcement-skipped` and stops before a multi-hour RL run. Configure positive
+return, success, task-coverage, and IK thresholds with
 the `--rl-preflight-*` options. Setting evaluation rollouts to zero
 intentionally disables this gate.
 
@@ -241,11 +249,16 @@ Every RL epoch is retained for diagnosis, but only an epoch with at least
 with `--rl-min-success-rate`, `--rl-min-successful-tasks`, and
 `--rl-max-ik-truncation-rate`. Training-rollout success cannot override a
 failed fixed-seed evaluation.
+If an epoch no longer meets the preflight learning-signal/feasibility gate,
+training writes `reinforcement-aborted`, restores the last eligible RL epoch or
+the evaluated supervised checkpoint, and does not spend later epochs extending
+a collapsed policy. The rejected epoch checkpoint remains available for
+diagnosis but is marked non-resumable by the loader.
 TorchCodec decoders use a per-task LRU capped at eight open videos by default;
 override it with `--video-decoder-cache-size` if the process has an unusually
 low file-descriptor limit.
 
-Standalone checkpoint version 3 contains trainable LoRA/graph-decoder state,
+Standalone checkpoint version 4 contains trainable LoRA/graph-decoder state,
 versioned controller semantics, controller, value head, both optimizer
 states, stage/epoch, Python/NumPy/PyTorch RNG states, graph vocabulary, and the
 world-domain checksum. Resume at either stage boundary with:
@@ -266,8 +279,11 @@ epoch reinforcement checkpoint restores the next RL epoch, while
 Both forms restore optimizer and RNG states. A resumed partial RL epoch does
 not repeat the fixed-seed baseline evaluation and carries forward any prior
 eligible best epoch. A version-2 supervised checkpoint resets and re-warms its
-controller under the physically scaled delta-BC objective. A version-2 RL
-checkpoint is rejected because it has already crossed that migration boundary.
+controller under the physically scaled delta-BC objective. Version-2 and
+version-3 RL checkpoints are rejected because they predate corrected IK credit
+assignment and transactional PPO; resume their supervised checkpoint instead.
+Current-version RL epoch checkpoints that failed their fixed-seed retention
+gate are also rejected as resume sources.
 Controller migration cannot proceed when both `--controller-warmup-steps` and
 `--controller-epochs` are zero.
 

@@ -942,6 +942,54 @@ def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joi
     assert restored["round_robin_cursor"] == 1
 
 
+def test_joint_version6_stage2_checkpoint_is_rejected(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    path = save_joint_checkpoint(
+        tmp_path / "legacy_stage2.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        stage="stage2",
+        epoch=0,
+        round_robin_cursor=1,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["joint_checkpoint_version"] = 6
+    torch.save(payload, path)
+
+    with pytest.raises(ValueError, match="transactional PPO"):
+        load_joint_checkpoint(
+            path, runtime=runtime, planner=planner, controller=controller
+        )
+
+
+def test_joint_failed_retention_checkpoint_is_rejected(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    path = save_joint_checkpoint(
+        tmp_path / "failed_retention.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        stage="stage2",
+        epoch=0,
+        round_robin_cursor=1,
+        metrics={"retention_eligible": False},
+    )
+
+    with pytest.raises(ValueError, match="failed its fixed-seed retention gate"):
+        load_joint_checkpoint(
+            path, runtime=runtime, planner=planner, controller=controller
+        )
+
+
 def test_joint_checkpoint_loads_legacy_process_local_dfa_numbering(tmp_path, joint_fixture):
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)
@@ -1108,12 +1156,20 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert stage2_preflight_eligible({
         "success_rate": 0.05,
         "successful_task_count": 1,
+        "positive_return_rate": 0.05,
         "ik_truncation_rate": 0.25,
     })
     assert not stage2_preflight_eligible({
         "success_rate": 0.05,
         "successful_task_count": 1,
+        "positive_return_rate": 0.05,
         "ik_truncation_rate": 0.75,
+    })
+    assert not stage2_preflight_eligible({
+        "success_rate": 0.0,
+        "successful_task_count": 0,
+        "positive_return_rate": 0.0,
+        "ik_truncation_rate": 0.10,
     })
     partial = {
         "stage": "stage2",
@@ -1152,6 +1208,7 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.stage2_max_ik_truncation_rate == pytest.approx(0.25)
     assert args.stage2_preflight_min_vlabench_success_rate == pytest.approx(0.0)
     assert args.stage2_preflight_min_successful_tasks == 0
+    assert args.stage2_preflight_min_positive_return_rate == pytest.approx(0.01)
     assert args.stage2_preflight_max_ik_truncation_rate == pytest.approx(0.50)
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)

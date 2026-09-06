@@ -37,8 +37,8 @@ class PlannerConstraintRuntime:
     max_tokens: int
 
 
-STANDALONE_CHECKPOINT_VERSION = 3
-SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS = {2, STANDALONE_CHECKPOINT_VERSION}
+STANDALONE_CHECKPOINT_VERSION = 4
+SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS = {2, 3, STANDALONE_CHECKPOINT_VERSION}
 
 
 def _planner_configuration(planner: torch.nn.Module) -> dict[str, Any]:
@@ -643,9 +643,26 @@ def load_joint_checkpoint(
         map_location=_checkpoint_map_location(map_location),
         weights_only=False,
     )
-    if payload.get("standalone_checkpoint_version") not in SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS:
+    checkpoint_version = payload.get("standalone_checkpoint_version")
+    if checkpoint_version not in SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS:
         raise ValueError(
             "checkpoint predates the efficient standalone graph decoder; restart Stage 1"
+        )
+    stage = payload.get("stage")
+    if int(checkpoint_version) < STANDALONE_CHECKPOINT_VERSION and stage == "reinforcement":
+        raise ValueError(
+            "reinforcement checkpoint predates transactional PPO and corrected IK "
+            "credit assignment; resume a supervised checkpoint"
+        )
+    metrics = payload.get("metrics")
+    if (
+        stage == "reinforcement"
+        and isinstance(metrics, Mapping)
+        and metrics.get("retention_eligible") is False
+    ):
+        raise ValueError(
+            "reinforcement checkpoint failed its fixed-seed retention gate; "
+            "resume the evaluated supervised checkpoint or an eligible RL checkpoint"
         )
     if payload.get("domain_checksum") != runtime.world_bundle.domain_checksum:
         raise ValueError("checkpoint domain checksum differs from the current world graph")
@@ -655,7 +672,6 @@ def load_joint_checkpoint(
         raise ValueError("checkpoint planner configuration differs from the current graph decoder")
     saved_controller = payload.get("controller_configuration")
     current_controller = _controller_configuration(controller)
-    stage = payload.get("stage")
     saved_representation = (
         int(saved_controller.get("action_representation_version", 1))
         if saved_controller is not None else 1

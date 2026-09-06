@@ -13,6 +13,9 @@ from torch.nn import functional as F
 
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
+
+POSITIVE_RETURN_EPSILON = 1e-6
+
 try:
     from .dataset import control_task_index_for_instruction
     from .environment import InverseKinematicsError, bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
@@ -113,6 +116,8 @@ class ControllerTransition:
     executed: int
     plan_context: torch.Tensor | None = None
     feasibility_cost: float = 0.0
+    feasibility_index: int | None = None
+    old_feasibility_logprob: torch.Tensor | None = None
     advantage: float = 0.0
     return_value: float = 0.0
 
@@ -424,6 +429,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.simulator_init_retries = max(1, int(simulator_init_retries))
         self.progress_callback = progress_callback
         self._entity_dfa_cache: dict[int, Any] = {}
+        self.last_controller_update: dict[str, Any] = {}
 
     def _report_progress(self, message: str) -> None:
         if self.progress_callback is not None:
@@ -656,6 +662,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 executed = 0
                 chunk_reward = 0.0
                 chunk_ik_failures = 0
+                failed_action_index = None
                 chunk_advanced = False
                 ik_truncated = False
                 for action_index, candidate in enumerate(actions[0, : self.execute_horizon]):
@@ -699,6 +706,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 ik_failures += 1
                                 chunk_ik_failures += 1
                         if command is None:
+                            failed_action_index = action_index
                             consecutive_ik_rejections += 1
                             ik_truncated = (
                                 consecutive_ik_rejections
@@ -755,24 +763,31 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         break
                     if steps >= self.max_steps:
                         break
-                # Even a first-action IK rejection is retained for the
-                # feasibility auxiliary objective. It has no simulator reward
-                # or PPO advantage, but the actor can reduce that action's
-                # likelihood instead of repeatedly rediscovering it.
-                likelihood_steps = executed or int(chunk_ik_failures > 0)
-                if likelihood_steps:
+                # Keep a fully rejected sampled action as separate feasibility
+                # evidence.  `executed` remains the number of actions that
+                # actually reached the simulator; conflating it with the failed
+                # action index penalizes the successful prefix of a chunk.
+                if executed or failed_action_index is not None:
                     transitions.append(ControllerTransition(
                         images=inputs[0].detach().cpu(),
                         state=inputs[1].detach().cpu(),
                         task_index=inputs[2].detach().cpu(),
                         plan_context=inputs[3].detach().cpu(),
                         actions=policy_actions.cpu(),
-                        old_logprob=logprobs[0, :likelihood_steps].sum().detach().cpu(),
+                        old_logprob=logprobs[0, :executed].sum().detach().cpu(),
                         old_value=values[0].detach().cpu(),
                         reward=chunk_reward,
                         done=success or not valid or ik_truncated or steps >= self.max_steps,
-                        executed=likelihood_steps,
-                        feasibility_cost=float(chunk_ik_failures),
+                        executed=executed,
+                        # Recovery is part of the environment's deterministic
+                        # safety transform. Penalize only the sampled target
+                        # that remained infeasible at every recovery scale.
+                        feasibility_cost=float(failed_action_index is not None),
+                        feasibility_index=failed_action_index,
+                        old_feasibility_logprob=(
+                            logprobs[0, failed_action_index].detach().cpu()
+                            if failed_action_index is not None else None
+                        ),
                     ))
                 if success or not valid or ik_truncated or steps >= self.max_steps:
                     break
@@ -940,27 +955,101 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         # PPO and the behavior-cloning anchor construct fresh autograd graphs.
         # Do not inherit evaluation mode from an earlier rollout evaluation.
         self.controller.train()
+        task_signal_episodes = sum(
+            episode.total_return > POSITIVE_RETURN_EPSILON for episode in episodes
+        )
+        actor_update_enabled = bool(task_signal_episodes)
+        # Once a batch has genuine task signal, all executed transitions from
+        # valid rollouts are useful PPO evidence: positive-return episodes show
+        # what to reinforce and zero-return episodes show what to suppress.
+        # A wholly zero-return batch still updates only the detached critic.
         entries = [
-            (item, episode.total_return > 0.0)
+            (item, actor_update_enabled and int(item.executed) > 0)
             for episode in episodes
             for item in episode.controller
         ]
         transitions = [item for item, _informative in entries]
         if not transitions:
+            self.last_controller_update = {
+                "task_signal_episodes": 0,
+                "actor_update_attempted": False,
+                "rolled_back": False,
+                "ppo_epochs_completed": 0,
+                "mean_action_log_ratio": 0.0,
+                "max_action_log_ratio": 0.0,
+            }
             return 0.0
         advantages = torch.zeros(len(entries), device=self.device_name)
-        informative_indices = [index for index, (_item, informative) in enumerate(entries) if informative]
+        informative_indices = [
+            index
+            for index, (item, informative) in enumerate(entries)
+            if informative and int(item.executed) > 0
+        ]
         if informative_indices:
             informative_advantages = torch.tensor(
                 [entries[index][0].advantage for index in informative_indices],
                 device=self.device_name,
             )
-            informative_advantages = (
-                informative_advantages - informative_advantages.mean()
-            ) / informative_advantages.std(unbiased=False).clamp_min(1e-6)
+            # Centering a singleton advantage erases the only sparse-success
+            # policy signal. Normalize only when there is a population against
+            # which to compare it; otherwise preserve the raw GAE advantage.
+            if informative_advantages.numel() > 1:
+                informative_advantages = (
+                    informative_advantages - informative_advantages.mean()
+                ) / informative_advantages.std(unbiased=False).clamp_min(1e-6)
             advantages[informative_indices] = informative_advantages
+        trainable = [
+            parameter for parameter in self.controller.parameters()
+            if parameter.requires_grad
+        ]
+        batch_start = (
+            [parameter.detach().clone() for parameter in trainable]
+            if actor_update_enabled else None
+        )
         total = 0.0
         completed_epochs = 0
+        rolled_back = False
+        last_action_log_ratio = 0.0
+        last_max_action_log_ratio = 0.0
+
+        def restore_batch_start(message: str) -> None:
+            nonlocal rolled_back, total, completed_epochs
+            if batch_start is not None:
+                with torch.no_grad():
+                    for parameter, previous in zip(trainable, batch_start):
+                        parameter.copy_(previous)
+            self.controller_optimizer.state.clear()
+            self.controller_optimizer.zero_grad(set_to_none=True)
+            rolled_back = True
+            total = 0.0
+            completed_epochs = 0
+            self._report_progress(message)
+
+        def add_action_log_ratios(target, logprob, item, informative) -> None:
+            executed = int(item.executed)
+            if informative and executed > 0:
+                old_logprob = item.old_logprob.to(self.device_name).reshape(())
+                target.append(
+                    (logprob[0, :executed].sum().detach() - old_logprob).abs()
+                    / executed
+                )
+            if (
+                actor_update_enabled
+                and float(item.feasibility_cost) > 0.0
+                and item.feasibility_index is not None
+            ):
+                if item.old_feasibility_logprob is None:
+                    raise ValueError("feasibility transition has no behavior log-probability")
+                feasibility_index = int(item.feasibility_index)
+                if feasibility_index < 0 or feasibility_index >= logprob.shape[1]:
+                    raise ValueError("feasibility transition index is outside the action chunk")
+                old_feasibility = item.old_feasibility_logprob.to(
+                    self.device_name
+                ).reshape(())
+                target.append(
+                    (logprob[0, feasibility_index].detach() - old_feasibility).abs()
+                )
+
         for ppo_epoch in range(self.ppo_epochs):
             losses = []
             action_log_ratios = []
@@ -972,13 +1061,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     item.actions.to(self.device_name),
                     item.plan_context.to(self.device_name) if item.plan_context is not None else None,
                 )
-                new_logprob = logprob[0, : item.executed].sum()
+                executed = int(item.executed)
+                new_logprob = logprob[0, :executed].sum()
                 old_logprob = item.old_logprob.to(self.device_name).reshape(())
-                if entries[index][1]:
-                    action_log_ratios.append(
-                        (new_logprob.detach() - old_logprob).abs()
-                        / max(1, item.executed)
-                    )
+                informative = bool(entries[index][1])
+                add_action_log_ratios(
+                    action_log_ratios, logprob, item, informative
+                )
                 policy_loss = (
                     ppo_clipped_loss(
                         new_logprob.reshape(1),
@@ -987,7 +1076,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         clip=self.ppo_clip,
                         max_log_ratio=self.ppo_max_log_ratio,
                     )
-                    if entries[index][1]
+                    if informative and executed > 0
                     else torch.zeros((), device=self.device_name)
                 )
                 target_value = torch.tensor(
@@ -996,34 +1085,65 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 ).clamp(-1.0, 1.0)
                 value_loss = F.smooth_l1_loss(value.reshape(()), target_value)
                 entropy_bonus = (
-                    self.entropy_weight * entropy[0, : item.executed].mean()
-                    if entries[index][1] else torch.zeros((), device=self.device_name)
+                    self.entropy_weight * entropy[0, :executed].mean()
+                    if informative and executed > 0
+                    else torch.zeros((), device=self.device_name)
                 )
+                feasibility_loss = torch.zeros((), device=self.device_name)
+                if (
+                    actor_update_enabled
+                    and float(item.feasibility_cost) > 0.0
+                    and item.feasibility_index is not None
+                ):
+                    feasibility_index = int(item.feasibility_index)
+                    old_feasibility = item.old_feasibility_logprob.to(
+                        self.device_name
+                    ).reshape(())
+                    feasibility_loss = (
+                        self.feasibility_weight
+                        * float(item.feasibility_cost)
+                        * torch.exp(
+                            (
+                                logprob[0, feasibility_index]
+                                - old_feasibility
+                            ).clamp(-self.ppo_max_log_ratio, self.ppo_max_log_ratio)
+                        )
+                    )
                 losses.append(
                     policy_loss
                     + self.value_weight * value_loss
                     - entropy_bonus
-                    + self.feasibility_weight
-                    * float(item.feasibility_cost)
-                    * torch.exp(
-                        ((new_logprob - old_logprob) / max(1, item.executed)).clamp(-2.0, 2.0)
-                    )
+                    + feasibility_loss
                 )
             mean_action_log_ratio = (
                 float(torch.stack(action_log_ratios).mean())
                 if action_log_ratios else 0.0
             )
+            max_action_log_ratio = (
+                float(torch.stack(action_log_ratios).max())
+                if action_log_ratios else 0.0
+            )
+            last_action_log_ratio = mean_action_log_ratio
+            last_max_action_log_ratio = max_action_log_ratio
             if (
                 ppo_epoch
-                and mean_action_log_ratio > self.ppo_target_action_log_ratio
+                and (
+                    mean_action_log_ratio > self.ppo_target_action_log_ratio
+                    or max_action_log_ratio > self.ppo_max_log_ratio
+                )
             ):
-                self._report_progress(
+                restore_batch_start(
                     "VLABench controller PPO early stop: "
                     f"mean action log-ratio={mean_action_log_ratio:.4f} "
-                    f"exceeds {self.ppo_target_action_log_ratio:.4f}"
+                    f"(limit {self.ppo_target_action_log_ratio:.4f}), "
+                    f"max={max_action_log_ratio:.4f} "
+                    f"(limit {self.ppo_max_log_ratio:.4f}); "
+                    "rolled back the complete controller update"
                 )
                 break
-            loss = torch.stack(losses).mean() + self.controller_bc_weight * self._controller_anchor()
+            loss = torch.stack(losses).mean()
+            if actor_update_enabled:
+                loss = loss + self.controller_bc_weight * self._controller_anchor()
             self.controller_optimizer.zero_grad(set_to_none=True)
             if not bool(torch.isfinite(loss)):
                 self._report_progress("VLABench controller PPO update skipped: non-finite loss")
@@ -1035,10 +1155,6 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 )
                 break
             loss.backward()
-            trainable = [
-                parameter for parameter in self.controller.parameters()
-                if parameter.requires_grad
-            ]
             try:
                 torch.nn.utils.clip_grad_norm_(
                     trainable,
@@ -1049,7 +1165,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 self.controller_optimizer.zero_grad(set_to_none=True)
                 self._report_progress("VLABench controller PPO update skipped: non-finite gradient")
                 break
-            backup = [parameter.detach().clone() for parameter in trainable]
+            backup = (
+                batch_start
+                if batch_start is not None
+                else [parameter.detach().clone() for parameter in trainable]
+            )
             self.controller_optimizer.step()
             if not all(bool(torch.isfinite(parameter).all()) for parameter in trainable):
                 with torch.no_grad():
@@ -1067,6 +1187,53 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 break
             total += float(loss.detach())
             completed_epochs += 1
+
+        # The next PPO pass detects drift from earlier passes, but the final
+        # optimizer step has no subsequent pass. Validate it explicitly and
+        # make the whole update transactional when the trust region is crossed.
+        if actor_update_enabled and completed_epochs and not rolled_back:
+            post_update_ratios = []
+            with torch.no_grad():
+                for item, informative in entries:
+                    logprob, _entropy, _value = self.controller.evaluate_action_chunk(
+                        item.images.to(self.device_name),
+                        item.state.to(self.device_name),
+                        item.task_index.to(self.device_name),
+                        item.actions.to(self.device_name),
+                        item.plan_context.to(self.device_name)
+                        if item.plan_context is not None else None,
+                    )
+                    add_action_log_ratios(
+                        post_update_ratios, logprob, item, informative
+                    )
+            last_action_log_ratio = (
+                float(torch.stack(post_update_ratios).mean())
+                if post_update_ratios else 0.0
+            )
+            last_max_action_log_ratio = (
+                float(torch.stack(post_update_ratios).max())
+                if post_update_ratios else 0.0
+            )
+            if (
+                last_action_log_ratio > self.ppo_target_action_log_ratio
+                or last_max_action_log_ratio > self.ppo_max_log_ratio
+            ):
+                restore_batch_start(
+                    "VLABench controller PPO rollback: final action log-ratio "
+                    f"mean={last_action_log_ratio:.4f} "
+                    f"(limit {self.ppo_target_action_log_ratio:.4f}), "
+                    f"max={last_max_action_log_ratio:.4f} "
+                    f"(limit {self.ppo_max_log_ratio:.4f})"
+                )
+
+        self.last_controller_update = {
+            "task_signal_episodes": int(task_signal_episodes),
+            "actor_update_attempted": actor_update_enabled,
+            "rolled_back": rolled_back,
+            "ppo_epochs_completed": int(completed_epochs),
+            "mean_action_log_ratio": float(last_action_log_ratio),
+            "max_action_log_ratio": float(last_max_action_log_ratio),
+        }
         return total / max(1, completed_epochs)
 
     def train_joint_epoch(self, descriptors: Sequence[Mapping[str, Any]], *, rollouts_per_update: int = 8):
@@ -1097,7 +1264,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 task_name,
                 {
                     "episodes": 0.0, "successes": 0.0, "valid": 0.0,
-                    "return": 0.0, "steps": 0.0, "ik_failures": 0.0,
+                    "return": 0.0, "positive_returns": 0.0,
+                    "steps": 0.0, "ik_failures": 0.0,
                     "ik_recoveries": 0.0, "ik_truncations": 0.0,
                     "execution_complete": 0.0,
                 },
@@ -1106,6 +1274,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             totals["successes"] += float(episode.success)
             totals["valid"] += float(episode.valid)
             totals["return"] += float(episode.total_return)
+            totals["positive_returns"] += float(
+                episode.total_return > POSITIVE_RETURN_EPSILON
+            )
             totals["steps"] += float(episode.steps)
             totals["ik_failures"] += float(episode.ik_failures)
             totals["ik_recoveries"] += float(episode.ik_recoveries)
@@ -1120,6 +1291,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "success_rate": totals["successes"] / totals["episodes"],
                 "valid_rate": totals["valid"] / totals["episodes"],
                 "return": totals["return"] / totals["episodes"],
+                "positive_return_rate": (
+                    totals["positive_returns"] / totals["episodes"]
+                ),
                 "steps": totals["steps"] / totals["episodes"],
                 "ik_failures": int(totals["ik_failures"]),
                 "ik_recoveries": int(totals["ik_recoveries"]),
@@ -1132,7 +1306,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         return {
             "planner_loss": planner_loss,
             "controller_loss": controller_loss_value,
+            "controller_update": dict(self.last_controller_update),
             "return": sum(item.total_return for item in episodes) / len(episodes),
+            "positive_return_rate": sum(
+                item.total_return > POSITIVE_RETURN_EPSILON for item in episodes
+            ) / len(episodes),
             "success_rate": sum(item.success for item in episodes) / len(episodes),
             "valid_rate": sum(item.valid for item in episodes) / len(episodes),
             "steps": sum(item.steps for item in episodes) / len(episodes),
@@ -1195,7 +1373,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         for task_name, episode in zip(names, episodes):
             totals = task_totals.setdefault(task_name, {
                 "episodes": 0.0, "successes": 0.0, "valid": 0.0,
-                "return": 0.0, "steps": 0.0, "ik_failures": 0.0,
+                "return": 0.0, "positive_returns": 0.0,
+                "steps": 0.0, "ik_failures": 0.0,
                 "ik_recoveries": 0.0, "ik_truncations": 0.0,
                 "execution_complete": 0.0,
             })
@@ -1203,6 +1382,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             totals["successes"] += float(episode.success)
             totals["valid"] += float(episode.valid)
             totals["return"] += float(episode.total_return)
+            totals["positive_returns"] += float(
+                episode.total_return > POSITIVE_RETURN_EPSILON
+            )
             totals["steps"] += float(episode.steps)
             totals["ik_failures"] += float(episode.ik_failures)
             totals["ik_recoveries"] += float(episode.ik_recoveries)
@@ -1217,6 +1399,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "success_rate": values["successes"] / values["episodes"],
                 "valid_rate": values["valid"] / values["episodes"],
                 "return": values["return"] / values["episodes"],
+                "positive_return_rate": (
+                    values["positive_returns"] / values["episodes"]
+                ),
                 "steps": values["steps"] / values["episodes"],
                 "ik_failures": int(values["ik_failures"]),
                 "ik_recoveries": int(values["ik_recoveries"]),
@@ -1229,6 +1414,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         count = len(episodes)
         return {
             "return": sum(item.total_return for item in episodes) / count,
+            "positive_return_rate": sum(
+                item.total_return > POSITIVE_RETURN_EPSILON for item in episodes
+            ) / count,
             "success_rate": sum(item.success for item in episodes) / count,
             "valid_rate": sum(item.valid for item in episodes) / count,
             "steps": sum(item.steps for item in episodes) / count,

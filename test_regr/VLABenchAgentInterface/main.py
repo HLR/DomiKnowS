@@ -65,6 +65,7 @@ def _aggregate_task_metrics(round_metrics):
             task_totals = totals.setdefault(task, {
                 "episodes": 0,
                 "successes": 0,
+                "positive_returns": 0.0,
                 "valid": 0.0,
                 "return": 0.0,
                 "steps": 0.0,
@@ -75,6 +76,10 @@ def _aggregate_task_metrics(round_metrics):
             })
             task_totals["episodes"] += episodes
             task_totals["successes"] += int(item.get("successes", 0))
+            task_totals["positive_returns"] += (
+                float(item.get("positive_return_rate", float(item.get("return", 0.0) > 1e-6)))
+                * episodes
+            )
             task_totals["valid"] += float(item.get("valid_rate", 0.0)) * episodes
             task_totals["return"] += float(item.get("return", 0.0)) * episodes
             task_totals["steps"] += float(item.get("steps", 0.0)) * episodes
@@ -87,6 +92,9 @@ def _aggregate_task_metrics(round_metrics):
             "episodes": item["episodes"],
             "successes": item["successes"],
             "success_rate": item["successes"] / max(1, item["episodes"]),
+            "positive_return_rate": (
+                item["positive_returns"] / max(1, item["episodes"])
+            ),
             "valid_rate": item["valid"] / max(1, item["episodes"]),
             "return": item["return"] / max(1, item["episodes"]),
             "steps": item["steps"] / max(1, item["episodes"]),
@@ -148,16 +156,24 @@ def reinforcement_preflight_eligible(
     *,
     min_success_rate: float = 0.0,
     min_successful_tasks: int = 0,
+    min_positive_return_rate: float = 0.01,
     max_ik_truncation_rate: float = 0.50,
 ) -> bool:
-    """Reject a supervised controller without basic fixed-seed feasibility."""
+    """Require both learnable task signal and basic fixed-seed feasibility."""
 
-    return reinforcement_checkpoint_eligible(
+    eligible = reinforcement_checkpoint_eligible(
         metrics,
         min_success_rate=min_success_rate,
         min_successful_tasks=min_successful_tasks,
         max_ik_truncation_rate=max_ik_truncation_rate,
     )
+    positive_return_rate = float(
+        metrics.get(
+            "positive_return_rate",
+            float(float(metrics.get("return", 0.0)) > 1e-6),
+        )
+    )
+    return eligible and positive_return_rate >= float(min_positive_return_rate)
 
 
 def _reinforcement_resume_position(payload, rounds_per_epoch):
@@ -544,6 +560,22 @@ def command_train_agent(args) -> None:
         max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
         progress_callback=_status,
     )
+    fallback_path = None
+    if resume_stage == "reinforcement" and resume_payload is not None:
+        saved_fallback = resume_payload.get("metrics", {}).get("fallback_path")
+        fallback_candidates = []
+        if saved_fallback:
+            fallback_candidates.append(Path(str(saved_fallback)))
+        fallback_candidates.append(output / "agent_stage1_evaluated.pt")
+        for candidate in fallback_candidates:
+            if candidate.is_file():
+                fallback_path = candidate.resolve()
+                break
+        if fallback_path is None:
+            _status(
+                "resume checkpoint has no available evaluated supervised fallback; "
+                "a failed retention gate will abort without restoring an older policy"
+            )
     if (
         args.eval_rollouts_per_task > 0
         and start_rl_epoch == 0
@@ -558,6 +590,7 @@ def command_train_agent(args) -> None:
             baseline,
             min_success_rate=args.rl_preflight_min_success_rate,
             min_successful_tasks=args.rl_preflight_min_successful_tasks,
+            min_positive_return_rate=args.rl_preflight_min_positive_return_rate,
             max_ik_truncation_rate=args.rl_preflight_max_ik_truncation_rate,
         )
         _json({
@@ -565,7 +598,7 @@ def command_train_agent(args) -> None:
             "metrics": baseline,
             "preflight_eligible": preflight_eligible,
         })
-        save_joint_checkpoint(
+        fallback_path = save_joint_checkpoint(
             output / "agent_stage1_evaluated.pt",
             planner=planner,
             controller=controller,
@@ -589,6 +622,7 @@ def command_train_agent(args) -> None:
                 "reason": "VLABench controller preflight gate",
                 "minimum_success_rate": args.rl_preflight_min_success_rate,
                 "minimum_successful_tasks": args.rl_preflight_min_successful_tasks,
+                "minimum_positive_return_rate": args.rl_preflight_min_positive_return_rate,
                 "maximum_ik_truncation_rate": args.rl_preflight_max_ik_truncation_rate,
                 "metrics": baseline,
             })
@@ -620,6 +654,7 @@ def command_train_agent(args) -> None:
             best_path = Path(args.resume).resolve()
         else:
             _status("resume checkpoint is not an eligible reinforcement best candidate")
+    reinforcement_aborted = False
     for epoch in range(start_rl_epoch, args.rl_epochs):
         continuing_partial_epoch = epoch == start_rl_epoch and start_rl_round > 0
         round_metrics = list(resumed_round_metrics) if continuing_partial_epoch else []
@@ -649,7 +684,11 @@ def command_train_agent(args) -> None:
                 stage="reinforcement",
                 epoch=epoch,
                 next_round=round_index + 1,
-                metrics={"rounds": round_metrics, "prior_best": prior_best},
+                metrics={
+                    "rounds": round_metrics,
+                    "prior_best": prior_best,
+                    "fallback_path": str(fallback_path) if fallback_path is not None else None,
+                },
             )
             _status(
                 f"saved reinforcement progress checkpoint={progress_checkpoint} "
@@ -660,6 +699,11 @@ def command_train_agent(args) -> None:
             "rounds": round_metrics,
             "episodes": episode_count,
             "return": sum(float(item["return"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
+            "positive_return_rate": sum(
+                float(item.get("positive_return_rate", float(float(item.get("return", 0.0)) > 1e-6)))
+                * int(item["episodes"])
+                for item in round_metrics
+            ) / max(1, episode_count),
             "success_rate": sum(float(item["success_rate"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
             "valid_rate": sum(float(item["valid_rate"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
             "ik_failures": sum(int(item.get("ik_failures", 0)) for item in round_metrics),
@@ -686,6 +730,19 @@ def command_train_agent(args) -> None:
         if best_path is not None and best_key is not None:
             prior_best = {"path": str(best_path), "key": list(best_key)}
         metrics["prior_best"] = prior_best
+        metrics["fallback_path"] = (
+            str(fallback_path) if fallback_path is not None else None
+        )
+        retention_eligible = True
+        if args.eval_rollouts_per_task > 0:
+            retention_eligible = reinforcement_preflight_eligible(
+                metrics["evaluation"],
+                min_success_rate=args.rl_preflight_min_success_rate,
+                min_successful_tasks=args.rl_preflight_min_successful_tasks,
+                min_positive_return_rate=args.rl_preflight_min_positive_return_rate,
+                max_ik_truncation_rate=args.rl_preflight_max_ik_truncation_rate,
+            )
+        metrics["retention_eligible"] = retention_eligible
         checkpoint = save_joint_checkpoint(
             output / f"agent_rl_epoch_{epoch:03d}.pt",
             planner=planner,
@@ -697,7 +754,7 @@ def command_train_agent(args) -> None:
             epoch=epoch,
             metrics=metrics,
         )
-        eligible = reinforcement_checkpoint_eligible(
+        eligible = retention_eligible and reinforcement_checkpoint_eligible(
             metrics,
             min_success_rate=args.rl_min_success_rate,
             min_successful_tasks=args.rl_min_successful_tasks,
@@ -711,11 +768,35 @@ def command_train_agent(args) -> None:
             "epoch": epoch,
             "checkpoint": checkpoint,
             "best_candidate_eligible": eligible,
+            "retention_eligible": retention_eligible,
             "minimum_success_rate": args.rl_min_success_rate,
             "minimum_successful_tasks": args.rl_min_successful_tasks,
             "maximum_ik_truncation_rate": args.rl_max_ik_truncation_rate,
             "metrics": metrics,
         })
+        if not retention_eligible:
+            restore_path = best_path or fallback_path
+            if restore_path is not None:
+                load_joint_checkpoint(
+                    restore_path,
+                    planner=planner,
+                    controller=controller,
+                    runtime=runtime,
+                    planner_optimizer=planner_optimizer,
+                    controller_optimizer=controller_optimizer,
+                    map_location=device,
+                )
+            _json({
+                "stage": "reinforcement-aborted",
+                "reason": "fixed-seed evaluation lost task signal or controller feasibility",
+                "rejected_checkpoint": checkpoint,
+                "restored_checkpoint": restore_path,
+                "minimum_positive_return_rate": args.rl_preflight_min_positive_return_rate,
+                "maximum_ik_truncation_rate": args.rl_preflight_max_ik_truncation_rate,
+                "metrics": metrics["evaluation"],
+            })
+            reinforcement_aborted = True
+            break
     if best_path is not None:
         payload = load_joint_checkpoint(
             best_path,
@@ -738,7 +819,7 @@ def command_train_agent(args) -> None:
             metrics=payload.get("metrics", {}),
         )
         _json({"stage": "reinforcement-best", "checkpoint": selected, "source": best_path})
-    else:
+    elif not reinforcement_aborted:
         _json({
             "stage": "reinforcement-best-skipped",
             "reason": "no epoch met all success, task-coverage, and IK-feasibility gates",
@@ -933,6 +1014,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="minimum task families with supervised baseline success before reinforcement",
+    )
+    agent.add_argument(
+        "--rl-preflight-min-positive-return-rate",
+        type=_unit_interval,
+        default=0.01,
+        help="minimum fixed-seed fraction with positive task signal before reinforcement",
     )
     agent.add_argument(
         "--rl-preflight-max-ik-truncation-rate",

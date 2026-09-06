@@ -487,6 +487,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "planner_loss": 0.0,
             "controller_loss": 0.0,
             "return": 0.0,
+            "positive_return_rate": 0.0,
             "success_rate": 0.0,
             "valid_rate": 0.0,
             "steps": 0.0,
@@ -510,6 +511,13 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 vla_task_totals[task_name] = {
                     "episodes": float(episodes),
                     "successes": float(task_metrics.get("successes", 0)),
+                    "positive_returns": (
+                        float(task_metrics.get(
+                            "positive_return_rate",
+                            float(float(task_metrics.get("return", 0.0)) > 1e-6),
+                        ))
+                        * episodes
+                    ),
                     "valid": float(task_metrics.get("valid_rate", 0.0)) * episodes,
                     "return": float(task_metrics.get("return", 0.0)) * episodes,
                     "steps": float(task_metrics.get("steps", 0.0)) * episodes,
@@ -526,6 +534,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                     "episodes": int(totals["episodes"]),
                     "successes": int(totals["successes"]),
                     "success_rate": totals["successes"] / max(1.0, totals["episodes"]),
+                    "positive_return_rate": (
+                        totals["positive_returns"] / max(1.0, totals["episodes"])
+                    ),
                     "valid_rate": totals["valid"] / max(1.0, totals["episodes"]),
                     "return": totals["return"] / max(1.0, totals["episodes"]),
                     "steps": totals["steps"] / max(1.0, totals["episodes"]),
@@ -583,6 +594,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                     {
                         "episodes": 0.0,
                         "successes": 0.0,
+                        "positive_returns": 0.0,
                         "valid": 0.0,
                         "return": 0.0,
                         "steps": 0.0,
@@ -594,6 +606,13 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 )
                 totals["episodes"] += episodes
                 totals["successes"] += int(task_metrics["successes"])
+                totals["positive_returns"] += (
+                    float(task_metrics.get(
+                        "positive_return_rate",
+                        float(float(task_metrics.get("return", 0.0)) > 1e-6),
+                    ))
+                    * episodes
+                )
                 totals["valid"] += float(task_metrics["valid_rate"]) * episodes
                 totals["return"] += float(task_metrics["return"]) * episodes
                 totals["steps"] += float(task_metrics["steps"]) * episodes

@@ -51,6 +51,7 @@ from test_regr.VLABenchAgentInterface.main import (
     reinforcement_selection_key,
 )
 from test_regr.VLABenchAgentInterface.program import (
+    ControllerTransition,
     JointEpisode,
     PlannerReplayDecision,
     VLABenchHierarchicalReinforcementProgram,
@@ -725,6 +726,7 @@ def test_standalone_agent_uses_bounded_report_defaults():
     assert args.rl_max_ik_truncation_rate == pytest.approx(0.25)
     assert args.rl_preflight_min_success_rate == pytest.approx(0.0)
     assert args.rl_preflight_min_successful_tasks == 0
+    assert args.rl_preflight_min_positive_return_rate == pytest.approx(0.01)
     assert args.rl_preflight_max_ik_truncation_rate == pytest.approx(0.50)
     assert args.eval_rollouts_per_task == 1
     assert args.ik_tolerance == pytest.approx(5e-3)
@@ -762,7 +764,14 @@ def test_standalone_reinforcement_gates_use_fixed_seed_evaluation():
     assert reinforcement_preflight_eligible({
         "success_rate": 0.0,
         "successful_task_count": 0,
+        "positive_return_rate": 0.1,
         "ik_truncation_rate": 0.50,
+    })
+    assert not reinforcement_preflight_eligible({
+        "success_rate": 0.0,
+        "successful_task_count": 0,
+        "positive_return_rate": 0.0,
+        "ik_truncation_rate": 0.10,
     })
     better = {
         "success_rate": 0.20,
@@ -787,12 +796,14 @@ def test_reinforcement_round_metrics_aggregate_repeated_tasks():
     rounds = [
         {"per_task": {"select_book": {
             "episodes": 2, "successes": 1, "valid_rate": 1.0,
+            "positive_return_rate": 0.5,
             "return": 0.5, "steps": 10.0, "ik_failures": 4,
             "ik_recoveries": 1, "ik_truncation_rate": 0.5,
             "execution_complete_rate": 0.5,
         }}},
         {"per_task": {"select_book": {
             "episodes": 1, "successes": 1, "valid_rate": 0.0,
+            "positive_return_rate": 1.0,
             "return": 0.2, "steps": 4.0, "ik_failures": 2,
             "ik_recoveries": 1, "ik_truncation_rate": 0.0,
             "execution_complete_rate": 1.0,
@@ -803,6 +814,7 @@ def test_reinforcement_round_metrics_aggregate_repeated_tasks():
 
     assert metrics["episodes"] == 3
     assert metrics["success_rate"] == pytest.approx(2 / 3)
+    assert metrics["positive_return_rate"] == pytest.approx(2 / 3)
     assert metrics["valid_rate"] == pytest.approx(2 / 3)
     assert metrics["return"] == pytest.approx(0.4)
     assert metrics["ik_failures"] == 6
@@ -1283,6 +1295,249 @@ def test_rollout_stores_sampled_policy_action_before_execution_safety_transform(
     assert transition.old_value.item() == pytest.approx(0.125)
 
 
+def test_feasibility_credit_targets_rejected_action_not_successful_prefix():
+    world = build_vlabench_world_graph("test_feasibility_index_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_feasibility_index"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class IndexedController(MultiViewController):
+        def sample_action_chunk(self, images, state, task_index):
+            batch = images.shape[0]
+            actions = torch.zeros(batch, 4, 7, device=images.device)
+            logprobs = torch.tensor(
+                [[-1.0, -2.0, -3.0, -4.0]], device=images.device
+            ).expand(batch, -1)
+            return (
+                actions,
+                logprobs,
+                torch.zeros_like(logprobs),
+                torch.zeros(batch, device=images.device),
+            )
+
+    class ThirdActionFailedRobot(FakeRobot):
+        def __init__(self):
+            self.calls = 0
+
+        def get_qpos_from_ee_pos(self, *, physics, pos, quat, **kwargs):
+            self.calls += 1
+            if self.calls <= 2:
+                return super().get_qpos_from_ee_pos(
+                    physics=physics, pos=pos, quat=quat, **kwargs
+                )
+            return False, np.arange(7, dtype=np.float64)
+
+    controller = IndexedController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=4, max_views=1
+    )
+    simulator = FakeSimulator(success=False)
+    simulator.robot = ThirdActionFailedRobot()
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: simulator,
+        execute_horizon=4,
+        max_steps=4,
+        num_samples=1,
+        ppo_epochs=1,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+        max_consecutive_ik_rejections=1,
+    )
+
+    episode = program.collect_episode({"task": "select_book"})
+    transition = episode.controller[0]
+
+    assert transition.executed == 2
+    assert transition.old_logprob.item() == pytest.approx(-3.0)
+    assert transition.feasibility_cost == pytest.approx(1.0)
+    assert transition.feasibility_index == 2
+    assert transition.old_feasibility_logprob.item() == pytest.approx(-3.0)
+
+
+def test_feasibility_gradient_changes_only_rejected_action_likelihood():
+    world = build_vlabench_world_graph("test_feasibility_gradient_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_feasibility_gradient"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class IndexedLogprobController(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.logprobs = torch.nn.Parameter(torch.zeros(4))
+            self.value = torch.nn.Parameter(torch.zeros(()))
+
+        def evaluate_action_chunk(self, images, state, task_index, actions, plan_context=None):
+            return (
+                self.logprobs.unsqueeze(0),
+                torch.zeros(1, 4),
+                self.value.unsqueeze(0),
+            )
+
+    controller = IndexedLogprobController()
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: None,
+        ppo_epochs=1,
+        value_weight=0.0,
+        entropy_weight=0.0,
+        feasibility_weight=0.05,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+    transition = ControllerTransition(
+        images=torch.zeros(1, 1),
+        state=torch.zeros(1, 1, 7),
+        task_index=torch.zeros(1, dtype=torch.long),
+        actions=torch.zeros(1, 4, 7),
+        old_logprob=torch.zeros(()),
+        old_value=torch.zeros(()),
+        reward=1.0,
+        done=True,
+        executed=2,
+        feasibility_cost=1.0,
+        feasibility_index=2,
+        old_feasibility_logprob=torch.zeros(()),
+        advantage=0.0,
+        return_value=1.0,
+    )
+    episode = JointEpisode([], [transition], 1.0, False, True, 2)
+
+    program._update_controller([episode])
+
+    assert controller.logprobs[2].item() < 0.0
+    torch.testing.assert_close(
+        controller.logprobs[[0, 1, 3]], torch.zeros(3)
+    )
+
+
+def test_single_positive_transition_preserves_ppo_policy_signal():
+    world = build_vlabench_world_graph("test_single_positive_transition_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_single_positive_transition"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class SingleLogprobController(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.logprob = torch.nn.Parameter(torch.zeros(()))
+            self.value = torch.nn.Parameter(torch.zeros(()))
+
+        def evaluate_action_chunk(self, images, state, task_index, actions, plan_context=None):
+            return (
+                self.logprob.reshape(1, 1),
+                torch.zeros(1, 1),
+                self.value.reshape(1),
+            )
+
+    controller = SingleLogprobController()
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: None,
+        ppo_epochs=1,
+        value_weight=0.0,
+        entropy_weight=0.0,
+        feasibility_weight=0.0,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+    transition = ControllerTransition(
+        images=torch.zeros(1, 1),
+        state=torch.zeros(1, 1, 7),
+        task_index=torch.zeros(1, dtype=torch.long),
+        actions=torch.zeros(1, 1, 7),
+        old_logprob=torch.zeros(()),
+        old_value=torch.zeros(()),
+        reward=1.0,
+        done=True,
+        executed=1,
+        advantage=1.0,
+        return_value=1.0,
+    )
+    episode = JointEpisode([], [transition], 1.0, True, True, 1)
+
+    program._update_controller([episode])
+
+    assert controller.logprob.item() > 0.0
+    assert program.last_controller_update["actor_update_attempted"] is True
+    assert program.last_controller_update["rolled_back"] is False
+
+
+def test_mixed_return_batch_uses_zero_return_rollout_as_negative_evidence():
+    world = build_vlabench_world_graph("test_mixed_return_evidence_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_mixed_return_evidence"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class IndexedEpisodeController(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.logprobs = torch.nn.Parameter(torch.zeros(2))
+            self.value = torch.nn.Parameter(torch.zeros(()))
+
+        def evaluate_action_chunk(self, images, state, task_index, actions, plan_context=None):
+            index = int(task_index.reshape(-1)[0])
+            return (
+                self.logprobs[index].reshape(1, 1),
+                torch.zeros(1, 1),
+                self.value.reshape(1),
+            )
+
+    controller = IndexedEpisodeController()
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: None,
+        ppo_epochs=1,
+        value_weight=0.0,
+        entropy_weight=0.0,
+        feasibility_weight=0.0,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+
+    def transition(task_index, advantage, reward):
+        return ControllerTransition(
+            images=torch.zeros(1, 1),
+            state=torch.zeros(1, 1, 7),
+            task_index=torch.tensor([task_index]),
+            actions=torch.zeros(1, 1, 7),
+            old_logprob=torch.zeros(()),
+            old_value=torch.zeros(()),
+            reward=reward,
+            done=True,
+            executed=1,
+            advantage=advantage,
+            return_value=reward,
+        )
+
+    positive = JointEpisode([], [transition(0, 1.0, 1.0)], 1.0, True, True, 1)
+    unsuccessful = JointEpisode([], [transition(1, 0.0, 0.0)], 0.0, False, True, 1)
+
+    program._update_controller([positive, unsuccessful])
+
+    assert controller.logprobs[0].item() > 0.0
+    assert controller.logprobs[1].item() < 0.0
+
+
 def test_recoverable_simulator_initialization_failure_retries_one_rollout():
     world = build_vlabench_world_graph("test_simulator_retry_world")
     runtime = build_constraint_runtime(
@@ -1338,7 +1593,11 @@ def test_failed_ik_action_receives_zero_and_is_not_executed():
     assert episode.total_return == 0.0
     assert simulator.count == 0
     assert len(episode.controller) == 3
-    assert all(item.feasibility_cost == 4.0 for item in episode.controller)
+    assert all(item.executed == 0 for item in episode.controller)
+    assert all(item.feasibility_cost == 1.0 for item in episode.controller)
+    assert all(item.feasibility_index == 0 for item in episode.controller)
+    assert all(item.old_logprob.item() == pytest.approx(0.0) for item in episode.controller)
+    assert all(torch.isfinite(item.old_feasibility_logprob) for item in episode.controller)
     assert episode.ik_failures == 12
     assert episode.termination_reason == "ik_failure"
 
@@ -1399,6 +1658,8 @@ def test_ik_recovery_retries_a_smaller_bounded_delta():
     assert episode.ik_failures == 1
     assert episode.ik_recoveries == 1
     assert episode.termination_reason == "success"
+    assert episode.controller[0].feasibility_cost == 0.0
+    assert episode.controller[0].feasibility_index is None
 
 
 def test_online_controller_uses_language_task_id_not_skill_pattern():
@@ -1453,6 +1714,18 @@ def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
     )
     episode = program.collect_episode({"task": "select_book"})
     assert episode.total_return == 0.0 and episode.controller
+    transition = episode.controller[0]
+    transition.feasibility_cost = 1.0
+    transition.feasibility_index = 0
+    transition.old_feasibility_logprob = transition.old_logprob.detach().clone()
+    program.controller_anchor_loader = [{
+        "images": transition.images,
+        "state": transition.state,
+        "task_index": transition.task_index,
+        "plan_context": transition.plan_context,
+        "actions": transition.actions,
+    }]
+    program.controller_bc_weight = 1.0
     actor_before = controller.policy_head.weight.detach().clone()
     task_before = controller.task_embedding.weight.detach().clone()
     value_before = controller.value_head.weight.detach().clone()
@@ -1461,6 +1734,48 @@ def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
     assert torch.equal(actor_before, controller.policy_head.weight)
     assert torch.equal(task_before, controller.task_embedding.weight)
     assert not torch.equal(value_before, controller.value_head.weight)
+    assert program.last_controller_update["actor_update_attempted"] is False
+    assert program.last_controller_update["rolled_back"] is False
+
+
+def test_controller_ppo_rolls_back_complete_update_when_policy_drift_exceeds_limit():
+    world = build_vlabench_world_graph("test_controller_rollback_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_controller_rollback"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=1.0),
+        env_factory=lambda **_kwargs: FakeSimulator(success=True),
+        execute_horizon=1,
+        max_steps=1,
+        num_samples=1,
+        ppo_epochs=2,
+        ppo_target_action_log_ratio=1e-4,
+        entropy_weight=1.0,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+    episode = program.collect_episode({"task": "select_book"})
+    before = {
+        name: value.detach().clone()
+        for name, value in controller.state_dict().items()
+    }
+
+    loss = program._update_controller([episode])
+
+    assert loss == pytest.approx(0.0)
+    assert program.last_controller_update["rolled_back"] is True
+    assert program.last_controller_update["ppo_epochs_completed"] == 0
+    for name, value in controller.state_dict().items():
+        torch.testing.assert_close(value, before[name])
 
 
 def test_joint_simulator_training_updates_planner_and_controller():
@@ -1487,6 +1802,8 @@ def test_joint_simulator_training_updates_planner_and_controller():
         max_steps=1,
         num_samples=1,
         ppo_epochs=1,
+        ppo_target_action_log_ratio=10.0,
+        ppo_max_log_ratio=10.0,
         supervised_weight=0.0,
         controller_bc_weight=0.0,
     )
@@ -1596,7 +1913,7 @@ def test_standalone_checkpoint_versions_controller_semantics_and_migrates_superv
         epoch=0,
     )
     payload = torch.load(path, weights_only=False)
-    assert payload["standalone_checkpoint_version"] == 3
+    assert payload["standalone_checkpoint_version"] == 4
     assert payload["controller_configuration"]["behavior_cloning_version"] == 2
 
     payload["controller_configuration"].pop("behavior_cloning_version")
@@ -1659,7 +1976,69 @@ def test_standalone_version2_checkpoint_migrates_only_before_reinforcement(tmp_p
 
     payload["stage"] = "reinforcement"
     torch.save(payload, path)
-    with pytest.raises(ValueError, match="versioned controller semantics"):
+    with pytest.raises(ValueError, match="transactional PPO"):
+        load_joint_checkpoint(
+            path,
+            planner=planner,
+            controller=controller,
+            runtime=runtime,
+        )
+
+
+def test_standalone_version3_reinforcement_checkpoint_is_rejected(tmp_path):
+    world = build_vlabench_world_graph("test_standalone_v3_rl_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_standalone_v3_rl"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    path = save_joint_checkpoint(
+        tmp_path / "legacy_rl.pt",
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        runtime=runtime,
+        stage="reinforcement",
+        epoch=0,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["standalone_checkpoint_version"] = 3
+    torch.save(payload, path)
+
+    with pytest.raises(ValueError, match="transactional PPO"):
+        load_joint_checkpoint(
+            path,
+            planner=planner,
+            controller=controller,
+            runtime=runtime,
+        )
+
+
+def test_standalone_failed_retention_checkpoint_is_rejected(tmp_path):
+    world = build_vlabench_world_graph("test_standalone_failed_retention_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_standalone_failed_retention"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    path = save_joint_checkpoint(
+        tmp_path / "failed_retention.pt",
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        runtime=runtime,
+        stage="reinforcement",
+        epoch=0,
+        metrics={"retention_eligible": False},
+    )
+
+    with pytest.raises(ValueError, match="failed its fixed-seed retention gate"):
         load_joint_checkpoint(
             path,
             planner=planner,
