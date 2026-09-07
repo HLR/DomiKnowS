@@ -286,8 +286,8 @@ The controller-only warm-up additionally writes
 `joint_controller_warmup.pt`. When resuming an existing Stage 1 checkpoint,
 the warm-up runs before Stage 2. If the process stops later, resume the warm-up
 checkpoint to avoid repeating those controller updates.
-Joint checkpoint version 7 rejects older Stage 2 checkpoints, whose controller
-updates predate exact IK-failure credit assignment and transactional PPO.
+Joint checkpoint version 8 rejects older Stage 2 checkpoints, whose controller
+updates include trajectories collected before the robot-frame rollout bridge.
 It also rejects current Stage 2 epoch checkpoints that failed their fixed-seed
 retention gate. Older Stage 1 and controller-warm-up checkpoints remain valid
 resume sources.

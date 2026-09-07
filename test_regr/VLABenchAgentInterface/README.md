@@ -172,7 +172,13 @@ tanh-transformed Normal distributions
 and the gripper from a Bernoulli distribution. Its pose head predicts bounded
 local xyz/Euler increments, cumulatively integrates the chunk around the last
 observed pose, and exposes the resulting absolute end-effector targets to the
-existing dataset, PPO, and simulator interfaces. Position and rotation have
+existing dataset and PPO interfaces. The official LeRobot state and action xyz
+coordinates are relative to the robot base, while VLABench observations and IK
+targets are world-frame. Online rollout subtracts the live robot-base position
+before controller inference, applies safety/recovery in that learned frame, and
+adds the base back exactly once at the IK boundary. Each rollout logs the frame
+contract and measured world-frame base so a stale server process is visible.
+Position and rotation have
 separate physical exploration-noise scales. Behavior cloning compares these
 wrapped pose deltas in the same physically scaled space instead of regressing
 large absolute coordinates. PPO uses `gamma=0.99`, GAE
@@ -258,7 +264,7 @@ TorchCodec decoders use a per-task LRU capped at eight open videos by default;
 override it with `--video-decoder-cache-size` if the process has an unusually
 low file-descriptor limit.
 
-Standalone checkpoint version 4 contains trainable LoRA/graph-decoder state,
+Standalone checkpoint version 5 contains trainable LoRA/graph-decoder state,
 versioned controller semantics, controller, value head, both optimizer
 states, stage/epoch, Python/NumPy/PyTorch RNG states, graph vocabulary, and the
 world-domain checksum. Resume at either stage boundary with:
@@ -278,10 +284,11 @@ epoch reinforcement checkpoint restores the next RL epoch, while
 `agent_rl_progress.pt` restores the next unfinished round in the current epoch.
 Both forms restore optimizer and RNG states. A resumed partial RL epoch does
 not repeat the fixed-seed baseline evaluation and carries forward any prior
-eligible best epoch. A version-2 supervised checkpoint resets and re-warms its
-controller under the physically scaled delta-BC objective. Version-2 and
-version-3 RL checkpoints are rejected because they predate corrected IK credit
-assignment and transactional PPO; resume their supervised checkpoint instead.
+eligible best epoch. Older supervised checkpoints remain valid: the controller
+weights were learned in robot-frame coordinates and can use the corrected
+online bridge without re-warm. Version-2 through version-4 RL checkpoints are
+rejected because they contain optimizer/trajectory state collected under older
+execution contracts; resume their supervised checkpoint instead.
 Current-version RL epoch checkpoints that failed their fixed-seed retention
 gate are also rejected as resume sources.
 Controller migration cannot proceed when both `--controller-warmup-steps` and
@@ -323,6 +330,11 @@ Within a chunk, controller rewards are shaped as:
 ```text
 r_t = 0.25 * delta(progress) + 0.10 * delta(intention)
 ```
+
+`intention` uses VLABench's latched discrete 10 cm proximity milestone. The
+upstream continuous helper is not used because its value decreases as the
+recorded minimum distance improves inside the threshold, which would reverse
+the shaping gradient.
 
 At termination, success, successful efficiency, the initial-score correction,
 and final clipping are added so stored rewards telescope exactly to:

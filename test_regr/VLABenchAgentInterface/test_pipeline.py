@@ -30,6 +30,9 @@ from test_regr.VLABenchAgentInterface.environment import (
     euler_to_quaternion,
     quaternion_to_euler,
     reset_reward_tracking,
+    robot_frame_position,
+    robot_to_world_ee_action,
+    world_to_robot_ee_state,
 )
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
@@ -55,6 +58,7 @@ from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
     PlannerReplayDecision,
     VLABenchHierarchicalReinforcementProgram,
+    _controller_inputs,
     _entity_pointer_dfa,
     _observation_state,
     _signal,
@@ -145,6 +149,17 @@ def test_partial_upstream_reward_tracking_adds_missing_target_and_signal_falls_b
 
     env = SimpleNamespace(get_intention_score=lambda **_kwargs: {}["missing_target"])
     assert _signal(env, "get_intention_score") == 0.0
+
+
+def test_intention_shaping_uses_monotone_discrete_upstream_signal():
+    seen = {}
+
+    def intention(**kwargs):
+        seen.update(kwargs)
+        return 1.0
+
+    assert _signal(SimpleNamespace(get_intention_score=intention), "get_intention_score") == 1.0
+    assert seen == {"threshold": 0.1, "discrete": True}
 
 
 def test_online_entity_pointer_dfa_masks_unknown_observation_pointers():
@@ -1135,6 +1150,17 @@ class RecoveringRobot(FakeRobot):
         )
 
 
+class RecordingRobot(FakeRobot):
+    def __init__(self):
+        self.positions = []
+
+    def get_qpos_from_ee_pos(self, *, physics, pos, quat, **kwargs):
+        self.positions.append(np.asarray(pos, dtype=np.float64).copy())
+        return super().get_qpos_from_ee_pos(
+            physics=physics, pos=pos, quat=quat, **kwargs
+        )
+
+
 def test_ee_action_conversion_uses_two_finger_gripper():
     env = SimpleNamespace(
         robot=FakeRobot(),
@@ -1162,6 +1188,31 @@ def test_vlabench_quaternion_convention_and_observed_pose_conversion():
         "q_state": np.full(7, 99.0),
     })
     assert observed == pytest.approx([0.1, 0.2, 0.3, np.pi / 2.0, 0.0, 0.0, 1.0])
+
+
+def test_vlabench_controller_frame_roundtrip_and_input_conversion():
+    frame = np.asarray([0.0, -0.4, 0.78])
+    world_state = np.asarray([0.1, -0.2, 1.2, 0.2, -0.3, 0.4, 1.0])
+    robot_state = world_to_robot_ee_state(world_state, frame)
+    assert robot_state == pytest.approx([0.1, 0.2, 0.42, 0.2, -0.3, 0.4, 1.0])
+    assert robot_to_world_ee_action(robot_state, frame) == pytest.approx(world_state)
+
+    observation = {
+        "rgb": np.zeros((3, 8, 8, 3), dtype=np.uint8),
+        "ee_state": world_state,
+    }
+    _images, state, _task, _plan = _controller_inputs(
+        [observation], 0, "cpu", robot_frame=frame
+    )
+    assert state[0, -1].numpy() == pytest.approx(robot_state)
+
+
+def test_robot_frame_position_uses_official_environment_accessor():
+    env = SimpleNamespace(
+        get_robot_frame_position=lambda: np.asarray([0.1, -0.5, 0.8]),
+        robot=SimpleNamespace(robot_config={"position": [9.0, 9.0, 9.0]}),
+    )
+    assert robot_frame_position(env) == pytest.approx([0.1, -0.5, 0.8])
 
 
 def test_ee_action_safety_envelope_limits_cartesian_and_wrapped_rotation_steps():
@@ -1564,6 +1615,47 @@ def test_recoverable_simulator_initialization_failure_retries_one_rollout():
     assert episode.valid and episode.success
 
 
+def test_online_controller_converts_dataset_frame_target_to_world_before_ik():
+    world = build_vlabench_world_graph("test_controller_robot_frame_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_controller_robot_frame"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    simulator = FakeSimulator(success=True)
+    simulator.robot = RecordingRobot()
+    simulator.get_robot_frame_position = lambda: np.asarray([0.0, -0.4, 0.78])
+    world_position = np.asarray([0.2, -0.1, 1.0])
+    robot_position = np.asarray([0.2, 0.3, 0.22])
+    simulator.get_observation = lambda require_pcd=False: {
+        "rgb": np.zeros((1, 16, 16, 3), dtype=np.uint8),
+        "ee_state": np.asarray([*world_position, 1.0, 0.0, 0.0, 0.0, 1.0]),
+    }
+
+    def hold_in_robot_frame(images, state, task_index, plan_context=None):
+        assert state[0, -1, :3].cpu().numpy() == pytest.approx(robot_position)
+        actions = torch.tensor(
+            [[[*robot_position, 0.0, 0.0, 0.0, 1.0]]], dtype=torch.float32
+        )
+        zeros = torch.zeros((1, 1), dtype=torch.float32)
+        return actions, zeros, zeros, torch.zeros(1, dtype=torch.float32)
+
+    controller.sample_action_chunk = hold_in_robot_frame
+    program = _joint_program(
+        runtime, planner, controller, lambda **_kwargs: simulator, num_samples=1
+    )
+
+    episode = program.collect_episode({"task": "select_book"})
+
+    assert episode.success
+    assert len(simulator.robot.positions) == 1
+    # A robot-frame hold target must become the exact observed world pose.
+    # Treating it directly as world-frame would instead trigger a 2 cm move.
+    assert simulator.robot.positions[0] == pytest.approx(world_position)
+
+
 def test_invalid_plan_never_executes_controller_or_environment():
     world = build_vlabench_world_graph("test_joint_invalid_world")
     runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_invalid")
@@ -1913,9 +2005,21 @@ def test_standalone_checkpoint_versions_controller_semantics_and_migrates_superv
         epoch=0,
     )
     payload = torch.load(path, weights_only=False)
-    assert payload["standalone_checkpoint_version"] == 4
+    assert payload["standalone_checkpoint_version"] == 5
     assert payload["controller_configuration"]["behavior_cloning_version"] == 2
 
+    payload["standalone_checkpoint_version"] = 4
+    torch.save(payload, path)
+    compatible_supervised = load_joint_checkpoint(
+        path,
+        planner=planner,
+        controller=controller,
+        controller_optimizer=optimizer,
+        runtime=runtime,
+    )
+    assert "controller_migration_required" not in compatible_supervised
+
+    payload["standalone_checkpoint_version"] = 5
     payload["controller_configuration"].pop("behavior_cloning_version")
     torch.save(payload, path)
     restored = load_joint_checkpoint(
@@ -1976,7 +2080,7 @@ def test_standalone_version2_checkpoint_migrates_only_before_reinforcement(tmp_p
 
     payload["stage"] = "reinforcement"
     torch.save(payload, path)
-    with pytest.raises(ValueError, match="transactional PPO"):
+    with pytest.raises(ValueError, match="robot-frame rollout contract"):
         load_joint_checkpoint(
             path,
             planner=planner,
@@ -1985,7 +2089,7 @@ def test_standalone_version2_checkpoint_migrates_only_before_reinforcement(tmp_p
         )
 
 
-def test_standalone_version3_reinforcement_checkpoint_is_rejected(tmp_path):
+def test_standalone_version4_reinforcement_checkpoint_is_rejected(tmp_path):
     world = build_vlabench_world_graph("test_standalone_v3_rl_world")
     runtime = build_constraint_runtime(
         world, max_entities=2, max_operations=2, name_prefix="test_standalone_v3_rl"
@@ -2005,10 +2109,10 @@ def test_standalone_version3_reinforcement_checkpoint_is_rejected(tmp_path):
         epoch=0,
     )
     payload = torch.load(path, weights_only=False)
-    payload["standalone_checkpoint_version"] = 3
+    payload["standalone_checkpoint_version"] = 4
     torch.save(payload, path)
 
-    with pytest.raises(ValueError, match="transactional PPO"):
+    with pytest.raises(ValueError, match="robot-frame rollout contract"):
         load_joint_checkpoint(
             path,
             planner=planner,

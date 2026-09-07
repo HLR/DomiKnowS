@@ -37,8 +37,8 @@ class PlannerConstraintRuntime:
     max_tokens: int
 
 
-STANDALONE_CHECKPOINT_VERSION = 4
-SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS = {2, 3, STANDALONE_CHECKPOINT_VERSION}
+STANDALONE_CHECKPOINT_VERSION = 5
+SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS = {2, 3, 4, STANDALONE_CHECKPOINT_VERSION}
 
 
 def _planner_configuration(planner: torch.nn.Module) -> dict[str, Any]:
@@ -651,8 +651,8 @@ def load_joint_checkpoint(
     stage = payload.get("stage")
     if int(checkpoint_version) < STANDALONE_CHECKPOINT_VERSION and stage == "reinforcement":
         raise ValueError(
-            "reinforcement checkpoint predates transactional PPO and corrected IK "
-            "credit assignment; resume a supervised checkpoint"
+            "reinforcement checkpoint predates the robot-frame rollout contract; "
+            "resume a supervised checkpoint"
         )
     metrics = payload.get("metrics")
     if (

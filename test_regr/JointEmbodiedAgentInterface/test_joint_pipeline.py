@@ -942,7 +942,7 @@ def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joi
     assert restored["round_robin_cursor"] == 1
 
 
-def test_joint_version6_stage2_checkpoint_is_rejected(tmp_path, joint_fixture):
+def test_joint_version7_stage2_checkpoint_is_rejected(tmp_path, joint_fixture):
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)
     controller = TinyController()
@@ -958,10 +958,10 @@ def test_joint_version6_stage2_checkpoint_is_rejected(tmp_path, joint_fixture):
         round_robin_cursor=1,
     )
     payload = torch.load(path, weights_only=False)
-    payload["joint_checkpoint_version"] = 6
+    payload["joint_checkpoint_version"] = 7
     torch.save(payload, path)
 
-    with pytest.raises(ValueError, match="transactional PPO"):
+    with pytest.raises(ValueError, match="robot-frame rollout contract"):
         load_joint_checkpoint(
             path, runtime=runtime, planner=planner, controller=controller
         )

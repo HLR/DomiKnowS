@@ -14,6 +14,61 @@ class InverseKinematicsError(ValueError):
     """A finite Cartesian target lies outside the current IK basin."""
 
 
+CONTROLLER_FRAME_VERSION = 2
+
+
+def robot_frame_position(env: Any) -> np.ndarray:
+    """Return the robot-base origin used by the official LeRobot dataset.
+
+    VLABench observations and IK targets are world-frame, while its LeRobot
+    ``state`` and ``actions`` columns subtract this origin.  Synthetic test
+    environments have no robot geometry and intentionally fall back to the
+    world origin.
+    """
+    getter = getattr(env, "get_robot_frame_position", None)
+    if callable(getter):
+        value = getter()
+    else:
+        robot = getattr(env, "robot", None)
+        get_base = getattr(robot, "get_base_position", None)
+        physics = getattr(env, "physics", None)
+        if callable(get_base) and physics is not None:
+            value = get_base(physics)
+        else:
+            config = getattr(robot, "robot_config", {}) or {}
+            value = config.get("position", np.zeros(3, dtype=np.float64))
+    result = np.asarray(value, dtype=np.float64).reshape(-1)
+    if result.shape != (3,) or not np.isfinite(result).all():
+        raise ValueError("VLABench robot frame position must be a finite xyz vector")
+    return result.copy()
+
+
+def world_to_robot_ee_state(state, robot_frame) -> np.ndarray:
+    """Translate a world-frame xyz-Euler EE state into dataset coordinates."""
+    value = np.asarray(state, dtype=np.float64).reshape(-1)
+    frame = np.asarray(robot_frame, dtype=np.float64).reshape(-1)
+    if value.size < 7 or frame.shape != (3,):
+        raise ValueError("EE state and robot frame must contain 7 and 3 values")
+    if not np.isfinite(value[:7]).all() or not np.isfinite(frame).all():
+        raise ValueError("EE state and robot frame must be finite")
+    result = value[:7].copy()
+    result[:3] -= frame
+    return result
+
+
+def robot_to_world_ee_action(action, robot_frame) -> np.ndarray:
+    """Translate a dataset-frame absolute EE action into an IK world target."""
+    value = np.asarray(action, dtype=np.float64).reshape(-1)
+    frame = np.asarray(robot_frame, dtype=np.float64).reshape(-1)
+    if value.shape != (7,) or frame.shape != (3,):
+        raise ValueError("EE action and robot frame must contain 7 and 3 values")
+    if not np.isfinite(value).all() or not np.isfinite(frame).all():
+        raise ValueError("EE action and robot frame must be finite")
+    result = value.copy()
+    result[:3] += frame
+    return result
+
+
 def numbered_views_from_observation(
     env: Any,
     observation: Mapping[str, Any],

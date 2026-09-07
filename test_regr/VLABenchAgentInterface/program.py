@@ -18,7 +18,18 @@ POSITIVE_RETURN_EPSILON = 1e-6
 
 try:
     from .dataset import control_task_index_for_instruction
-    from .environment import InverseKinematicsError, bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
+    from .environment import (
+        CONTROLLER_FRAME_VERSION,
+        InverseKinematicsError,
+        bound_ee_action,
+        ee_action_to_env_action,
+        numbered_views_from_observation,
+        quaternion_to_euler,
+        reset_reward_tracking,
+        robot_frame_position,
+        robot_to_world_ee_action,
+        world_to_robot_ee_state,
+    )
     from .graph import dfa_accepts_plan
     from .models import controller_loss
     from .world_graph import (
@@ -31,7 +42,18 @@ try:
     )
 except ImportError:
     from dataset import control_task_index_for_instruction
-    from environment import InverseKinematicsError, bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
+    from environment import (
+        CONTROLLER_FRAME_VERSION,
+        InverseKinematicsError,
+        bound_ee_action,
+        ee_action_to_env_action,
+        numbered_views_from_observation,
+        quaternion_to_euler,
+        reset_reward_tracking,
+        robot_frame_position,
+        robot_to_world_ee_action,
+        world_to_robot_ee_state,
+    )
     from graph import dfa_accepts_plan
     from models import controller_loss
     from world_graph import condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
@@ -244,7 +266,15 @@ def _signal(env, name: str) -> float:
         return 0.0
     try:
         try:
-            value = function(threshold=0.1, discrete=False) if name == "get_intention_score" else function()
+            # Upstream's continuous intention helper is inverted inside the
+            # threshold (its value falls as the minimum distance improves).
+            # The discrete form is a monotone, latched proximity milestone and
+            # therefore safe for potential-difference reward shaping.
+            value = (
+                function(threshold=0.1, discrete=True)
+                if name == "get_intention_score"
+                else function()
+            )
         except TypeError:
             value = function(threshold=0.1) if name == "get_intention_score" else function()
     except (AttributeError, KeyError, LookupError, ZeroDivisionError):
@@ -314,7 +344,14 @@ def _entity_pointer_dfa(base_dfa, vocabulary, entity_count: int):
     )
 
 
-def _controller_inputs(observations, task_index: int, device, camera_views: int = 3, plan_context=None):
+def _controller_inputs(
+    observations,
+    task_index: int,
+    device,
+    camera_views: int = 3,
+    plan_context=None,
+    robot_frame=None,
+):
     history = list(observations)[-2:]
     if len(history) == 1:
         history.insert(0, history[0])
@@ -323,6 +360,8 @@ def _controller_inputs(observations, task_index: int, device, camera_views: int 
         rgb = np.asarray(observation["rgb"])[:camera_views]
         image_history.append(torch.from_numpy(rgb).permute(0, 3, 1, 2).float() / 255.0)
         state = _observation_state(observation)
+        if robot_frame is not None:
+            state = world_to_robot_ee_state(state, robot_frame)
         state_history.append(torch.as_tensor(state, dtype=torch.float32))
     return (
         torch.stack(image_history).unsqueeze(0).to(device),
@@ -497,6 +536,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             timestep = env.reset()
             reset_reward_tracking(env)
             observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
+            # The official control dataset stores absolute EE poses relative to
+            # the robot base. Keep policy inputs/outputs in that learned frame
+            # and cross into simulator world coordinates only at the IK edge.
+            controller_robot_frame = robot_frame_position(env)
+            self._report_progress(
+                f"VLABench controller frame=v{CONTROLLER_FRAME_VERSION} "
+                f"robot_base_world={controller_robot_frame.tolist()}"
+            )
             observations = [observation]
             previous_progress = initial_progress = _signal(env, "get_task_progress")
             previous_intention = initial_intention = _signal(env, "get_intention_score")
@@ -635,6 +682,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     # language task id and images retain object identity while
                     # skill and operation position remain graph-conditioned.
                     plan_context=controller_plan_context(plan, operation_cursor),
+                    robot_frame=controller_robot_frame,
                 )
                 try:
                     try:
@@ -667,13 +715,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 ik_truncated = False
                 for action_index, candidate in enumerate(actions[0, : self.execute_horizon]):
                     try:
+                        current = world_to_robot_ee_state(
+                            _observation_state(observation), controller_robot_frame
+                        )
                         bounded = bound_ee_action(
                             candidate.detach().cpu().numpy(),
-                            _observation_state(observation),
+                            current,
                             max_position_step=self.max_position_step,
                             max_rotation_step=self.max_rotation_step,
                         )
-                        current = np.asarray(_observation_state(observation), dtype=np.float64)
                         command = None
                         last_ik_error = None
                         # A zero-scale target is merely a hold command. Treating
@@ -690,7 +740,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             try:
                                 command = ee_action_to_env_action(
                                     env,
-                                    recovered,
+                                    robot_to_world_ee_action(
+                                        recovered, controller_robot_frame
+                                    ),
                                     ik_tolerance=self.ik_tolerance,
                                     ik_max_steps=self.ik_max_steps,
                                 )
