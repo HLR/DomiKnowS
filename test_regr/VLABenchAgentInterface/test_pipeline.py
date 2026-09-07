@@ -275,7 +275,14 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
         def get_config_dict(*_args, **_kwargs):
             return raw, {}
 
+    calls = {}
+
     class AutoConfig:
+        @staticmethod
+        def from_pretrained(*_args, **kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(**kwargs)
+
         @staticmethod
         def for_model(_model_type, **kwargs):
             return SimpleNamespace(**kwargs)
@@ -289,6 +296,10 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
     assert config.eos_token_id is None
     assert config.text_config["bos_token_id"] is None
     assert config.text_config["eos_token_id"] is None
+    assert calls["bos_token_id"] is None
+    assert calls["eos_token_id"] is None
+    assert calls["text_config"]["bos_token_id"] is None
+    assert calls["text_config"]["eos_token_id"] is None
 
 
 def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):

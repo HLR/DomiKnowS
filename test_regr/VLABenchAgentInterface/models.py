@@ -68,6 +68,21 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
             config_dict = dict(config_dict)
             model_type = config_dict.pop("model_type")
             sanitize_special_token_ids(config_dict)
+            # Pass cleaned nested dictionaries through the public loader so
+            # Transformers merges them before constructing SiglipConfig and
+            # SiglipTextConfig, avoiding stale BOS/EOS validation warnings.
+            from_pretrained = getattr(auto_config, "from_pretrained", None)
+            if callable(from_pretrained):
+                try:
+                    return sanitize_special_token_ids(
+                        from_pretrained(
+                            model_id,
+                            local_files_only=local_files_only,
+                            **config_dict,
+                        )
+                    )
+                except (TypeError, ValueError):
+                    pass
             return sanitize_special_token_ids(for_model(model_type, **config_dict))
     if auto_config is None:
         return None
