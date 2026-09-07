@@ -538,6 +538,7 @@ class QwenVLPlanner(nn.Module):
         decoder_hidden_size: int = 512,
     ) -> "QwenVLPlanner":
         model_class, processor_class = resolve_vision_language_loader()
+        import transformers
 
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
         kwargs: dict[str, Any] = {"dtype": dtype, "local_files_only": local_files_only}
@@ -548,9 +549,21 @@ class QwenVLPlanner(nn.Module):
             kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_compute_dtype=dtype, bnb_4bit_quant_type="nf4",
             )
+        auto_config = getattr(transformers, "AutoConfig", None)
+        if auto_config is not None:
+            config = auto_config.from_pretrained(model_id, local_files_only=local_files_only)
+            kwargs["config"] = sanitize_special_token_ids(config)
         model = model_class.from_pretrained(model_id, **kwargs)
         hidden_size = vision_language_hidden_size(model)
-        processor = processor_class.from_pretrained(model_id, local_files_only=local_files_only)
+        # Some cached Qwen/CLIP tokenizer configs carry BOS/EOS ids from a
+        # different vocabulary.  Pass explicit null overrides so the warning
+        # is suppressed during tokenizer construction, not after it.
+        processor = processor_class.from_pretrained(
+            model_id,
+            local_files_only=local_files_only,
+            bos_token_id=None,
+            eos_token_id=None,
+        )
         if gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
             model.gradient_checkpointing_enable(
                 gradient_checkpointing_kwargs={"use_reentrant": False},

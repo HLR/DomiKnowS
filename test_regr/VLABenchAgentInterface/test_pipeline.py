@@ -260,6 +260,47 @@ def test_sanitize_special_token_ids_clears_invalid_nested_ids():
     assert config.text_config.eos_token_id is None
 
 
+def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):
+    from test_regr.VLABenchAgentInterface import models
+
+    config = SimpleNamespace(vocab_size=32000, bos_token_id=49406, eos_token_id=49407)
+    processor_calls = {}
+
+    class FakeModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(1))
+            self.config = SimpleNamespace(hidden_size=4, vocab_size=32000, bos_token_id=None, eos_token_id=None)
+
+    class ModelClass:
+        @staticmethod
+        def from_pretrained(*_args, **kwargs):
+            assert kwargs["config"].bos_token_id is None
+            assert kwargs["config"].eos_token_id is None
+            return FakeModel()
+
+    class ProcessorClass:
+        @staticmethod
+        def from_pretrained(*_args, **kwargs):
+            processor_calls.update(kwargs)
+            return SimpleNamespace()
+
+    class AutoConfig:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            return config
+
+    monkeypatch.setattr(models, "resolve_vision_language_loader", lambda: (ModelClass, ProcessorClass))
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(AutoConfig=AutoConfig))
+    vocabulary = PlanVocabulary(
+        skills=("pick",), argument_keys=("target_entity_name",),
+        skill_arguments=(("pick", ("target_entity_name",)),), max_entities=2,
+    )
+    models.QwenVLPlanner.from_pretrained(vocabulary, "fake-qwen", use_lora=False)
+    assert processor_calls["bos_token_id"] is None
+    assert processor_calls["eos_token_id"] is None
+
+
 def test_kbit_preparation_preserves_non_reentrant_checkpointing(monkeypatch):
     calls = []
     model = torch.nn.Linear(2, 2)
