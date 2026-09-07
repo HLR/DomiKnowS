@@ -29,25 +29,51 @@ def sanitize_special_token_ids(config: Any) -> Any:
         if current is None or id(current) in seen:
             continue
         seen.add(id(current))
-        vocab_size = getattr(current, "vocab_size", None)
+        is_mapping = isinstance(current, Mapping)
+        vocab_size = current.get("vocab_size") if is_mapping else getattr(current, "vocab_size", None)
         try:
             vocab_size = int(vocab_size) if vocab_size is not None else None
         except (TypeError, ValueError):
             vocab_size = None
         if vocab_size is not None:
             for name in ("bos_token_id", "eos_token_id"):
-                value = getattr(current, name, None)
+                value = current.get(name) if is_mapping else getattr(current, name, None)
                 try:
                     invalid = value is not None and not 0 <= int(value) < vocab_size
                 except (TypeError, ValueError):
                     invalid = value is not None
                 if invalid:
-                    setattr(current, name, None)
+                    if is_mapping:
+                        current[name] = None
+                    else:
+                        setattr(current, name, None)
         for name in ("text_config", "vision_config", "audio_config"):
-            nested = getattr(current, name, None)
+            nested = current.get(name) if is_mapping else getattr(current, name, None)
             if nested is not None:
                 pending.append(nested)
     return config
+
+
+def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_only: bool) -> Any:
+    """Build an AutoConfig from raw JSON so invalid nested token ids never validate."""
+
+    auto_config = getattr(transformers, "AutoConfig", None)
+    pretrained_config = getattr(transformers, "PretrainedConfig", None)
+    get_config_dict = getattr(pretrained_config, "get_config_dict", None)
+    for_model = getattr(auto_config, "for_model", None)
+    if callable(get_config_dict) and callable(for_model):
+        raw_result = get_config_dict(model_id, local_files_only=local_files_only)
+        config_dict = raw_result[0] if isinstance(raw_result, tuple) else raw_result
+        if isinstance(config_dict, Mapping) and config_dict.get("model_type"):
+            config_dict = dict(config_dict)
+            model_type = config_dict.pop("model_type")
+            sanitize_special_token_ids(config_dict)
+            return sanitize_special_token_ids(for_model(model_type, **config_dict))
+    if auto_config is None:
+        return None
+    return sanitize_special_token_ids(
+        auto_config.from_pretrained(model_id, local_files_only=local_files_only)
+    )
 
 
 def resolve_vision_language_loader():
@@ -159,8 +185,9 @@ class FrozenSigLIPEncoder(nn.Module):
         model_kwargs = {"local_files_only": local_files_only}
         auto_config = getattr(transformers, "AutoConfig", None)
         if auto_config is not None:
-            config = auto_config.from_pretrained(model_id, local_files_only=local_files_only)
-            model_kwargs["config"] = sanitize_special_token_ids(config)
+            model_kwargs["config"] = load_sanitized_auto_config(
+                transformers, model_id, local_files_only=local_files_only
+            )
 
         self.model = transformers.AutoModel.from_pretrained(model_id, **model_kwargs)
         for parameter in self.model.parameters():
@@ -551,8 +578,10 @@ class QwenVLPlanner(nn.Module):
             )
         auto_config = getattr(transformers, "AutoConfig", None)
         if auto_config is not None:
-            config = auto_config.from_pretrained(model_id, local_files_only=local_files_only)
-            kwargs["config"] = sanitize_special_token_ids(config)
+            config = load_sanitized_auto_config(
+                transformers, model_id, local_files_only=local_files_only
+            )
+            kwargs["config"] = config
             # Prevent from_pretrained from loading a stale generation_config
             # with BOS/EOS ids from an unrelated tokenizer vocabulary.
             generation_config_class = getattr(transformers, "GenerationConfig", None)

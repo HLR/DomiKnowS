@@ -41,6 +41,7 @@ from test_regr.VLABenchAgentInterface.models import (
     QwenVLPlanner,
     TinyImageEncoder,
     controller_loss,
+    load_sanitized_auto_config,
     prepare_kbit_model,
     resolve_vision_language_loader,
     sanitize_special_token_ids,
@@ -258,6 +259,36 @@ def test_sanitize_special_token_ids_clears_invalid_nested_ids():
     assert config.eos_token_id is None
     assert config.text_config.bos_token_id == 1
     assert config.text_config.eos_token_id is None
+
+
+def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
+    raw = {
+        "model_type": "fake",
+        "vocab_size": 32000,
+        "bos_token_id": 49406,
+        "eos_token_id": 49407,
+        "text_config": {"vocab_size": 32000, "bos_token_id": 49406, "eos_token_id": 49407},
+    }
+
+    class PretrainedConfig:
+        @staticmethod
+        def get_config_dict(*_args, **_kwargs):
+            return raw, {}
+
+    class AutoConfig:
+        @staticmethod
+        def for_model(_model_type, **kwargs):
+            return SimpleNamespace(**kwargs)
+
+    config = load_sanitized_auto_config(
+        SimpleNamespace(AutoConfig=AutoConfig, PretrainedConfig=PretrainedConfig),
+        "fake-model",
+        local_files_only=True,
+    )
+    assert config.bos_token_id is None
+    assert config.eos_token_id is None
+    assert config.text_config["bos_token_id"] is None
+    assert config.text_config["eos_token_id"] is None
 
 
 def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):
