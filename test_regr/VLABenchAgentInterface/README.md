@@ -519,7 +519,8 @@ name, dataset key, calibration and pixel MAE. Pixel comparison requires equal
 shapes and mean RGB error at most 0.05 on [0, 1]; inspect the PNGs too, especially
 for low-texture scenes. A mismatch stops that arm as
 `restore_or_camera_mismatch`, rather than treating an unrelated reset as a
-demonstration replay. Thresholds are exposed in the Python replay API. If no
+demonstration replay. A successful all-slot comparison reports camera status
+`verified` and `paired_frame_verified: true`. Thresholds are exposed in the Python replay API. If no
 replay assets are supplied, the report explicitly records replay as unavailable.
 
 After verifying the mapping, `--controller-camera-names NAME1 NAME2 NAME3` on

@@ -20,6 +20,36 @@ PLANNER_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
 VISION_MODEL_ID = "google/siglip-base-patch16-224"
 
 
+def sanitize_special_token_ids(config: Any) -> Any:
+    """Clear BOS/EOS ids outside each nested config vocabulary."""
+    pending = [config]
+    seen = set()
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        vocab_size = getattr(current, "vocab_size", None)
+        try:
+            vocab_size = int(vocab_size) if vocab_size is not None else None
+        except (TypeError, ValueError):
+            vocab_size = None
+        if vocab_size is not None:
+            for name in ("bos_token_id", "eos_token_id"):
+                value = getattr(current, name, None)
+                try:
+                    invalid = value is not None and not 0 <= int(value) < vocab_size
+                except (TypeError, ValueError):
+                    invalid = value is not None
+                if invalid:
+                    setattr(current, name, None)
+        for name in ("text_config", "vision_config", "audio_config"):
+            nested = getattr(current, name, None)
+            if nested is not None:
+                pending.append(nested)
+    return config
+
+
 def resolve_vision_language_loader():
     """Return a Transformers VLM loader across its renamed auto-model APIs."""
 
@@ -124,9 +154,15 @@ class TinyImageEncoder(nn.Module):
 class FrozenSigLIPEncoder(nn.Module):
     def __init__(self, model_id: str = VISION_MODEL_ID, *, local_files_only: bool = False):
         super().__init__()
-        from transformers import AutoModel
+        import transformers
 
-        self.model = AutoModel.from_pretrained(model_id, local_files_only=local_files_only)
+        model_kwargs = {"local_files_only": local_files_only}
+        auto_config = getattr(transformers, "AutoConfig", None)
+        if auto_config is not None:
+            config = auto_config.from_pretrained(model_id, local_files_only=local_files_only)
+            model_kwargs["config"] = sanitize_special_token_ids(config)
+
+        self.model = transformers.AutoModel.from_pretrained(model_id, **model_kwargs)
         for parameter in self.model.parameters():
             parameter.requires_grad_(False)
         config = self.model.config

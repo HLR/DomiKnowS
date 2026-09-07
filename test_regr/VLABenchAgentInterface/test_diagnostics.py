@@ -11,7 +11,7 @@ from .diagnostics import ControllerMetrics, RolloutDiagnostics
 from .models import MultiViewController, TinyImageEncoder
 from .observations import camera_indices, camera_report, image_tensor
 from .program import _controller_inputs
-from .replay import replay_heldout_demo
+from .replay import compare_cameras, paired_camera_mapping_verified, replay_heldout_demo
 
 
 def test_decoded_byte_pil_and_live_images_have_identical_siglip_inputs():
@@ -58,6 +58,26 @@ def test_camera_names_select_content_and_missing_names_fail_closed():
     assert report["status"] == "unverified"
     with pytest.raises(ValueError, match="not unique"):
         camera_indices(None, obs, ["unknown"])
+
+
+def test_paired_camera_mapping_verifies_every_dataset_slot(tmp_path):
+    rgb = np.stack([np.full((8, 9, 3), value, np.uint8) for value in (10, 20, 30, 40)])
+    observation = {
+        "rgb": rgb,
+        "camera_names": ["right", "left", "forward", "wrist"],
+        "ee_state": np.zeros(7),
+    }
+    dataset_images = [image_tensor(rgb[index]) for index in (2, 0, 3)]
+    _, report = compare_cameras(
+        dataset_images,
+        ["image", "second_image", "wrist_image"],
+        None,
+        observation,
+        {"image": "forward", "second_image": "right", "wrist_image": "wrist"},
+        tmp_path,
+    )
+    assert paired_camera_mapping_verified(report, image_tolerance=0.0)
+    assert all(view["pixel_mae"] == pytest.approx(0.0) for view in report["views"])
 
 
 def test_view_embeddings_then_mean_do_not_bind_content_to_camera_slot():
@@ -201,7 +221,8 @@ def test_replay_uses_fresh_observations_restores_each_arm_and_closes(tmp_path, m
     assert result["arms"]["controller"]["trace"][-1]["observed"][0] == pytest.approx(.03)
     assert controller.observed[1][1][0, -1, 0] == pytest.approx(.01)
     assert controller.observed[1][0][0, -1, 0, 0, 0, 0] == pytest.approx(10 / 255)
-    assert result["arms"]["controller"]["cameras"]["status"] == "same_frame_pixel_match"
+    assert result["arms"]["controller"]["cameras"]["status"] == "verified"
+    assert result["arms"]["controller"]["cameras"]["paired_frame_verified"]
 
 
 def test_replay_refuses_random_reset_as_matched_demonstration(tmp_path):

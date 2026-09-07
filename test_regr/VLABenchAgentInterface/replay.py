@@ -20,6 +20,17 @@ from .observations import camera_indices, camera_report, image_tensor
 from .program import _controller_inputs, _observation_state
 
 
+def paired_camera_mapping_verified(report, *, image_tolerance: float) -> bool:
+    """Require every dataset slot to match its paired live frame."""
+    views = report.get("views", ())
+    return bool(views) and all(
+        bool(view.get("same_shape"))
+        and view.get("pixel_mae") is not None
+        and float(view["pixel_mae"]) <= float(image_tolerance)
+        for view in views
+    )
+
+
 def compare_cameras(dataset_images, dataset_keys, env, observation, camera_mapping, output_dir):
     """Export paired images and compare the restored same-frame pixels per camera."""
     if len(dataset_keys) != len(dataset_images) or not dataset_keys:
@@ -90,12 +101,15 @@ def replay_heldout_demo(controller, dataset, descriptor, *, env_factory, restore
                     reference["images"][-1], keys, env, observation, camera_mapping,
                     Path(output_dir) / arm,
                 )
+                camera_matches = paired_camera_mapping_verified(
+                    cameras, image_tolerance=image_tolerance
+                )
                 matches = (np.max(np.abs(error[:3])) <= position_tolerance
                            and np.max(np.abs(error[3:])) <= rotation_tolerance
                            and bool(state[6] >= 0.5) == bool(reference["state"][-1, 6] >= 0.5)
-                           and all(view["pixel_mae"] is not None and view["pixel_mae"] <= image_tolerance
-                                   for view in cameras["views"]))
-                cameras["status"] = "same_frame_pixel_match" if matches else "restore_or_camera_mismatch"
+                           and camera_matches)
+                cameras["paired_frame_verified"] = camera_matches
+                cameras["status"] = "verified" if matches else "restore_or_camera_mismatch"
                 arm_result = {"initial_pose_error": error.tolist(), "cameras": cameras,
                               "trace": trace, "status": "short_horizon_complete"}
                 result["arms"][arm] = arm_result

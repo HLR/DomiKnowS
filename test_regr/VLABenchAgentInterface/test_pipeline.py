@@ -43,6 +43,7 @@ from test_regr.VLABenchAgentInterface.models import (
     controller_loss,
     prepare_kbit_model,
     resolve_vision_language_loader,
+    sanitize_special_token_ids,
     vision_language_hidden_size,
 )
 from test_regr.VLABenchAgentInterface.main import (
@@ -245,6 +246,20 @@ def test_vision_language_hidden_size_supports_nested_config_and_adapter_wrapper(
     assert vision_language_hidden_size(AdapterWrapper()) == 2048
 
 
+def test_sanitize_special_token_ids_clears_invalid_nested_ids():
+    config = SimpleNamespace(
+        vocab_size=32000,
+        bos_token_id=49406,
+        eos_token_id=49407,
+        text_config=SimpleNamespace(vocab_size=10, bos_token_id=1, eos_token_id=12),
+    )
+    assert sanitize_special_token_ids(config) is config
+    assert config.bos_token_id is None
+    assert config.eos_token_id is None
+    assert config.text_config.bos_token_id == 1
+    assert config.text_config.eos_token_id is None
+
+
 def test_kbit_preparation_preserves_non_reentrant_checkpointing(monkeypatch):
     calls = []
     model = torch.nn.Linear(2, 2)
@@ -308,6 +323,39 @@ def test_frozen_siglip_encoder_accepts_current_and_legacy_outputs(monkeypatch, o
     assert features.shape == (2, 3)
     assert features.dtype == torch.float32
     assert not any(parameter.requires_grad for parameter in encoder.parameters())
+
+
+def test_frozen_siglip_encoder_sanitizes_config_before_loading(monkeypatch):
+    config = SimpleNamespace(
+        vocab_size=32000,
+        bos_token_id=49406,
+        eos_token_id=49407,
+        vision_config=SimpleNamespace(hidden_size=3),
+    )
+    calls = {}
+
+    class FakeSigLIP(torch.nn.Module):
+        def __init__(self, loaded_config):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(1))
+            self.config = loaded_config
+
+    class AutoConfig:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            return config
+
+    class AutoModel:
+        @staticmethod
+        def from_pretrained(*_args, **kwargs):
+            calls.update(kwargs)
+            return FakeSigLIP(kwargs["config"])
+
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(AutoConfig=AutoConfig, AutoModel=AutoModel))
+    encoder = FrozenSigLIPEncoder("fake-siglip")
+    assert calls["config"].bos_token_id is None
+    assert calls["config"].eos_token_id is None
+    assert encoder.output_dim == 3
 
 
 def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
