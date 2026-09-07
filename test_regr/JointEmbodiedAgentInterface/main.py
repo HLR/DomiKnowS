@@ -490,6 +490,7 @@ def command_train_agent(args):
         controller_optimizer=controller_optimizer,
         env_factory=_factory(args.env_factory),
         controller_task_instructions=control_task_instructions,
+        controller_camera_names=getattr(args, "controller_camera_names", None),
         eai_supervised_examples=eai_train,
         vlabench_supervised_examples=vla_splits["train"],
         controller_anchor_loader=control_loaders["train"],
@@ -859,6 +860,8 @@ def build_parser():
     agent.add_argument("--video-decoder-cache-size", type=int, default=8)
     agent.add_argument("--action-horizon", type=int, default=16)
     agent.add_argument("--max-views", type=int, default=4)
+    agent.add_argument("--controller-camera-names", nargs="+", default=None,
+                       help="verified live camera names in dataset slot order")
     agent.add_argument("--hidden-dim", type=int, default=256)
     agent.add_argument("--vision-model", default="google/siglip-base-patch16-224")
     agent.add_argument("--tiny-vision", action="store_true")

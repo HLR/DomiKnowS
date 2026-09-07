@@ -401,3 +401,135 @@ It covers graph authority, schema-module removal, token round trips, checksums,
 DFA and semantic adversaries, exact Stage 1 updates, shared program heads,
 differentiable constrained sampling, PPO/GAE/action conversion, telescoping
 rewards, invalid-plan gating, joint updates, and exact checkpoint restoration.
+
+## Controller diagnostics after the V6 standalone run
+
+The supplied V6 log reports **end-to-end success 0/30**, positive-return rate
+0/30, 400 steps in every episode, 2,973 failed IK attempts and 1,285 recoveries.
+Its `execution_complete_rate=1.0` measures executable rollouts; reaching the
+step limit does not complete a task. The reinforcement preflight gate correctly
+skipped PPO. These results do not exercise the cuDNN backward/replay fix.
+
+The observation audit found a reproducible input-scale defect: the video-decoder
+path cast byte frames to floats without dividing by 255. Live controller inputs
+already used unit-range RGB. All image paths now use the same RGB conversion,
+including PIL, numpy, inline tensors and TorchCodec frames. State and action
+units are unchanged. This establishes a code defect, not proof that it explains
+every zero-return episode in V6; the old log contains no input-range telemetry.
+
+Behavior-cloning version **3** records this corrected contract. Resuming a V6
+supervised agent checkpoint through `train-agent` triggers the existing
+controller migration/warm-up flow. Keep the original checkpoint for comparison,
+use a new output directory and log, and complete short diagnostics before any
+long training run. An older reinforcement checkpoint cannot silently resume
+under changed controller semantics. Diagnostic evaluation loads existing weights
+without migration or optimizer updates, and reports the saved version alongside
+the current preprocessing version; it is not a reproduction of V6's old offline
+metric pipeline.
+
+Run controller-only diagnostics from the repository root on the server. This
+loads the controller checkpoint and control dataset without loading the Qwen
+planner, retraining, or starting PPO:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main diagnose-controller \
+  --checkpoint test_regr/VLABenchAgentInterface/checkpoints/agent_stage1.pt \
+  --control-source test_regr/VLABenchAgentInterface/data/control \
+  --task all --split validation --max-batches 32 \
+  --output test_regr/VLABenchAgentInterface/checkpoints/v6_diagnostics
+```
+
+Use the original seed, full dataset and model architecture options. `--limit`
+changes the indexed population and therefore the episode split; omit it for a
+held-out comparison to the original run. The batch limit applies separately to
+each task, avoiding a report that only covers the first task in a concatenated
+loader. Output is `diagnostics.json`, with:
+
+- Wrapped absolute pose MAE, delta MAE, normalized delta MAE and first-action
+  normalized error for each of x/y/z/roll/pitch/yaw. Translation uses meters;
+  rotation uses radians. Normalization uses the model's six step scales.
+- Unclipped target deltas and the fraction exceeding each action limit. Clipping
+  targets during training must not hide unreachable reference movements here.
+- A hold-position baseline in the same normalized delta space.
+- Gripper confusion matrix, per-class precision/recall, balanced accuracy,
+  majority baseline and transition precision/recall. These count action slots
+  in overlapping windows, not unique episode events. Unsupported ratios are
+  `null`, not zero evidence. The legacy aggregate `pose_mae` field remains for
+  comparison and still mixes units and unwrapped Euler coordinates.
+- Actual model-input image range. The expected range is [0, 1].
+
+Both standalone `train-agent` and Joint preflight now log dataset camera keys,
+live camera names/indices, calibration arrays when available, per-episode EE
+path length, command/observed gripper transitions and initial/minimum/final
+distance to **each environment task target**. Distance is measured from world
+EE position to the target entity's origin, not to an inferred grasp point.
+Missing target geometry is explicitly unavailable. Evaluation JSON retains this
+evidence in `episode_diagnostics`; it does not change the success/reward gate.
+
+### Camera correspondence and held-out replay
+
+Camera order alone is insufficient as an explanation: this controller adds
+view embeddings before averaging, so the same set of images is permutation
+invariant in evaluation. The embeddings do not bind camera identity to image
+content. A missing wrist view or a different camera set can still matter.
+The [upstream converter](https://github.com/OpenMOSS/VLABench/blob/main/scripts/convert_to_lerobot.py)
+selects explicit front/wrist indices, while the
+[live environment](https://github.com/OpenMOSS/VLABench/blob/main/VLABench/envs/dm_env.py)
+returns all cameras in simulator order. The published dataset has a third
+`second_image` feature. These sources alone do not verify its exact mapping on
+the installed server, so the code does not guess a replacement mapping.
+
+For a real paired replay, provide these three files/components:
+
+1. A JSON manifest containing held-out `task`, `episode_index`, `offset`,
+   `env_kwargs`, and any restoration metadata needed by the restorer. The
+   command checks episode membership in the existing validation/test split.
+2. A camera-map JSON object mapping **every actual dataset camera key** to its
+   corresponding live MuJoCo camera name. Use the names reported by preflight;
+   do not assume `rgb[:3]` includes the wrist camera.
+3. A Python callable `module:function` with signature `restore(env, descriptor)`.
+   It must restore the recorded scene configuration, robot joints, object poses,
+   velocities and task state for that episode/offset after `env.reset()`.
+   LeRobot's seven EE-state values alone cannot restore that full scene.
+
+Append the following options to the diagnostic command once those recorded
+assets and the restorer are available:
+
+```bash
+  --replay-manifest /path/to/heldout_replay.json \
+  --camera-map /path/to/camera_map.json \
+  --replay-restore recorded_scene:restore \
+  --replay-steps 32 --execute-horizon 4
+```
+
+For each manifest entry, the harness independently restores two environments:
+one executes recorded actions through the Cartesian/IK boundary; the other
+feeds fresh simulator images and EE states back to the controller. Both use
+the demonstration's task/phase context to isolate controller behavior from
+planner errors. Both apply the default 2 cm/0.10 rad safety envelope; an IK
+failure ends that diagnostic arm without recovery retries. Each trace records
+the candidate, bounded command, observed state, next reference state and
+per-axis tracking error. A terminal timestep is labeled terminal, without
+claiming task success.
+
+Before stepping, each arm checks the restored EE position (5 mm per axis),
+orientation (0.05 rad per Euler axis), gripper state and every camera against
+the same recorded frame. Paired PNGs are exported by camera slot, with live
+name, dataset key, calibration and pixel MAE. Pixel comparison requires equal
+shapes and mean RGB error at most 0.05 on [0, 1]; inspect the PNGs too, especially
+for low-texture scenes. A mismatch stops that arm as
+`restore_or_camera_mismatch`, rather than treating an unrelated reset as a
+demonstration replay. Thresholds are exposed in the Python replay API. If no
+replay assets are supplied, the report explicitly records replay as unavailable.
+
+After verifying the mapping, `--controller-camera-names NAME1 NAME2 NAME3` on
+standalone `train-agent` or Joint selects cameras by name in dataset slot order
+and rejects missing/duplicate names. Defaults retain the existing first-three
+selection and report it as unverified. Changing the camera set requires a new
+controller evaluation; neither a name match nor a unit test proves live parity.
+
+Local regression tests use synthetic images and a deterministic simulator double
+to check normalization, named selection, wrapped/weighted errors, target
+identity, gripper transitions, restored-scene rejection and feedback from fresh
+observations. Real VLABench replay and any resulting success improvement require
+the simulator, assets and recorded held-out scene state on the server.

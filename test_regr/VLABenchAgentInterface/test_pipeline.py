@@ -1932,6 +1932,12 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     assert metrics["episodes"] == 2
     assert metrics["successful_task_count"] == 2
     assert metrics["success_rate"] == 1.0
+    assert len(metrics["episode_diagnostics"]) == 2
+    evidence = metrics["episode_diagnostics"][0]["diagnostics"]
+    assert evidence["observations"] == 2
+    assert evidence["commands"] == 1
+    assert evidence["target_status"] == "unavailable"  # The fake has no target geometry.
+    assert evidence["cameras"]["status"] == "unverified"
     torch.testing.assert_close(planner.preference, planner_before)
     for name, value in controller.state_dict().items():
         torch.testing.assert_close(value, controller_before[name])
@@ -2006,7 +2012,7 @@ def test_standalone_checkpoint_versions_controller_semantics_and_migrates_superv
     )
     payload = torch.load(path, weights_only=False)
     assert payload["standalone_checkpoint_version"] == 5
-    assert payload["controller_configuration"]["behavior_cloning_version"] == 2
+    assert payload["controller_configuration"]["behavior_cloning_version"] == 3
 
     payload["standalone_checkpoint_version"] = 4
     torch.save(payload, path)
@@ -2020,7 +2026,8 @@ def test_standalone_checkpoint_versions_controller_semantics_and_migrates_superv
     assert "controller_migration_required" not in compatible_supervised
 
     payload["standalone_checkpoint_version"] = 5
-    payload["controller_configuration"].pop("behavior_cloning_version")
+    # V6 used local deltas but decoded video bytes without unit normalization.
+    payload["controller_configuration"]["behavior_cloning_version"] = 2
     torch.save(payload, path)
     restored = load_joint_checkpoint(
         path,

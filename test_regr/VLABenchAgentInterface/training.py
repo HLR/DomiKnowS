@@ -13,12 +13,14 @@ import torch
 from PIL import Image
 
 try:
+    from .diagnostics import ControllerMetrics
     from .graph import PlanVocabulary, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
     from .models import controller_loss
     from .program import VLABenchHierarchicalReinforcementProgram, build_stage1_program
     from .reward import make_vlabench_reward_function, score_vlabench_plan
     from .world_graph import build_vlabench_world_graph
 except ImportError:
+    from diagnostics import ControllerMetrics
     from graph import PlanVocabulary, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
     from models import controller_loss
     from program import VLABenchHierarchicalReinforcementProgram, build_stage1_program
@@ -350,11 +352,11 @@ def evaluate_controller(
     *,
     device: str | torch.device,
     max_batches: int | None = None,
-) -> dict[str, float]:
+) -> dict[str, Any]:
     device = torch.device(device)
     was_training = model.training
+    metrics = ControllerMetrics(getattr(model, "pose_step_scale", None))
     model.eval()
-    pose_error = gripper_correct = samples = 0.0
     try:
         for batch_index, batch in enumerate(loader):
             if max_batches is not None and batch_index >= int(max_batches):
@@ -369,16 +371,10 @@ def evaluate_controller(
                 inputs += (plan_context.to(device),)
             prediction = model(*inputs)
             target = batch["actions"].to(device)
-            pose_error += float(torch.abs(prediction[..., :-1] - target[..., :-1]).sum())
-            gripper_correct += float(((torch.sigmoid(prediction[..., -1]) >= 0.5) == (target[..., -1] >= 0.5)).sum())
-            samples += float(target[..., :-1].numel())
+            metrics.update(prediction, target, inputs[1], inputs[0])
     finally:
         model.train(was_training)
-    gripper_total = samples / 6.0 if samples else 0.0
-    return {
-        "pose_mae": pose_error / max(1.0, samples),
-        "gripper_accuracy": gripper_correct / max(1.0, gripper_total),
-    }
+    return metrics.result()
 
 
 def _example_value(example: Any, name: str, default: Any = None) -> Any:

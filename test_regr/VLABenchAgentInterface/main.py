@@ -281,6 +281,8 @@ def _control_loaders(args):
             f"indexed control task {task_index}/{len(tasks)}: {task} "
             f"records={len(records)} windows={len(windows)} episodes={len(windows.episodes)}"
         )
+        if len(records):
+            _status(f"controller dataset cameras task={task}: {list(windows.camera_keys(records[0]))}")
         episode_split = deterministic_split(
             sorted(windows.episodes), seed=getattr(args, "seed", 42)
         )
@@ -539,6 +541,7 @@ def command_train_agent(args) -> None:
         controller_optimizer=controller_optimizer,
         env_factory=_factory(args.env_factory),
         controller_task_instructions=load_control_task_instructions(args.control_source),
+        controller_camera_names=getattr(args, "controller_camera_names", None),
         supervised_examples=splits["train"],
         controller_anchor_loader=loaders["train"],
         device=device,
@@ -848,6 +851,72 @@ def _factory(value: str):
     return getattr(importlib.import_module(module_name), function_name)
 
 
+def command_diagnose_controller(args) -> None:
+    """Evaluate existing weights without planner loading, migration, or training."""
+    if __package__:
+        from .replay import replay_heldout_demo
+    else:
+        from test_regr.VLABenchAgentInterface.replay import replay_heldout_demo
+
+    if args.max_batches <= 0 or args.replay_steps <= 0 or args.execute_horizon <= 0:
+        raise ValueError("diagnostic batch and step limits must be positive")
+
+    device = _device(args.device)
+    controller = _controller(args, device)
+    payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+    configuration = payload.get("controller_configuration", {})
+    if configuration and configuration.get("action_representation_version", 1) != controller.action_representation_version:
+        raise ValueError("diagnostics requires a checkpoint with the current local-delta action representation")
+    weights = payload.get("controller", payload.get("model"))
+    if weights is None:
+        raise ValueError("checkpoint contains neither controller nor model weights")
+    controller.load_state_dict(weights)
+    loaders = _control_loaders(args)
+    tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
+    parts = dict(zip(tasks, loaders[args.split].dataset.datasets))
+    result = {
+        "checkpoint": str(Path(args.checkpoint).resolve()),
+        "checkpoint_controller_configuration": configuration,
+        "current_behavior_cloning_version": controller.behavior_cloning_version,
+        "split": args.split,
+        "offline_per_task": {
+            task: evaluate_controller(controller, DataLoader(part, batch_size=args.batch_size,
+                shuffle=False, num_workers=args.workers), device=device, max_batches=args.max_batches)
+            for task, part in parts.items()
+        },
+        "max_batches_per_task": args.max_batches,
+        "replay": {"status": "unavailable", "reason": "requires a held-out replay manifest and full scene restorer"},
+    }
+    output = Path(args.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    # Persist offline evidence even if simulator setup fails later.
+    report_path = output / "diagnostics.json"
+    report_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    if args.replay_manifest:
+        if not args.replay_restore or not args.camera_map:
+            raise ValueError("replay requires --replay-restore module:function and --camera-map JSON")
+        manifest = json.loads(Path(args.replay_manifest).read_text(encoding="utf-8"))
+        camera_mapping = json.loads(Path(args.camera_map).read_text(encoding="utf-8"))
+        restore = _factory(args.replay_restore)
+        env_factory = _factory(args.env_factory)
+        result["replay"] = []
+        for index, descriptor in enumerate(manifest):
+            task = descriptor["task"]
+            part = parts[task]
+            dataset = part.dataset
+            episode = int(descriptor["episode_index"])
+            if not any(dataset.index[item][0] == episode for item in part.indices):
+                raise ValueError(f"episode {episode} for {task} is not in the selected held-out split")
+            descriptor = {**descriptor, "env_kwargs": {**descriptor.get("env_kwargs", {}), "task": task}}
+            replay = replay_heldout_demo(controller, dataset, descriptor,
+                env_factory=env_factory, restore=restore, camera_mapping=camera_mapping,
+                output_dir=output / f"replay-{index}", device=device, steps=args.replay_steps,
+                execute_horizon=min(args.execute_horizon, args.action_horizon))
+            result["replay"].append({"task": task, **replay})
+            report_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    _json({"report": str(report_path), **result})
+
+
 def command_rollout(args) -> None:
     device = _device(args.device)
     vocabulary = PlanVocabulary.load(args.vocab)
@@ -1039,6 +1108,8 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--execute-horizon", type=int, default=4)
     agent.add_argument("--max-steps", type=int, default=400)
     agent.add_argument("--max-views", type=int, default=4)
+    agent.add_argument("--controller-camera-names", nargs="+", default=None,
+                       help="verified live camera names in dataset slot order; default retains first three views")
     agent.add_argument("--hidden-dim", type=int, default=256)
     agent.add_argument("--vision-model", default="google/siglip-base-patch16-224")
     agent.add_argument("--tiny-vision", action="store_true")
@@ -1094,6 +1165,33 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.add_argument("--tiny-vision", action="store_true")
     rollout.add_argument("--vision-dim", type=int, default=64)
     rollout.set_defaults(handler=command_rollout)
+
+    diagnostic = sub.add_parser("diagnose-controller", help="offline metrics and optional held-out scene replay; no training")
+    diagnostic.add_argument("--checkpoint", required=True)
+    diagnostic.add_argument("--control-source", required=True)
+    diagnostic.add_argument("--task", default="all", choices=["all", *PRIMITIVE_TASK_PATTERNS])
+    diagnostic.add_argument("--output", required=True)
+    diagnostic.add_argument("--split", choices=["validation", "test"], default="validation")
+    diagnostic.add_argument("--max-batches", type=int, default=32)
+    diagnostic.add_argument("--limit", type=int)
+    diagnostic.add_argument("--seed", type=int, default=42)
+    diagnostic.add_argument("--batch-size", type=int, default=8)
+    diagnostic.add_argument("--workers", type=int, default=0)
+    diagnostic.add_argument("--video-decoder-cache-size", type=int, default=8)
+    diagnostic.add_argument("--device")
+    diagnostic.add_argument("--action-horizon", type=int, default=16)
+    diagnostic.add_argument("--execute-horizon", type=int, default=4)
+    diagnostic.add_argument("--max-views", type=int, default=4)
+    diagnostic.add_argument("--hidden-dim", type=int, default=256)
+    diagnostic.add_argument("--vision-model", default="google/siglip-base-patch16-224")
+    diagnostic.add_argument("--tiny-vision", action="store_true")
+    diagnostic.add_argument("--vision-dim", type=int, default=64)
+    diagnostic.add_argument("--replay-manifest", help="JSON list of task, episode_index, offset and restoration metadata")
+    diagnostic.add_argument("--replay-restore", help="module:function restoring the complete held-out scene after env.reset()")
+    diagnostic.add_argument("--camera-map", help="JSON object mapping each dataset camera key to a live MuJoCo camera name")
+    diagnostic.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.environment:create_environment")
+    diagnostic.add_argument("--replay-steps", type=int, default=32)
+    diagnostic.set_defaults(handler=command_diagnose_controller)
     return parser
 
 

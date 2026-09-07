@@ -19,8 +19,10 @@ from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
 
 try:
+    from .observations import image_tensor
     from .world_graph import canonicalize_plan, controller_skill_index
 except ImportError:
+    from observations import image_tensor
     from world_graph import canonicalize_plan, controller_skill_index
 
 
@@ -697,7 +699,7 @@ def _video_tensor(
     """Decode a LeRobot v3 video reference or an already decoded frame."""
     if hasattr(value, "get_frame_played_at"):
         frame = value.get_frame_played_at(float(timestamp))
-        return _tensor(getattr(frame, "data", frame))
+        return image_tensor(getattr(frame, "data", frame), channels_last=False)
     if isinstance(value, Mapping) and ("path" in value or "video_path" in value):
         raw_path = value.get("path", value.get("video_path"))
         path = Path(str(raw_path))
@@ -721,8 +723,8 @@ def _video_tensor(
             _release_video_decoder(evicted)
             del evicted
         frame = decoder.get_frame_played_at(frame_time)
-        return _tensor(getattr(frame, "data", frame))
-    return _tensor(value)
+        return image_tensor(getattr(frame, "data", frame), channels_last=False)
+    return image_tensor(value)
 
 
 class LeRobotWindowDataset(Dataset):
@@ -806,7 +808,7 @@ class LeRobotWindowDataset(Dataset):
 
     def _images(self, row: Mapping[str, Any]) -> torch.Tensor:
         if "images" in row:
-            images = _tensor(row["images"])
+            images = image_tensor(row["images"])
             return images.unsqueeze(0) if images.ndim == 3 else images
         keys = self.image_keys or tuple(sorted(key for key in row if "image" in key.lower()))
         timestamp = float(np.asarray(row.get("timestamp", 0.0)).reshape(-1)[0])
@@ -854,6 +856,14 @@ class LeRobotWindowDataset(Dataset):
             )
             for path in paths
         ])
+
+    def camera_keys(self, row: Mapping[str, Any]) -> tuple[str, ...]:
+        """Report the exact slot order used by _images, without guessing semantics."""
+        if "images" in row:
+            return ()  # An anonymous tensor contains no camera identity evidence.
+        return self.image_keys or tuple(sorted(
+            key for key in row if "image" in key.lower()
+        )) or self.video_keys
 
     def __getitem__(self, item: int) -> dict[str, torch.Tensor]:
         episode, offset = self.index[item]

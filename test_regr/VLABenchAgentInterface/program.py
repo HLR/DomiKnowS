@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import random
 import time
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 POSITIVE_RETURN_EPSILON = 1e-6
 
 try:
+    from .diagnostics import RolloutDiagnostics
+    from .observations import camera_indices, camera_report, image_tensor
     from .dataset import control_task_index_for_instruction
     from .environment import (
         CONTROLLER_FRAME_VERSION,
@@ -41,6 +44,8 @@ try:
         verify_plan_constraints,
     )
 except ImportError:
+    from diagnostics import RolloutDiagnostics
+    from observations import camera_indices, camera_report, image_tensor
     from dataset import control_task_index_for_instruction
     from environment import (
         CONTROLLER_FRAME_VERSION,
@@ -156,6 +161,7 @@ class JointEpisode:
     ik_failures: int = 0
     ik_recoveries: int = 0
     termination_reason: str = "unknown"
+    diagnostics: dict[str, Any] | None = None
 
 
 @dataclass
@@ -351,14 +357,16 @@ def _controller_inputs(
     camera_views: int = 3,
     plan_context=None,
     robot_frame=None,
+    selected_camera_indices=None,
 ):
     history = list(observations)[-2:]
     if len(history) == 1:
         history.insert(0, history[0])
     image_history, state_history = [], []
     for observation in history:
-        rgb = np.asarray(observation["rgb"])[:camera_views]
-        image_history.append(torch.from_numpy(rgb).permute(0, 3, 1, 2).float() / 255.0)
+        rgb = np.asarray(observation["rgb"])
+        rgb = rgb[:camera_views] if selected_camera_indices is None else rgb[list(selected_camera_indices)]
+        image_history.append(image_tensor(rgb, channels_last=True))
         state = _observation_state(observation)
         if robot_frame is not None:
             state = world_to_robot_ee_state(state, robot_frame)
@@ -384,6 +392,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         controller_optimizer,
         env_factory: Callable[..., Any],
         controller_task_instructions: Mapping[int, str] | None = None,
+        controller_camera_names: Sequence[str] | None = None,
         supervised_examples: Sequence[Any] = (),
         controller_anchor_loader: Iterable[Mapping[str, torch.Tensor]] | None = None,
         device="cpu",
@@ -426,6 +435,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.controller_optimizer = controller_optimizer
         self.env_factory = env_factory
         self.controller_task_instructions = dict(controller_task_instructions or {})
+        self.controller_camera_names = tuple(controller_camera_names) if controller_camera_names else None
         self.supervised_examples = tuple(supervised_examples)
         self.controller_anchor_loader = controller_anchor_loader
         self.device_name = torch.device(device)
@@ -532,6 +542,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         termination_reason = "max_steps"
         previous_progress = previous_intention = 0.0
         last_progress_report = time.monotonic()
+        diagnostics = RolloutDiagnostics()
         try:
             timestep = env.reset()
             reset_reward_tracking(env)
@@ -545,6 +556,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 f"robot_base_world={controller_robot_frame.tolist()}"
             )
             observations = [observation]
+            selected_cameras = camera_indices(env, observation, self.controller_camera_names)
+            cameras = camera_report(env, observation, indices=selected_cameras)
+            self._report_progress("VLABench controller cameras=" + json.dumps(cameras))
+            diagnostics.observe(env, _observation_state(observation))
             previous_progress = initial_progress = _signal(env, "get_task_progress")
             previous_intention = initial_intention = _signal(env, "get_intention_score")
             instruction = descriptor.get("instruction")
@@ -683,6 +698,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     # skill and operation position remain graph-conditioned.
                     plan_context=controller_plan_context(plan, operation_cursor),
                     robot_frame=controller_robot_frame,
+                    selected_camera_indices=selected_cameras,
                 )
                 try:
                     try:
@@ -792,6 +808,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     executed += 1
                     observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
                     observations.append(observation)
+                    diagnostics.observe(env, _observation_state(observation), command_gripper=recovered[6])
                     progress = _signal(env, "get_task_progress")
                     intention = _signal(env, "get_intention_score")
                     delta_progress = progress - previous_progress
@@ -879,6 +896,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 0.0 if start is None else sum(item.reward for item in transitions[start:])
                 for start in planner_transition_indices
             ]
+            diagnostic_result = {**diagnostics.result(), "cameras": cameras}
+            self._report_progress(
+                f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "
+                + json.dumps(diagnostic_result)
+            )
             return JointEpisode(
                 planner_logprobs,
                 transitions,
@@ -890,6 +912,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 ik_failures,
                 ik_recoveries,
                 termination_reason,
+                diagnostic_result,
             )
         except Exception as exc:
             if _recoverable_simulator_error(exc):
@@ -1482,4 +1505,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             ) / count,
             "per_task": per_task,
             "evaluation_seed": int(seed),
+            "episode_diagnostics": [
+                {"task": name, "termination_reason": episode.termination_reason,
+                 "steps": episode.steps, "diagnostics": episode.diagnostics}
+                for name, episode in zip(names, episodes)
+            ],
         }

@@ -185,7 +185,8 @@ class MultiViewController(nn.Module):
     # pose. The public action remains an absolute
     # [xyz, roll, pitch, yaw, gripper] target matching dataset and simulator.
     action_representation_version = 4
-    behavior_cloning_version = 2
+    # Version 3 trains on unit-range RGB for every decoding path.
+    behavior_cloning_version = 3
     critic_version = 2
     plan_conditioning_version = 1
 
