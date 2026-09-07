@@ -110,7 +110,12 @@ def test_environment_imports_registration_modules_before_load_env(monkeypatch):
     result = create_environment("select_fruit", robot="franka", time_limit=4)
 
     assert calls == ["VLABench.robots", "VLABench.tasks", "VLABench.envs"]
-    assert result == {"task": "select_fruit", "robot": "franka", "time_limit": 4}
+    assert result == {
+        "task": "select_fruit",
+        "robot": "franka",
+        "time_limit": 4,
+        "run_mode": "eval",
+    }
 
 
 def test_missing_upstream_reward_tracking_state_is_initialized_once():
@@ -160,6 +165,19 @@ def test_intention_shaping_uses_monotone_discrete_upstream_signal():
 
     assert _signal(SimpleNamespace(get_intention_score=intention), "get_intention_score") == 1.0
     assert seen == {"threshold": 0.1, "discrete": True}
+
+
+def test_signal_passes_upstream_physics_argument():
+    physics = object()
+    seen = {}
+
+    def progress(received):
+        seen["physics"] = received
+        return 0.5
+
+    env = SimpleNamespace(physics=physics, get_task_progress=progress)
+    assert _signal(env, "get_task_progress") == 0.5
+    assert seen["physics"] is physics
 
 
 def test_online_entity_pointer_dfa_masks_unknown_observation_pointers():
@@ -1242,6 +1260,7 @@ class FakeSimulator:
         self.task = SimpleNamespace(
             entities={"apple": SimpleNamespace(), "bowl": SimpleNamespace()},
             get_instruction=lambda: "Put the apple in the bowl.",
+            should_terminate_episode=lambda _physics: self.success,
         )
 
     def reset(self):

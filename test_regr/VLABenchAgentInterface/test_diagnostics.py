@@ -123,6 +123,22 @@ def test_target_distance_uses_task_target_and_observed_gripper():
     assert RolloutDiagnostics().result()["target_status"] == "unavailable"
 
 
+def test_target_distance_resolves_vlabench_style_suffix_and_case():
+    target = SimpleNamespace(get_xpos=lambda _: np.array([1., 0., 0.]))
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(
+            target_entity="Rococo",
+            entities={"rococo_painting": target, "baroque_painting": object()},
+        ),
+    )
+    diagnostics = RolloutDiagnostics()
+    diagnostics.observe(env, np.array([0.75, 0., 0., 0., 0., 0., 0.]))
+    result = diagnostics.result()
+    assert result["target_status"] == "available"
+    assert result["targets"]["rococo_painting"]["samples"] == 1
+
+
 class ReplayEnv:
     def __init__(self):
         self.physics = object()

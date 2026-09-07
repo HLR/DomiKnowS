@@ -279,4 +279,10 @@ def create_environment(
         raise RuntimeError(
             "VLABench is required only for online rollout; install the OpenMOSS/VLABench clone editable"
         ) from exc
+    # The standalone controller consumes VLABench's progress and intention
+    # signals as shaping rewards.  The upstream default (``efficient``) is
+    # intended for data collection and leaves those signals uninitialised and
+    # unupdated.  Online rollouts must use the evaluation contract unless a
+    # caller explicitly supplies another mode for a specialised diagnostic.
+    kwargs.setdefault("run_mode", "eval")
     return load_env(task, robot=robot, time_limit=time_limit, **kwargs)

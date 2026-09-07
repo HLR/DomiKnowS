@@ -147,9 +147,29 @@ class RolloutDiagnostics:
         elif not isinstance(targets, (list, tuple, set, frozenset)):
             targets = (targets,)
         entities = getattr(task, "entities", {})
+
+        def normalize(name):
+            return "".join(character for character in str(name).lower() if character.isalnum())
+
+        def resolve_entity(target):
+            if not isinstance(target, str):
+                return getattr(target, "name", str(target)), target
+            exact = entities.get(target)
+            if exact is not None:
+                return target, exact
+            target_key = normalize(target)
+            candidates = []
+            for key, value in entities.items():
+                key_text = str(key)
+                base = key_text[:-8] if key_text.lower().endswith("_painting") else key_text
+                if normalize(key_text) == target_key or normalize(base) == target_key:
+                    candidates.append((key_text, value))
+            if len(candidates) == 1:
+                return candidates[0]
+            return target, None
+
         for target in targets:
-            name = target if isinstance(target, str) else getattr(target, "name", str(target))
-            entity = entities.get(name) if isinstance(target, str) else target
+            name, entity = resolve_entity(target)
             getter = getattr(entity, "get_xpos", None)
             entry = self.targets.setdefault(name, {"samples": 0, "unavailable": 0})
             if not callable(getter):

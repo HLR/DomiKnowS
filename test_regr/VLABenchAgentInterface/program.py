@@ -270,19 +270,29 @@ def _signal(env, name: str) -> float:
     function = getattr(env, name, None)
     if function is None:
         return 0.0
+    physics = getattr(env, "physics", None)
+    attempts = []
+    if physics is not None:
+        if name == "get_intention_score":
+            attempts.append(lambda: function(physics, threshold=0.1, discrete=True))
+        else:
+            attempts.append(lambda: function(physics))
+    if name == "get_intention_score":
+        attempts.extend((
+            lambda: function(threshold=0.1, discrete=True),
+            lambda: function(threshold=0.1),
+        ))
+    attempts.append(lambda: function())
     try:
-        try:
-            # Upstream's continuous intention helper is inverted inside the
-            # threshold (its value falls as the minimum distance improves).
-            # The discrete form is a monotone, latched proximity milestone and
-            # therefore safe for potential-difference reward shaping.
-            value = (
-                function(threshold=0.1, discrete=True)
-                if name == "get_intention_score"
-                else function()
-            )
-        except TypeError:
-            value = function(threshold=0.1) if name == "get_intention_score" else function()
+        value = None
+        for attempt in attempts:
+            try:
+                value = attempt()
+                break
+            except TypeError:
+                continue
+        if value is None:
+            return 0.0
     except (AttributeError, KeyError, LookupError, ZeroDivisionError):
         # Progress and intention are optional shaping signals.  Known upstream
         # primitive tasks expose the methods while leaving their backing state
@@ -291,6 +301,30 @@ def _signal(env, name: str) -> float:
         return 0.0
     value = float(value)
     return value if np.isfinite(value) else 0.0
+
+
+def _task_success(env) -> bool:
+    """Evaluate task completion independently from dm_env LAST."""
+    task = getattr(env, "task", None)
+    physics = getattr(env, "physics", None)
+    checker = getattr(task, "should_terminate_episode", None)
+    if callable(checker) and physics is not None:
+        try:
+            return bool(checker(physics))
+        except (AttributeError, KeyError, LookupError, TypeError, ValueError):
+            return False
+    conditions = getattr(task, "conditions", None)
+    is_met = getattr(conditions, "is_met", None)
+    if callable(is_met) and physics is not None:
+        try:
+            return bool(is_met(physics))
+        except (AttributeError, KeyError, LookupError, TypeError, ValueError):
+            return False
+    for name in ("is_success", "task_success", "success"):
+        value = getattr(task, name, None)
+        if value is not None and not callable(value):
+            return bool(value)
+    return False
 
 
 class _EntityPointerDFA:
@@ -826,9 +860,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         # preserves the authoritative final rollout formula.
                         chunk_reward += 0.05 / max(1, len(plan))
                     previous_progress, previous_intention = progress, intention
-                    if _last(timestep):
+                    if _last(timestep) and _task_success(env):
                         success = True
                         termination_reason = "success"
+                        break
+                    if _last(timestep):
+                        termination_reason = "terminal"
                         break
                     if steps >= self.max_steps:
                         break
@@ -896,7 +933,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 0.0 if start is None else sum(item.reward for item in transitions[start:])
                 for start in planner_transition_indices
             ]
-            diagnostic_result = {**diagnostics.result(), "cameras": cameras}
+            diagnostic_result = {
+                **diagnostics.result(),
+                "cameras": cameras,
+                "initial_progress": initial_progress,
+                "final_progress": final_progress,
+                "initial_intention": initial_intention,
+                "final_intention": final_intention,
+            }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "
                 + json.dumps(diagnostic_result)

@@ -45,6 +45,55 @@ def _truthy_last(timestep: Any) -> bool:
     return bool(last()) if callable(last) else bool(last)
 
 
+def _signal(env: Any, name: str) -> float:
+    function = getattr(env, name, None)
+    if function is None:
+        return 0.0
+    physics = getattr(env, "physics", None)
+    attempts = []
+    if physics is not None:
+        if name == "get_intention_score":
+            attempts.append(lambda: function(physics, threshold=0.1, discrete=True))
+        else:
+            attempts.append(lambda: function(physics))
+    if name == "get_intention_score":
+        attempts.extend((
+            lambda: function(threshold=0.1, discrete=True),
+            lambda: function(threshold=0.1),
+        ))
+    attempts.append(lambda: function())
+    for attempt in attempts:
+        try:
+            value = float(attempt())
+            return value if np.isfinite(value) else 0.0
+        except (AttributeError, KeyError, LookupError, TypeError, ValueError, ZeroDivisionError):
+            continue
+    return 0.0
+
+
+def _task_success(env: Any) -> bool:
+    task = getattr(env, "task", None)
+    physics = getattr(env, "physics", None)
+    checker = getattr(task, "should_terminate_episode", None)
+    if callable(checker) and physics is not None:
+        try:
+            return bool(checker(physics))
+        except (AttributeError, KeyError, LookupError, TypeError, ValueError):
+            return False
+    conditions = getattr(task, "conditions", None)
+    is_met = getattr(conditions, "is_met", None)
+    if callable(is_met) and physics is not None:
+        try:
+            return bool(is_met(physics))
+        except (AttributeError, KeyError, LookupError, TypeError, ValueError):
+            return False
+    for name in ("is_success", "task_success", "success"):
+        value = getattr(task, name, None)
+        if value is not None and not callable(value):
+            return bool(value)
+    return False
+
+
 class HierarchicalVLABenchAgent:
     """Constrained skill replanning around a receding-horizon controller."""
 
@@ -173,17 +222,17 @@ class HierarchicalVLABenchAgent:
                 actions.append(action)
                 observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
                 history.append(observation)
-                progress = env.get_task_progress() if hasattr(env, "get_task_progress") else 0.0
-                intention = env.get_intention_score(threshold=0.1) if hasattr(env, "get_intention_score") else 0.0
+                progress = _signal(env, "get_task_progress")
+                intention = _signal(env, "get_intention_score")
                 reward.update(progress=progress, intention=intention, valid=valid)
-                if _truthy_last(timestep):
+                if _truthy_last(timestep) and _task_success(env):
                     success = True
                     break
             if success or not valid:
                 break
 
-        final_progress = env.get_task_progress() if hasattr(env, "get_task_progress") else reward.progress
-        final_intention = env.get_intention_score(threshold=0.1) if hasattr(env, "get_intention_score") else reward.intention
+        final_progress = _signal(env, "get_task_progress")
+        final_intention = _signal(env, "get_intention_score")
         return RolloutResult(
             reward.finalize(success, progress=final_progress, intention=final_intention, valid=valid),
             tuple(plans),
