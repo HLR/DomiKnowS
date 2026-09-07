@@ -277,6 +277,8 @@ def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):
         def from_pretrained(*_args, **kwargs):
             assert kwargs["config"].bos_token_id is None
             assert kwargs["config"].eos_token_id is None
+            assert kwargs["bos_token_id"] is None
+            assert kwargs["eos_token_id"] is None
             return FakeModel()
 
     class ProcessorClass:

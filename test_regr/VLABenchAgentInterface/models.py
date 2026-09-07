@@ -553,6 +553,19 @@ class QwenVLPlanner(nn.Module):
         if auto_config is not None:
             config = auto_config.from_pretrained(model_id, local_files_only=local_files_only)
             kwargs["config"] = sanitize_special_token_ids(config)
+            # Prevent from_pretrained from loading a stale generation_config
+            # with BOS/EOS ids from an unrelated tokenizer vocabulary.
+            kwargs["bos_token_id"] = getattr(config, "bos_token_id", None)
+            kwargs["eos_token_id"] = getattr(config, "eos_token_id", None)
+            generation_config_class = getattr(transformers, "GenerationConfig", None)
+            if generation_config_class is not None:
+                try:
+                    generation_config = generation_config_class.from_model_config(config)
+                    generation_config.bos_token_id = kwargs["bos_token_id"]
+                    generation_config.eos_token_id = kwargs["eos_token_id"]
+                    kwargs["generation_config"] = generation_config
+                except (AttributeError, TypeError, ValueError):
+                    pass
         model = model_class.from_pretrained(model_id, **kwargs)
         hidden_size = vision_language_hidden_size(model)
         # Some cached Qwen/CLIP tokenizer configs carry BOS/EOS ids from a
