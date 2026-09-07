@@ -277,8 +277,10 @@ def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):
         def from_pretrained(*_args, **kwargs):
             assert kwargs["config"].bos_token_id is None
             assert kwargs["config"].eos_token_id is None
-            assert kwargs["bos_token_id"] is None
-            assert kwargs["eos_token_id"] is None
+            assert "bos_token_id" not in kwargs
+            assert "eos_token_id" not in kwargs
+            assert kwargs["generation_config"].bos_token_id is None
+            assert kwargs["generation_config"].eos_token_id is None
             return FakeModel()
 
     class ProcessorClass:
@@ -292,8 +294,17 @@ def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):
         def from_pretrained(*_args, **_kwargs):
             return config
 
+    class GenerationConfig:
+        @classmethod
+        def from_model_config(cls, _config):
+            return cls()
+
     monkeypatch.setattr(models, "resolve_vision_language_loader", lambda: (ModelClass, ProcessorClass))
-    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(AutoConfig=AutoConfig))
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        SimpleNamespace(AutoConfig=AutoConfig, GenerationConfig=GenerationConfig),
+    )
     vocabulary = PlanVocabulary(
         skills=("pick",), argument_keys=("target_entity_name",),
         skill_arguments=(("pick", ("target_entity_name",)),), max_entities=2,

@@ -555,14 +555,12 @@ class QwenVLPlanner(nn.Module):
             kwargs["config"] = sanitize_special_token_ids(config)
             # Prevent from_pretrained from loading a stale generation_config
             # with BOS/EOS ids from an unrelated tokenizer vocabulary.
-            kwargs["bos_token_id"] = getattr(config, "bos_token_id", None)
-            kwargs["eos_token_id"] = getattr(config, "eos_token_id", None)
             generation_config_class = getattr(transformers, "GenerationConfig", None)
             if generation_config_class is not None:
                 try:
                     generation_config = generation_config_class.from_model_config(config)
-                    generation_config.bos_token_id = kwargs["bos_token_id"]
-                    generation_config.eos_token_id = kwargs["eos_token_id"]
+                    generation_config.bos_token_id = getattr(config, "bos_token_id", None)
+                    generation_config.eos_token_id = getattr(config, "eos_token_id", None)
                     kwargs["generation_config"] = generation_config
                 except (AttributeError, TypeError, ValueError):
                     pass
