@@ -1062,7 +1062,6 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     approach_blend,
                                 )
                                 pick_assist_steps += 1
-                        pull_assist_active = False
                         if (
                             task_type.__module__.startswith("VLABench.")
                             and descriptor.get("task") == "select_book"
@@ -1072,18 +1071,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # SelectBookTask's expert pull uses the current
                             # orientation, closed gripper, and a -Y 0.3 m
                             # displacement. Apply one bounded step at a time.
-                            candidate_value[:3] = current[:3] + np.asarray([0.0, -0.05, 0.0])
-                            pull_assist_active = True
+                            candidate_value[:3] = current[:3] + np.asarray([0.0, -0.02, 0.0])
                             candidate_value[3:6] = current[3:6]
                             candidate_value[6] = 0.0
                             pull_assist_steps += 1
                         bounded = bound_ee_action(
                             candidate_value,
                             current,
-                            max_position_step=(
-                                max(self.max_position_step, 0.05)
-                                if pull_assist_active else self.max_position_step
-                            ),
+                            max_position_step=self.max_position_step,
+
                             max_rotation_step=self.max_rotation_step,
                         )
                         current_target_distance = diagnostics.target_distance()
