@@ -45,6 +45,7 @@ from test_regr.VLABenchAgentInterface.models import (
     prepare_kbit_model,
     resolve_vision_language_loader,
     sanitize_special_token_ids,
+    special_token_id_summary,
     vision_language_hidden_size,
 )
 from test_regr.VLABenchAgentInterface.main import (
@@ -271,6 +272,19 @@ def test_sanitize_special_token_ids_clears_invalid_nested_ids():
     sanitize_special_token_ids(siglip_raw)
     assert siglip_raw["bos_token_id"] is None
     assert siglip_raw["eos_token_id"] is None
+
+    summary = special_token_id_summary(
+        SimpleNamespace(
+            model_type="siglip",
+            vocab_size=None,
+            text_config=SimpleNamespace(
+                model_type="siglip_text_model", vocab_size=32000, bos_token_id=None, eos_token_id=None
+            ),
+        )
+    )
+    assert "root:class=SimpleNamespace model_type='siglip'" in summary
+    assert "root.text_config:class=SimpleNamespace model_type='siglip_text_model'" in summary
+    assert "bos=None" in summary and "eos=None" in summary
 
 
 def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():

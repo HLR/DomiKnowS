@@ -61,6 +61,34 @@ def sanitize_special_token_ids(config: Any) -> Any:
     return config
 
 
+def special_token_id_summary(config: Any) -> str:
+    """Return a compact, nested BOS/EOS snapshot for model-load diagnostics."""
+    pending = [("root", config)]
+    seen = set()
+    entries = []
+    while pending:
+        path, current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        is_mapping = isinstance(current, Mapping)
+        get_value = current.get if is_mapping else lambda name: getattr(current, name, None)
+        vocab_size = get_value("vocab_size")
+        bos_token_id = get_value("bos_token_id")
+        eos_token_id = get_value("eos_token_id")
+        model_type = get_value("model_type")
+        if any(value is not None for value in (vocab_size, bos_token_id, eos_token_id, model_type)):
+            entries.append(
+                f"{path}:class={type(current).__name__} model_type={model_type!r} "
+                f"vocab={vocab_size!r} bos={bos_token_id!r} eos={eos_token_id!r}"
+            )
+        for name in ("text_config", "vision_config", "audio_config"):
+            nested = get_value(name)
+            if nested is not None:
+                pending.append((f"{path}.{name}", nested))
+    return "; ".join(entries) or "none"
+
+
 def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_only: bool) -> Any:
     """Build an AutoConfig from raw JSON so invalid nested token ids never validate."""
 
@@ -209,6 +237,12 @@ class FrozenSigLIPEncoder(nn.Module):
         if auto_config is not None:
             model_kwargs["config"] = load_sanitized_auto_config(
                 transformers, model_id, local_files_only=local_files_only
+            )
+            sanitize_special_token_ids(model_kwargs["config"])
+            print(
+                f"[vlabench-model] vision config before AutoModel.from_pretrained "
+                f"model={model_id} {special_token_id_summary(model_kwargs['config'])}",
+                flush=True,
             )
 
         self.model = transformers.AutoModel.from_pretrained(model_id, **model_kwargs)
