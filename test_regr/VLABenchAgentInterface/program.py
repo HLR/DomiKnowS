@@ -1035,7 +1035,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 task_type.__module__.startswith("VLABench.")
                                 and descriptor.get("task") == "select_book"
                             ):
-                                target_world = diagnostics.target_grasp_position() or target_world
+                                grasp_target = diagnostics.target_grasp_position()
+                                if grasp_target is not None:
+                                    target_world = grasp_target
                             if target_world is not None:
                                 approach_blend = self.pick_approach_blend
                                 # SelectBookTask's expert pick uses the live
