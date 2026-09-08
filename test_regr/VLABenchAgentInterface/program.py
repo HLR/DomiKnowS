@@ -19,7 +19,13 @@ POSITIVE_RETURN_EPSILON = 1e-6
 
 try:
     from .diagnostics import RolloutDiagnostics
-    from .observations import camera_indices, camera_report, image_tensor
+    from .observations import (
+        DEFAULT_CONTROLLER_CAMERA_KEYS,
+        camera_indices,
+        camera_report,
+        image_tensor,
+        resolve_controller_camera_names,
+    )
     from .dataset import control_task_index_for_instruction
     from .environment import (
         CONTROLLER_FRAME_VERSION,
@@ -45,7 +51,13 @@ try:
     )
 except ImportError:
     from diagnostics import RolloutDiagnostics
-    from observations import camera_indices, camera_report, image_tensor
+    from observations import (
+        DEFAULT_CONTROLLER_CAMERA_KEYS,
+        camera_indices,
+        camera_report,
+        image_tensor,
+        resolve_controller_camera_names,
+    )
     from dataset import control_task_index_for_instruction
     from environment import (
         CONTROLLER_FRAME_VERSION,
@@ -327,6 +339,16 @@ def _task_success(env) -> bool:
     return False
 
 
+def _task_signals(env, diagnostics: RolloutDiagnostics) -> tuple[float, float, str]:
+    """Read upstream shaping signals with a geometric progress fallback."""
+    progress = _signal(env, "get_task_progress")
+    intention = _signal(env, "get_intention_score")
+    distance_progress = diagnostics.distance_progress()
+    if distance_progress is not None and progress <= 0.0:
+        return distance_progress, intention, "target_distance"
+    return progress, intention, "upstream"
+
+
 class _EntityPointerDFA:
     """Lazy DFA view that removes unknown observation-local pointers."""
 
@@ -427,6 +449,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         env_factory: Callable[..., Any],
         controller_task_instructions: Mapping[int, str] | None = None,
         controller_camera_names: Sequence[str] | None = None,
+        controller_camera_keys: Sequence[str] | None = None,
         supervised_examples: Sequence[Any] = (),
         controller_anchor_loader: Iterable[Mapping[str, torch.Tensor]] | None = None,
         device="cpu",
@@ -470,6 +493,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.env_factory = env_factory
         self.controller_task_instructions = dict(controller_task_instructions or {})
         self.controller_camera_names = tuple(controller_camera_names) if controller_camera_names else None
+        self.controller_camera_keys = tuple(controller_camera_keys or DEFAULT_CONTROLLER_CAMERA_KEYS)
         self.supervised_examples = tuple(supervised_examples)
         self.controller_anchor_loader = controller_anchor_loader
         self.device_name = torch.device(device)
@@ -590,12 +614,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 f"robot_base_world={controller_robot_frame.tolist()}"
             )
             observations = [observation]
-            selected_cameras = camera_indices(env, observation, self.controller_camera_names)
-            cameras = camera_report(env, observation, indices=selected_cameras)
+            selected_camera_names, camera_source = resolve_controller_camera_names(
+                env,
+                observation,
+                dataset_keys=self.controller_camera_keys,
+                requested=self.controller_camera_names,
+            )
+            selected_cameras = camera_indices(env, observation, selected_camera_names)
+            cameras = camera_report(
+                env,
+                observation,
+                indices=selected_cameras,
+                dataset_keys=self.controller_camera_keys,
+            )
+            cameras["mapping_source"] = camera_source
             self._report_progress("VLABench controller cameras=" + json.dumps(cameras))
             diagnostics.observe(env, _observation_state(observation))
-            previous_progress = initial_progress = _signal(env, "get_task_progress")
-            previous_intention = initial_intention = _signal(env, "get_intention_score")
+            previous_progress, previous_intention, progress_source = _task_signals(env, diagnostics)
+            initial_progress, initial_intention = previous_progress, previous_intention
             instruction = descriptor.get("instruction")
             if not instruction:
                 instruction = env.task.get_instruction() if hasattr(getattr(env, "task", None), "get_instruction") else ""
@@ -843,8 +879,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
                     observations.append(observation)
                     diagnostics.observe(env, _observation_state(observation), command_gripper=recovered[6])
-                    progress = _signal(env, "get_task_progress")
-                    intention = _signal(env, "get_intention_score")
+                    progress, intention, progress_source = _task_signals(env, diagnostics)
                     delta_progress = progress - previous_progress
                     delta_intention = intention - previous_intention
                     chunk_reward += 0.25 * delta_progress + 0.10 * delta_intention
@@ -940,6 +975,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "final_progress": final_progress,
                 "initial_intention": initial_intention,
                 "final_intention": final_intention,
+                "progress_source": progress_source,
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "

@@ -1109,7 +1109,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--max-steps", type=int, default=400)
     agent.add_argument("--max-views", type=int, default=4)
     agent.add_argument("--controller-camera-names", nargs="+", default=None,
-                       help="verified live camera names in dataset slot order; default retains first three views")
+                       help="live camera names in dataset slot order; default resolves right/left/wrist aliases")
     agent.add_argument("--hidden-dim", type=int, default=256)
     agent.add_argument("--vision-model", default="google/siglip-base-patch16-224")
     agent.add_argument("--tiny-vision", action="store_true")

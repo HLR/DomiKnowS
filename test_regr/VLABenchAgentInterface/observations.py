@@ -7,6 +7,12 @@ import torch
 from PIL import Image
 
 
+# The LeRobot control export uses these names in this stable slot order.  The
+# live VLABench camera names are simulator-specific, so they are resolved by
+# semantic aliases below instead of assuming that renderer order is stable.
+DEFAULT_CONTROLLER_CAMERA_KEYS = ("image", "second_image", "wrist_image")
+
+
 def image_tensor(value, *, channels_last=None):
     """Convert RGB byte images or unit-range floats to [..., C, H, W].
 
@@ -65,12 +71,96 @@ def camera_indices(env, observation, names=None, *, max_views=3):
     return [available.index(name) for name in names]
 
 
+def resolve_controller_camera_names(
+    env,
+    observation,
+    *,
+    dataset_keys=DEFAULT_CONTROLLER_CAMERA_KEYS,
+    requested=None,
+):
+    """Resolve learned camera slots to live names using semantic aliases.
+
+    Positional renderer order is not a camera contract: on VLABench the
+    third view is commonly ``forward`` while the learned third slot is
+    ``wrist_image``.  Explicit CLI names still take precedence, while the
+    default path chooses the unique right/left/wrist aliases and fails closed
+    when a required slot cannot be identified.
+    """
+    keys = tuple(str(key) for key in (dataset_keys or DEFAULT_CONTROLLER_CAMERA_KEYS))
+    if not keys:
+        raise ValueError("at least one dataset camera key is required")
+    if requested is not None:
+        names = tuple(str(name) for name in requested)
+        if len(names) != len(keys):
+            raise ValueError(
+                f"controller camera names ({len(names)}) must match dataset slots ({len(keys)})"
+            )
+        # camera_indices performs the uniqueness/availability validation.
+        camera_indices(env, observation, names)
+        return names, "explicit"
+
+    available = live_camera_names(env, observation)
+    # Synthetic/legacy environments may expose RGB views without camera
+    # identities.  Preserve their positional contract; there is no semantic
+    # pairing claim to make in that case.
+    if available and all(name is None for name in available):
+        return None, "positional-fallback"
+    unused = set(range(len(available)))
+    normalized = ["".join(ch for ch in key.lower() if ch.isalnum()) for key in keys]
+
+    def candidates(key):
+        if "wrist" in key or "hand" in key:
+            return [
+                index for index, name in enumerate(available)
+                if index in unused and name is not None
+                and ("wrist" in name.lower() or "hand" in name.lower())
+            ]
+        if key in {"image", "mainimage", "primaryimage"}:
+            preferred = ("right", "front", "forward", "overhead", "image")
+        elif "second" in key or key in {"leftimage", "sideimage"}:
+            preferred = ("left", "side", "forward", "front", "image")
+        else:
+            preferred = ()
+        result = []
+        for token in preferred:
+            result.extend(
+                index for index, name in enumerate(available)
+                if index in unused and name is not None and name.lower() == token
+            )
+        if result:
+            return result
+        return [
+            index for index, name in enumerate(available)
+            if index in unused and name is not None and any(token in name.lower() for token in preferred)
+        ]
+
+    selected = []
+    for key in normalized:
+        matches = candidates(key)
+        if not matches:
+            if "wrist" in key or "hand" in key:
+                raise ValueError(
+                    f"cannot resolve required wrist camera slot {key!r} from {available!r}"
+                )
+            # Preserve a useful fallback for anonymous/synthetic observations,
+            # but never steal a camera already assigned to another slot.
+            matches = sorted(unused)
+        if not matches:
+            raise ValueError(f"cannot resolve dataset camera slot {key!r} from {available!r}")
+        index = matches[0]
+        selected.append(available[index])
+        unused.remove(index)
+    camera_indices(env, observation, selected)
+    return tuple(selected), "dataset-alias"
+
+
 def camera_report(env, observation, *, indices=None, dataset_keys=()):
     names = live_camera_names(env, observation)
     indices = list(indices if indices is not None else range(min(3, len(names))))
     rgb = image_tensor(np.asarray(observation["rgb"]), channels_last=True)
     result = {
         "status": "unverified",  # Names and matching counts alone do not prove semantics.
+        "mapping_status": "configured" if dataset_keys and all(names[index] is not None for index in indices) else "unverified",
         "dataset_keys": list(dataset_keys),
         "selected_indices": indices,
         "selected_names": [names[index] for index in indices],

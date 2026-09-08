@@ -191,9 +191,33 @@ class RolloutDiagnostics:
     def result(self):
         return {
             "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+            "distance_progress": self.distance_progress(),
             "targets": {name: {**values, "improvement_m": values["initial_m"] - values["final_m"]}
                         if values["samples"] else dict(values) for name, values in self.targets.items()},
             "target_status": "available" if any(v["samples"] for v in self.targets.values()) else "unavailable",
             "ee_path_length_m": self.path_length,
             **dict(self.counts),
         }
+
+    def distance_progress(self):
+        """Return normalized progress toward the nearest observed task target.
+
+        VLABench primitive tasks often expose ``get_task_progress`` but leave
+        it at zero until a discrete primitive completes.  This value is a
+        shaping fallback only; task success is still determined by the
+        simulator's success predicate.  Returning ``None`` preserves the
+        distinction between no geometric evidence and zero progress.
+        """
+        ratios = []
+        for values in self.targets.values():
+            if not values.get("samples"):
+                continue
+            initial = float(values.get("initial_m", np.nan))
+            final = float(values.get("final_m", np.nan))
+            if not np.isfinite(initial) or not np.isfinite(final):
+                continue
+            if initial <= np.finfo(float).eps:
+                ratios.append(1.0 if final <= np.finfo(float).eps else 0.0)
+            else:
+                ratios.append(float(np.clip((initial - final) / initial, 0.0, 1.0)))
+        return max(ratios) if ratios else None

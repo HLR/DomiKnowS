@@ -9,7 +9,12 @@ from PIL import Image
 from .dataset import LeRobotWindowDataset, _video_tensor
 from .diagnostics import ControllerMetrics, RolloutDiagnostics
 from .models import MultiViewController, TinyImageEncoder
-from .observations import camera_indices, camera_report, image_tensor
+from .observations import (
+    camera_indices,
+    camera_report,
+    image_tensor,
+    resolve_controller_camera_names,
+)
 from .program import _controller_inputs
 from .replay import compare_cameras, paired_camera_mapping_verified, replay_heldout_demo
 
@@ -58,6 +63,17 @@ def test_camera_names_select_content_and_missing_names_fail_closed():
     assert report["status"] == "unverified"
     with pytest.raises(ValueError, match="not unique"):
         camera_indices(None, obs, ["unknown"])
+
+
+def test_default_camera_slots_select_live_wrist_by_name():
+    observation = {
+        "rgb": np.zeros((4, 8, 9, 3), np.uint8),
+        "camera_names": ["right", "left", "forward", "franka/Franka_wrist_cam"],
+        "ee_state": np.zeros(7),
+    }
+    names, source = resolve_controller_camera_names(None, observation)
+    assert names == ("right", "left", "franka/Franka_wrist_cam")
+    assert source == "dataset-alias"
 
 
 def test_paired_camera_mapping_verifies_every_dataset_slot(tmp_path):
@@ -141,6 +157,17 @@ def test_target_distance_uses_task_target_and_observed_gripper():
     assert result["commanded_gripper_transitions"] == 1
     assert result.get("observed_gripper_transitions", 0) == 0
     assert RolloutDiagnostics().result()["target_status"] == "unavailable"
+
+
+def test_target_distance_progress_is_normalized_and_monotone():
+    target = SimpleNamespace(get_xpos=lambda _: np.array([1., 0., 0.]))
+    env = SimpleNamespace(physics=object(), task=SimpleNamespace(
+        target_entity="apple", entities={"apple": target}))
+    diagnostics = RolloutDiagnostics()
+    diagnostics.observe(env, [0, 0, 0, 0, 0, 0, 0])
+    diagnostics.observe(env, [.25, 0, 0, 0, 0, 0, 0])
+    assert diagnostics.distance_progress() == pytest.approx(.25)
+    assert diagnostics.result()["distance_progress"] == pytest.approx(.25)
 
 
 def test_target_distance_resolves_vlabench_style_suffix_and_case():

@@ -34,6 +34,7 @@ from test_regr.VLABenchAgentInterface.environment import (
     robot_to_world_ee_action,
     world_to_robot_ee_state,
 )
+from test_regr.VLABenchAgentInterface.diagnostics import RolloutDiagnostics
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
     FrozenSigLIPEncoder,
@@ -66,6 +67,7 @@ from test_regr.VLABenchAgentInterface.program import (
     _entity_pointer_dfa,
     _observation_state,
     _signal,
+    _task_signals,
     generalized_advantage_estimate,
     ppo_clipped_loss,
 )
@@ -182,6 +184,23 @@ def test_signal_passes_upstream_physics_argument():
     env = SimpleNamespace(physics=physics, get_task_progress=progress)
     assert _signal(env, "get_task_progress") == 0.5
     assert seen["physics"] is physics
+
+
+def test_task_signals_use_target_distance_when_upstream_progress_is_flat():
+    target = SimpleNamespace(get_xpos=lambda _physics: np.array([1.0, 0.0, 0.0]))
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(target_entity="apple", entities={"apple": target}),
+        get_task_progress=lambda *_args, **_kwargs: 0.0,
+        get_intention_score=lambda *_args, **_kwargs: 0.0,
+    )
+    diagnostics = RolloutDiagnostics()
+    diagnostics.observe(env, np.zeros(7))
+    diagnostics.observe(env, np.array([0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+    progress, intention, source = _task_signals(env, diagnostics)
+    assert progress == pytest.approx(0.25)
+    assert intention == 0.0
+    assert source == "target_distance"
 
 
 def test_online_entity_pointer_dfa_masks_unknown_observation_pointers():
