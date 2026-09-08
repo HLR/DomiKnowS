@@ -171,7 +171,21 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
                     file=sys.stderr,
                     flush=True,
                 )
-            config = for_model(model_type, **constructor_config_dict)
+            if model_type == "siglip":
+                hf_logging = getattr(transformers, "logging", None)
+                get_verbosity = getattr(hf_logging, "get_verbosity", None)
+                set_verbosity = getattr(hf_logging, "set_verbosity", None)
+                set_verbosity_error = getattr(hf_logging, "set_verbosity_error", None)
+                previous_verbosity = get_verbosity() if callable(get_verbosity) else None
+                if callable(set_verbosity_error):
+                    set_verbosity_error()
+                try:
+                    config = for_model(model_type, **constructor_config_dict)
+                finally:
+                    if previous_verbosity is not None and callable(set_verbosity):
+                        set_verbosity(previous_verbosity)
+            else:
+                config = for_model(model_type, **constructor_config_dict)
             if model_type == "siglip":
                 print(
                     f"[vlabench-model] SigLIP config after AutoConfig.for_model "
