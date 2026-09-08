@@ -1234,7 +1234,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         # preserves the authoritative final rollout formula.
                         chunk_reward += 0.05 / max(1, len(plan))
                     previous_progress, previous_intention = progress, intention
-                    if _last(timestep) and _task_success(env):
+                    # VLABench may satisfy the task condition before its
+                    # dm_env timestep becomes LAST. Check the authoritative
+                    # task predicate on every executed transition so a
+                    # completed grasp/pull is not hidden by the time limit.
+                    if _task_success(env):
                         success = True
                         termination_reason = "success"
                         break
