@@ -39,9 +39,9 @@ def sanitize_special_token_ids(config: Any) -> Any:
             for name in ("bos_token_id", "eos_token_id"):
                 value = current.get(name) if is_mapping else getattr(current, name, None)
                 try:
-                    invalid = value is not None and not 0 <= int(value) < vocab_size
+                    invalid = value is None or not 0 <= int(value) < vocab_size
                 except (TypeError, ValueError):
-                    invalid = value is not None
+                    invalid = True
                 if invalid:
                     if is_mapping:
                         current[name] = None

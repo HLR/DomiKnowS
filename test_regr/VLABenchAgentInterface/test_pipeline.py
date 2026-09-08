@@ -260,6 +260,13 @@ def test_sanitize_special_token_ids_clears_invalid_nested_ids():
     assert config.text_config.bos_token_id == 1
     assert config.text_config.eos_token_id is None
 
+    missing = SimpleNamespace(vocab_size=32000, text_config=SimpleNamespace(vocab_size=32000))
+    sanitize_special_token_ids(missing)
+    assert missing.bos_token_id is None
+    assert missing.eos_token_id is None
+    assert missing.text_config.bos_token_id is None
+    assert missing.text_config.eos_token_id is None
+
 
 def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
     raw = {
