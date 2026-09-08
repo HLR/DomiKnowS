@@ -1137,7 +1137,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument(
         "--pick-grasp-distance",
         type=float,
-        default=0.12,
+        default=0.30,
         help="hold the gripper closed below this pick target distance in metres",
     )
     agent.add_argument("--ik-tolerance", type=float, default=5e-3)
