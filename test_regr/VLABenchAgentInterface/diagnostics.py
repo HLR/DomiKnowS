@@ -199,7 +199,11 @@ class RolloutDiagnostics:
                     keypoints = np.asarray(keypoint_getter(env.physics), dtype=float).reshape(-1, 3)
                     keypoints = keypoints[np.isfinite(keypoints).all(axis=1)]
                     if len(keypoints):
-                        grasp_position = keypoints[0]
+                        # VLABench SkillLib.pick uses the final keypoint.
+                        # Keep diagnostics and live assistance on that same
+                        # grasp pose rather than the entity origin or first
+                        # auxiliary keypoint.
+                        grasp_position = keypoints[-1]
                         grasp_distance = float(np.linalg.norm(grasp_position - state[:3]))
                         if np.isfinite(grasp_distance):
                             entry["grasp_position"] = grasp_position.tolist()
