@@ -287,11 +287,11 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
     class AutoConfig:
         @staticmethod
         def from_pretrained(*_args, **kwargs):
-            calls.update(kwargs)
-            return SimpleNamespace(**kwargs)
+            raise AssertionError("raw sanitized configs must use AutoConfig.for_model")
 
         @staticmethod
         def for_model(_model_type, **kwargs):
+            calls.update(kwargs)
             return SimpleNamespace(**kwargs)
 
     config = load_sanitized_auto_config(
