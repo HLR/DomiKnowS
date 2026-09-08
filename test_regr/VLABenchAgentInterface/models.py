@@ -62,6 +62,32 @@ def sanitize_special_token_ids(config: Any) -> Any:
     return config
 
 
+def clear_siglip_special_token_ids(config: Any) -> Any:
+    """Restore SigLIP BOS/EOS ids to None after constructor validation."""
+    pending = [config]
+    seen = set()
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        is_mapping = isinstance(current, Mapping)
+        get_value = current.get if is_mapping else lambda name: getattr(current, name, None)
+        model_type = get_value("model_type")
+        if model_type in {"siglip", "siglip_text_model"}:
+            if is_mapping:
+                current["bos_token_id"] = None
+                current["eos_token_id"] = None
+            else:
+                setattr(current, "bos_token_id", None)
+                setattr(current, "eos_token_id", None)
+        for name in ("text_config", "vision_config", "audio_config"):
+            nested = get_value(name)
+            if nested is not None:
+                pending.append(nested)
+    return config
+
+
 def special_token_id_summary(config: Any) -> str:
     """Return a compact, nested BOS/EOS snapshot for model-load diagnostics."""
     pending = [("root", config)]
@@ -114,6 +140,25 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
                     text_config.setdefault("bos_token_id", None)
                     text_config.setdefault("eos_token_id", None)
             sanitize_special_token_ids(config_dict)
+            constructor_config_dict = config_dict
+            if model_type == "siglip":
+                constructor_config_dict = dict(config_dict)
+                text_config = constructor_config_dict.get("text_config")
+                if isinstance(text_config, Mapping):
+                    text_config = dict(text_config)
+                    vocab_size = text_config.get("vocab_size")
+                    for name in ("bos_token_id", "eos_token_id"):
+                        value = text_config.get(name)
+                        if (
+                            value is None
+                            or not isinstance(value, int)
+                            or value < 0
+                            or (vocab_size is not None and value >= int(vocab_size))
+                        ):
+                            # Transformers 5.16 treats None as an omitted
+                            # dataclass field and reinstates SigLIP defaults.
+                            text_config[name] = 0
+                    constructor_config_dict["text_config"] = text_config
             # Construct directly from the cleaned raw dictionary. Calling
             # AutoConfig.from_pretrained with the nested dictionary first
             # constructs the original config and only applies nested kwargs
@@ -126,7 +171,7 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
                     file=sys.stderr,
                     flush=True,
                 )
-            config = for_model(model_type, **config_dict)
+            config = for_model(model_type, **constructor_config_dict)
             if model_type == "siglip":
                 print(
                     f"[vlabench-model] SigLIP config after AutoConfig.for_model "
@@ -134,11 +179,11 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
                     file=sys.stderr,
                     flush=True,
                 )
-            return sanitize_special_token_ids(config)
+            return clear_siglip_special_token_ids(sanitize_special_token_ids(config))
     if auto_config is None:
         return None
-    return sanitize_special_token_ids(
-        auto_config.from_pretrained(model_id, local_files_only=local_files_only)
+    return clear_siglip_special_token_ids(
+        sanitize_special_token_ids(auto_config.from_pretrained(model_id, local_files_only=local_files_only))
     )
 
 

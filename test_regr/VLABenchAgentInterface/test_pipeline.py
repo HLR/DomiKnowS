@@ -41,6 +41,7 @@ from test_regr.VLABenchAgentInterface.models import (
     QwenVLPlanner,
     TinyImageEncoder,
     controller_loss,
+    clear_siglip_special_token_ids,
     load_sanitized_auto_config,
     prepare_kbit_model,
     resolve_vision_language_loader,
@@ -311,6 +312,10 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
         @staticmethod
         def for_model(_model_type, **kwargs):
             calls.update(kwargs)
+            if _model_type == "siglip":
+                text_config = dict(kwargs["text_config"])
+                text_config.setdefault("model_type", "siglip_text_model")
+                return SimpleNamespace(model_type="siglip", text_config=text_config)
             return SimpleNamespace(**kwargs)
 
     config = load_sanitized_auto_config(
@@ -329,7 +334,12 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
 
     sparse_siglip = {
         "model_type": "siglip",
-        "text_config": {"hidden_size": 768},
+        "text_config": {
+            "hidden_size": 768,
+            "vocab_size": 32000,
+            "bos_token_id": 49406,
+            "eos_token_id": 49407,
+        },
     }
 
     class SparsePretrainedConfig:
@@ -344,6 +354,16 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
     )
     assert sparse.text_config["bos_token_id"] is None
     assert sparse.text_config["eos_token_id"] is None
+    assert calls["text_config"]["bos_token_id"] == 0
+    assert calls["text_config"]["eos_token_id"] == 0
+
+    restored = SimpleNamespace(
+        model_type="siglip",
+        text_config=SimpleNamespace(model_type="siglip_text_model", bos_token_id=0, eos_token_id=0),
+    )
+    clear_siglip_special_token_ids(restored)
+    assert restored.text_config.bos_token_id is None
+    assert restored.text_config.eos_token_id is None
 
 
 def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):
