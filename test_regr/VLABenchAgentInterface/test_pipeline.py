@@ -211,6 +211,9 @@ def test_select_painting_uses_press_skill_pattern():
     assert PRIMITIVE_TASK_PATTERNS["select_painting"] == ("press",)
 
 
+def test_select_book_uses_upstream_pick_pull_pattern():
+    assert PRIMITIVE_TASK_PATTERNS["select_book"] == ("pick", "pull")
+
 def test_press_button_fallback_uses_live_button_target():
     diagnostics = RolloutDiagnostics()
     diagnostics.targets = {"button2": {"samples": 1}}
@@ -242,6 +245,17 @@ def test_task_pattern_dfa_forces_press_skill_and_live_pointer():
     assert not dfa.accepts(wrong)
     assert dfa.allowed_tokens(dfa.start_state) == {expected[0]}
 
+
+def test_task_pattern_dfa_forces_pick_target_then_allows_pull():
+    world = build_vlabench_world_graph("test_task_pattern_pick_world")
+    runtime = build_constraint_runtime(world, max_entities=4, max_operations=2, name_prefix="test_task_pattern_pick")
+    dfa = _task_pattern_dfa(runtime.dfa, runtime.vocabulary, ("pick", "pull"), target_name="book2", entities=("book1", "book2"))
+    prefix = [runtime.vocabulary.label_for_token(token) for token in ("skill:pick", "arg:target_entity_name", "obj:1")]
+    tail = [runtime.vocabulary.label_for_token(token) for token in ("skill:pull", "<eos>")]
+    wrong = [runtime.vocabulary.label_for_token(token) for token in ("skill:pick", "arg:target_entity_name", "obj:0", "skill:pull", "<eos>")]
+    assert dfa.allowed_tokens(dfa.start_state) == {prefix[0]}
+    assert dfa.accepts(prefix + tail)
+    assert not dfa.accepts(wrong)
 
 def test_pick_target_blend_guides_position_without_rewriting_pose_or_gripper():
     action = np.asarray([0.0, 0.5, 0.2, 1.0, -1.0, 0.5, 1.0])
