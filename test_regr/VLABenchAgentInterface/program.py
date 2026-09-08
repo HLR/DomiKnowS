@@ -1072,7 +1072,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # orientation, closed gripper, and a -Y 0.3 m
                             # displacement. Apply one bounded step at a time.
                             candidate_value[:3] = current[:3] + np.asarray([0.0, -0.02, 0.0])
-                            candidate_value[3:6] = np.asarray([-np.pi / 2, -np.pi / 2, 0.0], dtype=np.float64)
+                            candidate_value[3:6] = current[3:6]
                             candidate_value[6] = 0.0
                             pull_assist_steps += 1
                         bounded = bound_ee_action(
