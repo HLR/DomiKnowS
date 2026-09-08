@@ -558,6 +558,8 @@ def command_train_agent(args) -> None:
         entropy_weight=args.entropy_weight,
         max_position_step=args.max_position_step,
         max_rotation_step=args.max_rotation_step,
+        pick_approach_blend=args.pick_approach_blend,
+        pick_grasp_distance=args.pick_grasp_distance,
         ik_tolerance=args.ik_tolerance,
         ik_max_steps=args.ik_max_steps,
         max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
@@ -1126,6 +1128,18 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--entropy-weight", type=float, default=0.01)
     agent.add_argument("--max-position-step", type=float, default=0.02)
     agent.add_argument("--max-rotation-step", type=float, default=0.10)
+    agent.add_argument(
+        "--pick-approach-blend",
+        type=float,
+        default=0.5,
+        help="blend pick-phase Cartesian targets toward the live task target",
+    )
+    agent.add_argument(
+        "--pick-grasp-distance",
+        type=float,
+        default=0.12,
+        help="hold the gripper closed below this pick target distance in metres",
+    )
     agent.add_argument("--ik-tolerance", type=float, default=5e-3)
     agent.add_argument("--ik-max-steps", type=int, default=200)
     agent.add_argument(

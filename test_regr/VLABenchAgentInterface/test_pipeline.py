@@ -64,6 +64,7 @@ from test_regr.VLABenchAgentInterface.program import (
     PlannerReplayDecision,
     VLABenchHierarchicalReinforcementProgram,
     _controller_inputs,
+    _blend_pick_target,
     _entity_pointer_dfa,
     _observation_state,
     _signal,
@@ -201,6 +202,14 @@ def test_task_signals_use_target_distance_when_upstream_progress_is_flat():
     assert progress == pytest.approx(0.25)
     assert intention == 0.0
     assert source == "target_distance"
+
+
+def test_pick_target_blend_guides_position_without_rewriting_pose_or_gripper():
+    action = np.asarray([0.0, 0.5, 0.2, 1.0, -1.0, 0.5, 1.0])
+    current = np.asarray([0.1, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0])
+    blended = _blend_pick_target(action, current, np.asarray([0.5, -0.3, 0.9]), 0.5)
+    assert blended[:3] == pytest.approx([0.25, 0.1, 0.55])
+    assert blended[3:] == pytest.approx(action[3:])
 
 
 def test_online_entity_pointer_dfa_masks_unknown_observation_pointers():

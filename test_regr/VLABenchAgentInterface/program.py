@@ -349,6 +349,20 @@ def _task_signals(env, diagnostics: RolloutDiagnostics) -> tuple[float, float, s
     return progress, intention, "upstream"
 
 
+def _blend_pick_target(action, current, target_robot, blend: float) -> np.ndarray:
+    """Blend only the Cartesian pick target toward a live task target."""
+    value = np.asarray(action, dtype=np.float64).reshape(-1).copy()
+    state = np.asarray(current, dtype=np.float64).reshape(-1)
+    target = np.asarray(target_robot, dtype=np.float64).reshape(-1)
+    if value.shape != (7,) or state.size < 6 or target.shape != (3,):
+        raise ValueError("pick target blending requires a 7D action, 6D state, and 3D target")
+    if not np.isfinite(value).all() or not np.isfinite(state[:6]).all() or not np.isfinite(target).all():
+        raise ValueError("pick target blending requires finite action, state, and target")
+    ratio = float(np.clip(blend, 0.0, 1.0))
+    value[:3] = (1.0 - ratio) * value[:3] + ratio * target
+    return value
+
+
 class _EntityPointerDFA:
     """Lazy DFA view that removes unknown observation-local pointers."""
 
@@ -470,6 +484,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         feasibility_weight: float = 0.05,
         max_position_step: float = 0.02,
         max_rotation_step: float = 0.10,
+        pick_approach_blend: float = 0.5,
+        pick_grasp_distance: float = 0.12,
         ik_tolerance: float = 1e-3,
         ik_max_steps: int = 200,
         max_consecutive_ik_rejections: int = 3,
@@ -513,6 +529,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.feasibility_weight = float(feasibility_weight)
         self.max_position_step = float(max_position_step)
         self.max_rotation_step = float(max_rotation_step)
+        self.pick_approach_blend = float(pick_approach_blend)
+        self.pick_grasp_distance = float(pick_grasp_distance)
+        if not np.isfinite(self.pick_approach_blend) or not 0.0 <= self.pick_approach_blend <= 1.0:
+            raise ValueError("pick approach blend must be finite and within [0, 1]")
+        if not np.isfinite(self.pick_grasp_distance) or self.pick_grasp_distance <= 0:
+            raise ValueError("pick grasp distance must be finite and positive")
         self.ik_tolerance = float(ik_tolerance)
         self.ik_max_steps = int(ik_max_steps)
         if not np.isfinite(self.ppo_max_log_ratio) or self.ppo_max_log_ratio <= 0:
@@ -601,6 +623,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         previous_progress = previous_intention = 0.0
         last_progress_report = time.monotonic()
         diagnostics = RolloutDiagnostics()
+        pick_assist_steps = grasp_assist_steps = 0
         try:
             timestep = env.reset()
             reset_reward_tracking(env)
@@ -814,12 +837,31 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         current = world_to_robot_ee_state(
                             _observation_state(observation), controller_robot_frame
                         )
+                        candidate_value = candidate.detach().cpu().numpy()
+                        if operation_cursor == 0 and self.pick_approach_blend > 0.0:
+                            target_world = diagnostics.target_position()
+                            if target_world is not None:
+                                candidate_value = _blend_pick_target(
+                                    candidate_value,
+                                    current,
+                                    target_world - controller_robot_frame,
+                                    self.pick_approach_blend,
+                                )
+                                pick_assist_steps += 1
                         bounded = bound_ee_action(
-                            candidate.detach().cpu().numpy(),
+                            candidate_value,
                             current,
                             max_position_step=self.max_position_step,
                             max_rotation_step=self.max_rotation_step,
                         )
+                        current_target_distance = diagnostics.target_distance()
+                        if (
+                            operation_cursor == 0
+                            and current_target_distance is not None
+                            and current_target_distance <= self.pick_grasp_distance
+                        ):
+                            bounded[6] = 0.0
+                            grasp_assist_steps += 1
                         command = None
                         last_ik_error = None
                         # A zero-scale target is merely a hold command. Treating
@@ -986,6 +1028,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "initial_intention": initial_intention,
                 "final_intention": final_intention,
                 "progress_source": progress_source,
+                "pick_assist_steps": pick_assist_steps,
+                "grasp_assist_steps": grasp_assist_steps,
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "

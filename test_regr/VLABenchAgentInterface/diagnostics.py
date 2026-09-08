@@ -185,6 +185,7 @@ class RolloutDiagnostics:
                 continue
             entry.setdefault("initial_m", distance)
             entry["final_m"] = distance
+            entry["final_position"] = xyz.tolist()
             entry["minimum_m"] = min(distance, entry.get("minimum_m", distance))
             entry["samples"] += 1
 
@@ -221,3 +222,22 @@ class RolloutDiagnostics:
             else:
                 ratios.append(float(np.clip((initial - final) / initial, 0.0, 1.0)))
         return max(ratios) if ratios else None
+
+    def target_position(self):
+        """Return the latest observed position of the first available target."""
+        for values in self.targets.values():
+            position = values.get("final_position")
+            if position is not None:
+                result = np.asarray(position, dtype=np.float64).reshape(-1)
+                if result.shape == (3,) and np.isfinite(result).all():
+                    return result
+        return None
+
+    def target_distance(self):
+        """Return the latest EE-to-target distance, when geometry is available."""
+        distances = [
+            float(values["final_m"])
+            for values in self.targets.values()
+            if values.get("samples") and np.isfinite(values.get("final_m", np.nan))
+        ]
+        return min(distances) if distances else None
