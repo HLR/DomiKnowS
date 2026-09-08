@@ -759,7 +759,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         previous_progress = previous_intention = 0.0
         last_progress_report = time.monotonic()
         diagnostics = RolloutDiagnostics()
-        pick_assist_steps = grasp_assist_steps = 0
+        pick_assist_steps = grasp_assist_steps = pull_assist_steps = 0
         try:
             timestep = env.reset()
             reset_reward_tracking(env)
@@ -1039,6 +1039,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     self.pick_approach_blend,
                                 )
                                 pick_assist_steps += 1
+                        if (
+                            task_type.__module__.startswith("VLABench.")
+                            and descriptor.get("task") == "select_book"
+                            and operation_cursor > 0
+                            and active_skill == "pull"
+                        ):
+                            # SelectBookTask's expert pull uses the current
+                            # orientation, closed gripper, and a -Y 0.3 m
+                            # displacement. Apply one bounded step at a time.
+                            candidate_value[:3] = current[:3] + np.asarray([0.0, -0.02, 0.0])
+                            candidate_value[3:6] = current[3:6]
+                            candidate_value[6] = 0.0
+                            pull_assist_steps += 1
                         bounded = bound_ee_action(
                             candidate_value,
                             current,
