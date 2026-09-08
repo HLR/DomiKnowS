@@ -203,6 +203,22 @@ def test_target_distance_prefers_press_button_over_semantic_style_target():
     assert list(result["targets"]) == ["button1"]
 
 
+
+
+def test_target_grasp_keypoint_tracks_live_pick_geometry():
+    target = SimpleNamespace(
+        get_xpos=lambda _: np.array([1.0, 0.0, 0.0]),
+        get_grasped_keypoints=lambda _: [np.array([0.7, 0.0, 0.2])],
+    )
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(target_entity="book", entities={"book": target}),
+    )
+    diagnostics = RolloutDiagnostics()
+    diagnostics.observe(env, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]))
+    assert diagnostics.target_grasp_position() == pytest.approx([0.7, 0.0, 0.2])
+    assert diagnostics.target_grasp_distance() == pytest.approx(np.sqrt(0.53))
+    assert diagnostics.result()["targets"]["book"]["grasp_minimum_m"] == pytest.approx(np.sqrt(0.53))
 class ReplayEnv:
     def __init__(self):
         self.physics = object()

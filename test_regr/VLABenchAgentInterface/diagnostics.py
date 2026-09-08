@@ -193,6 +193,22 @@ class RolloutDiagnostics:
             entry["final_m"] = distance
             entry["final_position"] = xyz.tolist()
             entry["minimum_m"] = min(distance, entry.get("minimum_m", distance))
+            keypoint_getter = getattr(entity, "get_grasped_keypoints", None)
+            if callable(keypoint_getter):
+                try:
+                    keypoints = np.asarray(keypoint_getter(env.physics), dtype=float).reshape(-1, 3)
+                    keypoints = keypoints[np.isfinite(keypoints).all(axis=1)]
+                    if len(keypoints):
+                        grasp_position = keypoints[0]
+                        grasp_distance = float(np.linalg.norm(grasp_position - state[:3]))
+                        if np.isfinite(grasp_distance):
+                            entry["grasp_position"] = grasp_position.tolist()
+                            entry["grasp_final_m"] = grasp_distance
+                            entry["grasp_minimum_m"] = min(
+                                grasp_distance, entry.get("grasp_minimum_m", grasp_distance)
+                            )
+                except (AttributeError, KeyError, TypeError, ValueError):
+                    pass
             entry["samples"] += 1
 
     def result(self):
@@ -230,7 +246,7 @@ class RolloutDiagnostics:
         return max(ratios) if ratios else None
 
     def target_position(self):
-        """Return the latest observed position of the first available target."""
+        """Return the latest observed origin of the first available target."""
         for values in self.targets.values():
             position = values.get("final_position")
             if position is not None:
@@ -238,6 +254,26 @@ class RolloutDiagnostics:
                 if result.shape == (3,) and np.isfinite(result).all():
                     return result
         return None
+
+    def target_grasp_position(self):
+        """Return the live grasp keypoint when the task entity exposes one."""
+        for values in self.targets.values():
+            position = values.get("grasp_position")
+            if position is not None:
+                result = np.asarray(position, dtype=np.float64).reshape(-1)
+                if result.shape == (3,) and np.isfinite(result).all():
+                    return result
+        return None
+
+    def target_grasp_distance(self):
+        """Return the EE distance to the latest live grasp keypoint."""
+        distances = [
+            float(values["grasp_final_m"])
+            for values in self.targets.values()
+            if values.get("grasp_final_m") is not None
+            and np.isfinite(values.get("grasp_final_m", np.nan))
+        ]
+        return min(distances) if distances else None
 
     def target_distance(self):
         """Return the latest EE-to-target distance, when geometry is available."""

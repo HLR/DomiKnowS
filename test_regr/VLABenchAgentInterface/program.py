@@ -1031,6 +1031,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             and self.pick_approach_blend > 0.0
                         ):
                             target_world = diagnostics.target_position()
+                            if (
+                                task_type.__module__.startswith("VLABench.")
+                                and descriptor.get("task") == "select_book"
+                            ):
+                                target_world = diagnostics.target_grasp_position() or target_world
                             if target_world is not None:
                                 approach_blend = self.pick_approach_blend
                                 # SelectBookTask's expert pick uses the live
@@ -1045,6 +1050,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     and active_skill == "pick"
                                 ):
                                     approach_blend = 1.0
+                                    candidate_value[3:6] = np.asarray(
+                                        [-np.pi / 2, -np.pi / 2, 0.0], dtype=np.float64
+                                    )
                                 candidate_value = _blend_pick_target(
                                     candidate_value,
                                     current,
@@ -1074,11 +1082,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         current_target_distance = diagnostics.target_distance()
                         target_min_distance = None
                         if diagnostics.targets:
+                            minimum_key = "minimum_m"
+                            if (
+                                task_type.__module__.startswith("VLABench.")
+                                and descriptor.get("task") == "select_book"
+                            ):
+                                current_target_distance = diagnostics.target_grasp_distance() or current_target_distance
+                                minimum_key = "grasp_minimum_m"
                             target_min_distance = min(
                                 (
-                                    float(values.get("minimum_m"))
+                                    float(values.get(minimum_key))
                                     for values in diagnostics.targets.values()
-                                    if values.get("minimum_m") is not None
+                                    if values.get(minimum_key) is not None
                                 ),
                                 default=None,
                             )
@@ -1187,10 +1202,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             task_type.__module__.startswith("VLABench.")
                             and descriptor.get("task") == "select_book"
                         ):
+                            latest_target_distance = diagnostics.target_distance()
                             grasp_advance = grasp_advance or (
                                 recovered[6] < 0.5
-                                and diagnostics.target_distance() is not None
-                                and diagnostics.target_distance() <= self.pick_grasp_distance
+                                and latest_target_distance is not None
+                                and latest_target_distance <= self.pick_grasp_distance
                             )
                     if (
                         not chunk_advanced
