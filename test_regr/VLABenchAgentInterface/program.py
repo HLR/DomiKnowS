@@ -1127,9 +1127,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     delta_progress = progress - previous_progress
                     delta_intention = intention - previous_intention
                     chunk_reward += 0.25 * delta_progress + 0.10 * delta_intention
+                    semantic_advance = (
+                        progress_source != "target_distance"
+                        and (delta_progress > 1e-6 or delta_intention > 1e-6)
+                    )
+                    grasp_advance = False
+                    if operation_cursor == 0 and active_skill == "pick":
+                        task_state = getattr(getattr(env, "task", None), "target_is_grasped", None)
+                        grasp_advance = bool(
+                            isinstance(task_state, Mapping)
+                            and any(bool(value) for value in task_state.values())
+                        ) or (
+                            recovered[6] < 0.5
+                            and diagnostics.target_distance() is not None
+                            and diagnostics.target_distance() <= self.pick_grasp_distance
+                        )
                     if (
                         not chunk_advanced
-                        and (delta_progress > 1e-6 or delta_intention > 1e-6)
+                        and (semantic_advance or grasp_advance)
                         and operation_cursor + 1 < len(plan)
                     ):
                         operation_cursor += 1
