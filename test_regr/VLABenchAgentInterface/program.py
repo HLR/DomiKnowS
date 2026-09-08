@@ -621,7 +621,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         max_position_step: float = 0.02,
         max_rotation_step: float = 0.10,
         pick_approach_blend: float = 0.5,
-        pick_grasp_distance: float = 0.12,
+        pick_grasp_distance: float = 0.22,
         ik_tolerance: float = 1e-3,
         ik_max_steps: int = 200,
         max_consecutive_ik_rejections: int = 3,
