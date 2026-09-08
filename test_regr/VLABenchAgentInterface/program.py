@@ -630,6 +630,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             cameras["mapping_source"] = camera_source
             self._report_progress("VLABench controller cameras=" + json.dumps(cameras))
             diagnostics.observe(env, _observation_state(observation))
+            geometric_progress_available = diagnostics.distance_progress() is not None
             previous_progress, previous_intention, progress_source = _task_signals(env, diagnostics)
             initial_progress, initial_intention = previous_progress, previous_intention
             instruction = descriptor.get("instruction")
@@ -751,10 +752,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 # demonstration windows switch operation context by episode
                 # phase.  Keep semantic advancement when available and use the
                 # same normalized phase convention as the offline dataset.
-                phase_cursor = min(
-                    max(0, len(plan) - 1),
-                    int(steps * max(1, len(plan)) / max(1, self.max_steps)),
-                )
+                if geometric_progress_available:
+                    # Distance shaping is continuous approach credit, not
+                    # evidence that the current primitive (usually ``pick``)
+                    # completed.  Advancing here would switch to ``place``
+                    # before the simulator observes a grasp.
+                    phase_cursor = operation_cursor
+                else:
+                    # Preserve the legacy phase fallback for diagnostic or
+                    # synthetic environments that expose no target geometry.
+                    phase_cursor = min(
+                        max(0, len(plan) - 1),
+                        int(steps * max(1, len(plan)) / max(1, self.max_steps)),
+                    )
                 operation_cursor = max(operation_cursor, phase_cursor)
                 inputs = _controller_inputs(
                     observations,

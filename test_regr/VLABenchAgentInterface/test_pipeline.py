@@ -1983,6 +1983,55 @@ def test_flat_progress_uses_episode_phase_to_advance_operation_context():
     assert torch.equal(controller.contexts[2], controller.contexts[3])
 
 
+def test_geometric_progress_does_not_switch_pick_to_place_before_grasp():
+    world = build_vlabench_world_graph("test_geometric_phase_context_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_geometric_phase_context"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class RecordingController(MultiViewController):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.contexts = []
+
+        def sample_action_chunk(self, images, state, task_index, plan_context=None):
+            self.contexts.append(plan_context.detach().clone())
+            return super().sample_action_chunk(images, state, task_index, plan_context)
+
+    class GeometricProgressSimulator(FakeSimulator):
+        def __init__(self):
+            super().__init__(success=False)
+            self.task.target_entity = "apple"
+            self.task.entities["apple"] = SimpleNamespace(
+                get_xpos=lambda _physics: np.asarray([1.0, 0.0, 0.0])
+            )
+
+    controller = RecordingController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: GeometricProgressSimulator(),
+        execute_horizon=1,
+        max_steps=4,
+        num_samples=1,
+        ppo_epochs=1,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+
+    episode = program.collect_episode({"task": "select_book"})
+
+    assert episode.steps == 4
+    assert len(controller.contexts) == 4
+    assert all(torch.equal(controller.contexts[0], context) for context in controller.contexts)
+
+
 def test_ik_recovery_retries_a_smaller_bounded_delta():
     world = build_vlabench_world_graph("test_joint_recovered_ik_world")
     runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_recovered_ik")
