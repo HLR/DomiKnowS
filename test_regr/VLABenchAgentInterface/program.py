@@ -384,6 +384,109 @@ def _press_button_fallback_plan(
     return [{"name": "press", "params": {"target_entity_name": target_names[0]}}]
 
 
+class _TaskPatternDFA:
+    """Restrict online planner sampling to a task's canonical skill family."""
+
+    def __init__(self, base_dfa, vocabulary, expected_pattern, forced_labels=()):
+        self.base_dfa = base_dfa
+        self.vocabulary = vocabulary
+        self.expected_pattern = tuple(str(name) for name in expected_pattern)
+        self.forced_labels = tuple(int(label) for label in forced_labels)
+        self.start_state = (base_dfa.start_state, 0, 0)
+        self.alphabet = base_dfa.alphabet
+
+    def _state(self, state):
+        if not isinstance(state, tuple) or len(state) != 3:
+            raise ValueError("invalid task-pattern DFA state")
+        return state
+
+    def allowed_tokens(self, state, remaining_steps=None):
+        base_state, skill_index, forced_index = self._state(state)
+        try:
+            allowed = self.base_dfa.allowed_tokens(
+                base_state, remaining_steps=remaining_steps
+            )
+        except TypeError:
+            allowed = self.base_dfa.allowed_tokens(base_state)
+        allowed = set(int(label) for label in allowed)
+        if self.forced_labels:
+            if forced_index >= len(self.forced_labels):
+                return set()
+            return allowed.intersection({self.forced_labels[forced_index]})
+        filtered = set()
+        for label in allowed:
+            token = self.vocabulary.token_for_label(label)
+            if token.startswith("skill:"):
+                expected = (
+                    self.expected_pattern[skill_index]
+                    if skill_index < len(self.expected_pattern)
+                    else None
+                )
+                if token != f"skill:{expected}":
+                    continue
+            elif token == self.vocabulary.eos_token and skill_index != len(self.expected_pattern):
+                continue
+            filtered.add(label)
+        return filtered
+
+    def step(self, state, symbol):
+        base_state, skill_index, forced_index = self._state(state)
+        symbol = int(symbol)
+        if symbol not in self.allowed_tokens(state):
+            return None
+        next_base = self.base_dfa.step(base_state, symbol)
+        if next_base is None:
+            return None
+        token = self.vocabulary.token_for_label(symbol)
+        next_skill_index = skill_index + int(token.startswith("skill:"))
+        return (next_base, next_skill_index, forced_index + int(bool(self.forced_labels)))
+
+    def is_accepting(self, state):
+        base_state, skill_index, forced_index = self._state(state)
+        if not self.base_dfa.is_accepting(base_state):
+            return False
+        if self.forced_labels:
+            return forced_index == len(self.forced_labels)
+        return skill_index == len(self.expected_pattern)
+
+    def accepts(self, sequence):
+        state = self.start_state
+        for symbol in sequence:
+            state = self.step(state, symbol)
+            if state is None:
+                return False
+        return self.is_accepting(state)
+
+    def __getattr__(self, name):
+        return getattr(self.base_dfa, name)
+
+
+def _task_pattern_dfa(base_dfa, vocabulary, expected_pattern, *, target_name=None, entities=()):
+    """Build a task-conditioned view of the graph DFA for online sampling."""
+
+    forced_labels = ()
+    if tuple(expected_pattern) == ("press",) and target_name is not None:
+        try:
+            target_index = next(
+                index for index, entity in enumerate(entities)
+                if str(entity) == str(target_name)
+            )
+            forced_labels = tuple(
+                vocabulary.label_for_token(token)
+                for token in (
+                    "skill:press",
+                    "arg:target_entity_name",
+                    f"obj:{target_index}",
+                    vocabulary.eos_token,
+                )
+            )
+        except (KeyError, StopIteration, TypeError, ValueError):
+            forced_labels = ()
+    return _TaskPatternDFA(
+        base_dfa, vocabulary, expected_pattern, forced_labels=forced_labels
+    )
+
+
 def _blend_pick_target(action, current, target_robot, blend: float) -> np.ndarray:
     """Blend only the Cartesian pick target toward a live task target."""
     value = np.asarray(action, dtype=np.float64).reshape(-1).copy()
@@ -709,6 +812,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     valid = False
                     termination_reason = "unknown_instruction"
 
+            expected_pattern = PRIMITIVE_TASK_PATTERNS.get(descriptor.get("task"))
             while steps < self.max_steps:
                 if not valid:
                     break
@@ -721,6 +825,21 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     last_progress_report = now
                 views, entities = numbered_views_from_observation(env, observation)
                 sampling_dfa = self._dfa_for_entities(entities)
+                if expected_pattern is not None:
+                    target_name = None
+                    if tuple(expected_pattern) == ("press",):
+                        target_name = next(
+                            (str(name) for name, values in diagnostics.targets.items()
+                             if int(values.get("samples", 0)) > 0),
+                            None,
+                        )
+                    sampling_dfa = _task_pattern_dfa(
+                        sampling_dfa,
+                        self.runtime.vocabulary,
+                        expected_pattern,
+                        target_name=target_name,
+                        entities=entities,
+                    )
                 selected_plan = None
                 selected_logprob = None
                 rejection_counts: dict[str, int] = {}
@@ -796,7 +915,6 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     termination_reason = "invalid_plan"
                     break
                 plan = selected_plan
-                expected_pattern = PRIMITIVE_TASK_PATTERNS.get(descriptor.get("task"))
                 if expected_pattern is not None:
                     actual_pattern = tuple(str(operation.get("name")) for operation in plan)
                     if actual_pattern != tuple(expected_pattern):

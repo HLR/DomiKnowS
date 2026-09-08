@@ -70,6 +70,7 @@ from test_regr.VLABenchAgentInterface.program import (
     _signal,
     _task_signals,
     _press_button_fallback_plan,
+    _task_pattern_dfa,
     generalized_advantage_estimate,
     ppo_clipped_loss,
 )
@@ -217,6 +218,29 @@ def test_press_button_fallback_uses_live_button_target():
         {"name": "press", "params": {"target_entity_name": "button2"}}
     ]
     assert _press_button_fallback_plan(("pick", "place"), diagnostics, ("button2",)) is None
+
+
+def test_task_pattern_dfa_forces_press_skill_and_live_pointer():
+    world = build_vlabench_world_graph("test_task_pattern_dfa_world")
+    runtime = build_constraint_runtime(world, max_entities=4, max_operations=2, name_prefix="test_task_pattern_dfa")
+    dfa = _task_pattern_dfa(
+        runtime.dfa,
+        runtime.vocabulary,
+        ("press",),
+        target_name="button2",
+        entities=("button1", "button2"),
+    )
+    expected = [
+        runtime.vocabulary.label_for_token(token)
+        for token in ("skill:press", "arg:target_entity_name", "obj:1", "<eos>")
+    ]
+    wrong = [
+        runtime.vocabulary.label_for_token(token)
+        for token in ("skill:press", "arg:target_entity_name", "obj:0", "<eos>")
+    ]
+    assert dfa.accepts(expected)
+    assert not dfa.accepts(wrong)
+    assert dfa.allowed_tokens(dfa.start_state) == {expected[0]}
 
 
 def test_pick_target_blend_guides_position_without_rewriting_pose_or_gripper():
