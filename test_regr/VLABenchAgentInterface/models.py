@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Any, Mapping, Sequence
 
 import torch
@@ -118,7 +119,22 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
             # constructs the original config and only applies nested kwargs
             # afterward, so SiglipTextConfig's out-of-vocabulary defaults
             # still trigger validation warnings before sanitization runs.
-            return sanitize_special_token_ids(for_model(model_type, **config_dict))
+            if model_type == "siglip":
+                print(
+                    f"[vlabench-model] raw SigLIP config before AutoConfig.for_model "
+                    f"{special_token_id_summary(config_dict)}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            config = for_model(model_type, **config_dict)
+            if model_type == "siglip":
+                print(
+                    f"[vlabench-model] SigLIP config after AutoConfig.for_model "
+                    f"{special_token_id_summary(config)}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            return sanitize_special_token_ids(config)
     if auto_config is None:
         return None
     return sanitize_special_token_ids(
@@ -242,6 +258,7 @@ class FrozenSigLIPEncoder(nn.Module):
             print(
                 f"[vlabench-model] vision config before AutoModel.from_pretrained "
                 f"model={model_id} {special_token_id_summary(model_kwargs['config'])}",
+                file=sys.stderr,
                 flush=True,
             )
 
