@@ -267,6 +267,11 @@ def test_sanitize_special_token_ids_clears_invalid_nested_ids():
     assert missing.text_config.bos_token_id is None
     assert missing.text_config.eos_token_id is None
 
+    siglip_raw = {"model_type": "siglip_text_model"}
+    sanitize_special_token_ids(siglip_raw)
+    assert siglip_raw["bos_token_id"] is None
+    assert siglip_raw["eos_token_id"] is None
+
 
 def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
     raw = {

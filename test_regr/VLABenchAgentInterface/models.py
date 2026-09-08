@@ -31,6 +31,13 @@ def sanitize_special_token_ids(config: Any) -> Any:
         seen.add(id(current))
         is_mapping = isinstance(current, Mapping)
         vocab_size = current.get("vocab_size") if is_mapping else getattr(current, "vocab_size", None)
+        model_type = current.get("model_type") if is_mapping else getattr(current, "model_type", None)
+        # Some SigLIP checkpoints omit the text vocabulary size from the
+        # nested raw dictionary. Transformers then supplies SiglipTextConfig's
+        # out-of-vocabulary BOS/EOS defaults unless the fields are explicit.
+        if is_mapping and model_type in {"siglip", "siglip_text_model"}:
+            current.setdefault("bos_token_id", None)
+            current.setdefault("eos_token_id", None)
         try:
             vocab_size = int(vocab_size) if vocab_size is not None else None
         except (TypeError, ValueError):
