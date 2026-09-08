@@ -139,7 +139,13 @@ class RolloutDiagnostics:
         elif self.previous_command is None:
             self.previous_command = grip
         task = getattr(env, "task", None)
-        targets = getattr(task, "target_entity", ())
+        # PressButtonTask stores the semantic target style in target_entity
+        # but evaluates success against target_button. Prefer the actionable
+        # button whenever the task exposes it; otherwise use the normal object
+        # target for manipulation tasks.
+        targets = getattr(task, "target_button", None)
+        if targets is None:
+            targets = getattr(task, "target_entity", ())
         if isinstance(targets, str):
             targets = (targets,)
         elif targets is None:

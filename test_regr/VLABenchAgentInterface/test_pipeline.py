@@ -88,6 +88,7 @@ from test_regr.VLABenchAgentInterface.training import (
     train_planner_reinforcement_epoch,
 )
 from test_regr.VLABenchAgentInterface.world_graph import (
+    PRIMITIVE_TASK_PATTERNS,
     build_vlabench_world_graph,
     condition_index_for_task,
 )
@@ -202,6 +203,10 @@ def test_task_signals_use_target_distance_when_upstream_progress_is_flat():
     assert progress == pytest.approx(0.25)
     assert intention == 0.0
     assert source == "target_distance"
+
+
+def test_select_painting_uses_press_skill_pattern():
+    assert PRIMITIVE_TASK_PATTERNS["select_painting"] == ("press",)
 
 
 def test_pick_target_blend_guides_position_without_rewriting_pose_or_gripper():

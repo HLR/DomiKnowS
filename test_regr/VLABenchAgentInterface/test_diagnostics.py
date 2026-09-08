@@ -186,6 +186,23 @@ def test_target_distance_resolves_vlabench_style_suffix_and_case():
     assert result["targets"]["rococo_painting"]["samples"] == 1
 
 
+def test_target_distance_prefers_press_button_over_semantic_style_target():
+    button = SimpleNamespace(get_xpos=lambda _: np.array([0.4, 0.0, 0.0]))
+    painting = SimpleNamespace(get_xpos=lambda _: np.array([1.0, 0.0, 0.0]))
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(
+            target_entity="Rococo",
+            target_button="button1",
+            entities={"button1": button, "rococo_painting": painting},
+        ),
+    )
+    diagnostics = RolloutDiagnostics()
+    diagnostics.observe(env, np.zeros(7))
+    result = diagnostics.result()
+    assert list(result["targets"]) == ["button1"]
+
+
 class ReplayEnv:
     def __init__(self):
         self.physics = object()

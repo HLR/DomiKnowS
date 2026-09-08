@@ -46,7 +46,9 @@ PRIMITIVE_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "select_drink": ("pick", "place"),
     "select_fruit": ("pick", "place"),
     "select_mahjong": ("pick", "place"),
-    "select_painting": ("pick", "place"),
+    # VLABench SelectPaintingTask inherits PressButtonTask: the goal is to
+    # press the button associated with the requested painting style.
+    "select_painting": ("press",),
     "select_poker": ("pick", "lift"),
     "select_toy": ("pick", "place"),
 })
