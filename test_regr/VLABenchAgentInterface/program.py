@@ -1046,11 +1046,25 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             max_rotation_step=self.max_rotation_step,
                         )
                         current_target_distance = diagnostics.target_distance()
+                        target_min_distance = None
+                        if diagnostics.targets:
+                            target_min_distance = min(
+                                (
+                                    float(values.get("minimum_m"))
+                                    for values in diagnostics.targets.values()
+                                    if values.get("minimum_m") is not None
+                                ),
+                                default=None,
+                            )
                         if (
                             operation_cursor == 0
                             and active_skill == "pick"
-                            and current_target_distance is not None
-                            and current_target_distance <= self.pick_grasp_distance
+                            and (
+                                current_target_distance is not None
+                                and current_target_distance <= self.pick_grasp_distance
+                                or target_min_distance is not None
+                                and target_min_distance <= self.pick_grasp_distance
+                            )
                         ):
                             bounded[6] = 0.0
                             grasp_assist_steps += 1
