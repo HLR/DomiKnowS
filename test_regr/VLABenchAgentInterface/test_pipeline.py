@@ -69,6 +69,7 @@ from test_regr.VLABenchAgentInterface.program import (
     _observation_state,
     _signal,
     _task_signals,
+    _press_button_fallback_plan,
     generalized_advantage_estimate,
     ppo_clipped_loss,
 )
@@ -207,6 +208,15 @@ def test_task_signals_use_target_distance_when_upstream_progress_is_flat():
 
 def test_select_painting_uses_press_skill_pattern():
     assert PRIMITIVE_TASK_PATTERNS["select_painting"] == ("press",)
+
+
+def test_press_button_fallback_uses_live_button_target():
+    diagnostics = RolloutDiagnostics()
+    diagnostics.targets = {"button2": {"samples": 1}}
+    assert _press_button_fallback_plan(("press",), diagnostics, ("button2",)) == [
+        {"name": "press", "params": {"target_entity_name": "button2"}}
+    ]
+    assert _press_button_fallback_plan(("pick", "place"), diagnostics, ("button2",)) is None
 
 
 def test_pick_target_blend_guides_position_without_rewriting_pose_or_gripper():
