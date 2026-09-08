@@ -42,6 +42,7 @@ try:
     from .graph import dfa_accepts_plan
     from .models import controller_loss
     from .world_graph import (
+        PRIMITIVE_TASK_PATTERNS,
         condition_index_for_pattern,
         controller_plan_context,
         materialize_plan,
@@ -73,7 +74,7 @@ except ImportError:
     )
     from graph import dfa_accepts_plan
     from models import controller_loss
-    from world_graph import condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
+    from world_graph import PRIMITIVE_TASK_PATTERNS, condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
 
 
 class EOSMaskedCrossEntropyLoss(torch.nn.Module):
@@ -761,6 +762,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     termination_reason = "invalid_plan"
                     break
                 plan = selected_plan
+                expected_pattern = PRIMITIVE_TASK_PATTERNS.get(descriptor.get("task"))
+                if expected_pattern is not None:
+                    actual_pattern = tuple(str(operation.get("name")) for operation in plan)
+                    if actual_pattern != tuple(expected_pattern):
+                        self._report_progress(
+                            f"VLABench planner task-pattern mismatch task={descriptor.get('task', 'unknown')} "
+                            f"expected={list(expected_pattern)} actual={list(actual_pattern)}"
+                        )
+                        valid = False
+                        termination_reason = "task_pattern_mismatch"
+                        break
                 planner_logprobs.append(selected_logprob)
                 planner_transition_indices.append(len(transitions))
                 subtasks = split_subtasks([operation["name"] for operation in plan])
