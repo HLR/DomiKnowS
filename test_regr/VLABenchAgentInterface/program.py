@@ -896,7 +896,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             _observation_state(observation), controller_robot_frame
                         )
                         candidate_value = candidate.detach().cpu().numpy()
-                        if operation_cursor == 0 and self.pick_approach_blend > 0.0:
+                        active_skill = (
+                            str(plan[operation_cursor].get("name"))
+                            if plan and operation_cursor < len(plan)
+                            else ""
+                        )
+                        if (
+                            operation_cursor == 0
+                            and active_skill in {"pick", "press"}
+                            and self.pick_approach_blend > 0.0
+                        ):
                             target_world = diagnostics.target_position()
                             if target_world is not None:
                                 candidate_value = _blend_pick_target(
@@ -915,6 +924,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         current_target_distance = diagnostics.target_distance()
                         if (
                             operation_cursor == 0
+                            and active_skill == "pick"
                             and current_target_distance is not None
                             and current_target_distance <= self.pick_grasp_distance
                         ):
