@@ -79,6 +79,11 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
         if isinstance(config_dict, Mapping) and config_dict.get("model_type"):
             config_dict = dict(config_dict)
             model_type = config_dict.pop("model_type")
+            if model_type == "siglip":
+                text_config = config_dict.get("text_config")
+                if isinstance(text_config, Mapping):
+                    text_config.setdefault("bos_token_id", None)
+                    text_config.setdefault("eos_token_id", None)
             sanitize_special_token_ids(config_dict)
             # Construct directly from the cleaned raw dictionary. Calling
             # AutoConfig.from_pretrained with the nested dictionary first

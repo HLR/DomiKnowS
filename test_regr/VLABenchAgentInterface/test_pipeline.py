@@ -313,6 +313,24 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
     assert calls["text_config"]["bos_token_id"] is None
     assert calls["text_config"]["eos_token_id"] is None
 
+    sparse_siglip = {
+        "model_type": "siglip",
+        "text_config": {"hidden_size": 768},
+    }
+
+    class SparsePretrainedConfig:
+        @staticmethod
+        def get_config_dict(*_args, **_kwargs):
+            return sparse_siglip, {}
+
+    sparse = load_sanitized_auto_config(
+        SimpleNamespace(AutoConfig=AutoConfig, PreTrainedConfig=SparsePretrainedConfig),
+        "sparse-siglip",
+        local_files_only=True,
+    )
+    assert sparse.text_config["bos_token_id"] is None
+    assert sparse.text_config["eos_token_id"] is None
+
 
 def test_qwen_loader_sanitizes_model_and_processor_special_tokens(monkeypatch):
     from test_regr.VLABenchAgentInterface import models
