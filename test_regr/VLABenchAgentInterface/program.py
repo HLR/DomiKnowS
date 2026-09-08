@@ -1032,11 +1032,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         ):
                             target_world = diagnostics.target_position()
                             if target_world is not None:
+                                approach_blend = self.pick_approach_blend
+                                # SelectBookTask's expert pick uses the live
+                                # target pose throughout the approach. A
+                                # controller sample can otherwise drift away
+                                # after the first bounded step, producing
+                                # repeated IK recovery without reaching the
+                                # grasp envelope.
+                                if (
+                                    task_type.__module__.startswith("VLABench.")
+                                    and descriptor.get("task") == "select_book"
+                                    and active_skill == "pick"
+                                ):
+                                    approach_blend = 1.0
                                 candidate_value = _blend_pick_target(
                                     candidate_value,
                                     current,
                                     target_world - controller_robot_frame,
-                                    self.pick_approach_blend,
+                                    approach_blend,
                                 )
                                 pick_assist_steps += 1
                         if (
@@ -1164,14 +1177,35 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         grasp_advance = bool(
                             isinstance(task_state, Mapping)
                             and any(bool(value) for value in task_state.values())
-                        ) or (
-                            recovered[6] < 0.5
-                            and diagnostics.target_distance() is not None
-                            and diagnostics.target_distance() <= self.pick_grasp_distance
                         )
+                        # The live SelectBookTask exposes an authoritative
+                        # per-target grasp flag. Distance plus a closed
+                        # command is only a controller-side fallback for
+                        # synthetic environments; it can otherwise switch to
+                        # pull while the object is still on the shelf.
+                        if not (
+                            task_type.__module__.startswith("VLABench.")
+                            and descriptor.get("task") == "select_book"
+                        ):
+                            grasp_advance = grasp_advance or (
+                                recovered[6] < 0.5
+                                and diagnostics.target_distance() is not None
+                                and diagnostics.target_distance() <= self.pick_grasp_distance
+                            )
                     if (
                         not chunk_advanced
-                        and (semantic_advance or grasp_advance)
+                        and (
+                            grasp_advance
+                            or (
+                                semantic_advance
+                                and not (
+                                    task_type.__module__.startswith("VLABench.")
+                                    and descriptor.get("task") == "select_book"
+                                    and operation_cursor == 0
+                                    and active_skill == "pick"
+                                )
+                            )
+                        )
                         and operation_cursor + 1 < len(plan)
                     ):
                         operation_cursor += 1
@@ -1264,6 +1298,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "progress_source": progress_source,
                 "pick_assist_steps": pick_assist_steps,
                 "grasp_assist_steps": grasp_assist_steps,
+                "pull_assist_steps": pull_assist_steps,
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "
