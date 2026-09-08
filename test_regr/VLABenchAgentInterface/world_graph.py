@@ -41,7 +41,7 @@ SUBTASK_PATTERNS: tuple[tuple[str, ...], ...] = (
 PRIMITIVE_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "add_condiment": ("pick", "pour"),
     "insert_flower": ("pick", "insert"),
-    "select_book": ("pick", "place"),
+    # SelectBookTask removes the book from the shelf with pick followed by pull.\n    "select_book": ("pick", "pull"),
     "select_chemistry_tube": ("pick", "place"),
     "select_drink": ("pick", "place"),
     "select_fruit": ("pick", "place"),
