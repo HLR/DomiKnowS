@@ -295,7 +295,7 @@ def test_load_sanitized_auto_config_cleans_raw_nested_ids_before_validation():
             return SimpleNamespace(**kwargs)
 
     config = load_sanitized_auto_config(
-        SimpleNamespace(AutoConfig=AutoConfig, PretrainedConfig=PretrainedConfig),
+        SimpleNamespace(AutoConfig=AutoConfig, PreTrainedConfig=PretrainedConfig),
         "fake-model",
         local_files_only=True,
     )

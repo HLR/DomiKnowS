@@ -58,7 +58,12 @@ def load_sanitized_auto_config(transformers: Any, model_id: str, *, local_files_
     """Build an AutoConfig from raw JSON so invalid nested token ids never validate."""
 
     auto_config = getattr(transformers, "AutoConfig", None)
-    pretrained_config = getattr(transformers, "PretrainedConfig", None)
+    # Transformers exposes this class under both spellings across releases.
+    # Prefer the canonical v5 name so the raw-config path remains active on
+    # servers that no longer expose the legacy alias.
+    pretrained_config = getattr(transformers, "PreTrainedConfig", None)
+    if pretrained_config is None:
+        pretrained_config = getattr(transformers, "PretrainedConfig", None)
     get_config_dict = getattr(pretrained_config, "get_config_dict", None)
     for_model = getattr(auto_config, "for_model", None)
     if callable(get_config_dict) and callable(for_model):
