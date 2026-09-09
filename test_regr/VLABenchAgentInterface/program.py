@@ -1319,7 +1319,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         # quaternion applies after pick during lift and moveto.
                                         approach_blend = 1.0
 
-                                    if task_name in {"select_book", "add_condiment"}:
+                                    if task_name in {"select_book", "add_condiment", "insert_flower"}:
                                         gripper_pcd = getattr(
                                             getattr(env, "robot", None),
                                             "gripper_pcd",
@@ -1755,7 +1755,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         # the gripper has closed within grasp distance.
                         if not grasp_advance and not (
                             task_type.__module__.startswith("VLABench.")
-                            and descriptor.get("task") in {"select_book", "add_condiment"}
+                            and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower"}
                         ):
                             latest_target_distance = (
                                 diagnostics.target_grasp_distance()
@@ -1791,7 +1791,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 semantic_advance
                                 and not (
                                     task_type.__module__.startswith("VLABench.")
-                                    and descriptor.get("task") in {"select_book", "add_condiment"}
+                                    and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower"}
                                     and operation_cursor == 0
                                     and active_skill == "pick"
                                 )
