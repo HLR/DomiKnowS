@@ -40,5 +40,4 @@ Controller shaping is `0.25 * delta(progress) + 0.10 * delta(intention)`. The fi
 + 0.05 * success * (1 - steps / max_steps)
 ```
 
-The smoke/audit override `--rl-preflight-min-successful-tasks 999` records diagnostics while preventing PPO. The simulator preflight prints a Markdown table with `Task`, `Success`, `Progress`, and `IK` columns; progress is the average authoritative final task-progress signal for that task. Do not treat an audit with that override as evidence that reinforcement learning is ready.
-
+The smoke/audit override `--rl-preflight-min-successful-tasks 999` records diagnostics while preventing PPO. The simulator preflight prints a Markdown table with `Task`, `Success`, `Progress`, and `IK` columns; progress is the average authoritative final task-progress signal, falling back to normalized distance progress when the upstream signal remains zero. Do not treat an audit with that override as evidence that reinforcement learning is ready.

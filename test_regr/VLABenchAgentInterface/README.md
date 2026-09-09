@@ -76,5 +76,3 @@ python -m test_regr.VLABenchAgentInterface.main diagnose-controller \
 ```
 
 Camera parity requires a held-out replay manifest, camera map, and scene restorer. See [Notes.md](Notes.md) for the required options and interpretation.
-
-
