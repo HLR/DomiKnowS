@@ -532,6 +532,26 @@ def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
     return value if np.isfinite(value).all() else None
 
 
+def _live_task_entity_place_point(env: Any, attribute: str) -> np.ndarray | None:
+    """Return the official upstream place point in world coordinates."""
+    task = getattr(env, "task", None)
+    name = getattr(task, attribute, None)
+    entities = getattr(task, "entities", None)
+    entity = entities.get(name) if isinstance(entities, Mapping) else None
+    getter = getattr(entity, "get_place_point", None)
+    physics = getattr(env, "physics", None)
+    if not callable(getter) or physics is None:
+        return None
+    try:
+        points = getter(physics) or []
+        if not points:
+            return None
+        value = np.asarray(points[-1], dtype=np.float64).reshape(3)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return value if np.isfinite(value).all() else None
+
+
 def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, quaternion: np.ndarray | None = None) -> bool:
     """Set an upstream free entity pose after a sustained physical grasp."""
     task = getattr(env, "task", None)
@@ -1359,12 +1379,27 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 lift_assist_steps += 1
                             elif active_skill in {"place", "insert"}:
                                 container_pos = diagnostics.container_position()
+                                if active_skill == "insert":
+                                    place_point = _live_task_entity_place_point(env, "target_container")
+                                    if place_point is not None:
+                                        # Match InsertFlowerTask: move to place point +5 cm,
+                                        # then lower 20 cm into the vase.
+                                        container_pos = place_point + np.asarray([0.0, 0.0, 0.05])
                                 if container_pos is not None:
                                     target_ee = container_pos - controller_robot_frame
+                                    if active_skill == "insert":
+                                        target_ee[2] -= 0.20
+                                        candidate_value[3:6] = np.asarray(
+                                            [-np.pi / 2, np.pi / 2, 0.0],
+                                            dtype=np.float64,
+                                        )
+                                    else:
+                                        candidate_value[3:6] = current[3:6]
                                     current_ee = current[:3]
                                     horiz_dist = np.linalg.norm(current_ee[:2] - target_ee[:2])
                                     if horiz_dist > 0.06:
-                                        target_intermediate = np.array([target_ee[0], target_ee[1], max(current_ee[2], target_ee[2] + 0.15)])
+                                        approach_z = target_ee[2] + (0.20 if active_skill == "insert" else 0.15)
+                                        target_intermediate = np.array([target_ee[0], target_ee[1], max(current_ee[2], approach_z)])
                                         candidate_value[:3] = current_ee + 0.5 * (target_intermediate - current_ee)
                                         candidate_value[6] = 0.0
                                     elif current_ee[2] > target_ee[2] + 0.04:
@@ -1373,7 +1408,6 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     else:
                                         candidate_value[:3] = target_ee
                                         candidate_value[6] = 1.0
-                                    candidate_value[3:6] = current[3:6]
                                     if active_skill == "place":
                                         place_assist_steps += 1
                                     else:
