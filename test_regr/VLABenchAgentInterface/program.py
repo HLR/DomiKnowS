@@ -784,6 +784,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         pick_assist_steps = grasp_assist_steps = pull_assist_steps = pour_assist_steps = 0
         pick_grasp_latched = False
         grasp_close_steps = 0
+        condiment_prepare_reached = False
+        condiment_grasp_pose = None
         condiment_pour_phase = -1
         condiment_lift_target_world = None
         condiment_container_target_world = None
@@ -1171,12 +1173,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                                 current[:3] + controller_robot_frame
                                             )
                                             if (
-                                                np.isfinite(approach_vector).all()
+                                                not (descriptor.get("task") == "add_condiment" and condiment_prepare_reached)
+                                                and np.isfinite(approach_vector).all()
                                                 and np.linalg.norm(
                                                     current_world - prepare_world
                                                 ) > 0.08
                                             ):
                                                 target_world = prepare_world
+                                            elif descriptor.get("task") == "add_condiment":
+                                                condiment_prepare_reached = True
                                         except (
                                             AttributeError,
                                             KeyError,
@@ -1248,6 +1253,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 )
                                 grasp_close_steps += 1
                                 grasp_assist_steps += 1
+                        condiment_pick = (
+                            task_type.__module__.startswith("VLABench.")
+                            and descriptor.get("task") == "add_condiment"
+                            and operation_cursor == 0 and active_skill == "pick"
+                        )
+                        if condiment_pick:
+                            # Close only at the grasp pose, not at the broad
+                            # approach envelope used by legacy controllers.
+                            grasp_distance = diagnostics.target_grasp_distance()
+                            if condiment_grasp_pose is None:
+                                if grasp_distance is not None and grasp_distance <= 0.025:
+                                    condiment_grasp_pose = current.copy()
+                                grasp_close_steps = 0
+                            if condiment_grasp_pose is None:
+                                bounded[6] = 1.0
+                            else:
+                                bounded[:6] = condiment_grasp_pose[:6]
+                                bounded[6] = 0.0
                         command = None
                         last_ik_error = None
                         direct_pour = (
@@ -1348,6 +1371,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         valid = False
                         termination_reason = "invalid_action"
                         break
+                    if condiment_pick and condiment_grasp_pose is not None:
+                        # EE gripper state is binary; apply the physical
+                        # aperture ramp only after conversion to joint control.
+                        command[-2:] = 0.04 * max(0.0, 1.0 - grasp_close_steps / 10.0)
                     timestep = env.step(command)
                     consecutive_ik_rejections = 0
                     steps += 1
