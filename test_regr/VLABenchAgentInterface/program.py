@@ -1140,8 +1140,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     condiment_pour_phase = 2
                             candidate_value[6] = 0.0
                             if condiment_pour_phase == 0:
-                                candidate_value[:3] = (
-                                    condiment_lift_target_world - controller_robot_frame
+                                # The official lift is interpolated over many
+                                # waypoints. Use a small per-step increment so
+                                # the narrow condiment bottle remains captured
+                                # by the gripper while it leaves the table.
+                                candidate_value[:3] = current[:3] + np.asarray(
+                                    [0.0, 0.0, 0.005]
                                 )
                                 candidate_value[3:6] = current[3:6]
                             elif (
