@@ -2113,7 +2113,8 @@ def test_geometric_progress_does_not_switch_pick_to_place_before_grasp():
 
 
 
-def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture():
+@pytest.mark.parametrize("follows_lift", [None, False, True])
+def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture(follows_lift):
     world = build_vlabench_world_graph("test_condiment_aperture_world")
     runtime = build_constraint_runtime(
         world, max_entities=2, max_operations=2, name_prefix="test_condiment_aperture"
@@ -2138,9 +2139,9 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture()
             self.task = CondimentTask(**vars(self.task))
             self.task.target_entity = "apple"
             self.task.entities["apple"] = SimpleNamespace(
-                get_xpos=lambda _: np.array([0.2, 0., 0.]),
+                get_xpos=lambda _: np.array([0.2, 0., min(0.2, max(0., (self.count - 20) * 0.02)) if follows_lift else 0.]),
                 get_grasped_keypoints=lambda _: [np.array([0.2, 0., 0.])],
-                is_grasped=lambda *_: False,
+                is_grasped=lambda *_: follows_lift is not None,
             )
 
         def get_observation(self, require_pcd=False):
@@ -2148,6 +2149,8 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture()
             # Two approach transitions, then hold 3 cm from the grasp point.
             observation["ee_state"][0] = 0.17 if self.count >= 2 else 0.
             observation["ee_state"][3:6] = [0., -np.pi / 2, 0.]
+            if follows_lift is not None:
+                observation["ee_state"][2] = min(0.2, max(0., (self.count - 20) * 0.02))
             return observation
 
         def step(self, command):
@@ -2160,8 +2163,14 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture()
         TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
     )
     program = _joint_program(runtime, planner, controller, lambda **_: simulator)
-    program.max_steps = 14
+    program.max_steps = 14 if follows_lift is None else 40
     episode = program.collect_episode({"task": "add_condiment"})
+    if follows_lift is not None:
+        # Identical finger contact and arm motion, differing only in whether
+        # the object is actually carried: contact alone must not pass lift.
+        assert episode.termination_reason == ("max_steps" if follows_lift else "grasp_lost")
+        assert not episode.success
+        return
     assert episode.steps == 14
     apertures = np.asarray(simulator.commands)[:, -2:]
     expected = [0.04, 0.04] + [0.04 * (1 - i / 10) for i in range(11)] + [0.0]
