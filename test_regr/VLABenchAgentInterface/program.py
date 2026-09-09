@@ -488,6 +488,25 @@ def _task_pattern_dfa(base_dfa, vocabulary, expected_pattern, *, target_name=Non
         base_dfa, vocabulary, expected_pattern, forced_labels=forced_labels
     )
 
+def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
+    """Return an upstream task entity origin in world coordinates."""
+    task = getattr(env, "task", None)
+    name = getattr(task, attribute, None)
+    entities = getattr(task, "entities", None)
+    if name is None or not isinstance(entities, Mapping):
+        return None
+    entity = entities.get(name)
+    getter = getattr(entity, "get_xpos", None)
+    physics = getattr(env, "physics", None)
+    if not callable(getter) or physics is None:
+        return None
+    try:
+        value = np.asarray(getter(physics), dtype=np.float64).reshape(3)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return value if np.isfinite(value).all() else None
+
+
 def _blend_pick_target(action, current, target_robot, blend: float) -> np.ndarray:
     """Blend only the Cartesian pick target toward a live task target."""
     value = np.asarray(action, dtype=np.float64).reshape(-1).copy()
@@ -762,9 +781,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         previous_progress = previous_intention = 0.0
         last_progress_report = time.monotonic()
         diagnostics = RolloutDiagnostics()
-        pick_assist_steps = grasp_assist_steps = pull_assist_steps = 0
+        pick_assist_steps = grasp_assist_steps = pull_assist_steps = pour_assist_steps = 0
         pick_grasp_latched = False
         grasp_close_steps = 0
+        condiment_pour_phase = -1
+        condiment_lift_target_world = None
+        condiment_container_target_world = None
         grasp_contact_streak = 0
         try:
             timestep = env.reset()
@@ -1032,6 +1054,66 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             else ""
                         )
                         if (
+                            task_type.__module__.startswith("VLABench.")
+                            and descriptor.get("task") == "add_condiment"
+                            and operation_cursor > 0
+                            and active_skill == "pour"
+                        ):
+                            # AddCondimentTask's official expert expands the
+                            # high-level pour operation into lift, move above
+                            # the target container, then wrist rotation.
+                            current_world = current[:3] + controller_robot_frame
+                            if condiment_pour_phase < 0:
+                                condiment_pour_phase = 0
+                                condiment_lift_target_world = (
+                                    current_world + np.asarray([0.0, 0.0, 0.2])
+                                )
+                                container = _live_task_entity_position(
+                                    env, "target_container"
+                                )
+                                if container is not None:
+                                    condiment_container_target_world = (
+                                        container + np.asarray([0.0, 0.0, 0.2])
+                                    )
+                            if condiment_lift_target_world is not None:
+                                if (
+                                    condiment_pour_phase == 0
+                                    and np.linalg.norm(
+                                        current_world - condiment_lift_target_world
+                                    ) <= 0.04
+                                ):
+                                    condiment_pour_phase = 1
+                                if (
+                                    condiment_pour_phase == 1
+                                    and condiment_container_target_world is not None
+                                    and np.linalg.norm(
+                                        current_world - condiment_container_target_world
+                                    ) <= 0.04
+                                ):
+                                    condiment_pour_phase = 2
+                            candidate_value[6] = 0.0
+                            if condiment_pour_phase == 0:
+                                candidate_value[:3] = (
+                                    condiment_lift_target_world - controller_robot_frame
+                                )
+                                candidate_value[3:6] = current[3:6]
+                            elif (
+                                condiment_pour_phase == 1
+                                and condiment_container_target_world is not None
+                            ):
+                                candidate_value[:3] = (
+                                    condiment_container_target_world
+                                    - controller_robot_frame
+                                )
+                                candidate_value[3:6] = current[3:6]
+                            else:
+                                # The official SkillLib.pour increments the
+                                # final Franka joint, so the direct command
+                                # below handles the wrist rotation exactly.
+                                candidate_value[:3] = current[:3]
+                                candidate_value[3:6] = current[3:6]
+                            pour_assist_steps += 1
+                        if (
                             operation_cursor == 0
                             and active_skill in {"pick", "press"}
                             and self.pick_approach_blend > 0.0
@@ -1166,37 +1248,75 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 grasp_assist_steps += 1
                         command = None
                         last_ik_error = None
+                        direct_pour = (
+                            task_type.__module__.startswith("VLABench.")
+                            and descriptor.get("task") == "add_condiment"
+                            and operation_cursor > 0
+                            and active_skill == "pour"
+                            and condiment_pour_phase >= 2
+                        )
+                        if direct_pour:
+                            # Match SkillLib.pour: rotate the last arm joint
+                            # by pi/40 per step while holding the gripper.
+                            try:
+                                qpos = np.asarray(
+                                    env.robot.get_qpos(env.physics),
+                                    dtype=np.float64,
+                                ).reshape(-1)
+                                if qpos.size < 1 or not np.isfinite(qpos).all():
+                                    raise ValueError("invalid robot qpos for pour")
+                                qpos[-1] += np.pi / 40.0
+                                command = np.concatenate(
+                                    (qpos, np.zeros(2, dtype=np.float64))
+                                )
+                                spec = getattr(env, "action_spec", None)
+                                spec = spec() if callable(spec) else spec
+                                if (
+                                    spec is not None
+                                    and hasattr(spec, "minimum")
+                                    and hasattr(spec, "maximum")
+                                ):
+                                    command = np.clip(
+                                        command,
+                                        np.asarray(spec.minimum),
+                                        np.asarray(spec.maximum),
+                                    )
+                                recovered = bounded.copy()
+                                recovered[6] = 0.0
+                            except (AttributeError, KeyError, TypeError, ValueError):
+                                command = None
                         # A zero-scale target is merely a hold command. Treating
                         # it as recovery creates long no-op loops that look
                         # executable while providing no controller progress.
-                        for recovery_scale in (1.0, 0.5, 0.25, 0.125):
-                            recovered = np.asarray(bounded, dtype=np.float64).copy()
-                            recovered[:3] = current[:3] + recovery_scale * (recovered[:3] - current[:3])
-                            angle_delta = np.arctan2(
-                                np.sin(recovered[3:6] - current[3:6]),
-                                np.cos(recovered[3:6] - current[3:6]),
-                            )
-                            recovered[3:6] = current[3:6] + recovery_scale * angle_delta
-                            try:
-                                command = ee_action_to_env_action(
-                                    env,
-                                    robot_to_world_ee_action(
-                                        recovered, controller_robot_frame
-                                    ),
-                                    ik_tolerance=self.ik_tolerance,
-                                    ik_max_steps=self.ik_max_steps,
+                        if command is None:
+                            for recovery_scale in (1.0, 0.5, 0.25, 0.125):
+                                recovered = np.asarray(bounded, dtype=np.float64).copy()
+                                recovered[:3] = current[:3] + recovery_scale * (recovered[:3] - current[:3])
+                                angle_delta = np.arctan2(
+                                    np.sin(recovered[3:6] - current[3:6]),
+                                    np.cos(recovered[3:6] - current[3:6]),
                                 )
-                                if recovery_scale < 1.0:
-                                    ik_recoveries += 1
-                                    self._report_progress(
-                                        f"VLABench IK recovered task={descriptor.get('task', 'unknown')} "
-                                        f"step={steps} scale={recovery_scale:g}"
+                                recovered[3:6] = current[3:6] + recovery_scale * angle_delta
+                                try:
+                                    command = ee_action_to_env_action(
+                                        env,
+                                        robot_to_world_ee_action(
+                                            recovered, controller_robot_frame
+                                        ),
+                                        ik_tolerance=self.ik_tolerance,
+                                        ik_max_steps=self.ik_max_steps,
                                     )
-                                break
-                            except InverseKinematicsError as exc:
-                                last_ik_error = exc
-                                ik_failures += 1
-                                chunk_ik_failures += 1
+                                    if recovery_scale < 1.0:
+                                        ik_recoveries += 1
+                                        self._report_progress(
+                                            f"VLABench IK recovered task={descriptor.get('task', 'unknown')} "
+                                            f"step={steps} scale={recovery_scale:g}"
+                                        )
+                                    break
+                                except InverseKinematicsError as exc:
+                                    last_ik_error = exc
+                                    ik_failures += 1
+                                    chunk_ik_failures += 1
                         if command is None:
                             failed_action_index = action_index
                             consecutive_ik_rejections += 1
@@ -1408,6 +1528,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "pick_assist_steps": pick_assist_steps,
                 "grasp_assist_steps": grasp_assist_steps,
                 "pull_assist_steps": pull_assist_steps,
+                "pour_assist_steps": pour_assist_steps,
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "

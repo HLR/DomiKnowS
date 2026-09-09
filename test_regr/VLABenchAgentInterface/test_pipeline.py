@@ -66,6 +66,7 @@ from test_regr.VLABenchAgentInterface.program import (
     _controller_inputs,
     _blend_pick_target,
     _entity_pointer_dfa,
+    _live_task_entity_position,
     _observation_state,
     _signal,
     _task_signals,
@@ -188,6 +189,22 @@ def test_signal_passes_upstream_physics_argument():
     env = SimpleNamespace(physics=physics, get_task_progress=progress)
     assert _signal(env, "get_task_progress") == 0.5
     assert seen["physics"] is physics
+
+
+def test_add_condiment_resolves_target_container_world_position():
+    class Container:
+        def get_xpos(self, _physics):
+            return np.asarray([0.1, 0.2, 0.3])
+
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(
+            target_container="pan",
+            entities={"pan": Container()},
+        ),
+    )
+    assert np.allclose(_live_task_entity_position(env, "target_container"), [0.1, 0.2, 0.3])
+    assert _live_task_entity_position(env, "target_entity") is None
 
 
 def test_task_signals_use_target_distance_when_upstream_progress_is_flat():
