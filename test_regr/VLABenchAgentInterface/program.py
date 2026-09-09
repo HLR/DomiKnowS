@@ -1144,8 +1144,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 # waypoints. Use a small per-step increment so
                                 # the narrow condiment bottle remains captured
                                 # by the gripper while it leaves the table.
-                                candidate_value[:3] = current[:3] + np.asarray(
-                                    [0.0, 0.0, 0.005]
+                                lift_target_robot = (
+                                    condiment_lift_target_world - controller_robot_frame
+                                )
+                                candidate_value[:3] = np.asarray(
+                                    [
+                                        lift_target_robot[0],
+                                        lift_target_robot[1],
+                                        current[2] + 0.005,
+                                    ],
+                                    dtype=np.float64,
                                 )
                                 candidate_value[3:6] = current[3:6]
                             elif (
