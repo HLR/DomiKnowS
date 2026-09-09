@@ -32,6 +32,7 @@ try:
         InverseKinematicsError,
         bound_ee_action,
         ee_action_to_env_action,
+        euler_to_quaternion,
         numbered_views_from_observation,
         quaternion_to_euler,
         reset_reward_tracking,
@@ -65,6 +66,7 @@ except ImportError:
         InverseKinematicsError,
         bound_ee_action,
         ee_action_to_env_action,
+        euler_to_quaternion,
         numbered_views_from_observation,
         quaternion_to_euler,
         reset_reward_tracking,
@@ -1058,6 +1060,45 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     candidate_value[3:6] = np.asarray(
                                         [-np.pi / 2, -np.pi / 2, 0.0], dtype=np.float64
                                     )
+                                    # Follow SkillLib.pick's collision-free
+                                    # prepare point before descending onto the
+                                    # grasp keypoint. Directly crossing the
+                                    # shelf can create contact without a
+                                    # stable grasp.
+                                    gripper_pcd = getattr(
+                                        getattr(env, "robot", None),
+                                        "gripper_pcd",
+                                        None,
+                                    )
+                                    if callable(gripper_pcd):
+                                        try:
+                                            _, approach_vector = gripper_pcd(
+                                                target_world,
+                                                euler_to_quaternion(*candidate_value[3:6]),
+                                            )
+                                            approach_vector = np.asarray(
+                                                approach_vector, dtype=np.float64
+                                            ).reshape(3)
+                                            prepare_world = (
+                                                target_world - 0.1 * approach_vector
+                                            )
+                                            current_world = (
+                                                current[:3] + controller_robot_frame
+                                            )
+                                            if (
+                                                np.isfinite(approach_vector).all()
+                                                and np.linalg.norm(
+                                                    current_world - prepare_world
+                                                ) > 0.08
+                                            ):
+                                                target_world = prepare_world
+                                        except (
+                                            AttributeError,
+                                            KeyError,
+                                            TypeError,
+                                            ValueError,
+                                        ):
+                                            pass
                                 candidate_value = _blend_pick_target(
                                     candidate_value,
                                     current,
