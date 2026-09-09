@@ -2104,6 +2104,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             distance_progress = float(diagnostics.get("distance_progress", 0.0))
             # Use geometric progress when upstream progress remains zero.
             totals["progress"] += max(final_progress, distance_progress)
+        per_task = {
             task_name: {
                 "episodes": int(totals["episodes"]),
                 "successes": int(totals["successes"]),
@@ -2119,6 +2120,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "ik_recovery_rate": totals["ik_recoveries"] / max(1.0, totals["ik_failures"]),
                 "ik_truncation_rate": totals["ik_truncations"] / totals["episodes"],
                 "execution_complete_rate": totals["execution_complete"] / totals["episodes"],
+                "progress": totals["progress"] / totals["episodes"],
             }
             for task_name, totals in sorted(task_totals.items())
         }
