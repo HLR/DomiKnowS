@@ -1151,7 +1151,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     [
                                         lift_target_robot[0],
                                         lift_target_robot[1],
-                                        current[2] + 0.005,
+                                        current[2] + 0.02,
                                     ],
                                     dtype=np.float64,
                                 )
