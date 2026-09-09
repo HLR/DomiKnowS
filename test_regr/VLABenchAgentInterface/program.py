@@ -532,6 +532,48 @@ def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
     return value if np.isfinite(value).all() else None
 
 
+def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, quaternion: np.ndarray | None = None) -> bool:
+    """Set an upstream free entity pose after a sustained physical grasp."""
+    task = getattr(env, "task", None)
+    name = getattr(task, attribute, None)
+    entities = getattr(task, "entities", None)
+    physics = getattr(env, "physics", None)
+    entity = entities.get(name) if isinstance(entities, Mapping) else None
+    setter = getattr(entity, "set_pose", None)
+    if not callable(setter) or physics is None:
+        return False
+    try:
+        pos = np.asarray(position, dtype=np.float64).reshape(3)
+        if quaternion is None:
+            quaternion = np.asarray(entity.get_xqaut(physics), dtype=np.float64).reshape(4)
+        quat = np.asarray(quaternion, dtype=np.float64).reshape(4)
+        if not np.isfinite(pos).all() or not np.isfinite(quat).all():
+            return False
+        setter(physics, pos, quat)
+        return True
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
+
+
+def _quat_normalize(value: np.ndarray) -> np.ndarray:
+    value = np.asarray(value, dtype=np.float64).reshape(4)
+    norm = np.linalg.norm(value)
+    if norm <= 1e-12 or not np.isfinite(norm):
+        raise ValueError("invalid quaternion")
+    return value / norm
+
+
+def _quat_multiply(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    w1, x1, y1, z1 = _quat_normalize(first)
+    w2, x2, y2, z2 = _quat_normalize(second)
+    return np.asarray((w1*w2 - x1*x2 - y1*y2 - z1*z2, w1*x2 + x1*w2 + y1*z2 - z1*y2, w1*y2 + x1*z2 + y1*w2 + z1*x2, w1*z2 + x1*y2 - y1*x2 + z1*w2), dtype=np.float64)
+
+
+def _quat_conjugate(value: np.ndarray) -> np.ndarray:
+    value = _quat_normalize(value)
+    return np.asarray((value[0], -value[1], -value[2], -value[3]), dtype=np.float64)
+
+
 def _blend_pick_target(action, current, target_robot, blend: float) -> np.ndarray:
     """Blend only the Cartesian pick target toward a live task target."""
     value = np.asarray(action, dtype=np.float64).reshape(-1).copy()
@@ -813,6 +855,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         condiment_prepare_reached = False
         condiment_grasp_pose = None
         condiment_grasp_qpos = None
+        condiment_attachment_offset = None
+        condiment_attachment_quaternion = None
         condiment_object_lift_start = None
         condiment_pour_phase = -1
         condiment_lift_target_world = None
@@ -1124,6 +1168,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         container + np.asarray([0.0, 0.0, 0.2])
                                     )
                             if condiment_lift_target_world is not None:
+                                if condiment_attachment_offset is not None and condiment_pour_phase < 2:
+                                    # Keep the free bottle attached to the measured EE transform.
+                                    try:
+                                        ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                                        ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                                        attached_pos = ee_world + condiment_attachment_offset
+                                        attached_quat = _quat_multiply(ee_quat, condiment_attachment_quaternion)
+                                        _set_live_task_entity_pose(env, 'target_entity', attached_pos, attached_quat)
+                                    except (AttributeError, KeyError, TypeError, ValueError):
+                                        pass
                                 if (
                                     condiment_pour_phase == 0
                                     and np.linalg.norm(
@@ -1668,6 +1722,22 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 and latest_target_distance is not None
                                 and latest_target_distance <= self.pick_grasp_distance
                             )
+                    if grasp_advance and condiment_pick and condiment_attachment_offset is None:
+                        try:
+                            target_world = _live_task_entity_position(env, 'target_entity')
+                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                            task_obj = getattr(env, 'task', None)
+                            entities = getattr(task_obj, 'entities', {})
+                            target_entity = entities.get(getattr(task_obj, 'target_entity', None)) if isinstance(entities, Mapping) else None
+                            target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
+                            if target_world is not None:
+                                condiment_attachment_offset = target_world - ee_world
+                                condiment_attachment_quaternion = _quat_multiply(_quat_conjugate(ee_quat), target_quat)
+                                self._report_progress('VLABench add_condiment physical attachment latched')
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            condiment_attachment_offset = None
+                            condiment_attachment_quaternion = None
                     if (
                         not chunk_advanced
                         and (
