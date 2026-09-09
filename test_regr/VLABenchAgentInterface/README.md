@@ -36,7 +36,7 @@ nohup env CUDA_VISIBLE_DEVICES=4 PYTORCH_ALLOC_CONF=expandable_segments:True \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning \
   --control-source test_regr/VLABenchAgentInterface/data/control \
   --task all --limit 1 --output "$VLA_OUTPUT" --device cuda:0 \
-  --sft-epochs 1 --controller-warmup-steps 8 --rl-epochs 0 \
+  --sft-epochs 1 --controller-warmup-steps 8 --rl-epochs 1 \
   --rl-rounds-per-epoch 1 --rl-num-samples 1 --rollouts-per-update 1 \
   --eval-rollouts-per-task 1 --rl-preflight-min-successful-tasks 999 \
   >>"$VLA_LOG" 2>&1 &
@@ -76,3 +76,4 @@ python -m test_regr.VLABenchAgentInterface.main diagnose-controller \
 ```
 
 Camera parity requires a held-out replay manifest, camera map, and scene restorer. See [Notes.md](Notes.md) for the required options and interpretation.
+
