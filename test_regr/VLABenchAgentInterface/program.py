@@ -762,6 +762,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         pick_assist_steps = grasp_assist_steps = pull_assist_steps = 0
         pick_grasp_latched = False
         grasp_close_steps = 0
+        grasp_contact_streak = 0
         try:
             timestep = env.reset()
             reset_reward_tracking(env)
@@ -1211,8 +1212,21 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         grasp_checker = getattr(target_entity, "is_grasped", None)
                         if callable(grasp_checker):
                             try:
-                                grasp_advance = bool(grasp_checker(env.physics, env.robot)) and grasp_close_steps >= 10
+                                physically_grasped = bool(
+                                    grasp_checker(env.physics, env.robot)
+                                )
+                                grasp_contact_streak = (
+                                    grasp_contact_streak + 1
+                                    if physically_grasped
+                                    else 0
+                                )
+                                grasp_advance = (
+                                    physically_grasped
+                                    and grasp_close_steps >= 10
+                                    and grasp_contact_streak >= 10
+                                )
                             except (AttributeError, KeyError, TypeError, ValueError):
+                                grasp_contact_streak = 0
                                 grasp_advance = False
                         else:
                             task_state = getattr(task, "target_is_grasped", None)
