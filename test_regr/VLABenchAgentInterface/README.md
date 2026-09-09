@@ -167,6 +167,17 @@ entity embedding rows online. Simulator
 progress/intention advances that cursor when available; normalized episode
 phase is the fallback when those signals stay flat, matching the
 demonstration-window convention.
+Each adapter primitive also has an explicit executable contract in
+world_graph.py: canonical skill sequence, upstream target attributes,
+authoritative simulator success predicate, and progress signals used for
+diagnostics. Rollout reports include this contract under task_contract.
+The current adapter scope is the ten primitive tasks in
+PRIMITIVE_TASK_PATTERNS; upstream VLABench categories outside that set are
+not silently treated as equivalent pick/place tasks. Before enabling long RL,
+run one short smoke episode for every adapter primitive and require success,
+finite progress, and no IK truncation per task. Composite tasks should be
+audited only after this primitive matrix is green.
+
 The controller samples six bounded local end-effector deltas from
 tanh-transformed Normal distributions
 and the gripper from a Bernoulli distribution. Its pose head predicts bounded

@@ -48,6 +48,7 @@ try:
         controller_plan_context,
         materialize_plan,
         split_subtasks,
+        task_contract_for,
         validate_plan,
         verify_plan_constraints,
     )
@@ -76,7 +77,7 @@ except ImportError:
     )
     from graph import dfa_accepts_plan
     from models import controller_loss
-    from world_graph import PRIMITIVE_TASK_PATTERNS, condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
+    from world_graph import PRIMITIVE_TASK_PATTERNS, condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, task_contract_for, validate_plan, verify_plan_constraints
 
 
 class EOSMaskedCrossEntropyLoss(torch.nn.Module):
@@ -1392,6 +1393,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             ]
             diagnostic_result = {
                 **diagnostics.result(),
+                "task_contract": (
+                    task_contract.as_dict()
+                    if (task_contract := task_contract_for(str(descriptor.get("task", ""))))
+                    is not None
+                    else None
+                ),
                 "cameras": cameras,
                 "initial_progress": initial_progress,
                 "final_progress": final_progress,

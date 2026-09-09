@@ -54,6 +54,78 @@ PRIMITIVE_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "select_toy": ("pick", "place"),
 })
 
+
+@dataclass(frozen=True)
+class TaskContract:
+    """Executable contract shared by planning, rollout diagnostics, and QA."""
+
+    task: str
+    family: str
+    skill_sequence: tuple[str, ...]
+    target_attributes: tuple[str, ...]
+    success_predicate: str
+    progress_signals: tuple[str, ...]
+    notes: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "task": self.task,
+            "family": self.family,
+            "skill_sequence": list(self.skill_sequence),
+            "target_attributes": list(self.target_attributes),
+            "success_predicate": self.success_predicate,
+            "progress_signals": list(self.progress_signals),
+            "notes": self.notes,
+        }
+
+
+_TASK_PROGRESS_SIGNALS = ("get_task_progress", "get_intention_score", "target_distance")
+_TASK_SUCCESS_PREDICATE = "task.should_terminate_episode(physics)"
+
+# Contracts cover the ten primitives currently represented by the LeRobot
+# control adapter. Upstream VLABench has additional categories; those must be
+# added only after their task objects and success conditions are audited.
+TASK_CONTRACTS: Mapping[str, TaskContract] = MappingProxyType({
+    "add_condiment": TaskContract("add_condiment", "primitive", ("pick", "pour"),
+        ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the condiment and pour it into the target container."),
+    "insert_flower": TaskContract("insert_flower", "primitive", ("pick", "insert"),
+        ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the flower and insert it into the target container."),
+    "select_book": TaskContract("select_book", "primitive", ("pick", "pull"),
+        ("target_entity",), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the book and pull it clear of the shelf."),
+    "select_chemistry_tube": TaskContract("select_chemistry_tube", "primitive", ("pick", "place"),
+        ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the requested tube and place it in the target."),
+    "select_drink": TaskContract("select_drink", "primitive", ("pick", "place"),
+        ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the requested drink and place it in the target."),
+    "select_fruit": TaskContract("select_fruit", "primitive", ("pick", "place"),
+        ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the requested fruit and place it in the target."),
+    "select_mahjong": TaskContract("select_mahjong", "primitive", ("pick", "place"),
+        ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the requested mahjong tile and place it in the target."),
+    "select_painting": TaskContract("select_painting", "primitive", ("press",),
+        ("target_button", "target_entity"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Press the button associated with the requested painting style."),
+    "select_poker": TaskContract("select_poker", "primitive", ("pick", "lift"),
+        ("target_entity",), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the requested poker item and lift it."),
+    "select_toy": TaskContract("select_toy", "primitive", ("pick", "place"),
+        ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
+        _TASK_PROGRESS_SIGNALS, "Pick the requested toy and place it in the target."),
+})
+
+
+def task_contract_for(task: str) -> TaskContract | None:
+    """Return the audited adapter contract for a task identifier."""
+
+    normalized = str(task).strip().lower().replace("-", "_")
+    return TASK_CONTRACTS.get(normalized)
+
+
 SKILL_ARGUMENTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "pick": ("target_entity_name",),
     "place": ("target_container_name",),

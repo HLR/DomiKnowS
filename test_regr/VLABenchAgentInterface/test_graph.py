@@ -8,9 +8,12 @@ from test_regr.VLABenchAgentInterface.graph import (
 )
 from test_regr.VLABenchAgentInterface.world_graph import (
     EOS_TOKEN,
+    PRIMITIVE_TASK_PATTERNS,
     SKILL_ARGUMENTS,
+    TASK_CONTRACTS,
     build_vlabench_world_graph,
     materialize_plan,
+    task_contract_for,
     verify_plan_constraints,
 )
 
@@ -114,3 +117,22 @@ def test_schema_module_is_removed_and_vocabulary_is_world_derived():
     vocabulary = PlanVocabulary.from_world(world, max_entities=7)
     assert vocabulary.skill_argument_map == world.skill_arguments
     assert vocabulary.domain_checksum == world.domain_checksum
+
+
+def test_every_adapter_primitive_has_an_explicit_task_contract():
+    assert set(TASK_CONTRACTS) == set(PRIMITIVE_TASK_PATTERNS)
+    for task, pattern in PRIMITIVE_TASK_PATTERNS.items():
+        contract = task_contract_for(task)
+        assert contract is not None
+        assert contract.family == "primitive"
+        assert contract.skill_sequence == pattern
+        assert contract.success_predicate == "task.should_terminate_episode(physics)"
+        assert "get_task_progress" in contract.progress_signals
+        assert "target_distance" in contract.progress_signals
+
+
+def test_task_contract_preserves_upstream_painting_and_book_semantics():
+    assert task_contract_for("select_painting").target_attributes == ("target_button", "target_entity")
+    assert task_contract_for("select_painting").skill_sequence == ("press",)
+    assert task_contract_for("select_book").skill_sequence == ("pick", "pull")
+    assert task_contract_for("unknown_task") is None
