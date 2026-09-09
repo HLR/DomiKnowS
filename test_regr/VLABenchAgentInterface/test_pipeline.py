@@ -2132,6 +2132,8 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture()
         def __init__(self):
             super().__init__(success=False)
             self.commands = []
+            # A moving arm reports different measured joints every step.
+            self.robot.get_qpos = lambda _: np.full(7, self.count, dtype=float)
             self.task = CondimentTask(**vars(self.task))
             self.task.target_entity = "apple"
             self.task.entities["apple"] = SimpleNamespace(
@@ -2162,6 +2164,8 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture()
     apertures = np.asarray(simulator.commands)[:, -2:]
     expected = [0.04, 0.04] + [0.04 * (1 - i / 10) for i in range(11)] + [0.0]
     np.testing.assert_allclose(apertures, np.repeat(np.array(expected)[:, None], 2, axis=1))
+    # Closing must hold the joints captured at arrival, despite later readings.
+    np.testing.assert_allclose(np.asarray(simulator.commands)[2:, :-2], 2.0)
     # Nearness and closed commands cannot substitute for physical grasp.
     assert not episode.success
     assert episode.diagnostics["pour_assist_steps"] == 0
