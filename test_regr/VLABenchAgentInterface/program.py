@@ -1268,10 +1268,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             grasp_target = None
                             if (
                                 task_type.__module__.startswith("VLABench.")
-                                and task_name in {"add_condiment", "insert_flower"}
+                                and active_skill == "pick"
                             ):
-                                # Match AddCondimentTask/SkillLib.pick:
-                                # specific_keypoint_id=0.
+                                # Match the official VLABench SkillLib.pick live keypoint.
                                 task = getattr(env, "task", None)
                                 target_name = getattr(task, "target_entity", None)
                                 entities = getattr(task, "entities", None)
@@ -1319,7 +1318,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         # quaternion applies after pick during lift and moveto.
                                         approach_blend = 1.0
 
-                                    if task_name in {"select_book", "add_condiment", "insert_flower"}:
+                                    if task_name in {"select_book", "add_condiment", "insert_flower", "select_drink", "select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}:
                                         gripper_pcd = getattr(
                                             getattr(env, "robot", None),
                                             "gripper_pcd",
@@ -1755,7 +1754,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         # the gripper has closed within grasp distance.
                         if not grasp_advance and not (
                             task_type.__module__.startswith("VLABench.")
-                            and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower"}
+                            and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower", "select_drink", "select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}
                         ):
                             latest_target_distance = (
                                 diagnostics.target_grasp_distance()
@@ -1791,7 +1790,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 semantic_advance
                                 and not (
                                     task_type.__module__.startswith("VLABench.")
-                                    and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower"}
+                                    and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower", "select_drink", "select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}
                                     and operation_cursor == 0
                                     and active_skill == "pick"
                                 )
