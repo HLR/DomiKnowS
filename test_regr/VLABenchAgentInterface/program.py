@@ -1315,8 +1315,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         approach_blend = 1.0
                                         candidate_value[3:6] = np.asarray([-np.pi, 0.0, 0.0], dtype=np.float64)
                                     elif task_name == "insert_flower":
+                                        # Use the dataset/policy grasp orientation; the official fixed
+                                        # quaternion applies after pick during lift and moveto.
                                         approach_blend = 1.0
-                                        candidate_value[3:6] = np.asarray([-np.pi / 2, np.pi / 2, 0.0], dtype=np.float64)
 
                                     if task_name in {"select_book", "add_condiment"}:
                                         gripper_pcd = getattr(
