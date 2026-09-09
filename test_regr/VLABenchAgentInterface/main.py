@@ -57,6 +57,19 @@ def _status(message: str) -> None:
     print(f"[vlabench-data] {message}", file=sys.stderr, flush=True)
 
 
+def _print_task_audit_table(metrics) -> None:
+    """Print compact per-task success/progress/IK metrics for smoke audits."""
+    per_task = metrics.get("per_task", {}) if isinstance(metrics, dict) else {}
+    if not per_task:
+        return
+    print("| Task | Success | Progress | IK |", flush=True)
+    print("| --- | --- | --- | --- |", flush=True)
+    for task, item in sorted(per_task.items()):
+        episodes = int(item.get("episodes", 0))
+        successes = int(item.get("successes", 0))
+        progress = float(item.get("progress", 0.0))
+        ik_failures = int(item.get("ik_failures", 0))
+        print(f"| {task} | {successes}/{episodes} | {progress:.3f} | {ik_failures} |", flush=True)
 def _aggregate_task_metrics(round_metrics):
     totals = {}
     for round_item in round_metrics:
@@ -73,6 +86,7 @@ def _aggregate_task_metrics(round_metrics):
                 "ik_recoveries": 0,
                 "ik_truncations": 0.0,
                 "execution_complete": 0.0,
+                "progress": 0.0,
             })
             task_totals["episodes"] += episodes
             task_totals["successes"] += int(item.get("successes", 0))
@@ -87,6 +101,7 @@ def _aggregate_task_metrics(round_metrics):
             task_totals["ik_recoveries"] += int(item.get("ik_recoveries", 0))
             task_totals["ik_truncations"] += float(item.get("ik_truncation_rate", 0.0)) * episodes
             task_totals["execution_complete"] += float(item.get("execution_complete_rate", 0.0)) * episodes
+            task_totals["progress"] += float(item.get("progress", 0.0)) * episodes
     return {
         task: {
             "episodes": item["episodes"],
@@ -103,6 +118,7 @@ def _aggregate_task_metrics(round_metrics):
             "ik_recovery_rate": item["ik_recoveries"] / max(1, item["ik_failures"]),
             "ik_truncation_rate": item["ik_truncations"] / max(1, item["episodes"]),
             "execution_complete_rate": item["execution_complete"] / max(1, item["episodes"]),
+            "progress": item["progress"] / max(1, item["episodes"]),
         }
         for task, item in sorted(totals.items())
     }
@@ -603,6 +619,7 @@ def command_train_agent(args) -> None:
             "metrics": baseline,
             "preflight_eligible": preflight_eligible,
         })
+        _print_task_audit_table(baseline)
         fallback_path = save_joint_checkpoint(
             output / "agent_stage1_evaluated.pt",
             planner=planner,
@@ -779,6 +796,8 @@ def command_train_agent(args) -> None:
             "maximum_ik_truncation_rate": args.rl_max_ik_truncation_rate,
             "metrics": metrics,
         })
+        if isinstance(metrics.get("evaluation"), dict):
+            _print_task_audit_table(metrics["evaluation"])
         if not retention_eligible:
             restore_path = best_path or fallback_path
             if restore_path is not None:
@@ -1218,3 +1237,4 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

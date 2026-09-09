@@ -2099,6 +2099,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             totals["execution_complete"] += float(
                 episode.valid and episode.termination_reason != "ik_failure"
             )
+            diagnostics = episode.diagnostics if isinstance(episode.diagnostics, dict) else {}
+            totals["progress"] += float(
+                diagnostics.get("final_progress", diagnostics.get("distance_progress", 0.0))
+            )
         per_task = {
             task_name: {
                 "episodes": int(totals["episodes"]),
@@ -2192,6 +2196,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "steps": 0.0, "ik_failures": 0.0,
                 "ik_recoveries": 0.0, "ik_truncations": 0.0,
                 "execution_complete": 0.0,
+                "progress": 0.0,
             })
             totals["episodes"] += 1.0
             totals["successes"] += float(episode.success)
@@ -2223,6 +2228,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "ik_recovery_rate": values["ik_recoveries"] / max(1.0, values["ik_failures"]),
                 "ik_truncation_rate": values["ik_truncations"] / values["episodes"],
                 "execution_complete_rate": values["execution_complete"] / values["episodes"],
+                "progress": values["progress"] / values["episodes"],
             }
             for name, values in sorted(task_totals.items())
         }

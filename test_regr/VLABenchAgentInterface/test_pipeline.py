@@ -52,6 +52,7 @@ from test_regr.VLABenchAgentInterface.models import (
 )
 from test_regr.VLABenchAgentInterface.main import (
     _aggregate_task_metrics,
+    _print_task_audit_table,
     _reinforcement_resume_position,
     build_parser,
     reinforcement_checkpoint_eligible,
@@ -1138,6 +1139,17 @@ def test_standalone_reinforcement_gates_use_fixed_seed_evaluation():
     assert reinforcement_selection_key(better) > reinforcement_selection_key(
         metrics["evaluation"]
     )
+
+
+def test_task_audit_table_reports_success_progress_and_ik(capsys):
+    _print_task_audit_table({"per_task": {"add_condiment": {
+        "episodes": 1, "successes": 0, "progress": 0.8, "ik_failures": 0,
+    }}})
+    assert capsys.readouterr().out.splitlines() == [
+        "| Task | Success | Progress | IK |",
+        "| --- | --- | --- | --- |",
+        "| add_condiment | 0/1 | 0.800 | 0 |",
+    ]
 
 
 def test_reinforcement_round_metrics_aggregate_repeated_tasks():
