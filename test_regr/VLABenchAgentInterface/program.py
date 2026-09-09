@@ -1121,7 +1121,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             target_world = diagnostics.target_position()
                             if (
                                 task_type.__module__.startswith("VLABench.")
-                                and descriptor.get("task") == "select_book"
+                                and descriptor.get("task") in {"select_book", "add_condiment"}
                             ):
                                 grasp_target = diagnostics.target_grasp_position()
                                 if grasp_target is not None:
@@ -1136,12 +1136,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 # grasp envelope.
                                 if (
                                     task_type.__module__.startswith("VLABench.")
-                                    and descriptor.get("task") == "select_book"
+                                    and descriptor.get("task") in {"select_book", "add_condiment"}
                                     and active_skill == "pick"
                                 ):
                                     approach_blend = 1.0
                                     candidate_value[3:6] = np.asarray(
-                                        [-np.pi / 2, -np.pi / 2, 0.0], dtype=np.float64
+                                        [-np.pi / 2, -np.pi / 2,
+                                         np.pi / 2 if descriptor.get("task") == "add_condiment" else 0.0],
+                                        dtype=np.float64,
                                     )
                                     # Follow SkillLib.pick's collision-free
                                     # prepare point before descending onto the
@@ -1215,7 +1217,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             minimum_key = "minimum_m"
                             if (
                                 task_type.__module__.startswith("VLABench.")
-                                and descriptor.get("task") == "select_book"
+                                and descriptor.get("task") in {"select_book", "add_condiment"}
                             ):
                                 current_target_distance = diagnostics.target_grasp_distance() or current_target_distance
                                 minimum_key = "grasp_minimum_m"
@@ -1403,7 +1405,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         # pull while the object is still on the shelf.
                         if not (
                             task_type.__module__.startswith("VLABench.")
-                            and descriptor.get("task") == "select_book"
+                            and descriptor.get("task") in {"select_book", "add_condiment"}
                         ):
                             latest_target_distance = diagnostics.target_distance()
                             grasp_advance = grasp_advance or (
@@ -1419,7 +1421,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 semantic_advance
                                 and not (
                                     task_type.__module__.startswith("VLABench.")
-                                    and descriptor.get("task") == "select_book"
+                                    and descriptor.get("task") in {"select_book", "add_condiment"}
                                     and operation_cursor == 0
                                     and active_skill == "pick"
                                 )
