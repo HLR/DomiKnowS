@@ -1036,6 +1036,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         int(steps * max(1, len(plan)) / max(1, self.max_steps)),
                     )
                 operation_cursor = max(operation_cursor, phase_cursor)
+                if (
+                    task_type.__module__.startswith("VLABench.")
+                    and descriptor.get("task") == "add_condiment"
+                    and not (grasp_close_steps >= 10 and grasp_contact_streak >= 10)
+                ):
+                    # Apply this after every progress update: upstream
+                    # intention can change before physical contact is stable.
+                    operation_cursor = 0
+                    condiment_pour_phase = -1
                 inputs = _controller_inputs(
                     observations,
                     task_index,
