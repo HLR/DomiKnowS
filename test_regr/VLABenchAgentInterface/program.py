@@ -1268,7 +1268,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             grasp_target = None
                             if (
                                 task_type.__module__.startswith("VLABench.")
-                                and task_name == "add_condiment"
+                                and task_name in {"add_condiment", "insert_flower"}
                             ):
                                 # Match AddCondimentTask/SkillLib.pick:
                                 # specific_keypoint_id=0.
