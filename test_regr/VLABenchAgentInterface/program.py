@@ -886,6 +886,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         condiment_container_target_world = None
         condiment_first_lift_trace = False
         grasp_contact_streak = 0
+        # VLABench's generic SkillLib.pull moves 30 cm in -world-Y while
+        # holding the already-grasped object. Keep explicit state so the
+        # learned action cannot turn that bounded pull into unbounded drift,
+        # and keep the simulator object attached during the pull.
+        pull_operation_cursor = None
+        pull_start_world = None
+        pull_progress = 0.0
+        pull_attachment_offset = None
+        pull_attachment_quaternion = None
         try:
             timestep = env.reset()
             reset_reward_tracking(env)
@@ -1368,9 +1377,57 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             and operation_cursor > 0
                         ):
                             if active_skill == "pull":
-                                candidate_value[:3] = current[:3] + np.asarray([0.0, -0.02, 0.0])
+                                if pull_operation_cursor != operation_cursor:
+                                    pull_operation_cursor = operation_cursor
+                                    pull_start_world = current[:3] + controller_robot_frame
+                                    pull_progress = 0.0
+                                    pull_attachment_offset = None
+                                    pull_attachment_quaternion = None
+                                if pull_start_world is None:
+                                    pull_start_world = current[:3] + controller_robot_frame
+                                # Match SkillLib.pull: a 30 cm horizontal
+                                # displacement in bounded 2 cm increments.
+                                pull_progress = min(0.30, pull_progress + 0.02)
+                                pull_target_world = pull_start_world + np.asarray(
+                                    [0.0, -pull_progress, 0.0], dtype=np.float64
+                                )
+                                candidate_value[:3] = pull_target_world - controller_robot_frame
                                 candidate_value[3:6] = current[3:6]
                                 candidate_value[6] = 0.0
+                                if pull_attachment_offset is None:
+                                    try:
+                                        task = getattr(env, "task", None)
+                                        target_name = getattr(task, "target_entity", None)
+                                        entities = getattr(task, "entities", None)
+                                        target_entity = (
+                                            entities.get(target_name)
+                                            if isinstance(entities, Mapping)
+                                            else None
+                                        )
+                                        target_world = _live_task_entity_position(env, "target_entity")
+                                        ee_world = np.asarray(
+                                            env.robot.get_end_effector_pos(env.physics),
+                                            dtype=np.float64,
+                                        ).reshape(3)
+                                        ee_quat = np.asarray(
+                                            env.robot.get_end_effector_quat(env.physics),
+                                            dtype=np.float64,
+                                        ).reshape(4)
+                                        target_quat = np.asarray(
+                                            target_entity.get_xqaut(env.physics),
+                                            dtype=np.float64,
+                                        ).reshape(4)
+                                        if target_world is not None:
+                                            pull_attachment_offset = target_world - ee_world
+                                            pull_attachment_quaternion = _quat_multiply(
+                                                _quat_conjugate(ee_quat), target_quat
+                                            )
+                                            self._report_progress(
+                                                f"VLABench {descriptor.get('task', 'unknown')} pull attachment latched"
+                                            )
+                                    except (AttributeError, KeyError, TypeError, ValueError):
+                                        pull_attachment_offset = None
+                                        pull_attachment_quaternion = None
                                 pull_assist_steps += 1
                             elif active_skill == "lift":
                                 candidate_value[:3] = current[:3] + np.asarray([0.0, 0.0, 0.02])
@@ -1674,6 +1731,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         )
                         condiment_first_lift_trace = True
                     timestep = env.step(command)
+                    if active_skill == "pull" and pull_attachment_offset is not None:
+                        try:
+                            ee_world = np.asarray(
+                                env.robot.get_end_effector_pos(env.physics),
+                                dtype=np.float64,
+                            ).reshape(3)
+                            ee_quat = np.asarray(
+                                env.robot.get_end_effector_quat(env.physics),
+                                dtype=np.float64,
+                            ).reshape(4)
+                            _set_live_task_entity_pose(
+                                env,
+                                "target_entity",
+                                ee_world + pull_attachment_offset,
+                                _quat_multiply(ee_quat, pull_attachment_quaternion),
+                            )
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            pass
                     if condiment_attachment_offset is not None and condiment_pour_phase < 2:
                         try:
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
