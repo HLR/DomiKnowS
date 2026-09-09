@@ -232,6 +232,14 @@ def test_select_painting_uses_press_skill_pattern():
 def test_select_book_uses_upstream_pick_pull_pattern():
     assert PRIMITIVE_TASK_PATTERNS["select_book"] == ("pick", "pull")
 
+
+def test_select_chemistry_tube_uses_upstream_pick_lift_pattern():
+    assert PRIMITIVE_TASK_PATTERNS["select_chemistry_tube"] == ("pick", "lift")
+
+
+def test_select_drink_uses_upstream_pick_pull_pattern():
+    assert PRIMITIVE_TASK_PATTERNS["select_drink"] == ("pick", "pull")
+
 def test_press_button_fallback_uses_live_button_target():
     diagnostics = RolloutDiagnostics()
     diagnostics.targets = {"button2": {"samples": 1}}

@@ -807,6 +807,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         last_progress_report = time.monotonic()
         diagnostics = RolloutDiagnostics()
         pick_assist_steps = grasp_assist_steps = pull_assist_steps = pour_assist_steps = 0
+        place_assist_steps = insert_assist_steps = lift_assist_steps = 0
         pick_grasp_latched = False
         grasp_close_steps = 0
         condiment_prepare_reached = False
@@ -1161,75 +1162,72 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             and active_skill in {"pick", "press"}
                             and self.pick_approach_blend > 0.0
                         ):
-                            target_world = diagnostics.target_position()
-                            if (
-                                task_type.__module__.startswith("VLABench.")
-                                and descriptor.get("task") in {"select_book", "add_condiment"}
-                            ):
-                                grasp_target = diagnostics.target_grasp_position()
-                                if grasp_target is not None:
-                                    target_world = grasp_target
+                            grasp_target = diagnostics.target_grasp_position()
+                            if grasp_target is not None:
+                                target_world = grasp_target
+                            else:
+                                target_world = diagnostics.target_position()
                             if target_world is not None:
                                 approach_blend = self.pick_approach_blend
-                                # SelectBookTask's expert pick uses the live
-                                # target pose throughout the approach. A
-                                # controller sample can otherwise drift away
-                                # after the first bounded step, producing
-                                # repeated IK recovery without reaching the
-                                # grasp envelope.
+                                # SelectBookTask and AddCondimentTask use horizontal grasp orientation.
+                                # Top-down tasks use top-down orientation [-pi, 0, 0].
                                 if (
                                     task_type.__module__.startswith("VLABench.")
-                                    and descriptor.get("task") in {"select_book", "add_condiment"}
                                     and active_skill == "pick"
                                 ):
-                                    approach_blend = 1.0
-                                    candidate_value[3:6] = np.asarray(
-                                        [-np.pi / 2, -np.pi / 2,
-                                         np.pi / 2 if descriptor.get("task") == "add_condiment" else 0.0],
-                                        dtype=np.float64,
-                                    )
-                                    # Follow SkillLib.pick's collision-free
-                                    # prepare point before descending onto the
-                                    # grasp keypoint. Directly crossing the
-                                    # shelf can create contact without a
-                                    # stable grasp.
-                                    gripper_pcd = getattr(
-                                        getattr(env, "robot", None),
-                                        "gripper_pcd",
-                                        None,
-                                    )
-                                    if callable(gripper_pcd):
-                                        try:
-                                            _, approach_vector = gripper_pcd(
-                                                target_world,
-                                                euler_to_quaternion(*candidate_value[3:6]),
-                                            )
-                                            approach_vector = np.asarray(
-                                                approach_vector, dtype=np.float64
-                                            ).reshape(3)
-                                            prepare_world = (
-                                                target_world - 0.1 * approach_vector
-                                            )
-                                            current_world = (
-                                                current[:3] + controller_robot_frame
-                                            )
-                                            if (
-                                                not (descriptor.get("task") == "add_condiment" and condiment_prepare_reached)
-                                                and np.isfinite(approach_vector).all()
-                                                and np.linalg.norm(
-                                                    current_world - prepare_world
-                                                ) > 0.08
+                                    task_name = str(descriptor.get("task", ""))
+                                    if task_name in {"select_book", "add_condiment", "select_drink"}:
+                                        approach_blend = 1.0
+                                        candidate_value[3:6] = np.asarray(
+                                            [-np.pi / 2, -np.pi / 2,
+                                             np.pi / 2 if task_name == "add_condiment" else 0.0],
+                                            dtype=np.float64,
+                                        )
+                                    elif task_name in {"select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}:
+                                        approach_blend = 1.0
+                                        candidate_value[3:6] = np.asarray([-np.pi, 0.0, 0.0], dtype=np.float64)
+                                    elif task_name == "insert_flower":
+                                        approach_blend = 1.0
+                                        candidate_value[3:6] = np.asarray([-np.pi / 2, np.pi / 2, 0.0], dtype=np.float64)
+
+                                    if task_name in {"select_book", "add_condiment"}:
+                                        gripper_pcd = getattr(
+                                            getattr(env, "robot", None),
+                                            "gripper_pcd",
+                                            None,
+                                        )
+                                        if callable(gripper_pcd):
+                                            try:
+                                                _, approach_vector = gripper_pcd(
+                                                    target_world,
+                                                    euler_to_quaternion(*candidate_value[3:6]),
+                                                )
+                                                approach_vector = np.asarray(
+                                                    approach_vector, dtype=np.float64
+                                                ).reshape(3)
+                                                prepare_world = (
+                                                    target_world - 0.1 * approach_vector
+                                                )
+                                                current_world = (
+                                                    current[:3] + controller_robot_frame
+                                                )
+                                                if (
+                                                    not (task_name == "add_condiment" and condiment_prepare_reached)
+                                                    and np.isfinite(approach_vector).all()
+                                                    and np.linalg.norm(
+                                                        current_world - prepare_world
+                                                    ) > 0.08
+                                                ):
+                                                    target_world = prepare_world
+                                                elif task_name == "add_condiment":
+                                                    condiment_prepare_reached = True
+                                            except (
+                                                AttributeError,
+                                                KeyError,
+                                                TypeError,
+                                                ValueError,
                                             ):
-                                                target_world = prepare_world
-                                            elif descriptor.get("task") == "add_condiment":
-                                                condiment_prepare_reached = True
-                                        except (
-                                            AttributeError,
-                                            KeyError,
-                                            TypeError,
-                                            ValueError,
-                                        ):
-                                            pass
+                                                pass
                                 candidate_value = _blend_pick_target(
                                     candidate_value,
                                     current,
@@ -1239,17 +1237,39 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 pick_assist_steps += 1
                         if (
                             task_type.__module__.startswith("VLABench.")
-                            and descriptor.get("task") == "select_book"
                             and operation_cursor > 0
-                            and active_skill == "pull"
                         ):
-                            # SelectBookTask's expert pull uses the current
-                            # orientation, closed gripper, and a -Y 0.3 m
-                            # displacement. Apply one bounded step at a time.
-                            candidate_value[:3] = current[:3] + np.asarray([0.0, -0.02, 0.0])
-                            candidate_value[3:6] = current[3:6]
-                            candidate_value[6] = 0.0
-                            pull_assist_steps += 1
+                            if active_skill == "pull":
+                                candidate_value[:3] = current[:3] + np.asarray([0.0, -0.02, 0.0])
+                                candidate_value[3:6] = current[3:6]
+                                candidate_value[6] = 0.0
+                                pull_assist_steps += 1
+                            elif active_skill == "lift":
+                                candidate_value[:3] = current[:3] + np.asarray([0.0, 0.0, 0.02])
+                                candidate_value[3:6] = current[3:6]
+                                candidate_value[6] = 0.0
+                                lift_assist_steps += 1
+                            elif active_skill in {"place", "insert"}:
+                                container_pos = diagnostics.container_position()
+                                if container_pos is not None:
+                                    target_ee = container_pos - controller_robot_frame
+                                    current_ee = current[:3]
+                                    horiz_dist = np.linalg.norm(current_ee[:2] - target_ee[:2])
+                                    if horiz_dist > 0.06:
+                                        target_intermediate = np.array([target_ee[0], target_ee[1], max(current_ee[2], target_ee[2] + 0.15)])
+                                        candidate_value[:3] = current_ee + 0.5 * (target_intermediate - current_ee)
+                                        candidate_value[6] = 0.0
+                                    elif current_ee[2] > target_ee[2] + 0.04:
+                                        candidate_value[:3] = current_ee + 0.5 * (target_ee - current_ee)
+                                        candidate_value[6] = 0.0
+                                    else:
+                                        candidate_value[:3] = target_ee
+                                        candidate_value[6] = 1.0
+                                    candidate_value[3:6] = current[3:6]
+                                    if active_skill == "place":
+                                        place_assist_steps += 1
+                                    else:
+                                        insert_assist_steps += 1
                         bounded = bound_ee_action(
                             candidate_value,
                             current,
@@ -1257,16 +1277,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
 
                             max_rotation_step=self.max_rotation_step,
                         )
-                        current_target_distance = diagnostics.target_distance()
+                        current_target_distance = diagnostics.target_grasp_distance() or diagnostics.target_distance()
                         target_min_distance = None
                         if diagnostics.targets:
-                            minimum_key = "minimum_m"
-                            if (
-                                task_type.__module__.startswith("VLABench.")
-                                and descriptor.get("task") in {"select_book", "add_condiment"}
-                            ):
-                                current_target_distance = diagnostics.target_grasp_distance() or current_target_distance
-                                minimum_key = "grasp_minimum_m"
+                            minimum_key = "grasp_minimum_m" if any(v.get("grasp_minimum_m") is not None for v in diagnostics.targets.values()) else "minimum_m"
                             target_min_distance = min(
                                 (
                                     float(values.get(minimum_key))
@@ -1275,7 +1289,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 ),
                                 default=None,
                             )
-                        if operation_cursor == 0 and active_skill == "pick":
+                        condiment_pick = (
+                            task_type.__module__.startswith("VLABench.")
+                            and descriptor.get("task") == "add_condiment"
+                            and operation_cursor == 0 and active_skill == "pick"
+                        )
+                        if operation_cursor == 0 and active_skill == "pick" and not condiment_pick:
                             within_grasp_envelope = (
                                 current_target_distance is not None
                                 and current_target_distance <= self.pick_grasp_distance
@@ -1294,11 +1313,6 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 )
                                 grasp_close_steps += 1
                                 grasp_assist_steps += 1
-                        condiment_pick = (
-                            task_type.__module__.startswith("VLABench.")
-                            and descriptor.get("task") == "add_condiment"
-                            and operation_cursor == 0 and active_skill == "pick"
-                        )
                         if condiment_pick:
                             grasp_orientation, orientation_error = _condiment_orientation_step(
                                 current[3:6], self.max_rotation_step
@@ -1310,7 +1324,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # approach envelope used by legacy controllers.
                             grasp_distance = diagnostics.target_grasp_distance()
                             if condiment_grasp_pose is None:
-                                if grasp_distance is not None and grasp_distance <= 0.01 and orientation_error <= 0.15:
+                                if grasp_distance is not None and grasp_distance <= 0.025 and orientation_error <= 0.20:
                                     condiment_grasp_pose = current.copy()
                                     self._report_progress(
                                         f"VLABench add_condiment closing grasp distance={grasp_distance:.4f} "
@@ -1433,6 +1447,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         if condiment_grasp_qpos is not None:
                             command[:-2] = condiment_grasp_qpos
                         command[-2:] = 0.04 * max(0.0, 1.0 - grasp_close_steps / 10.0)
+                        grasp_close_steps += 1
+                        grasp_assist_steps += 1
                     timestep = env.step(command)
                     consecutive_ik_rejections = 0
                     steps += 1
@@ -1471,8 +1487,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 )
                                 grasp_advance = (
                                     physically_grasped
-                                    and grasp_close_steps >= 10
-                                    and grasp_contact_streak >= 10
+                                    and grasp_close_steps >= 8
+                                    and (physically_grasped or grasp_contact_streak >= 3)
                                 )
                             except (AttributeError, KeyError, TypeError, ValueError):
                                 grasp_contact_streak = 0
@@ -1483,18 +1499,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 isinstance(task_state, Mapping)
                                 and any(bool(value) for value in task_state.values())
                             )
-                        # The live SelectBookTask exposes an authoritative
-                        # per-target grasp flag. Distance plus a closed
-                        # command is only a controller-side fallback for
-                        # synthetic environments; it can otherwise switch to
-                        # pull while the object is still on the shelf.
-                        if not (
+                        # Distance plus a closed command provides a fallback when
+                        # the gripper has closed within grasp distance.
+                        if not grasp_advance and not (
                             task_type.__module__.startswith("VLABench.")
                             and descriptor.get("task") in {"select_book", "add_condiment"}
                         ):
-                            latest_target_distance = diagnostics.target_distance()
-                            grasp_advance = grasp_advance or (
+                            latest_target_distance = (
+                                diagnostics.target_grasp_distance()
+                                or diagnostics.target_distance()
+                            )
+                            grasp_advance = (
                                 recovered[6] < 0.5
+                                and grasp_close_steps >= 8
                                 and latest_target_distance is not None
                                 and latest_target_distance <= self.pick_grasp_distance
                             )
@@ -1616,6 +1633,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "grasp_assist_steps": grasp_assist_steps,
                 "pull_assist_steps": pull_assist_steps,
                 "pour_assist_steps": pour_assist_steps,
+                "place_assist_steps": place_assist_steps,
+                "insert_assist_steps": insert_assist_steps,
+                "lift_assist_steps": lift_assist_steps,
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "

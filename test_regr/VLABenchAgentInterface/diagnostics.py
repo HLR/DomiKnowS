@@ -114,6 +114,7 @@ class RolloutDiagnostics:
 
     def __init__(self):
         self.targets = {}
+        self.containers = {}
         self.counts = Counter()
         self.previous_grip = self.previous_command = self.previous_xyz = None
         self.path_length = 0.0
@@ -216,6 +217,31 @@ class RolloutDiagnostics:
                     pass
             entry["samples"] += 1
 
+        container_target = getattr(task, "target_container", None)
+        if container_target:
+            cname, centity = resolve_entity(container_target)
+            centry = self.containers.setdefault(cname, {"samples": 0, "unavailable": 0})
+            cpos = None
+            if hasattr(centity, "get_place_point"):
+                try:
+                    pts = centity.get_place_point(env.physics)
+                    if pts is not None and len(pts):
+                        cpos = np.asarray(pts[-1], dtype=float).reshape(3)
+                except Exception:
+                    pass
+            if cpos is None and hasattr(centity, "get_xpos"):
+                try:
+                    cpos = np.asarray(centity.get_xpos(env.physics), dtype=float).reshape(3)
+                except Exception:
+                    pass
+            if cpos is not None and np.isfinite(cpos).all():
+                cdist = float(np.linalg.norm(cpos - state[:3]))
+                centry["final_position"] = cpos.tolist()
+                centry["final_m"] = cdist
+                centry["samples"] += 1
+            else:
+                centry["unavailable"] += 1
+
     def result(self):
         return {
             "target_distance_reference": "world EE to task target entity origin; not grasp distance",
@@ -285,6 +311,25 @@ class RolloutDiagnostics:
         distances = [
             float(values["final_m"])
             for values in self.targets.values()
+            if values.get("samples") and np.isfinite(values.get("final_m", np.nan))
+        ]
+        return min(distances) if distances else None
+
+    def container_position(self):
+        """Return the latest observed placement position of the target container."""
+        for values in self.containers.values():
+            position = values.get("final_position")
+            if position is not None:
+                result = np.asarray(position, dtype=np.float64).reshape(-1)
+                if result.shape == (3,) and np.isfinite(result).all():
+                    return result
+        return None
+
+    def container_distance(self):
+        """Return the EE distance to the latest container placement position."""
+        distances = [
+            float(values["final_m"])
+            for values in self.containers.values()
             if values.get("samples") and np.isfinite(values.get("final_m", np.nan))
         ]
         return min(distances) if distances else None
