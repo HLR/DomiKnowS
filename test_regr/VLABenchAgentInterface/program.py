@@ -1019,7 +1019,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 # demonstration windows switch operation context by episode
                 # phase.  Keep semantic advancement when available and use the
                 # same normalized phase convention as the offline dataset.
-                if geometric_progress_available:
+                if geometric_progress_available or (
+                    task_type.__module__.startswith("VLABench.")
+                    and descriptor.get("task") == "add_condiment"
+                ):
                     # Distance shaping is continuous approach credit, not
                     # evidence that the current primitive (usually ``pick``)
                     # completed.  Advancing here would switch to ``place``
