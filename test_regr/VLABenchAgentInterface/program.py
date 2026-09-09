@@ -1376,7 +1376,40 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             grasp_distance = diagnostics.target_grasp_distance()
                             if condiment_grasp_pose is None:
                                 if grasp_distance is not None and grasp_distance <= 0.025 and orientation_error <= 0.20:
-                                    condiment_grasp_pose = current.copy()
+                                    measured_pose = current.copy()
+                                    get_ee_pos = getattr(
+                                        getattr(env, "robot", None),
+                                        "get_end_effector_pos",
+                                        None,
+                                    )
+                                    get_ee_quat = getattr(
+                                        getattr(env, "robot", None),
+                                        "get_end_effector_quat",
+                                        None,
+                                    )
+                                    if callable(get_ee_pos) and callable(get_ee_quat):
+                                        try:
+                                            live_world_pose = np.concatenate(
+                                                (
+                                                    np.asarray(
+                                                        get_ee_pos(env.physics),
+                                                        dtype=np.float64,
+                                                    ).reshape(3),
+                                                    quaternion_to_euler(
+                                                        *np.asarray(
+                                                            get_ee_quat(env.physics),
+                                                            dtype=np.float64,
+                                                        ).reshape(4)
+                                                    ),
+                                                )
+                                            )
+                                            measured_pose = world_to_robot_ee_state(
+                                                live_world_pose,
+                                                controller_robot_frame,
+                                            )
+                                        except (AttributeError, TypeError, ValueError):
+                                            measured_pose = current.copy()
+                                    condiment_grasp_pose = measured_pose
                                     self._report_progress(
                                         f"VLABench add_condiment closing grasp distance={grasp_distance:.4f} "
                                         f"orientation_error={orientation_error:.4f}"
