@@ -2100,10 +2100,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 episode.valid and episode.termination_reason != "ik_failure"
             )
             diagnostics = episode.diagnostics if isinstance(episode.diagnostics, dict) else {}
-            totals["progress"] += float(
-                diagnostics.get("final_progress", diagnostics.get("distance_progress", 0.0))
-            )
-        per_task = {
+            final_progress = float(diagnostics.get("final_progress", 0.0))
+            distance_progress = float(diagnostics.get("distance_progress", 0.0))
+            # Use geometric progress when upstream progress remains zero.
+            totals["progress"] += max(final_progress, distance_progress)
             task_name: {
                 "episodes": int(totals["episodes"]),
                 "successes": int(totals["successes"]),
