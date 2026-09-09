@@ -550,6 +550,9 @@ def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, q
         if not np.isfinite(pos).all() or not np.isfinite(quat).all():
             return False
         setter(physics, pos, quat)
+        forward = getattr(physics, "forward", None)
+        if callable(forward):
+            forward()
         return True
     except (AttributeError, KeyError, TypeError, ValueError):
         return False
