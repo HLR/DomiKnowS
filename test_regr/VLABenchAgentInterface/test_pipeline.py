@@ -96,6 +96,7 @@ from test_regr.VLABenchAgentInterface.world_graph import (
     PRIMITIVE_TASK_PATTERNS,
     build_vlabench_world_graph,
     condition_index_for_task,
+    task_contract_for,
 )
 
 
@@ -105,6 +106,31 @@ class RateLimitError(Exception):
         self.response = SimpleNamespace(status_code=429, headers={"Retry-After": "0"})
 
 
+
+def test_add_condiment_world_graph_contract_matches_official_sequence():
+    contract = task_contract_for("add_condiment")
+    assert contract is not None
+    assert contract.skill_sequence == ("pick", "pour")
+    assert contract.target_attributes == ("target_entity", "target_container")
+    assert contract.success_predicate == "task.should_terminate_episode(physics)"
+    assert PRIMITIVE_TASK_PATTERNS["add_condiment"] == ("pick", "pour")
+
+
+def test_rollout_diagnostics_records_first_lift_event():
+    diagnostics = RolloutDiagnostics()
+    diagnostics.record_event(
+        "add_condiment_first_lift",
+        {
+            "arm_joint_command": [1.0] * 7,
+            "gripper_aperture": [0.0, 0.0],
+            "contact_state": True,
+            "bottle_pose_world": [0.1, 0.2, 0.3],
+        },
+    )
+    diagnostics.record_event("add_condiment_first_lift", {"contact_state": False})
+    event = diagnostics.result()["events"]["add_condiment_first_lift"]
+    assert event["contact_state"] is True
+    assert event["arm_joint_command"] == [1.0] * 7
 def test_environment_imports_registration_modules_before_load_env(monkeypatch):
     calls = []
 

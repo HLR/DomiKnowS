@@ -817,6 +817,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         condiment_pour_phase = -1
         condiment_lift_target_world = None
         condiment_container_target_world = None
+        condiment_first_lift_trace = False
         grasp_contact_streak = 0
         try:
             timestep = env.reset()
@@ -1499,6 +1500,55 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         command[-2:] = 0.04 * max(0.0, 1.0 - grasp_close_steps / 10.0)
                         grasp_close_steps += 1
                         grasp_assist_steps += 1
+                    if (
+                        not condiment_first_lift_trace
+                        and task_type.__module__.startswith("VLABench.")
+                        and descriptor.get("task") == "add_condiment"
+                        and operation_cursor > 0
+                        and active_skill == "pour"
+                        and condiment_pour_phase == 0
+                    ):
+                        task = getattr(env, "task", None)
+                        target_name = getattr(task, "target_entity", None)
+                        entities = getattr(task, "entities", None)
+                        target_entity = (
+                            entities.get(target_name)
+                            if isinstance(entities, Mapping)
+                            else None
+                        )
+                        contact = None
+                        grasp_checker = getattr(target_entity, "is_grasped", None)
+                        if callable(grasp_checker):
+                            try:
+                                contact = bool(grasp_checker(env.physics, env.robot))
+                            except (AttributeError, KeyError, TypeError, ValueError):
+                                contact = None
+                        bottle_pose = _live_task_entity_position(
+                            env, "target_entity"
+                        )
+                        diagnostics.record_event(
+                            "add_condiment_first_lift",
+                            {
+                                "step": int(steps),
+                                "arm_joint_command": np.asarray(
+                                    command[:-2], dtype=np.float64
+                                ).reshape(-1).tolist(),
+                                "gripper_aperture": np.asarray(
+                                    command[-2:], dtype=np.float64
+                                ).reshape(-1).tolist(),
+                                "contact_state": contact,
+                                "bottle_pose_world": (
+                                    None if bottle_pose is None else bottle_pose.tolist()
+                                ),
+                                "ee_pose_world": np.asarray(
+                                    current_world, dtype=np.float64
+                                ).reshape(-1).tolist(),
+                                "lift_target_world": np.asarray(
+                                    condiment_lift_target_world, dtype=np.float64
+                                ).reshape(-1).tolist(),
+                            },
+                        )
+                        condiment_first_lift_trace = True
                     timestep = env.step(command)
                     consecutive_ik_rejections = 0
                     steps += 1

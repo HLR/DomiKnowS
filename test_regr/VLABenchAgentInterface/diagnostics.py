@@ -118,6 +118,7 @@ class RolloutDiagnostics:
         self.counts = Counter()
         self.previous_grip = self.previous_command = self.previous_xyz = None
         self.path_length = 0.0
+        self.events = {}
 
     def observe(self, env, world_state, *, command_gripper=None):
         state = np.asarray(world_state)
@@ -242,8 +243,14 @@ class RolloutDiagnostics:
             else:
                 centry["unavailable"] += 1
 
+    def record_event(self, name: str, payload: dict[str, Any]) -> None:
+        """Store one first-occurrence rollout event for postmortem inspection."""
+        if name not in self.events:
+            self.events[name] = dict(payload)
+
     def result(self):
         return {
+            "events": {name: dict(payload) for name, payload in self.events.items()},
             "target_distance_reference": "world EE to task target entity origin; not grasp distance",
             "distance_progress": self.distance_progress(),
             "targets": {name: {**values, "improvement_m": values["initial_m"] - values["final_m"]}
