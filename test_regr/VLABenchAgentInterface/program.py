@@ -760,6 +760,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         last_progress_report = time.monotonic()
         diagnostics = RolloutDiagnostics()
         pick_assist_steps = grasp_assist_steps = pull_assist_steps = 0
+        pick_grasp_latched = False
+        grasp_close_steps = 0
         try:
             timestep = env.reset()
             reset_reward_tracking(env)
@@ -1100,18 +1102,25 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 ),
                                 default=None,
                             )
-                        if (
-                            operation_cursor == 0
-                            and active_skill == "pick"
-                            and (
+                        if operation_cursor == 0 and active_skill == "pick":
+                            within_grasp_envelope = (
                                 current_target_distance is not None
                                 and current_target_distance <= self.pick_grasp_distance
                                 or target_min_distance is not None
                                 and target_min_distance <= self.pick_grasp_distance
                             )
-                        ):
-                            bounded[6] = 0.0
-                            grasp_assist_steps += 1
+                            if within_grasp_envelope:
+                                pick_grasp_latched = True
+                            if pick_grasp_latched:
+                                # Match SkillLib.close_gripper: close over
+                                # several transitions while holding the live
+                                # grasp pose, instead of one abrupt pulse.
+                                bounded[6] = max(
+                                    0.0,
+                                    0.04 * (1.0 - min(grasp_close_steps, 10) / 10.0),
+                                )
+                                grasp_close_steps += 1
+                                grasp_assist_steps += 1
                         command = None
                         last_ik_error = None
                         # A zero-scale target is merely a hold command. Treating
@@ -1191,11 +1200,26 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     )
                     grasp_advance = False
                     if operation_cursor == 0 and active_skill == "pick":
-                        task_state = getattr(getattr(env, "task", None), "target_is_grasped", None)
-                        grasp_advance = bool(
-                            isinstance(task_state, Mapping)
-                            and any(bool(value) for value in task_state.values())
+                        task = getattr(env, "task", None)
+                        target_name = getattr(task, "target_entity", None)
+                        entities = getattr(task, "entities", None)
+                        target_entity = (
+                            entities.get(target_name)
+                            if isinstance(entities, Mapping)
+                            else None
                         )
+                        grasp_checker = getattr(target_entity, "is_grasped", None)
+                        if callable(grasp_checker):
+                            try:
+                                grasp_advance = bool(grasp_checker(env.physics, env.robot))
+                            except (AttributeError, KeyError, TypeError, ValueError):
+                                grasp_advance = False
+                        else:
+                            task_state = getattr(task, "target_is_grasped", None)
+                            grasp_advance = bool(
+                                isinstance(task_state, Mapping)
+                                and any(bool(value) for value in task_state.values())
+                            )
                         # The live SelectBookTask exposes an authoritative
                         # per-target grasp flag. Distance plus a closed
                         # command is only a controller-side fallback for
