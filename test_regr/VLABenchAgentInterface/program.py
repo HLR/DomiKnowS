@@ -1211,7 +1211,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         grasp_checker = getattr(target_entity, "is_grasped", None)
                         if callable(grasp_checker):
                             try:
-                                grasp_advance = bool(grasp_checker(env.physics, env.robot))
+                                grasp_advance = bool(grasp_checker(env.physics, env.robot)) and grasp_close_steps >= 10
                             except (AttributeError, KeyError, TypeError, ValueError):
                                 grasp_advance = False
                         else:
