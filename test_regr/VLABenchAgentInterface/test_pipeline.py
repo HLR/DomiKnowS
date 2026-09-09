@@ -1047,7 +1047,7 @@ def test_standalone_agent_uses_bounded_report_defaults():
     assert args.rl_min_successful_tasks == 3
     assert args.rl_max_ik_truncation_rate == pytest.approx(0.25)
     assert args.rl_preflight_min_success_rate == pytest.approx(0.0)
-    assert args.rl_preflight_min_successful_tasks == 0
+    assert args.rl_preflight_min_successful_tasks == 10
     assert args.rl_preflight_min_positive_return_rate == pytest.approx(0.01)
     assert args.rl_preflight_max_ik_truncation_rate == pytest.approx(0.50)
     assert args.eval_rollouts_per_task == 1

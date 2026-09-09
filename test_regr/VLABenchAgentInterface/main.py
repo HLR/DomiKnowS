@@ -1083,8 +1083,9 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument(
         "--rl-preflight-min-successful-tasks",
         type=int,
-        default=0,
-        help="minimum task families with supervised baseline success before reinforcement",
+        default=len(PRIMITIVE_TASK_PATTERNS),
+        help=("minimum task families with supervised baseline success before reinforcement "
+              "(default: every adapter primitive)"),
     )
     agent.add_argument(
         "--rl-preflight-min-positive-return-rate",

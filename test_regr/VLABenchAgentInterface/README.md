@@ -253,12 +253,13 @@ and evaluation metrics remain separate. Use at least
 short diagnostic run. Setting `--rl-epochs 0` produces the supervised-only
 VLABench setting and still writes `agent_stage1_evaluated.pt`.
 The pre-RL evaluation is also a learning-signal and controller-feasibility
-gate. By default, at least `0.01` of fixed-seed episodes must produce positive
-task return and no more than `0.50` may truncate at IK. Failure writes
+gate. By default, every adapter primitive must have a successful fixed-seed
+episode, at least `0.01` of fixed-seed episodes must produce positive task
+return, and no more than `0.50` may truncate at IK. Failure writes
 `reinforcement-skipped` and stops before a multi-hour RL run. Configure positive
-return, success, task-coverage, and IK thresholds with
-the `--rl-preflight-*` options. Setting evaluation rollouts to zero
-intentionally disables this gate.
+return, success, task-coverage, and IK thresholds with the
+`--rl-preflight-*` options. Setting evaluation rollouts to zero intentionally
+disables this gate.
 
 Every RL epoch is retained for diagnosis, but only an epoch with at least
 `0.10` fixed-seed success, three successful task families, and no more than
