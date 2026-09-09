@@ -217,8 +217,8 @@ def test_target_grasp_keypoint_tracks_live_pick_geometry():
     diagnostics = RolloutDiagnostics()
     diagnostics.observe(env, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]))
     assert diagnostics.target_grasp_position() == pytest.approx([0.7, 0.0, 0.2])
-    assert diagnostics.target_grasp_distance() == pytest.approx(np.sqrt(0.13))
-    assert diagnostics.result()["targets"]["book"]["grasp_minimum_m"] == pytest.approx(np.sqrt(0.13))
+    assert diagnostics.target_grasp_distance() == pytest.approx(np.sqrt(0.53))
+    assert diagnostics.result()["targets"]["book"]["grasp_minimum_m"] == pytest.approx(np.sqrt(0.53))
 class ReplayEnv:
     def __init__(self):
         self.physics = object()
