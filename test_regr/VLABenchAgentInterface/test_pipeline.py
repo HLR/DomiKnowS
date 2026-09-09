@@ -2146,8 +2146,8 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture(f
 
         def get_observation(self, require_pcd=False):
             observation = super().get_observation(require_pcd)
-            # Two approach transitions, then hold 3 cm from the grasp point.
-            observation["ee_state"][0] = 0.17 if self.count >= 2 else 0.
+            # Two approach transitions outside the bottle, then hold 5 mm from its grasp point.
+            observation["ee_state"][0] = 0.195 if self.count >= 2 else 0.17
             observation["ee_state"][3:6] = [0., -np.pi / 2, 0.]
             if follows_lift is not None:
                 observation["ee_state"][2] = min(0.2, max(0., (self.count - 20) * 0.02))

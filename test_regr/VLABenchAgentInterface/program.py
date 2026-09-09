@@ -1310,7 +1310,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # approach envelope used by legacy controllers.
                             grasp_distance = diagnostics.target_grasp_distance()
                             if condiment_grasp_pose is None:
-                                if grasp_distance is not None and grasp_distance <= 0.04 and orientation_error <= 0.15:
+                                if grasp_distance is not None and grasp_distance <= 0.01 and orientation_error <= 0.15:
                                     condiment_grasp_pose = current.copy()
                                     self._report_progress(
                                         f"VLABench add_condiment closing grasp distance={grasp_distance:.4f} "
