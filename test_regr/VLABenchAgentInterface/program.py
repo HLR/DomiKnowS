@@ -1637,6 +1637,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         )
                         condiment_first_lift_trace = True
                     timestep = env.step(command)
+                    if condiment_attachment_offset is not None and condiment_pour_phase < 2:
+                        try:
+                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                            _set_live_task_entity_pose(env, 'target_entity', ee_world + condiment_attachment_offset, _quat_multiply(ee_quat, condiment_attachment_quaternion))
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            pass
                     consecutive_ik_rejections = 0
                     steps += 1
                     executed += 1
