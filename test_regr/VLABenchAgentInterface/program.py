@@ -1186,7 +1186,33 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             and active_skill in {"pick", "press"}
                             and self.pick_approach_blend > 0.0
                         ):
-                            grasp_target = diagnostics.target_grasp_position()
+                            task_name = str(descriptor.get("task", ""))
+                            grasp_target = None
+                            if (
+                                task_type.__module__.startswith("VLABench.")
+                                and task_name == "add_condiment"
+                            ):
+                                # Match AddCondimentTask/SkillLib.pick:
+                                # specific_keypoint_id=0.
+                                task = getattr(env, "task", None)
+                                target_name = getattr(task, "target_entity", None)
+                                entities = getattr(task, "entities", None)
+                                target_entity = (
+                                    entities.get(target_name)
+                                    if isinstance(entities, Mapping)
+                                    else None
+                                )
+                                keypoint_getter = getattr(
+                                    target_entity, "get_grasped_keypoints", None
+                                )
+                                if callable(keypoint_getter):
+                                    keypoints = list(keypoint_getter(env.physics) or [])
+                                    if keypoints:
+                                        grasp_target = np.asarray(
+                                            keypoints[0], dtype=np.float64
+                                        ).reshape(3)
+                            if grasp_target is None:
+                                grasp_target = diagnostics.target_grasp_position()
                             if grasp_target is not None:
                                 target_world = grasp_target
                             else:
