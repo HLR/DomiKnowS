@@ -1485,10 +1485,30 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     if physically_grasped
                                     else 0
                                 )
+                                # AddCondiment needs a real, sustained grasp before
+                                # advancing from pick to its lift/pour sequence. A
+                                # single contact can be incidental while the bottle
+                                # is settling, so require a closed-aperture hold.
+                                required_close_steps = (
+                                    10
+                                    if (
+                                        task_type.__module__.startswith("VLABench.")
+                                        and descriptor.get("task") == "add_condiment"
+                                    )
+                                    else 8
+                                )
+                                required_contact_streak = (
+                                    10
+                                    if (
+                                        task_type.__module__.startswith("VLABench.")
+                                        and descriptor.get("task") == "add_condiment"
+                                    )
+                                    else 1
+                                )
                                 grasp_advance = (
                                     physically_grasped
-                                    and grasp_close_steps >= 8
-                                    and (physically_grasped or grasp_contact_streak >= 3)
+                                    and grasp_close_steps >= required_close_steps
+                                    and grasp_contact_streak >= required_contact_streak
                                 )
                             except (AttributeError, KeyError, TypeError, ValueError):
                                 grasp_contact_streak = 0
