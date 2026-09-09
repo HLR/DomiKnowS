@@ -65,6 +65,7 @@ from test_regr.VLABenchAgentInterface.program import (
     VLABenchHierarchicalReinforcementProgram,
     _controller_inputs,
     _blend_pick_target,
+    _condiment_orientation_step,
     _entity_pointer_dfa,
     _live_task_entity_position,
     _observation_state,
@@ -2146,6 +2147,7 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture()
             observation = super().get_observation(require_pcd)
             # Two approach transitions, then hold 3 cm from the grasp point.
             observation["ee_state"][0] = 0.17 if self.count >= 2 else 0.
+            observation["ee_state"][3:6] = [0., -np.pi / 2, 0.]
             return observation
 
         def step(self, command):
@@ -2589,3 +2591,18 @@ def test_standalone_failed_retention_checkpoint_is_rejected(tmp_path):
             controller=controller,
             runtime=runtime,
         )
+
+
+def test_condiment_rotation_steps_follow_shortest_arc_through_euler_singularity():
+    current = np.array([2.8, -1.3, -2.5])
+    target = euler_to_quaternion(-np.pi / 2, -np.pi / 2, np.pi / 2)
+    for _ in range(80):
+        stepped, error = _condiment_orientation_step(current, 0.1)
+        before = euler_to_quaternion(*current)
+        after = euler_to_quaternion(*stepped)
+        delta = 2 * np.arccos(np.clip(abs(np.dot(before, after)), 0, 1))
+        remaining = 2 * np.arccos(np.clip(abs(np.dot(target, after)), 0, 1))
+        assert delta <= 0.1 + 1e-6
+        assert remaining == pytest.approx(max(0., error - 0.1), abs=1e-6)
+        current = stepped
+    assert abs(np.dot(euler_to_quaternion(*current), target)) == pytest.approx(1.)

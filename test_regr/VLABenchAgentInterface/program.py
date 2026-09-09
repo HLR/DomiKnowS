@@ -488,6 +488,31 @@ def _task_pattern_dfa(base_dfa, vocabulary, expected_pattern, *, target_name=Non
         base_dfa, vocabulary, expected_pattern, forced_labels=forced_labels
     )
 
+
+def _condiment_orientation_step(current_euler, max_angle):
+    """Shortest rotation toward the expert grasp, including its Euler singularity."""
+    current = euler_to_quaternion(*current_euler)
+    target = euler_to_quaternion(-np.pi / 2, -np.pi / 2, np.pi / 2)
+    dot = float(np.dot(current, target))
+    if dot < 0:
+        target = -target
+        dot = -dot
+    half_angle = float(np.arccos(np.clip(dot, -1., 1.)))
+    angle = 2 * half_angle
+    fraction = min(1., max_angle / max(angle, 1e-12))
+    if half_angle < 1e-8:
+        stepped = target
+    else:
+        stepped = (np.sin((1 - fraction) * half_angle) * current
+                   + np.sin(fraction * half_angle) * target) / np.sin(half_angle)
+    w, x, y, z = stepped
+    pitch_term = 2 * (w * y - z * x)
+    if abs(pitch_term) >= 1 - 1e-12:
+        euler = np.array([2 * np.arctan2(x, w), np.copysign(np.pi / 2, pitch_term), 0.])
+    else:
+        euler = quaternion_to_euler(stepped)
+    return euler, angle
+
 def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
     """Return an upstream task entity origin in world coordinates."""
     task = getattr(env, "task", None)
@@ -787,6 +812,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         condiment_prepare_reached = False
         condiment_grasp_pose = None
         condiment_grasp_qpos = None
+        condiment_object_lift_start = None
         condiment_pour_phase = -1
         condiment_lift_target_world = None
         condiment_container_target_world = None
@@ -1072,6 +1098,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             current_world = current[:3] + controller_robot_frame
                             if condiment_pour_phase < 0:
                                 condiment_pour_phase = 0
+                                condiment_object_lift_start = _live_task_entity_position(env, "target_entity")
                                 condiment_lift_target_world = (
                                     current_world + np.asarray([0.0, 0.0, 0.2])
                                 )
@@ -1089,6 +1116,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         current_world - condiment_lift_target_world
                                     ) <= 0.04
                                 ):
+                                    lifted_object = _live_task_entity_position(env, "target_entity")
+                                    if (
+                                        lifted_object is None or condiment_object_lift_start is None
+                                        or lifted_object[2] - condiment_object_lift_start[2] < 0.08
+                                    ):
+                                        termination_reason = "grasp_lost"
+                                        valid = False
+                                        self._report_progress("VLABench add_condiment grasp lost: object did not follow lift")
+                                        break
                                     condiment_pour_phase = 1
                                 if (
                                     condiment_pour_phase == 1
@@ -1264,12 +1300,22 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             and operation_cursor == 0 and active_skill == "pick"
                         )
                         if condiment_pick:
+                            grasp_orientation, orientation_error = _condiment_orientation_step(
+                                current[3:6], self.max_rotation_step
+                            )
+                            bounded[3:6] = grasp_orientation
+                            if condiment_grasp_pose is None and orientation_error > 0.15:
+                                bounded[:3] = current[:3]
                             # Close only at the grasp pose, not at the broad
                             # approach envelope used by legacy controllers.
                             grasp_distance = diagnostics.target_grasp_distance()
                             if condiment_grasp_pose is None:
-                                if grasp_distance is not None and grasp_distance <= 0.04:
+                                if grasp_distance is not None and grasp_distance <= 0.04 and orientation_error <= 0.15:
                                     condiment_grasp_pose = current.copy()
+                                    self._report_progress(
+                                        f"VLABench add_condiment closing grasp distance={grasp_distance:.4f} "
+                                        f"orientation_error={orientation_error:.4f}"
+                                    )
                                     get_qpos = getattr(env.robot, "get_qpos", None)
                                     if callable(get_qpos):
                                         condiment_grasp_qpos = np.asarray(
