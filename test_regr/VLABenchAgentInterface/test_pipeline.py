@@ -2111,6 +2111,61 @@ def test_geometric_progress_does_not_switch_pick_to_place_before_grasp():
     assert all(torch.equal(controller.contexts[0], context) for context in controller.contexts)
 
 
+
+def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture():
+    world = build_vlabench_world_graph("test_condiment_aperture_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_condiment_aperture"
+    )
+
+    class CondimentPlanner(TinyCompactPlanner):
+        def sample_with_logprob(self, **kwargs):
+            return [
+                {"name": "pick", "params": {"target_entity_name": 0}},
+                {"name": "pour", "params": {"target_container_name": 1}},
+            ], torch.nn.functional.logsigmoid(self.preference)
+
+    class CondimentTask(SimpleNamespace):
+        __module__ = "VLABench.tasks.tests"
+
+    class CondimentSimulator(FakeSimulator):
+        def __init__(self):
+            super().__init__(success=False)
+            self.commands = []
+            self.task = CondimentTask(**vars(self.task))
+            self.task.target_entity = "apple"
+            self.task.entities["apple"] = SimpleNamespace(
+                get_xpos=lambda _: np.array([0.2, 0., 0.]),
+                get_grasped_keypoints=lambda _: [np.array([0.2, 0., 0.])],
+                is_grasped=lambda *_: False,
+            )
+
+        def get_observation(self, require_pcd=False):
+            observation = super().get_observation(require_pcd)
+            # Two approach transitions, then hold 3 cm from the grasp point.
+            observation["ee_state"][0] = 0.17 if self.count >= 2 else 0.
+            return observation
+
+        def step(self, command):
+            self.commands.append(np.asarray(command).copy())
+            return super().step(command)
+
+    simulator = CondimentSimulator()
+    planner = CondimentPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = _joint_program(runtime, planner, controller, lambda **_: simulator)
+    program.max_steps = 14
+    episode = program.collect_episode({"task": "add_condiment"})
+    assert episode.steps == 14
+    apertures = np.asarray(simulator.commands)[:, -2:]
+    expected = [0.04, 0.04] + [0.04 * (1 - i / 10) for i in range(11)] + [0.0]
+    np.testing.assert_allclose(apertures, np.repeat(np.array(expected)[:, None], 2, axis=1))
+    # Nearness and closed commands cannot substitute for physical grasp.
+    assert not episode.success
+    assert episode.diagnostics["pour_assist_steps"] == 0
+
 def test_ik_recovery_retries_a_smaller_bounded_delta():
     world = build_vlabench_world_graph("test_joint_recovered_ik_world")
     runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_recovered_ik")

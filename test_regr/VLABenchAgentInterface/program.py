@@ -786,6 +786,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         grasp_close_steps = 0
         condiment_prepare_reached = False
         condiment_grasp_pose = None
+        condiment_grasp_qpos = None
         condiment_pour_phase = -1
         condiment_lift_target_world = None
         condiment_container_target_world = None
@@ -859,6 +860,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     self._report_progress(
                         f"VLABench episode task={descriptor.get('task', 'unknown')} "
                         f"steps={steps}/{self.max_steps}"
+                        + (f" grasp_distance={diagnostics.target_grasp_distance()}"
+                           f" close_steps={grasp_close_steps} contact_streak={grasp_contact_streak}"
+                           f" pour_phase={condiment_pour_phase}"
+                           if descriptor.get("task") == "add_condiment" else "")
                     )
                     last_progress_report = now
                 views, entities = numbered_views_from_observation(env, observation)
@@ -1263,8 +1268,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # approach envelope used by legacy controllers.
                             grasp_distance = diagnostics.target_grasp_distance()
                             if condiment_grasp_pose is None:
-                                if grasp_distance is not None and grasp_distance <= 0.025:
+                                if grasp_distance is not None and grasp_distance <= 0.04:
                                     condiment_grasp_pose = current.copy()
+                                    get_qpos = getattr(env.robot, "get_qpos", None)
+                                    if callable(get_qpos):
+                                        condiment_grasp_qpos = np.asarray(
+                                            get_qpos(env.physics), dtype=np.float64
+                                        ).copy()
                                 grasp_close_steps = 0
                             if condiment_grasp_pose is None:
                                 bounded[6] = 1.0
@@ -1374,6 +1384,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if condiment_pick and condiment_grasp_pose is not None:
                         # EE gripper state is binary; apply the physical
                         # aperture ramp only after conversion to joint control.
+                        if condiment_grasp_qpos is not None:
+                            command[:-2] = condiment_grasp_qpos
                         command[-2:] = 0.04 * max(0.0, 1.0 - grasp_close_steps / 10.0)
                     timestep = env.step(command)
                     consecutive_ik_rejections = 0
