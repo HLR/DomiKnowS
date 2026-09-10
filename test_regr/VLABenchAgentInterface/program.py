@@ -1957,7 +1957,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
                                 _set_live_task_entity_pose(env, "target_entity", insert_position, target_quat)
                         except (AttributeError, KeyError, TypeError, ValueError):
-                            pass                    if active_skill == "pull" and pull_attachment_offset is not None:
+                            pass`r`n                    if active_skill == "pull" and pull_attachment_offset is not None:
                         try:
                             ee_world = np.asarray(
                                 env.robot.get_end_effector_pos(env.physics),
