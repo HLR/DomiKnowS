@@ -1617,7 +1617,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                             insert_attachment_offset = None
                                             insert_attachment_quaternion = None
                                 if container_pos is not None:
-                                    target_ee = container_pos - controller_robot_frame
+                                    # The containment predicate evaluates the
+                                    # object origin, while the controller
+                                    # commands the gripper pose. Account for
+                                    # the measured grasp offset before release.
+                                    target_world = np.asarray(container_pos, dtype=np.float64)
+                                    if (
+                                        active_skill == "place"
+                                        and place_attachment_offset is not None
+                                    ):
+                                        target_world = target_world - np.asarray(
+                                            place_attachment_offset, dtype=np.float64
+                                        )
+                                    target_ee = target_world - controller_robot_frame
                                     if active_skill == "insert":
                                         # The flower grasp point is above its entity
                                         # origin. Lower the gripper an extra 15 cm so
