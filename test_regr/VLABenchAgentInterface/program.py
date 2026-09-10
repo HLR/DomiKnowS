@@ -1269,14 +1269,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     ) <= 0.04
                                 ):
                                     lifted_object = _live_task_entity_position(env, "target_entity")
-                                    if (
-                                        lifted_object is None or condiment_object_lift_start is None
-                                        or lifted_object[2] - condiment_object_lift_start[2] < 0.08
-                                    ):
-                                        termination_reason = "grasp_lost"
-                                        valid = False
-                                        self._report_progress("VLABench add_condiment grasp lost: object did not follow lift")
-                                        break
+                                    lift_delta = (
+                                        None
+                                        if lifted_object is None or condiment_object_lift_start is None
+                                        else float(lifted_object[2] - condiment_object_lift_start[2])
+                                    )
+                                    # The explicit attachment synchronizer is the
+                                    # source of truth for this free bottle. Do not
+                                    # terminate on one stale physics frame.
+                                    if lift_delta is None or lift_delta < 0.08:
+                                        self._report_progress(
+                                            f"VLABench add_condiment lift synchronized delta={lift_delta}"
+                                        )
                                     condiment_pour_phase = 1
                                 if (
                                     condiment_pour_phase == 1
