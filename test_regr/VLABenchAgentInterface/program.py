@@ -1623,10 +1623,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         last_ik_error = None
                         direct_pour = (
                             task_type.__module__.startswith("VLABench.")
-                            and descriptor.get("task") == "add_condiment"
                             and operation_cursor > 0
                             and active_skill == "pour"
-                            and condiment_pour_phase >= 2
+                            and (
+                                descriptor.get("task") != "add_condiment"
+                                or condiment_pour_phase >= 2
+                            )
                         )
                         if direct_pour:
                             # Match SkillLib.pour: rotate the last arm joint
