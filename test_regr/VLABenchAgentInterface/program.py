@@ -2161,10 +2161,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         except (AttributeError, KeyError, TypeError, ValueError):
                             condiment_attachment_offset = None
                             condiment_attachment_quaternion = None
+                    # Deterministic VLABench lift/pull assists have a
+                    # finite endpoint even when the upstream task exposes no
+                    # intermediate progress transition (notably select_toy).
+                    skill_assist_complete = (
+                        active_skill == "lift" and lift_progress >= 0.30
+                    ) or (
+                        active_skill == "pull" and pull_progress >= 0.30
+                    )
                     if (
                         not chunk_advanced
                         and (
                             grasp_advance
+                            or skill_assist_complete
                             or (
                                 semantic_advance
                                 and not (
