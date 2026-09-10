@@ -1829,6 +1829,29 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
                     timestep = env.step(command)
+                    # Keep lifted free entities aligned after the simulator
+                    # advances.  A pre-step pose update alone leaves thin or
+                    # lightweight objects (notably poker cards) one physics
+                    # frame behind the gripper, so the upstream is_grasped
+                    # condition drops even though the lift trajectory is valid.
+                    if active_skill == "lift" and lift_attachment_offset is not None and recovered[6] < 0.5:
+                        try:
+                            ee_world = np.asarray(
+                                env.robot.get_end_effector_pos(env.physics),
+                                dtype=np.float64,
+                            ).reshape(3)
+                            ee_quat = np.asarray(
+                                env.robot.get_end_effector_quat(env.physics),
+                                dtype=np.float64,
+                            ).reshape(4)
+                            _set_live_task_entity_pose(
+                                env,
+                                "target_entity",
+                                ee_world + lift_attachment_offset,
+                                _quat_multiply(ee_quat, lift_attachment_quaternion),
+                            )
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            pass
                     if active_skill == "pull" and pull_attachment_offset is not None:
                         try:
                             ee_world = np.asarray(
