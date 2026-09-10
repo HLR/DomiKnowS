@@ -25,6 +25,8 @@ _VERIFIER_GRAPH: Any = None
 # Domain declarations live here.  All codecs, generation vocabularies, data
 # validation, rewards, and policies derive from the world graph bundle.
 SUBTASK_PATTERNS: tuple[tuple[str, ...], ...] = (
+    ("pick", "lift", "pull"),
+    ("pick", "lift", "place"),
     ("pick", "pour", "place"),
     ("pick", "push", "place"),
     ("pick", "push", "pull"),
