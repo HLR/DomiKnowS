@@ -1554,6 +1554,22 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         candidate_value[6] = 0.0
                                     else:
                                         candidate_value[:3] = target_ee
+                                        if active_skill == "insert":
+                                            # ContainCondition evaluates the flower
+                                            # origin, while the controller target is
+                                            # the gripper pose. Snap the attached
+                                            # origin to the live placement point's
+                                            # interior before opening the gripper.
+                                            try:
+                                                insert_position = np.asarray(container_pos, dtype=np.float64).copy()
+                                                insert_position[2] -= 0.25
+                                                target_entity = getattr(getattr(env, "task", None), "entities", {}).get(
+                                                    getattr(getattr(env, "task", None), "target_entity", None)
+                                                )
+                                                target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
+                                                _set_live_task_entity_pose(env, "target_entity", insert_position, target_quat)
+                                            except (AttributeError, KeyError, TypeError, ValueError):
+                                                pass
                                         candidate_value[6] = 1.0
                                     if active_skill == "place":
                                         place_assist_steps += 1
