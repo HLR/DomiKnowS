@@ -69,6 +69,7 @@ from test_regr.VLABenchAgentInterface.program import (
     _condiment_orientation_step,
     _entity_pointer_dfa,
     _live_task_entity_position,
+    _mark_task_target_grasped,
     _observation_state,
     _signal,
     _task_signals,
@@ -217,6 +218,21 @@ def test_signal_passes_upstream_physics_argument():
     env = SimpleNamespace(physics=physics, get_task_progress=progress)
     assert _signal(env, "get_task_progress") == 0.5
     assert seen["physics"] is physics
+
+
+def test_mark_task_target_grasped_persists_single_target_progress():
+    task = SimpleNamespace(target_entity="orange", target_is_grasped={"orange": False})
+
+    assert _mark_task_target_grasped(task) is True
+    assert task.target_is_grasped == {"orange": True}
+    assert _mark_task_target_grasped(task) is False
+
+
+def test_mark_task_target_grasped_persists_multi_target_progress():
+    task = SimpleNamespace(target_entity=["a", "b"], target_is_grasped={"a": False, "b": True})
+
+    assert _mark_task_target_grasped(task) is True
+    assert task.target_is_grasped == {"a": True, "b": True}
 
 
 def test_add_condiment_resolves_target_container_world_position():

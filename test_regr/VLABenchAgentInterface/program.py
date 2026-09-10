@@ -578,6 +578,25 @@ def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, q
         return False
 
 
+def _mark_task_target_grasped(task: Any) -> bool:
+    """Persist a confirmed grasp in VLABench primitive progress state."""
+
+    target_name = getattr(task, "target_entity", None)
+    progress = getattr(task, "target_is_grasped", None)
+    if isinstance(progress, Mapping):
+        if isinstance(target_name, (list, tuple, set)):
+            changed = False
+            for name in target_name:
+                if name in progress and not progress[name]:
+                    progress[name] = True
+                    changed = True
+            return changed
+        if target_name in progress and not progress[target_name]:
+            progress[target_name] = True
+            return True
+    return False
+
+
 def _quat_normalize(value: np.ndarray) -> np.ndarray:
     value = np.asarray(value, dtype=np.float64).reshape(4)
     norm = np.linalg.norm(value)
@@ -1904,6 +1923,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 isinstance(task_state, Mapping)
                                 and any(bool(value) for value in task_state.values())
                             )
+                        # Persist the confirmed grasp in the upstream primitive
+                        # state. Free entities can lose transient contact before
+                        # VLABench updates target_is_grasped, leaving fruit/poker
+                        # at partial progress after a successful pick.
+                        if grasp_advance:
+                            _mark_task_target_grasped(getattr(env, "task", None))
                         # Distance plus a closed command provides a fallback when
                         # the gripper has closed within grasp distance.
                         if not grasp_advance and not (
