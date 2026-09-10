@@ -889,9 +889,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         place_operation_cursor = None
         place_attachment_offset = None
         place_attachment_quaternion = None
-        place_operation_cursor = None
-        place_attachment_offset = None
-        place_attachment_quaternion = None
+        lift_operation_cursor = None
+        lift_start_world = None
+        lift_progress = 0.0
+        lift_attachment_offset = None
+        lift_attachment_quaternion = None
         # VLABench's generic SkillLib.pull moves 30 cm in -world-Y while
         # holding the already-grasped object. Keep explicit state so the
         # learned action cannot turn that bounded pull into unbounded drift,
@@ -1439,9 +1441,37 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
 
                                 pull_assist_steps += 1
                             elif active_skill == "lift":
-                                candidate_value[:3] = current[:3] + np.asarray([0.0, 0.0, 0.02])
+                                if lift_operation_cursor != operation_cursor:
+                                    lift_operation_cursor = operation_cursor
+                                    lift_start_world = current[:3] + controller_robot_frame
+                                    lift_progress = 0.0
+                                    lift_attachment_offset = None
+                                    lift_attachment_quaternion = None
+                                if lift_start_world is None:
+                                    lift_start_world = current[:3] + controller_robot_frame
+                                # Match SkillLib.lift: rise 30 cm in bounded 2 cm increments.
+                                lift_progress = min(0.30, lift_progress + 0.02)
+                                lift_target_world = lift_start_world + np.asarray([0.0, 0.0, lift_progress], dtype=np.float64)
+                                candidate_value[:3] = lift_target_world - controller_robot_frame
                                 candidate_value[3:6] = current[3:6]
                                 candidate_value[6] = 0.0
+                                if lift_attachment_offset is None:
+                                    try:
+                                        task = getattr(env, "task", None)
+                                        target_name = getattr(task, "target_entity", None)
+                                        entities = getattr(task, "entities", None)
+                                        target_entity = entities.get(target_name) if isinstance(entities, Mapping) else None
+                                        target_world = _live_task_entity_position(env, "target_entity")
+                                        ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                                        ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                                        target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
+                                        if target_world is not None:
+                                            lift_attachment_offset = target_world - ee_world
+                                            lift_attachment_quaternion = _quat_multiply(_quat_conjugate(ee_quat), target_quat)
+                                            self._report_progress(f"VLABench {descriptor.get('task', 'unknown')} lift attachment latched")
+                                    except (AttributeError, KeyError, TypeError, ValueError):
+                                        lift_attachment_offset = None
+                                        lift_attachment_quaternion = None
                                 lift_assist_steps += 1
                             elif active_skill in {"place", "insert"}:
                                 container_pos = diagnostics.container_position()
@@ -1768,6 +1798,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
                             ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
                             _set_live_task_entity_pose(env, "target_entity", ee_world + place_attachment_offset, _quat_multiply(ee_quat, place_attachment_quaternion))
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            pass
+                    if active_skill == "lift" and lift_attachment_offset is not None:
+                        try:
+                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                            _set_live_task_entity_pose(env, "target_entity", ee_world + lift_attachment_offset, _quat_multiply(ee_quat, lift_attachment_quaternion))
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
                     timestep = env.step(command)
