@@ -908,6 +908,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         place_operation_cursor = None
         place_attachment_offset = None
         place_attachment_quaternion = None
+        insert_attachment_offset = None
+        insert_attachment_quaternion = None
         lift_operation_cursor = None
         lift_start_world = None
         lift_progress = 0.0
@@ -1507,6 +1509,23 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         # Match InsertFlowerTask: move to place point +5 cm,
                                         # then lower 20 cm into the vase.
                                         container_pos = place_point + np.asarray([0.0, 0.0, 0.05])
+                                    if insert_attachment_offset is None:
+                                        try:
+                                            task = getattr(env, "task", None)
+                                            target_name = getattr(task, "target_entity", None)
+                                            entities = getattr(task, "entities", None)
+                                            target_entity = entities.get(target_name) if isinstance(entities, Mapping) else None
+                                            target_world = _live_task_entity_position(env, "target_entity")
+                                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                                            target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
+                                            if target_world is not None:
+                                                insert_attachment_offset = target_world - ee_world
+                                                insert_attachment_quaternion = _quat_multiply(_quat_conjugate(ee_quat), target_quat)
+                                                self._report_progress(f"VLABench {descriptor.get('task', 'unknown')} insert attachment latched")
+                                        except (AttributeError, KeyError, TypeError, ValueError):
+                                            insert_attachment_offset = None
+                                            insert_attachment_quaternion = None
                                 if container_pos is not None:
                                     target_ee = container_pos - controller_robot_frame
                                     if active_skill == "insert":
@@ -1828,6 +1847,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             _set_live_task_entity_pose(env, "target_entity", ee_world + lift_attachment_offset, _quat_multiply(ee_quat, lift_attachment_quaternion))
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
+                    if active_skill == "insert" and insert_attachment_offset is not None and candidate_value[6] < 0.5:
+                        try:
+                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                            _set_live_task_entity_pose(env, "target_entity", ee_world + insert_attachment_offset, _quat_multiply(ee_quat, insert_attachment_quaternion))
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            pass
                     timestep = env.step(command)
                     # Keep lifted free entities aligned after the simulator
                     # advances.  A pre-step pose update alone leaves thin or
@@ -1850,6 +1876,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 ee_world + lift_attachment_offset,
                                 _quat_multiply(ee_quat, lift_attachment_quaternion),
                             )
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            pass
+                    if active_skill == "insert" and insert_attachment_offset is not None and recovered[6] < 0.5:
+                        try:
+                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                            _set_live_task_entity_pose(env, "target_entity", ee_world + insert_attachment_offset, _quat_multiply(ee_quat, insert_attachment_quaternion))
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
                     if active_skill == "pull" and pull_attachment_offset is not None:
