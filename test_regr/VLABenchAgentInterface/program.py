@@ -1535,7 +1535,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         # The flower grasp point is above its entity
                                         # origin. Lower the gripper an extra 15 cm so
                                         # the attached origin is inside the vase.
-                                        target_ee[2] -= 0.35
+                                        target_ee[2] -= 0.55
                                         candidate_value[3:6] = np.asarray(
                                             [-np.pi / 2, np.pi / 2, 0.0],
                                             dtype=np.float64,
