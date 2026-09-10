@@ -563,8 +563,7 @@ def _live_task_container_interior_point(env: Any, attribute: str) -> np.ndarray 
     base = _live_task_entity_place_point(env, attribute)
     if not callable(contain) or physics is None or base is None:
         return None
-    offsets = [(0.0, 0.0, dz) for dz in (0.0, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, 0.05)]
-    offsets += [(dx, dy, dz) for dx, dy in ((-0.04, 0.0), (0.04, 0.0), (0.0, -0.04), (0.0, 0.04)) for dz in (-0.10, -0.20)]
+    offsets = [(dx, dy, dz) for dx in np.linspace(-0.20, 0.20, 5) for dy in np.linspace(-0.20, 0.20, 5) for dz in np.linspace(-0.80, 0.20, 21)]
     for dx, dy, dz in offsets:
         candidate = base + np.asarray([dx, dy, dz], dtype=np.float64)
         try:
