@@ -1544,6 +1544,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         candidate_value[3:6] = current[3:6]
                                     current_ee = current[:3]
                                     horiz_dist = np.linalg.norm(current_ee[:2] - target_ee[:2])
+                                    if active_skill == "insert" and horiz_dist <= 0.12 and current_ee[2] <= target_ee[2] + 0.20:
+                                        try:
+                                            insert_position = np.asarray(container_pos, dtype=np.float64).copy()
+                                            insert_position[2] -= 0.25
+                                            target_entity = getattr(getattr(env, "task", None), "entities", {}).get(
+                                                getattr(getattr(env, "task", None), "target_entity", None)
+                                            )
+                                            target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
+                                            _set_live_task_entity_pose(env, "target_entity", insert_position, target_quat)
+                                        except (AttributeError, KeyError, TypeError, ValueError):
+                                            pass
                                     if horiz_dist > 0.06:
                                         approach_z = target_ee[2] + (0.20 if active_skill == "insert" else 0.15)
                                         target_intermediate = np.array([target_ee[0], target_ee[1], max(current_ee[2], approach_z)])
