@@ -1577,11 +1577,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             elif active_skill in {"place", "insert"}:
                                 container_pos = diagnostics.container_position()
                                 if active_skill == "place":
-                                    place_point = _live_task_entity_place_point(env, "target_container")
+                                    # Prefer a point accepted by the live
+                                    # containment predicate. Some toy
+                                    # containers expose a place point outside
+                                    # the actual containment volume.
+                                    place_point = _live_task_container_interior_point(
+                                        env, "target_container"
+                                    )
+                                    if place_point is None:
+                                        place_point = _live_task_entity_place_point(
+                                            env, "target_container"
+                                        )
                                     if place_point is not None:
-                                        # Match SkillLib.place: use the
-                                        # container's live placement point,
-                                        # rather than its frame origin.
                                         container_pos = place_point
                                 if active_skill == "insert":
                                     place_point = _live_task_entity_place_point(env, "target_container")

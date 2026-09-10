@@ -44,14 +44,16 @@ PRIMITIVE_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     # SelectBookTask removes the book from the shelf with pick followed by pull.
     "select_book": ("pick", "pull"),
     "select_chemistry_tube": ("pick", "lift"),
-    "select_drink": ("pick", "pull"),
+    # SelectDrinkTask officially lifts the drink before pulling it clear.
+    "select_drink": ("pick", "lift", "pull"),
     "select_fruit": ("pick", "place"),
     "select_mahjong": ("pick", "place"),
     # VLABench SelectPaintingTask inherits PressButtonTask: the goal is to
     # press the button associated with the requested painting style.
     "select_painting": ("press",),
     "select_poker": ("pick", "lift"),
-    "select_toy": ("pick", "place"),
+    # SelectToyTask lifts the toy before placing it in the target.
+    "select_toy": ("pick", "lift", "place"),
 })
 
 
@@ -98,9 +100,9 @@ TASK_CONTRACTS: Mapping[str, TaskContract] = MappingProxyType({
     "select_chemistry_tube": TaskContract("select_chemistry_tube", "primitive", ("pick", "lift"),
         ("target_entity",), _TASK_SUCCESS_PREDICATE,
         _TASK_PROGRESS_SIGNALS, "Pick the requested tube and lift it clear of the rack."),
-    "select_drink": TaskContract("select_drink", "primitive", ("pick", "pull"),
+    "select_drink": TaskContract("select_drink", "primitive", ("pick", "lift", "pull"),
         ("target_entity",), _TASK_SUCCESS_PREDICATE,
-        _TASK_PROGRESS_SIGNALS, "Pick the requested drink and pull it clear of the cooler."),
+        _TASK_PROGRESS_SIGNALS, "Pick, lift, and pull the requested drink clear of the cooler."),
     "select_fruit": TaskContract("select_fruit", "primitive", ("pick", "place"),
         ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
         _TASK_PROGRESS_SIGNALS, "Pick the requested fruit and place it in the target."),
@@ -113,9 +115,9 @@ TASK_CONTRACTS: Mapping[str, TaskContract] = MappingProxyType({
     "select_poker": TaskContract("select_poker", "primitive", ("pick", "lift"),
         ("target_entity",), _TASK_SUCCESS_PREDICATE,
         _TASK_PROGRESS_SIGNALS, "Pick the requested poker item and lift it."),
-    "select_toy": TaskContract("select_toy", "primitive", ("pick", "place"),
+    "select_toy": TaskContract("select_toy", "primitive", ("pick", "lift", "place"),
         ("target_entity", "target_container"), _TASK_SUCCESS_PREDICATE,
-        _TASK_PROGRESS_SIGNALS, "Pick the requested toy and place it in the target."),
+        _TASK_PROGRESS_SIGNALS, "Pick, lift, and place the requested toy in the target."),
 })
 
 

@@ -311,8 +311,12 @@ def test_select_chemistry_tube_uses_upstream_pick_lift_pattern():
     assert PRIMITIVE_TASK_PATTERNS["select_chemistry_tube"] == ("pick", "lift")
 
 
-def test_select_drink_uses_upstream_pick_pull_pattern():
-    assert PRIMITIVE_TASK_PATTERNS["select_drink"] == ("pick", "pull")
+def test_select_drink_uses_upstream_pick_lift_pull_pattern():
+    assert PRIMITIVE_TASK_PATTERNS["select_drink"] == ("pick", "lift", "pull")
+
+def test_select_toy_uses_upstream_pick_lift_place_pattern():
+    assert PRIMITIVE_TASK_PATTERNS["select_toy"] == ("pick", "lift", "place")
+
 
 def test_press_button_fallback_uses_live_button_target():
     diagnostics = RolloutDiagnostics()
