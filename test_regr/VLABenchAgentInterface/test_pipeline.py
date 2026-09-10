@@ -69,6 +69,7 @@ from test_regr.VLABenchAgentInterface.program import (
     _condiment_orientation_step,
     _entity_pointer_dfa,
     _live_task_entity_position,
+    _live_task_grasp_keypoint,
     _live_task_container_interior_point,
     _mark_task_target_grasped,
     _observation_state,
@@ -250,6 +251,19 @@ def test_add_condiment_resolves_target_container_world_position():
     )
     assert np.allclose(_live_task_entity_position(env, "target_container"), [0.1, 0.2, 0.3])
     assert _live_task_entity_position(env, "target_entity") is None
+
+
+def test_grasp_keypoint_uses_nearest_finite_point():
+    class Drink:
+        def get_grasped_keypoints(self, _physics):
+            return [[1.0, 0.0, 0.0], [0.12, 0.0, 0.0], [float("nan"), 0.0, 0.0]]
+
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(target_entity="drink", entities={"drink": Drink()}),
+    )
+    point = _live_task_grasp_keypoint(env, "target_entity", np.asarray([0.1, 0.0, 0.0]))
+    assert np.allclose(point, [0.12, 0.0, 0.0])
 
 
 def test_container_interior_point_uses_upstream_contain_predicate():

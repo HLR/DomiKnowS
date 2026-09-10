@@ -532,6 +532,33 @@ def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
     return value if np.isfinite(value).all() else None
 
 
+def _live_task_grasp_keypoint(
+    env: Any, attribute: str, reference_world: np.ndarray | None = None
+) -> np.ndarray | None:
+    """Return the reachable live grasp keypoint nearest the current EE."""
+    task = getattr(env, "task", None)
+    name = getattr(task, attribute, None)
+    entities = getattr(task, "entities", None)
+    entity = entities.get(name) if isinstance(entities, Mapping) else None
+    getter = getattr(entity, "get_grasped_keypoints", None)
+    physics = getattr(env, "physics", None)
+    if not callable(getter) or physics is None:
+        return None
+    try:
+        points = np.asarray(getter(physics), dtype=np.float64).reshape(-1, 3)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    points = points[np.isfinite(points).all(axis=1)]
+    if not len(points):
+        return None
+    if reference_world is None:
+        return points[0]
+    reference = np.asarray(reference_world, dtype=np.float64).reshape(3)
+    if not np.isfinite(reference).all():
+        return points[0]
+    return points[int(np.argmin(np.linalg.norm(points - reference, axis=1)))]
+
+
 def _live_task_entity_place_point(env: Any, attribute: str) -> np.ndarray | None:
     """Return the official upstream place point in world coordinates."""
     task = getattr(env, "task", None)
@@ -1376,23 +1403,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 and active_skill == "pick"
                             ):
                                 # Match the official VLABench SkillLib.pick live keypoint.
-                                task = getattr(env, "task", None)
-                                target_name = getattr(task, "target_entity", None)
-                                entities = getattr(task, "entities", None)
-                                target_entity = (
-                                    entities.get(target_name)
-                                    if isinstance(entities, Mapping)
-                                    else None
+                                current_world = current[:3] + controller_robot_frame
+                                grasp_target = _live_task_grasp_keypoint(
+                                    env, "target_entity", current_world
                                 )
-                                keypoint_getter = getattr(
-                                    target_entity, "get_grasped_keypoints", None
-                                )
-                                if callable(keypoint_getter):
-                                    keypoints = list(keypoint_getter(env.physics) or [])
-                                    if keypoints:
-                                        grasp_target = np.asarray(
-                                            keypoints[0], dtype=np.float64
-                                        ).reshape(3)
                             if grasp_target is None:
                                 grasp_target = diagnostics.target_grasp_position()
                             if grasp_target is not None:
