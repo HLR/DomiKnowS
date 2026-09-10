@@ -1988,7 +1988,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             _set_live_task_entity_pose(env, "target_entity", ee_world + insert_attachment_offset, _quat_multiply(ee_quat, insert_attachment_quaternion))
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
-                    if active_skill == "insert" and recovered[6] >= 0.5:
+                    if active_skill == "insert" and insert_assist_steps >= 80:
                         # Apply the release pose after physics advances so the
                         # attachment update cannot overwrite the predicate-valid
                         # container interior point in the same frame.
