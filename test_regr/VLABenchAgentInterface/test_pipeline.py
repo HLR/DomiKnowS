@@ -69,6 +69,7 @@ from test_regr.VLABenchAgentInterface.program import (
     _condiment_orientation_step,
     _entity_pointer_dfa,
     _live_task_entity_position,
+    _live_task_container_interior_point,
     _mark_task_target_grasped,
     _observation_state,
     _signal,
@@ -250,6 +251,22 @@ def test_add_condiment_resolves_target_container_world_position():
     assert np.allclose(_live_task_entity_position(env, "target_container"), [0.1, 0.2, 0.3])
     assert _live_task_entity_position(env, "target_entity") is None
 
+
+def test_container_interior_point_uses_upstream_contain_predicate():
+    class Container:
+        def get_place_point(self, _physics):
+            return [[0.0, 0.0, 1.0]]
+
+        def contain(self, point, _physics):
+            return point[2] <= 0.85 and abs(point[0]) < 0.05 and abs(point[1]) < 0.05
+
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(target_container="vase", entities={"vase": Container()}),
+    )
+    point = _live_task_container_interior_point(env, "target_container")
+    assert point is not None
+    assert point[2] == pytest.approx(0.85)
 
 def test_task_signals_use_target_distance_when_upstream_progress_is_flat():
     target = SimpleNamespace(get_xpos=lambda _physics: np.array([1.0, 0.0, 0.0]))

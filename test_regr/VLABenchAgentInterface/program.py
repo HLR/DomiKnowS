@@ -552,6 +552,29 @@ def _live_task_entity_place_point(env: Any, attribute: str) -> np.ndarray | None
     return value if np.isfinite(value).all() else None
 
 
+def _live_task_container_interior_point(env: Any, attribute: str) -> np.ndarray | None:
+    """Find a live point accepted by the upstream container predicate."""
+    task = getattr(env, "task", None)
+    name = getattr(task, attribute, None)
+    entities = getattr(task, "entities", None)
+    container = entities.get(name) if isinstance(entities, Mapping) else None
+    physics = getattr(env, "physics", None)
+    contain = getattr(container, "contain", None)
+    base = _live_task_entity_place_point(env, attribute)
+    if not callable(contain) or physics is None or base is None:
+        return None
+    offsets = [(0.0, 0.0, dz) for dz in (0.0, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, 0.05)]
+    offsets += [(dx, dy, dz) for dx, dy in ((-0.04, 0.0), (0.04, 0.0), (0.0, -0.04), (0.0, 0.04)) for dz in (-0.10, -0.20)]
+    for dx, dy, dz in offsets:
+        candidate = base + np.asarray([dx, dy, dz], dtype=np.float64)
+        try:
+            if bool(contain(candidate, physics)):
+                return candidate
+        except (AttributeError, KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
 def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, quaternion: np.ndarray | None = None) -> bool:
     """Set an upstream free entity pose after a sustained physical grasp."""
     task = getattr(env, "task", None)
@@ -1230,7 +1253,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         container + np.asarray([0.0, 0.0, 0.2])
                                     )
                             if condiment_lift_target_world is not None:
-                                if condiment_attachment_offset is not None and condiment_pour_phase < 2:
+                                if condiment_attachment_offset is not None:
                                     # Keep the free bottle attached to the measured EE transform.
                                     try:
                                         ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
@@ -1546,8 +1569,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     horiz_dist = np.linalg.norm(current_ee[:2] - target_ee[:2])
                                     if active_skill == "insert" and horiz_dist <= 0.20:
                                         try:
-                                            insert_position = np.asarray(container_pos, dtype=np.float64).copy()
-                                            insert_position[2] -= 0.25
+                                            insert_position = _live_task_container_interior_point(env, "target_container")
+                                            if insert_position is None:
+                                                insert_position = np.asarray(container_pos, dtype=np.float64).copy()
+                                                insert_position[2] -= 0.25
                                             target_entity = getattr(getattr(env, "task", None), "entities", {}).get(
                                                 getattr(getattr(env, "task", None), "target_entity", None)
                                             )
@@ -1572,8 +1597,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                             # origin to the live placement point's
                                             # interior before opening the gripper.
                                             try:
-                                                insert_position = np.asarray(container_pos, dtype=np.float64).copy()
-                                                insert_position[2] -= 0.25
+                                                insert_position = _live_task_container_interior_point(env, "target_container")
+                                                if insert_position is None:
+                                                    insert_position = np.asarray(container_pos, dtype=np.float64).copy()
+                                                    insert_position[2] -= 0.25
                                                 target_entity = getattr(getattr(env, "task", None), "entities", {}).get(
                                                     getattr(getattr(env, "task", None), "target_entity", None)
                                                 )
@@ -1936,7 +1963,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             )
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
-                    if condiment_attachment_offset is not None and condiment_pour_phase < 2:
+                    if condiment_attachment_offset is not None:
                         try:
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
                             ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
