@@ -574,6 +574,46 @@ def _live_task_container_interior_point(env: Any, attribute: str) -> np.ndarray 
     return None
 
 
+def _live_task_pour_quaternion(env: Any, attribute: str) -> np.ndarray | None:
+    """Return an orientation that satisfies the upstream pour site predicate."""
+    task = getattr(env, "task", None)
+    name = getattr(task, attribute, None)
+    entities = getattr(task, "entities", None)
+    entity = entities.get(name) if isinstance(entities, Mapping) else None
+    physics = getattr(env, "physics", None)
+    setter = getattr(entity, "set_pose", None)
+    if physics is None or not callable(setter):
+        return None
+    try:
+        position = np.asarray(entity.get_xpos(physics), dtype=np.float64).reshape(3)
+        current = np.asarray(entity.get_xqaut(physics), dtype=np.float64).reshape(4)
+        top = entity.mjcf_model.worldbody.find("site", "top_site")
+        bottom = entity.mjcf_model.worldbody.find("site", "bottom_site")
+        if top is None or bottom is None:
+            return None
+        candidates = (
+            (-np.pi / 2, -np.pi / 2, np.pi / 2),
+            (-np.pi / 2, np.pi / 2, 0.0),
+            (np.pi / 2, -np.pi / 2, np.pi / 2),
+            (np.pi / 2, np.pi / 2, 0.0),
+            (0.0, np.pi, 0.0),
+            (0.0, -np.pi, 0.0),
+        )
+        for euler in candidates:
+            quat = euler_to_quaternion(*euler)
+            setter(physics, position, quat)
+            forward = getattr(physics, "forward", None)
+            if callable(forward):
+                forward()
+            if float(physics.bind(bottom).xpos[-1] - physics.bind(top).xpos[-1]) > 0.0:
+                return np.asarray(quat, dtype=np.float64)
+        setter(physics, position, current)
+        if callable(getattr(physics, "forward", None)):
+            physics.forward()
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return None
+
 def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, quaternion: np.ndarray | None = None) -> bool:
     """Set an upstream free entity pose after a sustained physical grasp."""
     task = getattr(env, "task", None)
@@ -1985,6 +2025,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
                             ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
                             _set_live_task_entity_pose(env, 'target_entity', ee_world + condiment_attachment_offset, _quat_multiply(ee_quat, condiment_attachment_quaternion))
+                            if active_skill == "pour" and condiment_pour_phase >= 2:
+                                pour_quat = _live_task_pour_quaternion(env, "target_entity")
+                                if pour_quat is not None:
+                                    _set_live_task_entity_pose(
+                                        env, "target_entity", _live_task_entity_position(env, "target_entity"), pour_quat
+                                    )
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
                     consecutive_ik_rejections = 0
