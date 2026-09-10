@@ -1506,8 +1506,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 if active_skill == "insert":
                                     place_point = _live_task_entity_place_point(env, "target_container")
                                     if place_point is not None:
-                                        # Match InsertFlowerTask: move to place point +5 cm,
-                                        # then lower 20 cm into the vase.
+                                        # Match InsertFlowerTask's +5 cm approach,
+                                        # then lower far enough that the flower origin
+                                        # (rather than the gripper origin) enters the
+                                        # vase containment bounds. The attachment
+                                        # offset is preserved while this target is used.
                                         container_pos = place_point + np.asarray([0.0, 0.0, 0.05])
                                     if insert_attachment_offset is None:
                                         try:
@@ -1529,7 +1532,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 if container_pos is not None:
                                     target_ee = container_pos - controller_robot_frame
                                     if active_skill == "insert":
-                                        target_ee[2] -= 0.20
+                                        # The flower grasp point is above its entity
+                                        # origin. Lower the gripper an extra 15 cm so
+                                        # the attached origin is inside the vase.
+                                        target_ee[2] -= 0.35
                                         candidate_value[3:6] = np.asarray(
                                             [-np.pi / 2, np.pi / 2, 0.0],
                                             dtype=np.float64,
