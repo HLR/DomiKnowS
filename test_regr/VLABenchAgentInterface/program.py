@@ -1544,7 +1544,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         candidate_value[3:6] = current[3:6]
                                     current_ee = current[:3]
                                     horiz_dist = np.linalg.norm(current_ee[:2] - target_ee[:2])
-                                    if active_skill == "insert" and horiz_dist <= 0.12 and current_ee[2] <= target_ee[2] + 0.20:
+                                    if active_skill == "insert" and horiz_dist <= 0.20:
                                         try:
                                             insert_position = np.asarray(container_pos, dtype=np.float64).copy()
                                             insert_position[2] -= 0.25
