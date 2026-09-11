@@ -987,6 +987,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         diagnostics = RolloutDiagnostics()
         pick_assist_steps = grasp_assist_steps = pull_assist_steps = pour_assist_steps = 0
         place_assist_steps = insert_assist_steps = lift_assist_steps = 0
+        press_assist_steps = 0
         pick_grasp_latched = False
         grasp_close_steps = 0
         condiment_prepare_reached = False
@@ -1010,6 +1011,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         lift_progress = 0.0
         lift_attachment_offset = None
         lift_attachment_quaternion = None
+        press_operation_cursor = None
+        press_phase = 0
         # VLABench's generic SkillLib.pull moves 30 cm in -world-Y while
         # holding the already-grasped object. Keep explicit state so the
         # learned action cannot turn that bounded pull into unbounded drift,
@@ -1303,6 +1306,42 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         )
                         if (
                             task_type.__module__.startswith("VLABench.")
+                            and active_skill == "press"
+                            and operation_cursor == 0
+                        ):
+                            # Match SkillLib.press: approach the button from
+                            # 10 cm above, descend to its origin, then close
+                            # the gripper while holding the button pose.
+                            if press_operation_cursor != operation_cursor:
+                                press_operation_cursor = operation_cursor
+                                press_phase = 0
+                            button_world = _live_task_entity_position(env, "target_button")
+                            if button_world is not None:
+                                current_world = current[:3] + controller_robot_frame
+                                approach_world = button_world + np.asarray(
+                                    [0.0, 0.0, 0.10], dtype=np.float64
+                                )
+                                if press_phase == 0:
+                                    target_world = approach_world
+                                    candidate_value[6] = 1.0
+                                    if np.linalg.norm(current_world - approach_world) <= 0.04:
+                                        press_phase = 1
+                                elif press_phase == 1:
+                                    target_world = button_world
+                                    candidate_value[6] = 1.0
+                                    if np.linalg.norm(current_world - button_world) <= 0.035:
+                                        press_phase = 2
+                                else:
+                                    target_world = button_world
+                                    candidate_value[6] = 0.0
+                                candidate_value[:3] = (
+                                    np.asarray(target_world, dtype=np.float64)
+                                    - controller_robot_frame
+                                )
+                                candidate_value[3:6] = current[3:6]
+                                press_assist_steps += 1
+                        if (
+                            task_type.__module__.startswith("VLABench.")
                             and descriptor.get("task") == "add_condiment"
                             and operation_cursor > 0
                             and active_skill == "pour"
@@ -1399,7 +1438,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             pour_assist_steps += 1
                         if (
                             operation_cursor == 0
-                            and active_skill in {"pick", "press"}
+                            and active_skill == "pick"
                             and self.pick_approach_blend > 0.0
                         ):
                             task_name = str(descriptor.get("task", ""))
@@ -2320,6 +2359,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "place_assist_steps": place_assist_steps,
                 "insert_assist_steps": insert_assist_steps,
                 "lift_assist_steps": lift_assist_steps,
+                "press_assist_steps": press_assist_steps,
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "
