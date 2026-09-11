@@ -1329,7 +1329,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 elif press_phase == 1:
                                     target_world = button_world
                                     candidate_value[6] = 1.0
-                                    if np.linalg.norm(current_world - button_world) <= 0.035:
+                                    if np.linalg.norm(current_world - button_world) <= 0.055:
                                         press_phase = 2
                                 else:
                                     target_world = button_world
