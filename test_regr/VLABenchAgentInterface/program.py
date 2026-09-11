@@ -2807,6 +2807,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     "steps": 0.0, "ik_failures": 0.0,
                     "ik_recoveries": 0.0, "ik_truncations": 0.0,
                     "execution_complete": 0.0,
+                    "progress": 0.0,
                 },
             )
             totals["episodes"] += 1.0
