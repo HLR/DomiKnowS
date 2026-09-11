@@ -266,6 +266,24 @@ def test_grasp_keypoint_uses_nearest_finite_point():
     assert np.allclose(point, [0.12, 0.0, 0.0])
 
 
+def test_select_drink_grasp_keypoint_can_use_official_index_zero():
+    class Drink:
+        def get_grasped_keypoints(self, _physics):
+            return [[1.0, 0.0, 0.0], [0.12, 0.0, 0.0]]
+
+    env = SimpleNamespace(
+        physics=object(),
+        task=SimpleNamespace(target_entity="drink", entities={"drink": Drink()}),
+    )
+    point = _live_task_grasp_keypoint(
+        env,
+        "target_entity",
+        np.asarray([0.1, 0.0, 0.0]),
+        keypoint_index=0,
+    )
+    assert np.allclose(point, [1.0, 0.0, 0.0])
+
+
 def test_container_interior_point_uses_upstream_contain_predicate():
     class Container:
         def get_place_point(self, _physics):

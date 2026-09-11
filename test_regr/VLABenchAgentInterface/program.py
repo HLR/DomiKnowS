@@ -533,9 +533,13 @@ def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
 
 
 def _live_task_grasp_keypoint(
-    env: Any, attribute: str, reference_world: np.ndarray | None = None
+    env: Any,
+    attribute: str,
+    reference_world: np.ndarray | None = None,
+    *,
+    keypoint_index: int | None = None,
 ) -> np.ndarray | None:
-    """Return the reachable live grasp keypoint nearest the current EE."""
+    """Return a live grasp keypoint, optionally using the official index."""
     task = getattr(env, "task", None)
     name = getattr(task, attribute, None)
     entities = getattr(task, "entities", None)
@@ -551,6 +555,8 @@ def _live_task_grasp_keypoint(
     points = points[np.isfinite(points).all(axis=1)]
     if not len(points):
         return None
+    if keypoint_index is not None and 0 <= int(keypoint_index) < len(points):
+        return points[int(keypoint_index)]
     if reference_world is None:
         return points[0]
     reference = np.asarray(reference_world, dtype=np.float64).reshape(3)
@@ -1405,7 +1411,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 # Match the official VLABench SkillLib.pick live keypoint.
                                 current_world = current[:3] + controller_robot_frame
                                 grasp_target = _live_task_grasp_keypoint(
-                                    env, "target_entity", current_world
+                                    env,
+                                    "target_entity",
+                                    current_world,
+                                    # SelectDrinkTask's SkillLib.pick explicitly
+                                    # uses keypoint 0. Nearest-point selection
+                                    # can choose a side of a bottle occluded by
+                                    # the cooler, leaving the EE far from the
+                                    # official grasp pose and never advancing
+                                    # to lift/pull.
+                                    keypoint_index=(
+                                        0 if task_name == "select_drink" else None
+                                    ),
                                 )
                             if grasp_target is None:
                                 grasp_target = diagnostics.target_grasp_position()
