@@ -85,6 +85,16 @@ uv run python test_regr/EmbodiedAgentInterface/test_reward.py
 uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 ```
 
+### 2. Independent EAI semantic audit
+
+Run the audit before a long EAI RL run. It covers the complete BEHAVIOR and VirtualHome reference set, rejects empty plans, reports per-domain and first-action coverage, and runs adversarial checks for temporal ordering, objectless actions, relation grounding, and VirtualHome PUTBACK semantics. This is a symbolic/reference audit; it does not replace simulator rollouts of a learned policy.
+
+```powershell
+uv run python -m test_regr.EmbodiedAgentInterface.audit_eai --dataset all --max-steps 135 --json test_regr/EmbodiedAgentInterface/audit_eai.json
+```
+
+Use `--dataset behavior` or `--dataset virtualhome` to audit one domain. Keep the generated JSON report local unless it is explicitly needed for a release record.
+
 ### Declaring future world constraints
 
 `build_program()` enables source-state action preconditions by default. Placement actions require an object in the appropriate hand, release/drop requires a held object, and pour requires some held source object. Place-inside actions additionally require an open destination when the simulator knows its open/closed status. Because the flat EAI action format names only a placement destination, an idempotent placement/release is also accepted when the referenced object is already spatially placed. These preconditions were audited against all 438 reference demonstrations.
