@@ -20,14 +20,15 @@ For simulator runs, install the supported OpenMOSS/VLABench checkout and its ass
 Run this from `/workspace` on GPU2. It pulls the current commit, runs one episode per adapter task, performs a short supervised warm-up, and skips PPO.
 
 ```bash
-git pull --ff-only
-git log -1 --oneline
-VLA_LOG=test_regr/VLABenchAgentInterface/results/primitive_audit_$(git rev-parse --short HEAD).log
-VLA_OUTPUT=test_regr/VLABenchAgentInterface/checkpoints/primitive_audit_$(git rev-parse --short HEAD)
+git pull --ff-only origin develop
+RUN_TAG=$(date +%Y%m%d_%H%M%S)
+VLA_LOG="test_regr/VLABenchAgentInterface/results/primitive_audit_${RUN_TAG}.log"
+VLA_OUTPUT="test_regr/VLABenchAgentInterface/checkpoints/primitive_audit_${RUN_TAG}"
 mkdir -p "$(dirname "$VLA_LOG")"
 {
   echo "===== Git commit ====="
   git log -1 --oneline
+  git rev-parse HEAD
   echo "===== VLABench primitive audit ====="
 } >"$VLA_LOG" 2>&1
 nohup env CUDA_VISIBLE_DEVICES=4 PYTORCH_ALLOC_CONF=expandable_segments:True \
@@ -35,16 +36,16 @@ nohup env CUDA_VISIBLE_DEVICES=4 PYTORCH_ALLOC_CONF=expandable_segments:True \
   --two-stage \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning \
   --control-source test_regr/VLABenchAgentInterface/data/control \
-  --task all --limit 1 --max-steps 80 --output "$VLA_OUTPUT" --device cuda:0 \
-  --sft-epochs 1 --controller-warmup-steps 8 --rl-epochs 1 \
+  --task all --limit 1 --max-steps 400 --output "$VLA_OUTPUT" --device cuda:0 \
+  --sft-epochs 1 --controller-warmup-steps 8 --rl-epochs 0 \
   --rl-rounds-per-epoch 1 --rl-num-samples 1 --rollouts-per-update 1 \
-  --eval-rollouts-per-task 1 --rl-preflight-min-successful-tasks 999 \
+  --eval-rollouts-per-task 1 \
   >>"$VLA_LOG" 2>&1 &
 echo "VLABench audit PID=$! log=$VLA_LOG output=$VLA_OUTPUT"
 tail -f "$VLA_LOG"
 ```
 
-The `999` threshold is deliberate: this is a diagnostic audit, not an RL run. Require successful task completion and no IK truncation before long training.
+The audit is deliberately PPO-free. Require every task to report successful completion with progress 1.000, zero IK failures, and zero IK truncation before starting long RL.
 
 ## Single-task smoke
 
