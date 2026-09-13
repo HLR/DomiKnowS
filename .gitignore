@@ -289,3 +289,7 @@ test_regr/VLABenchAgentInterface/data/
 test_regr/VLABenchAgentInterface/checkpoints/
 test_regr/VLABenchAgentInterface/models/
 test_regr/VLABenchAgentInterface/outputs/
+
+# generated 3D-FORCE question sets (reproducible via gen_force3d_free.py)
+test_regr/Clever/generated/*.json
+test_regr/Clever/generated/*.log

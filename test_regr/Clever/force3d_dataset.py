@@ -300,19 +300,45 @@ def relation_holds(name: str, i: int, j: int, coords: np.ndarray, rotations: Seq
 
 def compute_relation_labels(scene: dict, cameras: Sequence[dict], relations: Sequence[str],
                             conv: RelationConvention) -> np.ndarray:
-    """(n*n, len(relations)) float32 matrix, row i*n+j == relation(i, j)."""
+    """(n*n, len(relations)) float32 matrix, row i*n+j == relation(i, j).
+
+    Vectorised: one broadcasted dot product per relation instead of a Python
+    loop over every pair (the loop cost ~0.5 s per question, which made a
+    44k-question set take hours to load).  Semantics identical to
+    ``relation_holds``.
+    """
     objs = scene["objects"]
     n = len(objs)
-    coords = np.array([o["3d_coords"] for o in objs], dtype=np.float64)
-    rotations = [o.get("rotation", 0.0) for o in objs]
-    camera_dirs = {k: camera_direction_vectors(scene, cam)
-                   for k, cam in enumerate(cameras)}
+    coords = np.array([o["3d_coords"][:2] for o in objs], dtype=np.float64)
+    rot = np.radians(np.array([float(o.get("rotation", 0.0)) for o in objs]) + conv.object_heading_offset_deg)
+    heading = np.stack([np.cos(rot), np.sin(rot)], axis=1)          # per anchor j
+    left_vec = np.stack([-heading[:, 1], heading[:, 0]], axis=1)
+    d = coords[:, None, :] - coords[None, :, :]                       # d[i, j] = p_i - p_j
+    camera_dirs = {k: camera_direction_vectors(scene, cam) for k, cam in enumerate(cameras)}
+    not_diag = ~np.eye(n, dtype=bool)
     out = np.zeros((n * n, len(relations)), dtype=np.float32)
     for r_idx, name in enumerate(relations):
-        for i in range(n):
-            for j in range(n):
-                if i != j and relation_holds(name, i, j, coords, rotations, camera_dirs, conv):
-                    out[i * n + j, r_idx] = 1.0
+        if name == DISTINCT:
+            mat = not_diag
+        elif name.startswith("obj_"):
+            direction = name[4:]
+            if direction in ("front", "behind"):
+                val = np.einsum("ijk,jk->ij", d, heading) * conv.object_fb_sign
+                mat = val > 0 if direction == "front" else val < 0
+            else:
+                val = np.einsum("ijk,jk->ij", d, left_vec) * conv.object_lr_sign
+                mat = val > 0 if direction == "left" else val < 0
+        else:
+            if name in DIRECTIONS:
+                direction, cam = name, 0
+            else:
+                direction, cam_s = name.rsplit("_", 1)
+                cam = int(cam_s)
+            if cam not in camera_dirs:
+                continue
+            val = d @ camera_dirs[cam][direction] * conv.camera_sign
+            mat = val > 0
+        out[:, r_idx] = (mat & not_diag).reshape(-1).astype(np.float32)
     return out
 
 
@@ -388,9 +414,20 @@ def _local_image_path(root: Path, scene_dir: str, view_hash: str) -> Path:
     raise FileNotFoundError(f"no image for {scene_dir}/{view_hash} under {root}")
 
 
-def _load_json(path: Path):
+_JSON_MEMO: Dict[str, object] = {}
+
+
+def _load_json(path: Path, memo: bool = False):
+    """Read JSON; ``memo=True`` caches small per-scene files (scene/camera/bboxes),
+    which are re-read for every question and live on a network share."""
+    key = str(path)
+    if memo and key in _JSON_MEMO:
+        return _JSON_MEMO[key]
     with open(path) as f:
-        return json.load(f)
+        data = json.load(f)
+    if memo:
+        _JSON_MEMO[key] = data
+    return data
 
 
 def _flatten_questions(json_path: Path) -> List[dict]:
@@ -407,7 +444,8 @@ def _flatten_questions(json_path: Path) -> List[dict]:
 def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transform=None,
                  view_policy: str = "first", limit: Optional[int] = None,
                  with_oracle: bool = True, convention: Optional[RelationConvention] = None,
-                 verbose: bool = True) -> List[dict]:
+                 verbose: bool = True, json_name: Optional[str] = None,
+                 with_images: bool = True) -> List[dict]:
     """Load a 3D-FORCE split into Clever-style samples.
 
     ``split`` is ``'puzzle'`` (yes/no) or ``'ref'`` (object index).  Only
@@ -421,8 +459,10 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
         from dataset import default_image_transform as image_transform  # noqa
 
     root = Path(root)
-    json_name = "3DForcePuzzle.json" if split == "puzzle" else "3DForceRef.json"
-    questions = _flatten_questions(root / json_name)
+    if json_name is None:
+        json_name = "3DForcePuzzle.json" if split == "puzzle" else "3DForceRef.json"
+    json_path = Path(json_name) if os.path.isabs(json_name) else root / json_name
+    questions = _flatten_questions(json_path)
     if limit is not None:
         questions = questions[:limit]
 
@@ -432,11 +472,11 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
         scene_dir, _ = _scene_dir_from_path(q["image_filename"][0])
         q["_scene_dir"] = scene_dir
         if scene_dir not in scenes:
-            scenes[scene_dir] = _load_json(root / "multiview" / scene_dir / "scene.json")
+            scenes[scene_dir] = _load_json(root / "multiview" / scene_dir / "scene.json", memo=True)
         cams = []
         for p in q["image_filename"]:
             sd, vh = _scene_dir_from_path(p)
-            cams.append(_load_json(root / "multiview" / sd / vh / "camera.json"))
+            cams.append(_load_json(root / "multiview" / sd / vh / "camera.json", memo=True))
         cameras_of[qi] = cams
 
     if with_oracle and convention is None:
@@ -479,8 +519,14 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
             continue
 
         image_path = _local_image_path(root, scene_dir, view_hash)
-        pil_image = Image.open(image_path).convert("RGB")
-        image_arr, boxes_t = image_transform(pil_image, boxes_np)
+        if with_images:
+            pil_image = Image.open(image_path).convert("RGB")
+            image_arr, boxes_t = image_transform(pil_image, boxes_np)
+        else:
+            # Light sample: images attached later by ``attach_images`` for the
+            # subset actually used (a 44k-question set with images does not fit
+            # in a cache file or comfortably in memory).
+            pil_image, image_arr, boxes_t = None, None, boxes_np
 
         all_objects = [
             {k: o.get(k) for k in ("color", "shape", "size", "material", "3d_coords", "rotation")}
@@ -496,6 +542,7 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
             "pil_image": pil_image,
             "image": image_arr,
             "objects_raw": np.asarray(boxes_t, dtype=np.float32),
+            "_raw_boxes": boxes_np if not with_images else None,
             "all_objects": all_objects,
             "question_raw": q["question"],
             "question": q["question"],
@@ -535,6 +582,21 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
         print(f"[force3d] split={split}: {len(samples)} samples from {len(questions)} questions, "
               f"{len(scenes)} scenes; skipped={dict(skipped)}")
     return samples
+
+
+def attach_images(samples: Sequence[dict], image_transform=None) -> None:
+    """Load and transform images for light samples in place."""
+    if image_transform is None:
+        from dataset import default_image_transform as image_transform  # noqa
+    for s in samples:
+        if s.get("pil_image") is not None:
+            continue
+        pil_image = Image.open(s["image_filename"]).convert("RGB")
+        image_arr, boxes_t = image_transform(pil_image, s["_raw_boxes"])
+        s["pil_image"] = pil_image
+        s["image"] = image_arr
+        s["objects_raw"] = np.asarray(boxes_t, dtype=np.float32)
+        s["_raw_boxes"] = None
 
 
 def split_by_scene(samples: Sequence[dict], n_test_scenes: int, seed: int = 0

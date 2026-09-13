@@ -493,6 +493,9 @@ def _load_force3d_dataset(args, CACHE_DIR):
         d["force3d_role"] = "train"
     for d in test:
         d["force3d_role"] = "test"
+    from force3d_dataset import attach_images
+    attach_images(train + test)
+    print(f"[force3d] images attached for {len(train)} train + {len(test)} test samples")
     return train + test
 
 
@@ -771,6 +774,9 @@ Examples:
                         help="3D-FORCE root containing 3DForcePuzzle.json/3DForceRef.json and multiview/")
     parser.add_argument("--force3d-split", choices=["puzzle", "ref"], default="puzzle",
                         help="3D-FORCE split: puzzle (yes/no existsL) or ref (object selection via miotaL)")
+    parser.add_argument("--force3d-json", type=str, default=None,
+                        help="Question file to load instead of the released split (e.g. output of "
+                             "gen_force3d_free.py); relative paths resolve under --force3d-root.")
     parser.add_argument("--force3d-test-scenes", type=int, default=20,
                         help="Number of whole scenes held out as the 3D-FORCE test set")
     parser.add_argument("--force3d-split-seed", type=int, default=0,

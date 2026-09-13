@@ -275,16 +275,21 @@ def preprocess_force3d(args, CACHE_DIR):
 
     split = getattr(args, "force3d_split", "puzzle")
     view = getattr(args, "force3d_view", "first")
-    cache_file = CACHE_DIR / f"force3d_{split}_{view}.pkl"
+    json_name = getattr(args, "force3d_json", None)
+    tag = f"_{Path(json_name).stem}" if json_name else ""
+    cache_file = CACHE_DIR / f"force3d_{split}_{view}{tag}.pkl"
     if cache_file.exists():
         with cache_file.open("rb") as f:
             dataset = pickle.load(f)
         print(f"[force3d] re-loaded {len(dataset)} samples from {cache_file}")
         return dataset
-    dataset = load_force3d(split=split, root=Path(args.force3d_root), view_policy=view)
+    # Light load (no images): the caller splits/caps first and then attaches
+    # images to the subset it trains and tests on.  Caches stay small.
+    dataset = load_force3d(split=split, root=Path(args.force3d_root), view_policy=view,
+                           json_name=json_name, with_images=False)
     with cache_file.open("wb") as f:
         pickle.dump(dataset, f)
-    print(f"[force3d] cached {len(dataset)} samples -> {cache_file}")
+    print(f"[force3d] cached {len(dataset)} light samples -> {cache_file}")
     return dataset
 
 
