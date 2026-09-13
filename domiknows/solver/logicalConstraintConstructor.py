@@ -899,10 +899,15 @@ class LogicalConstraintConstructor:
     # Joint tables above this many rows are declined (the caller keeps the
     # previous behaviour) so a pathological formula cannot exhaust memory.
     JOINT_GROUNDING_MAX_ROWS = 3_000_000
-    # Above this many rows the loss path also prunes non-protected variables by
-    # thresholded unary values (an approximation that only drops candidates the
-    # current predictions already reject); below it the table is exact.
-    JOINT_GROUNDING_SOFT_PRUNE_ROWS = 300_000
+    # Above this many rows the loss path also prunes non-protected variables,
+    # keeping the top-k candidates per variable ranked by the product of their
+    # unary evidence (an approximation that drops the candidates the current
+    # predictions rank lowest); below it the table is exact.  Both knobs can
+    # be set through environment variables for experiments.
+    JOINT_GROUNDING_SOFT_PRUNE_ROWS = int(__import__('os').environ.get(
+        'DOMIKNOWS_JOINT_SOFT_PRUNE_ROWS', 300_000))
+    JOINT_GROUNDING_SOFT_PRUNE_TOPK = int(__import__('os').environ.get(
+        'DOMIKNOWS_JOINT_SOFT_PRUNE_TOPK', 4))
 
     @staticmethod
     def expandToJointGrounding(useLcVariables, bindings, lcVariablesDns, prune=False,
@@ -988,7 +993,12 @@ class LogicalConstraintConstructor:
             return useLcVariables, False, None
         device = next(iter(normalised.values()))[1][0].device
 
-        # --- optional pruning by plain unary operands (hard values) -------
+        # --- optional pruning by unary evidence -----------------------------
+        # Per-variable evidence = product over unary operands (plain, or
+        # re-grounded along a relation but constant on the other axis).
+        # Verify mode (hard 0/1 values): keep candidates with evidence > 0.5,
+        # exact.  Loss mode above the row budget: keep the top-k candidates
+        # per variable by evidence (soft values), never touching ``protect``.
         allowed = {v: torch.ones(domains[v], dtype=torch.bool, device=device) for v in joint}
         full_rows = 1
         for v in joint:
@@ -996,6 +1006,7 @@ class LogicalConstraintConstructor:
         soft_prune = (not prune) and full_rows > LogicalConstraintConstructor.JOINT_GROUNDING_SOFT_PRUNE_ROWS
         protect = set(protect or ())
         if prune or soft_prune:
+            evidence = {v: torch.ones(domains[v], dtype=torch.float32, device=device) for v in joint}
             for name, (fmt, cols) in normalised.items():
                 names, keys = bound[name]
                 dims = [domains[v] for v in names]
@@ -1003,19 +1014,27 @@ class LogicalConstraintConstructor:
                     continue
                 key_t = torch.tensor(keys, dtype=torch.long, device=device).reshape(len(keys), len(names))
                 for col in cols:
-                    full = torch.zeros(dims, dtype=torch.bool, device=device)
-                    full[tuple(key_t[:, i] for i in range(len(names)))] = (col.float() > 0.5)
+                    full = torch.zeros(dims, dtype=torch.float32, device=device)
+                    full[tuple(key_t[:, i] for i in range(len(names)))] = col.float()
                     if len(names) == 1:
-                        if names[0] not in protect:
-                            allowed[names[0]] &= full
+                        evidence[names[0]] = evidence[names[0]] * full
                         continue
-                    # A unary re-grounded along a relation is constant along the
-                    # other axis; prune the axis it actually varies along.
                     for axis, v in enumerate(names):
-                        other = tuple(i for i in range(len(names)) if i != axis)
                         first = full.movedim(axis, 0).reshape(full.shape[axis], -1)
-                        if v not in protect and bool((first == first[:, :1]).all()):
-                            allowed[v] &= first[:, 0]
+                        if bool(torch.allclose(first, first[:, :1].expand_as(first))):
+                            evidence[v] = evidence[v] * first[:, 0]
+            topk = LogicalConstraintConstructor.JOINT_GROUNDING_SOFT_PRUNE_TOPK
+            for v in joint:
+                if v in protect:
+                    continue
+                if prune:
+                    allowed[v] &= evidence[v] > 0.5
+                else:
+                    k = min(topk, domains[v])
+                    keep = torch.topk(evidence[v], k).indices
+                    mask = torch.zeros(domains[v], dtype=torch.bool, device=device)
+                    mask[keep] = True
+                    allowed[v] &= mask
         axes = [torch.nonzero(allowed[v]).reshape(-1) for v in joint]
         empty = any(a.numel() == 0 for a in axes)
         if empty:
@@ -1669,7 +1688,7 @@ class LogicalConstraintConstructor:
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
         else:
             joined = False
-            if (loss or verify) and not sample and not isEntitySelector:
+            if (loss or verify or circuit) and not sample and not isEntitySelector:
                 # Align operands enumerated over different variable tuples
                 # before combining them (no-op when they are co-grounded).
                 self.fillPathBindings(useLcVariables, lcVariableVs,
