@@ -362,6 +362,72 @@ def _program_size(sample):
     return 0
 
 
+def _subset_logic_dataset(logic_dataset, raw_items):
+    """Build a LogicDataset restricted to ``raw_items`` without recompiling.
+
+    The program's models snapshot the graph's properties/sensors and the loss
+    model's constraint registry at construction time, so constraints compiled
+    afterwards (via ``graph.compile_executable``) never receive labels and are
+    silently ignored during both training and evaluation. Re-using the
+    already-compiled executable constraints avoids that and keeps the graph
+    from growing on every curriculum stage.
+    """
+    from domiknows.graph.executable import LogicDataset
+
+    index_by_id = {id(item): idx for idx, item in enumerate(logic_dataset.data)}
+    indices = [index_by_id[id(item)] for item in raw_items if id(item) in index_by_id]
+    if len(indices) != len(raw_items):
+        raise ValueError(
+            f"{len(raw_items) - len(indices)} curriculum items are not part of the "
+            "compiled dataset; compile the subset before creating the program."
+        )
+    return LogicDataset(
+        [logic_dataset.data[i] for i in indices],
+        [logic_dataset.lc_name_list[i] for i in indices],
+        logic_keyword=logic_dataset.logic_keyword,
+        logic_label_keyword=logic_dataset.logic_label_keyword,
+        vector_label_names=logic_dataset.vector_label_names,
+        deduplicated=logic_dataset.deduplicated,
+        concept_bindings=[logic_dataset.concept_bindings[i] for i in indices],
+        parameterized=logic_dataset.parameterized,
+    )
+
+
+def _print_force3d_ref_top1(args, program, dataset, device, tag):
+    """REF-only: argmax-of-selection accuracy next to the built-in miotaL score."""
+    if getattr(args, "dataset", "clevr") != "force3d" or args.force3d_split != "ref" or dataset is None:
+        return
+    from force3d_dataset import force3d_ref_top1
+    with torch.no_grad():
+        acc, correct, total = force3d_ref_top1(program, dataset, device=device)
+    print(f"{tag} REF top-1 accuracy: {acc:.2f}% ({correct}/{total})")
+
+
+def _load_force3d_dataset(args, CACHE_DIR):
+    """Load 3D-FORCE, swap the vocabulary, split by scene and apply size caps.
+
+    Returns train + test samples tagged with ``force3d_role`` so the split
+    block in ``main`` can separate them after the min/max-object filters.
+    """
+    import dataset as clevr_dataset
+    from force3d_dataset import (FORCE3D_ATTRIBUTE_CONCEPTS, FORCE3D_RELATIONAL_CONCEPTS,
+                                 split_by_scene)
+    from preprocess import preprocess_force3d
+
+    clevr_dataset.set_vocabulary(FORCE3D_ATTRIBUTE_CONCEPTS, FORCE3D_RELATIONAL_CONCEPTS)
+    samples = preprocess_force3d(args, CACHE_DIR)
+    train, test = split_by_scene(samples, args.force3d_test_scenes, seed=args.force3d_split_seed)
+    if args.train_size is not None:
+        train = train[args.train_start: args.train_start + args.train_size]
+    if args.test_size is not None:
+        test = test[: args.test_size]
+    for d in train:
+        d["force3d_role"] = "train"
+    for d in test:
+        d["force3d_role"] = "test"
+    return train + test
+
+
 def _get_curriculum_limits(epoch):
     for i in range(len(CURRICULUM_STRATEGY) - 1):
         start, max_scene_size, max_program_size = CURRICULUM_STRATEGY[i]
@@ -629,6 +695,24 @@ Examples:
     plugin_manager.register(GradientFlowPlugin(), 'GradientFlow')
     plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
     
+    # ---- 3D-FORCE adapter (see force3d_dataset.py) ----
+    parser.add_argument("--dataset", choices=["clevr", "force3d"], default="clevr",
+                        help="Dataset adapter: CLEVR (default) or 3D-FORCE via force3d_dataset.py")
+    parser.add_argument("--force3d-root", type=str,
+                        default="/localscratch/kamalida/projects/SaPy/datasets/3D-FORCE",
+                        help="3D-FORCE root containing 3DForcePuzzle.json/3DForceRef.json and multiview/")
+    parser.add_argument("--force3d-split", choices=["puzzle", "ref"], default="puzzle",
+                        help="3D-FORCE split: puzzle (yes/no existsL) or ref (object selection via miotaL)")
+    parser.add_argument("--force3d-test-scenes", type=int, default=20,
+                        help="Number of whole scenes held out as the 3D-FORCE test set")
+    parser.add_argument("--force3d-split-seed", type=int, default=0,
+                        help="Seed for the 3D-FORCE scene split")
+    parser.add_argument("--force3d-view", choices=["first"], default="first",
+                        help="Which view to feed the model (only 'first' = camera 0 for now)")
+    parser.add_argument("--infer-type", choices=["ILP", "local"], default="ILP",
+                        help="Inference run by the model on every populate: 'ILP' (default, Gurobi) or "
+                             "'local' (local/argmax only; ~2-10x faster evaluation, identical accuracy "
+                             "numbers since the metric reads local argmax)")
     plugin_manager.add_arguments_to_parser(parser)
     
     args = parser.parse_args()
@@ -704,6 +788,10 @@ def program_declaration(train, dev, args, device='cpu'):
             else:
                 dataset[i]["logic_label"] = torch.LongTensor([0]).to(device)
             dataset[i]["query_type"] = query_types[i]
+        elif torch.is_tensor(dataset[i].get("logic_label")):
+            # Precomputed vector label (3D-FORCE REF one-hot for miotaL).
+            dataset[i]["logic_label"] = dataset[i]["logic_label"].to(device)
+            dataset[i]["query_type"] = None
         else:
             dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['answer'])]).to(device)
             dataset[i]["query_type"] = None
@@ -720,12 +808,14 @@ def program_declaration(train, dev, args, device='cpu'):
             oracle_logit = math.log(oracle_conf / (1.0 - oracle_conf))
 
         spatial_list = g_relational_concepts.get("spatial_relation", [])
-        inverse_for_reverse = {
-            "left": "right",
-            "right": "left",
-            "front": "behind",
-            "behind": "front",
-        }
+        _base_opposite = {"left": "right", "right": "left", "front": "behind", "behind": "front"}
+        inverse_for_reverse = {}
+        for _rel in spatial_list:
+            if _rel in _base_opposite:
+                inverse_for_reverse[_rel] = _base_opposite[_rel]
+            else:
+                from force3d_dataset import opposite_relation
+                inverse_for_reverse[_rel] = opposite_relation(_rel)
         for i in range(len(dataset)):
             all_objs = dataset[i].get('all_objects', [])
             # Use bounding-box count (objects_raw) as the authoritative object
@@ -757,7 +847,7 @@ def program_declaration(train, dev, args, device='cpu'):
                     if src_key in dataset[i]:
                         dataset[i][f"oracle_is_{rev_name}_rev"] = list(dataset[i][src_key])
 
-            for attr in ['size', 'color', 'material', 'shape']:
+            for attr in list(g_attribute_concepts.keys()):
                 oracle_data = []
                 for obj_i in range(n):
                     for obj_j in range(n):
@@ -830,6 +920,16 @@ def program_declaration(train, dev, args, device='cpu'):
         relation_target = relaton_2_obj
         if attr_name in spatial_relations_rev and relation_2_obj_rev is not None:
             relation_target = relation_2_obj_rev
+
+        if attr_name in ("distinct", "distinct_rev"):
+            # Fixed identity relation (3D-FORCE adapter): distinct(i, j) iff i != j.
+            # Never learned; the loader provides the logits in every mode.
+            relation_target[f"{attr_variable}_label"] = FunctionalReaderSensor(
+                keyword=f"oracle_is_{attr_name}",
+                forward=lambda data: torch.Tensor(data).to(device))
+            relation_target[attr_variable] = ModuleLearner(
+                f"{attr_name}_label", module=OracleDummyLearner(), device=device)
+            continue
 
         if args.oracle_mode:
             if attr_name in spatial_relation_names:
@@ -939,6 +1039,8 @@ def program_declaration(train, dev, args, device='cpu'):
         'tnorm': args.tnorm,
         'pos_weight': args.pos_weight,
     }
+    if getattr(args, "infer_type", "ILP") == "local":
+        program_kwargs['inferTypes'] = ['local/argmax']
     if args.use_gumbel:
         program_kwargs.update({
             'use_gumbel': args.use_gumbel,
@@ -1113,7 +1215,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
 def main(args):
     global _models
     
-    CACHE_DIR = preprocess_folders_and_files(args.dummy)
+    CACHE_DIR = preprocess_folders_and_files(args.dummy, skip_extract=(args.dataset == "force3d"))
     NUM_INSTANCES = args.num_instances
     device = args.device
 
@@ -1131,6 +1233,8 @@ def main(args):
             dataset = filtered[: args.train_size]
         else:
             dataset = filtered
+    elif args.dataset == "force3d":
+        dataset = _load_force3d_dataset(args, CACHE_DIR)
     else:
         dataset = preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=args.question_type)
 
@@ -1154,7 +1258,12 @@ def main(args):
     #      dataset so it can be disjoint from --train-start.
     #   2. Else if --test-split is set, hold out the tail of the train slice.
     #   3. Else use the full train slice for training only.
-    if args.test_start is not None and args.test_size is not None and not args.eval_only:
+    if args.dataset == "force3d":
+        train_raw = [d for d in dataset if d.get("force3d_role") == "train"]
+        test_raw = [d for d in dataset if d.get("force3d_role") == "test"] or None
+        print(f"[force3d] scene split: {len(train_raw)} train, {len(test_raw or [])} test questions "
+              f"({args.force3d_test_scenes} held-out scenes, seed {args.force3d_split_seed})")
+    elif args.test_start is not None and args.test_size is not None and not args.eval_only:
         full_dataset = load_full_dataset(args, NUM_INSTANCES, CACHE_DIR,
                                          question_type=args.question_type)
         t_start = max(0, int(args.test_start))
@@ -1231,12 +1340,7 @@ def main(args):
 
     test_dataset_filtered = None
     if test_raw_filtered is not None and test_raw is not None and len(test_raw_filtered) < len(test_raw):
-        test_dataset_filtered = program.graph.compile_executable(
-            test_raw_filtered,
-            logic_keyword='logic_str',
-            logic_label_keyword='logic_label',
-            extra_namespace_values=attribute_names_dict,
-        )
+        test_dataset_filtered = _subset_logic_dataset(test_dataset, test_raw_filtered)
 
     eval_dataset = test_dataset if test_dataset is not None else train_dataset
     eval_dataset_name = "test" if test_dataset is not None else "train"
@@ -1405,11 +1509,8 @@ def main(args):
                                 "even after relaxation; using full training set"
                             )
                         else:
-                            cached_curriculum_dataset = program.graph.compile_executable(
-                                epoch_train_raw,
-                                logic_keyword='logic_str',
-                                logic_label_keyword='logic_label',
-                                extra_namespace_values=attribute_names_dict,
+                            cached_curriculum_dataset = _subset_logic_dataset(
+                                train_dataset, epoch_train_raw
                             )
                             if curriculum_info["fallback_kind"] == "relaxed_or":
                                 print(
@@ -1473,6 +1574,7 @@ def main(args):
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
+                    _print_force3d_ref_top1(args, program, test_dataset, device, f"Epoch {i + 1}")
                     if _tb_writer is not None:
                         _tb_writer.add_scalar("test/acc", epoch_test_acc, i + 1)
 
@@ -1497,6 +1599,7 @@ def main(args):
                 print(f"{active_train_label.capitalize()} accuracy after training: {final_train_acc:.2f}%")
             if final_test_acc is not None:
                 print(f"Test accuracy after training: {final_test_acc:.2f}%")
+                _print_force3d_ref_top1(args, program, test_dataset, device, "Final")
             if final_test_acc_filtered is not None:
                 print(f"Test accuracy (<={args.max_objects} objects): {final_test_acc_filtered:.2f}%")
             

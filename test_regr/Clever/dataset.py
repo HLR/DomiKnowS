@@ -1151,3 +1151,15 @@ def get_question_type(program: Optional[List[Dict[str, Any]]]) -> str:
     return g_last_op_to_question_type.get(op_type_str, 'unk_op_mapping')
 
 
+
+
+def set_vocabulary(attribute_concepts, relational_concepts):
+    """Replace the CLEVR vocabulary in place (keeps every imported reference valid).
+
+    Used by main.py when ``--dataset force3d`` selects the 3D-FORCE concept sets
+    before the graph is built.
+    """
+    g_attribute_concepts.clear()
+    g_attribute_concepts.update(attribute_concepts)
+    g_relational_concepts.clear()
+    g_relational_concepts.update(relational_concepts)

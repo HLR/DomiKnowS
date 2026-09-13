@@ -78,3 +78,32 @@ existL(is_blue('x'), is_big(path=('x')), is_square(path=('x')),
 - Counting
 - Automatic Conversion from natural langauge question into DomiKnowS execution
 - Multiple Relations
+---
+
+## 3D-FORCE (Puzzle and REF)
+
+`force3d_dataset.py` adapts the 3D-FORCE dataset (`/localscratch/kamalida/projects/SaPy/datasets/3D-FORCE`)
+to this pipeline: it loads one view per question (camera 0), translates the lambda-style programs into
+DomiKnowS logic (`existsL` for Puzzle, `miotaL` with a one-hot object label for REF), swaps the CLEVR
+vocabulary for 7 colors / 12 shapes / 24 spatial relations (`left`, `obj_left`, `left_0`..`left_3`, ...),
+and derives oracle relation labels from the 3D geometry (`scene.json` + `camera.json`). Train/test are
+split by whole scenes. Every pair of logical variables gets a fixed `distinct('x', 'y')` relation (identity, never learned): the dataset requires each variable to bind a different object, and that also links relation-free variables into one connected formula.
+
+Tests (CPU): `python -m pytest test_force3d_adapter.py -q`
+
+Oracle sanity check (expect ~100%):
+```bash
+CUDA_VISIBLE_DEVICES=0 python main.py --dataset force3d --oracle-mode --train-size 200 --epochs 1 \
+  --curriculum none --disable-plugins --skip-train-eval --tensorboard false --step-notebook false
+```
+Learned run, Puzzle:
+```bash
+CUDA_VISIBLE_DEVICES=0 python main.py --dataset force3d --force3d-test-scenes 20 --epochs 10 \
+  --batch-size 10 --lr 1e-3 --tnorm G --curriculum none --disable-plugins --skip-train-eval \
+  --tensorboard false --step-notebook false
+```
+REF: add `--force3d-split ref --force3d-test-scenes 100`. The log then also prints `REF top-1 accuracy`
+(argmax of the miotaL selection vs. the answer index) next to the framework's exact-match score.
+
+Notes: use `--curriculum none` (the CLEVR curriculum buckets are empty for 8-12 object scenes);
+`--train-size/--test-size` cap the scene-split parts; the first load caches to `dataset_cache/force3d_*.pkl`.
