@@ -588,3 +588,34 @@ def force3d_ref_top1(program, dataset, device="cpu") -> Tuple[float, int, int]:
                 correct += int(pred == int(answer))
     acc = 100.0 * correct / total if total else 0.0
     return acc, correct, total
+
+
+def soft_constraint_accuracy(program, dataset, device="cpu", tnorm="P"):
+    """Accuracy of P(formula satisfied) > 0.5 against the yes/no label.
+
+    The exact evaluator thresholds every predicate at 0.5 before evaluating
+    the formula, so a model whose predicates are still below 0.5 everywhere
+    scores the constant class rate even while its satisfaction probabilities
+    already separate the classes.  This soft score shows that progress.
+    Returns (accuracy_percent, correct, total, mean_P_positives, mean_P_negatives).
+    """
+    correct = total = 0
+    p_pos, p_neg = [], []
+    with torch.no_grad():
+        for datanode, sample in zip(program.populate(dataset, device=device), dataset):
+            label = sample.get("logic_label")
+            if label is None or (torch.is_tensor(label) and label.numel() != 1):
+                continue
+            label = int(label.reshape(-1)[0]) if torch.is_tensor(label) else int(bool(label))
+            for lc_name in datanode.getActiveExecutableConstraintNames():
+                out = datanode.calculateSingleLcLoss(lc_name, tnorm=tnorm)
+                prob = out.get("conversionSigmoid") if isinstance(out, dict) else None
+                if prob is None:
+                    continue
+                prob = float(torch.as_tensor(prob).reshape(-1)[0])
+                total += 1
+                correct += int((prob > 0.5) == bool(label))
+                (p_pos if label else p_neg).append(prob)
+    acc = 100.0 * correct / total if total else 0.0
+    mean = lambda xs: sum(xs) / len(xs) if xs else float("nan")
+    return acc, correct, total, mean(p_pos), mean(p_neg)

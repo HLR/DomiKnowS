@@ -199,6 +199,24 @@ class _CallbacksMixin:
         self.after_test_step = []
 
 
+from domiknows.program.lossprogram import SemanticLossProgram
+
+
+class SemanticLossProgramWithCallbacks(_CallbacksMixin, CallbackProgram, SemanticLossProgram):
+    """Exact semantic loss (-log P(satisfied) via circuits) with the Clever callbacks."""
+    # The constraint-accuracy evaluator is defined on InferenceProgram but only
+    # needs populate() and the graph; reuse it unchanged.
+    evaluate_condition = InferenceProgram.evaluate_condition
+
+    def default_after_train_step(self, output=None):
+        """No-op: the loss program's epoch already runs backward and step."""
+        pass
+
+    def __init__(self, graph, Model, **kwargs):
+        super().__init__(graph, Model, **kwargs)
+        self._init_callback_hooks()
+
+
 class InferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, InferenceProgram):
     """InferenceProgram with callback support."""
     
@@ -393,6 +411,16 @@ def _subset_logic_dataset(logic_dataset, raw_items):
     )
 
 
+def _print_force3d_soft_acc(args, program, dataset, device, tag):
+    """Puzzle-only: P(satisfied) > 0.5 accuracy plus mean P per class."""
+    if getattr(args, "dataset", "clevr") != "force3d" or args.force3d_split != "puzzle" or dataset is None:
+        return
+    from force3d_dataset import soft_constraint_accuracy
+    acc, correct, total, p_pos, p_neg = soft_constraint_accuracy(
+        program, dataset, device=device, tnorm=("P" if args.tnorm in ("default", "auto") else args.tnorm))
+    print(f"{tag} soft accuracy: {acc:.2f}% ({correct}/{total})  mean P | yes={p_pos:.3f} no={p_neg:.3f}")
+
+
 def _print_force3d_ref_top1(args, program, dataset, device, tag):
     """REF-only: argmax-of-selection accuracy next to the built-in miotaL score."""
     if getattr(args, "dataset", "clevr") != "force3d" or args.force3d_split != "ref" or dataset is None:
@@ -401,6 +429,43 @@ def _print_force3d_ref_top1(args, program, dataset, device, tag):
     with torch.no_grad():
         acc, correct, total = force3d_ref_top1(program, dataset, device=device)
     print(f"{tag} REF top-1 accuracy: {acc:.2f}% ({correct}/{total})")
+
+
+def _init_head_prior(classifier, prior, weight_scale=0.05):
+    """Start a 2-way linear head at P(true) = prior.
+
+    Random heads output ~0.5 per predicate; an existsL over a joint table of
+    thousands of rows is then saturated at 1.0 for every question and the
+    label carries no signal (see the 3D-FORCE diagnosis).  Setting the bias to
+    the class log-odds and shrinking the weights makes the formula start
+    unsatisfied for most questions, so gradients discriminate.
+    """
+    import math
+    prior = min(max(float(prior), 1e-4), 1 - 1e-4)
+    with torch.no_grad():
+        classifier.weight.mul_(weight_scale)
+        classifier.bias.zero_()
+        classifier.bias[1] = math.log(prior / (1.0 - prior))
+    return classifier
+
+
+def _prior_for_name(attr_name, args):
+    """Class prior for a predicate head from the vocabulary structure."""
+    for group, values in g_attribute_concepts.items():
+        if attr_name in values:
+            return 1.0 / max(len(values), 2)
+    return getattr(args, "prior_relation", 0.25)
+
+
+FORCE3D_CURRICULUM_STRATEGY = [
+    # (start_epoch_exclusive, max_scene_size, max_program_size): scene-size only,
+    # 3D-FORCE has no short programs.  Small scenes keep the joint tables small
+    # while the predicate heads move away from their priors.
+    (0, 8, None),
+    (3, 10, None),
+    (6, None, None),
+    (10**9, None, None),
+]
 
 
 def _load_force3d_dataset(args, CACHE_DIR):
@@ -415,6 +480,9 @@ def _load_force3d_dataset(args, CACHE_DIR):
     from preprocess import preprocess_force3d
 
     clevr_dataset.set_vocabulary(FORCE3D_ATTRIBUTE_CONCEPTS, FORCE3D_RELATIONAL_CONCEPTS)
+    if args.curriculum != "none":
+        CURRICULUM_STRATEGY[:] = FORCE3D_CURRICULUM_STRATEGY
+        print("[force3d] using scene-size curriculum:", FORCE3D_CURRICULUM_STRATEGY[:-1])
     samples = preprocess_force3d(args, CACHE_DIR)
     train, test = split_by_scene(samples, args.force3d_test_scenes, seed=args.force3d_split_seed)
     if args.train_size is not None:
@@ -709,6 +777,18 @@ Examples:
                         help="Seed for the 3D-FORCE scene split")
     parser.add_argument("--force3d-view", choices=["first"], default="first",
                         help="Which view to feed the model (only 'first' = camera 0 for now)")
+    parser.add_argument("--program", choices=["inference", "semantic"], default="inference",
+                        help="Training objective: t-norm constraint loss (inference, default) or exact "
+                             "circuit semantic loss -log P(satisfied) (semantic).")
+    parser.add_argument("--circuit-backend", default="bdd", help="Semantic-loss circuit backend")
+    parser.add_argument("--circuit-max-nodes", type=int, default=200000)
+    parser.add_argument("--circuit-size-limit-action", default="raise")
+    parser.add_argument("--init-prior", action="store_true",
+                        help="Initialise each predicate head at its class prior (1/#values for "
+                             "attributes, --prior-relation for relations) instead of ~0.5, so "
+                             "existsL over large joint tables is not saturated at start.")
+    parser.add_argument("--prior-relation", type=float, default=0.25,
+                        help="Prior P(true) used by --init-prior for relation heads.")
     parser.add_argument("--infer-type", choices=["ILP", "local"], default="ILP",
                         help="Inference run by the model on every populate: 'ILP' (default, Gurobi) or "
                              "'local' (local/argmax only; ~2-10x faster evaluation, identical accuracy "
@@ -952,14 +1032,20 @@ def program_declaration(train, dev, args, device='cpu'):
         elif not args.use_vlm:
             if attr_name in spatial_relation_names:
                 classifier = torch.nn.Linear(1024, 2).to(device)
+                if getattr(args, "init_prior", False):
+                    _init_head_prior(classifier, _prior_for_name(attr_name, args))
                 classifiers[attr_name] = classifier
                 relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
             elif attr_name.startswith("same_"):
                 classifier = torch.nn.Linear(1024, 2).to(device)
+                if getattr(args, "init_prior", False):
+                    _init_head_prior(classifier, _prior_for_name(attr_name, args))
                 classifiers[attr_name] = classifier
                 relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
             else:
                 classifier = torch.nn.Linear(1024, 2).to(device)
+                if getattr(args, "init_prior", False):
+                    _init_head_prior(classifier, _prior_for_name(attr_name, args))
                 classifiers[attr_name] = classifier
                 object[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
         else:
@@ -1051,7 +1137,18 @@ def program_declaration(train, dev, args, device='cpu'):
             'hard_gumbel': args.hard_gumbel,
         })
 
-    program = InferenceProgramWithCallbacks(graph, SolverModel, **program_kwargs)
+    if getattr(args, "program", "inference") == "semantic":
+        # Exact -log P(formula) in log space: no vanishing product and no
+        # single-element Gödel gradient over large joint tables.
+        program_kwargs = {k: v for k, v in program_kwargs.items()
+                          if k not in ("tnorm", "pos_weight", "use_gumbel", "initial_temp", "final_temp",
+                                       "anneal_start_epoch", "anneal_epochs", "hard_gumbel")}
+        program_kwargs.update(circuit_backend=args.circuit_backend,
+                              circuit_max_nodes=args.circuit_max_nodes,
+                              circuit_size_limit_action=args.circuit_size_limit_action)
+        program = SemanticLossProgramWithCallbacks(graph, SolverModel, **program_kwargs)
+    else:
+        program = InferenceProgramWithCallbacks(graph, SolverModel, **program_kwargs)
 
     return program, train_dataset, dev_dataset, attribute_names_dict
 
@@ -1570,11 +1667,13 @@ def main(args):
                     with torch.no_grad():
                         epoch_train_acc = program.evaluate_condition(active_train_dataset, device=device)
                     print(f"Epoch {i + 1} {active_train_label} accuracy: {epoch_train_acc :.2f}%")
+                    _print_force3d_soft_acc(args, program, active_train_dataset, device, f"Epoch {i + 1} {active_train_label}")
                 if test_dataset is not None:
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
                     _print_force3d_ref_top1(args, program, test_dataset, device, f"Epoch {i + 1}")
+                    _print_force3d_soft_acc(args, program, test_dataset, device, f"Epoch {i + 1} test")
                     if _tb_writer is not None:
                         _tb_writer.add_scalar("test/acc", epoch_test_acc, i + 1)
 
