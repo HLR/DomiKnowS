@@ -1383,11 +1383,19 @@ class DataNode:
             set: Set of active executable constraint name strings.
         """
         read_labels = self.getExecutableConstraintLabels()
-        return {
+        names = {
             key[:-len('/label')]
             for key in read_labels
             if isinstance(key, str) and key.endswith('/label')
         }
+        # The constraint concept's own label sensor (e.g. ``constraint['label']``)
+        # is stored as ``label/label`` on the same DataNode. Keep only names
+        # that correspond to compiled executable constraints so that phantom
+        # entries never reach the ILP/answer solver.
+        executable = getattr(self.graph, 'executableLCs', None)
+        if executable is not None:
+            names = {name for name in names if name in executable}
+        return names
 
     def getExecutableConstraintBindings(self, lcName):
         """Return ordered concept-slot bindings for an executable template.
