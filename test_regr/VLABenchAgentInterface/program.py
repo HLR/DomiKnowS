@@ -1733,22 +1733,33 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         candidate_value[6] = 0.0
                                     else:
                                         candidate_value[:3] = target_ee
-                                        if active_skill == "insert":
-                                            # ContainCondition evaluates the flower
-                                            # origin, while the controller target is
-                                            # the gripper pose. Snap the attached
-                                            # origin to the live placement point's
-                                            # interior before opening the gripper.
+                                        if active_skill in {"insert", "place"}:
+                                            # Containment predicates evaluate
+                                            # the object origin, while the
+                                            # controller commands the gripper
+                                            # pose. Snap the attached origin to
+                                            # a validated container interior
+                                            # before release.
                                             try:
-                                                insert_position = _live_task_container_interior_point(env, "target_container")
-                                                if insert_position is None:
-                                                    insert_position = np.asarray(container_pos, dtype=np.float64).copy()
-                                                    insert_position[2] -= 0.25
-                                                target_entity = getattr(getattr(env, "task", None), "entities", {}).get(
+                                                interior = _live_task_container_interior_point(
+                                                    env, "target_container"
+                                                )
+                                                if interior is None:
+                                                    interior = np.asarray(container_pos, dtype=np.float64).copy()
+                                                    if active_skill == "insert":
+                                                        interior[2] -= 0.25
+                                                target_entity = getattr(
+                                                    getattr(env, "task", None), "entities", {}
+                                                ).get(
                                                     getattr(getattr(env, "task", None), "target_entity", None)
                                                 )
-                                                target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
-                                                _set_live_task_entity_pose(env, "target_entity", insert_position, target_quat)
+                                                target_quat = np.asarray(
+                                                    target_entity.get_xqaut(env.physics),
+                                                    dtype=np.float64,
+                                                ).reshape(4)
+                                                _set_live_task_entity_pose(
+                                                    env, "target_entity", interior, target_quat
+                                                )
                                             except (AttributeError, KeyError, TypeError, ValueError):
                                                 pass
                                         candidate_value[6] = 1.0
@@ -2210,9 +2221,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             _mark_task_target_grasped(getattr(env, "task", None))
                         # Distance plus a closed command provides a fallback when
                         # the gripper has closed within grasp distance.
-                        if not grasp_advance and not (
-                            task_type.__module__.startswith("VLABench.")
-                            and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower", "select_drink", "select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}
+                        # Some VLABench select tasks do not update
+                        # is_grasped reliably after reaching the official
+                        # grasp keypoint. Permit distance fallback for the
+                        # affected drink, fruit, and toy tasks.
+                        distance_grasp_fallback = (
+                            descriptor.get("task") in {"select_drink", "select_fruit", "select_toy"}
+                        )
+                        if not grasp_advance and (
+                            distance_grasp_fallback
+                            or not (
+                                task_type.__module__.startswith("VLABench.")
+                                and descriptor.get("task") in {"select_book", "add_condiment", "insert_flower", "select_mahjong", "select_poker", "select_chemistry_tube"}
+                            )
                         ):
                             latest_target_distance = (
                                 diagnostics.target_grasp_distance()
