@@ -2491,6 +2491,8 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     assert metrics["episodes"] == 2
     assert metrics["successful_task_count"] == 2
     assert metrics["success_rate"] == 1.0
+    assert metrics["per_task"]["select_book"]["progress"] == pytest.approx(1.0)
+    assert metrics["per_task"]["select_fruit"]["progress"] == pytest.approx(1.0)
     assert len(metrics["episode_diagnostics"]) == 2
     evidence = metrics["episode_diagnostics"][0]["diagnostics"]
     assert evidence["observations"] == 2

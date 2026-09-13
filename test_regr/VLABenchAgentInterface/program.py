@@ -353,6 +353,17 @@ def _task_signals(env, diagnostics: RolloutDiagnostics) -> tuple[float, float, s
     return progress, intention, "upstream"
 
 
+def _reported_episode_progress(episode: "JointEpisode") -> float:
+    """Use authoritative completion for aggregate progress metrics."""
+    if bool(episode.success):
+        return 1.0
+    diagnostics = episode.diagnostics if isinstance(episode.diagnostics, dict) else {}
+    return max(
+        float(diagnostics.get("final_progress", 0.0)),
+        float(diagnostics.get("distance_progress", 0.0)),
+    )
+
+
 def _press_button_fallback_plan(
     expected_pattern: Sequence[str],
     diagnostics: RolloutDiagnostics,
@@ -2824,11 +2835,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             totals["execution_complete"] += float(
                 episode.valid and episode.termination_reason != "ik_failure"
             )
-            diagnostics = episode.diagnostics if isinstance(episode.diagnostics, dict) else {}
-            final_progress = float(diagnostics.get("final_progress", 0.0))
-            distance_progress = float(diagnostics.get("distance_progress", 0.0))
-            # Use geometric progress when upstream progress remains zero.
-            totals["progress"] += max(final_progress, distance_progress)
+            totals["progress"] += _reported_episode_progress(episode)
         per_task = {
             task_name: {
                 "episodes": int(totals["episodes"]),
@@ -2939,10 +2946,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             totals["execution_complete"] += float(
                 episode.valid and episode.termination_reason != "ik_failure"
             )
-            diagnostics = episode.diagnostics if isinstance(episode.diagnostics, dict) else {}
-            final_progress = float(diagnostics.get("final_progress", 0.0))
-            distance_progress = float(diagnostics.get("distance_progress", 0.0))
-            totals["progress"] += max(final_progress, distance_progress)
+            totals["progress"] += _reported_episode_progress(episode)
         per_task = {
             name: {
                 "episodes": int(values["episodes"]),
