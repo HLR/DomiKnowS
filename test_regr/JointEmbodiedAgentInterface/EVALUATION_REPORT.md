@@ -8,9 +8,7 @@ This report compares three base training settings:
 2. VLABench only
 3. Joint EAI and VLABench
 
-Each base setting is evaluated both without reinforcement learning (the restored
-Stage 1 supervised checkpoint) and with reinforcement learning (the restored
-Stage 2 checkpoint), for six settings in total. End-to-end task success is the
+Each base setting is evaluated both without reinforcement learning (a fresh Stage 1 supervised run) and with reinforcement learning (the retained Stage 2 checkpoint), for six settings in total. End-to-end task success is the
 primary comparison metric. Sequence matching, graph/DFA validity, constraint
 satisfaction, and reward components are reported as supporting diagnostics.
 
@@ -19,10 +17,10 @@ satisfaction, and reward components are reported as supporting diagnostics.
 | Training setting | Without RL | With RL | Status |
 |---|---:|---:|---|
 | EAI only | 77.3% goal success | 79.5% goal success | Complete |
-| VLABench only | Stage 1 restored checkpoint | 78.75% simulator success; 10 successful tasks | Complete; best RL checkpoint retained |
-| Joint EAI and VLABench | Stage 1 validation complete | 73.75% VLABench success; 10 successful tasks | Complete; best Stage 2 checkpoint retained |
+| VLABench only | 76.67% simulator success; 9 successful tasks | 78.75% simulator success; 10 successful tasks | Complete; fresh Stage 1 and best RL runs |
+| Joint EAI and VLABench | 80.0% VLABench success; 10 successful tasks | 73.75% VLABench success; 10 successful tasks | Complete; fresh Stage 1 and best Stage 2 runs |
 
-The VLABench-only and Joint runs were completed on physical GPU 4 and GPU 5 respectively from saved snapshots. The best-run report below uses the latest retained checkpoints from commit `2b0a4045`.
+The VLABench-only and Joint best runs were completed on physical GPU 4 and GPU 5 respectively. The fresh no-RL baselines below used no `--resume` checkpoint and ran on commit `4e078750`; the RL results use the retained checkpoints from the preceding runs.
 ## EAI-only experiment
 
 ### Evaluation protocol
@@ -110,6 +108,13 @@ interpretation.
 - Ten primitive VLABench tasks were evaluated with eight rollouts per reinforcement update.
 - The run used the corrected camera mapping, controller frame v2, task contracts, and simulator diagnostics.
 
+### Fresh Stage 1 baseline (without RL)
+
+- Log: `test_regr/VLABenchAgentInterface/results/vlabench_without_rl_20260914_034901.log`
+- Checkpoint directory: `test_regr/VLABenchAgentInterface/checkpoints/vlabench_without_rl_20260914_034901`
+- Training: 3 supervised epochs plus 20,000 controller warm-up steps; RL disabled with `--rl-epochs 0`.
+- Simulator success rate: **76.67%** (9 successful tasks).
+
 ### Final retained result
 
 | Metric | Best retained VLABench RL checkpoint |
@@ -135,6 +140,13 @@ The final retained result is the `agent_rl_best.pt` checkpoint from this run. Su
 - EAI training examples: 438 (`394` train, `44` validation)
 - VLABench planning examples: 4,500 (`3,600` train, `450` validation, `450` test)
 - Stage 2 used ten rounds per epoch and eight VLABench rollouts per update.
+
+### Fresh Stage 1 baseline (without RL)
+
+- Log: `test_regr/JointEmbodiedAgentInterface/results/joint_without_rl_20260914_034901.log`
+- Checkpoint directory: `test_regr/JointEmbodiedAgentInterface/checkpoints/joint_without_rl_20260914_034901`
+- Training: 5 Stage 1 epochs plus 20,000 controller warm-up steps; Stage 2 disabled with `--stage2-epochs 0`.
+- Simulator success rate: **80.0%** (10 successful tasks).
 
 ### Final Stage 2 result
 
