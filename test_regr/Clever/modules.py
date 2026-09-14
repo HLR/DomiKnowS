@@ -33,6 +33,32 @@ def meshgrid_single(tensor, dim=0):
         b = tensor.unsqueeze(0).expand(n, n, -1)
     return a, b
 
+# Input resolution of ResnetLEFT.  Boxes given to LEFTObjectEMB and
+# LEFTRelationEMB are ROI-pooled on its stride-16 feature map, so they must be
+# expressed in this frame (see boxes_in_backbone_frame).
+BACKBONE_INPUT_SIZE = 224
+
+
+def boxes_in_backbone_frame(boxes, pil_image):
+    """Rescale raw pixel boxes [x1, y1, x2, y2] of ``pil_image`` into the
+    BACKBONE_INPUT_SIZE x BACKBONE_INPUT_SIZE frame ResnetLEFT resizes images to.
+
+    ResnetLEFT squashes every image to a square without keeping the aspect
+    ratio, so each axis is scaled independently.  Boxes are returned unchanged
+    when the image (and hence its size) is unknown.
+    """
+    import numpy as _np
+    arr = _np.asarray(boxes if boxes is not None else _np.zeros((0, 4)), dtype=_np.float32)
+    arr = arr.reshape(-1, 4).copy()
+    size = getattr(pil_image, "size", None)
+    if pil_image is None or len(arr) == 0 or callable(size) or not size:
+        return arr
+    width, height = size
+    arr[:, [0, 2]] *= BACKBONE_INPUT_SIZE / float(width)
+    arr[:, [1, 3]] *= BACKBONE_INPUT_SIZE / float(height)
+    return arr
+
+
 class ResnetLEFT(torch.nn.Module):
     def __init__(self, device):
         super().__init__()
@@ -52,7 +78,7 @@ class ResnetLEFT(torch.nn.Module):
         # No avgpool or fc (incl_gap=False, num_classes=None)
 
         self.preprocessor = T.Compose([
-            T.Resize((224, 224)),
+            T.Resize((BACKBONE_INPUT_SIZE, BACKBONE_INPUT_SIZE)),
             T.ToTensor(),
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -78,7 +104,7 @@ class ResnetLEFT(torch.nn.Module):
             if image.size(0) == 1:  # Single channel, convert to 3 channels
                 image = image.repeat(3, 1, 1)
             x = torch.nn.functional.interpolate(
-                image.unsqueeze(0), size=(224, 224), mode='bilinear', align_corners=False
+                image.unsqueeze(0), size=(BACKBONE_INPUT_SIZE, BACKBONE_INPUT_SIZE), mode='bilinear', align_corners=False
             )
             x = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(x.squeeze(0))
             x = x.unsqueeze(0).to(self.device)

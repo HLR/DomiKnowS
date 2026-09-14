@@ -83,12 +83,12 @@ from domiknows.program.plugins.grad_chain_diagnostic import GradChainDiagnostic
 try:
     from .preprocess import preprocess_dataset, preprocess_folders_and_files, load_full_dataset
     from .graph import create_graph
-    from .modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+    from .modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer, boxes_in_backbone_frame
     from .dataset import g_relational_concepts, g_attribute_concepts
 except ImportError:
     from preprocess import preprocess_dataset, preprocess_folders_and_files, load_full_dataset
     from graph import create_graph
-    from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+    from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer, boxes_in_backbone_frame
     from dataset import g_relational_concepts, g_attribute_concepts
 
 RUN_DIR = Path(__file__).parent.resolve()
@@ -489,6 +489,12 @@ def _load_force3d_dataset(args, CACHE_DIR):
         train = train[args.train_start: args.train_start + args.train_size]
     if args.test_size is not None:
         test = test[: args.test_size]
+    if args.force3d_split == "puzzle" and train and test:
+        from force3d_dataset import structure_only_baseline
+        struct_acc, majority_acc, n_eval = structure_only_baseline(train, test)
+        print(f"[force3d] structure-only baseline (question structure, no image): {struct_acc:.1f}% "
+              f"held-out, majority class {majority_acc:.1f}%, n={n_eval}; a model must beat "
+              f"the structure baseline, not 50%")
     for d in train:
         d["force3d_role"] = "train"
     for d in test:
@@ -882,6 +888,16 @@ def program_declaration(train, dev, args, device='cpu'):
             dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['answer'])]).to(device)
             dataset[i]["query_type"] = None
 
+    # Boxes for the ResNet path, in the backbone's input frame.  ResnetLEFT
+    # resizes every image to BACKBONE_INPUT_SIZE squared, so raw pixel boxes
+    # (objects_raw) must be rescaled per axis.  Feeding them unscaled pooled
+    # features from the wrong region: 60% of 3D-FORCE objects had zero overlap
+    # with their box and 59% of CLEVR object centres fell outside the map.
+    # objects_raw itself stays in pixels for the VLM and oracle paths.
+    for i in range(len(dataset)):
+        dataset[i]["objects_backbone"] = boxes_in_backbone_frame(
+            dataset[i].get("objects_raw"), dataset[i].get("pil_image"))
+
     # Pre-compute oracle ground truth
     if args.oracle_mode:
         import math
@@ -953,6 +969,9 @@ def program_declaration(train, dev, args, device='cpu'):
     image["image_id"] = FunctionalReaderSensor(keyword='image_index', forward=lambda data: [data])
     object["bounding_boxes"] = FunctionalReaderSensor(keyword="objects_raw",
                                                       forward=lambda data: torch.Tensor(data).to(device))
+    # Same boxes rescaled into the ResNet backbone frame (used for ROI pooling).
+    object["backbone_boxes"] = FunctionalReaderSensor(keyword="objects_backbone",
+                                                      forward=lambda data: torch.Tensor(data).to(device))
     object["properties"] = ReaderSensor(keyword="all_objects")
     object["image_id"] = FunctionalSensor(image["image_id"], "bounding_boxes",
                                           forward=lambda data, data2: data * len(data2))
@@ -962,10 +981,10 @@ def program_declaration(train, dev, args, device='cpu'):
         resnet_model = ResnetLEFT(device=device)
         image["emb"] = ModuleSensor("image_id", "pil_image", module=resnet_model, device=device)
         object_feature_extraction_model = LEFTObjectEMB(device=device)
-        object["feature_emb"] = ModuleLearner(image["emb"], "bounding_boxes", 
+        object["feature_emb"] = ModuleLearner(image["emb"], "backbone_boxes", 
                                               module=object_feature_extraction_model, device=device)
         object_feature_fc = LinearLayer(128 * 32 * 32, 1024, device=device)
-        object["emb"] = ModuleLearner("feature_emb", "bounding_boxes", 
+        object["emb"] = ModuleLearner("feature_emb", "backbone_boxes", 
                                       module=object_feature_fc, device=device)
         _models['resnet'] = resnet_model
         _models['object_emb'] = object_feature_extraction_model
@@ -983,13 +1002,13 @@ def program_declaration(train, dev, args, device='cpu'):
     
     if not args.use_vlm and not args.oracle_mode:
         object_relation_extraction = LEFTRelationEMB(input_size=256, output_size=1024, device=device)
-        relaton_2_obj["emb"] = ModuleLearner(image["emb"], object["bounding_boxes"], 
+        relaton_2_obj["emb"] = ModuleLearner(image["emb"], object["backbone_boxes"], 
                                              object["feature_emb"],
                                              module=object_relation_extraction, device=device)
         if relation_2_obj_rev is not None:
             relation_2_obj_rev["emb"] = ModuleLearner(
                 image["emb"],
-                object["bounding_boxes"],
+                object["backbone_boxes"],
                 object["feature_emb"],
                 module=object_relation_extraction,
                 device=device,

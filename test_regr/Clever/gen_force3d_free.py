@@ -1,13 +1,27 @@
-"""Free generation of 3D-FORCE-style puzzles on scenes the released splits do not use.
+"""Contrastive free generation of 3D-FORCE-style puzzles on scenes the released splits do not use.
 
-No distractor or uniqueness constraints: programs are sampled at random and
-their answers computed exactly from the scene geometry (object positions,
-headings and ring cameras), the same oracle that reproduces 100% of the
-released labels.  Output is the released ``3DForcePuzzle.json`` layout so
-``force3d_dataset.load_force3d`` reads it unchanged.
+Every question is emitted as a pair with identical structure:
+
+* a positive whose variables are anchored on real, distinct objects, with
+  descriptors and relations that hold for those anchors, and
+* a negative made by one minimal edit that renders the formula unsatisfiable:
+  flip one relation to its opposite on the same axis and perspective
+  (``left_1`` -> ``right_1``, ``obj_front`` -> ``obj_behind``), or swap one
+  descriptor value for another value of the same attribute.
+
+Both members have the same number of variables, descriptor tokens, bare
+variables and relations per perspective, so question structure alone predicts
+the answer at chance.  The earlier unpaired sampler leaked the answer through
+structure: longer formulas were mostly false and a structure-only lookup
+reached 73.7% held-out, above the trained model.
+
+No distractor or uniqueness constraints.  Answers and solutions are computed
+exactly from scene geometry (100% agreement with the released labels).  Output
+uses the released ``3DForcePuzzle.json`` layout plus ``pair_id`` and
+``negative_edit``, readable by ``force3d_dataset.load_force3d``.
 
 Example:
-    python gen_force3d_free.py --out free_puzzles.json --num-scenes 200 --per-scene 10 --seed 0
+    python gen_force3d_free.py --out generated/free_pairs_all.json --num-scenes 5000 --per-scene 10 --seed 1
 """
 from __future__ import annotations
 
@@ -20,14 +34,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-import numpy as np
-
 import force3d_dataset as F
 
 SHARED_PREFIX = F.SHARED_PREFIX
 COLORS = F.FORCE3D_ATTRIBUTE_CONCEPTS["color"]
 SHAPES = F.FORCE3D_ATTRIBUTE_CONCEPTS["shape"]
-DIRECTIONS = list(F.DIRECTIONS)
+AXES = [("left", "right"), ("front", "behind")]
 
 SHAPE_TEXT = {
     "airliner": "airliner", "biplane": "biplane", "double": "double-decker bus", "fighter": "fighter jet",
@@ -35,6 +47,8 @@ SHAPE_TEXT = {
     "sedan": "sedan car", "suv": "SUV", "tank": "tank", "truck": "pickup truck",
 }
 DIR_TEXT = {"left": "left of", "right": "right of", "front": "in front of", "behind": "behind"}
+
+Relation = Tuple[str, int, int]  # (question relation name, variable index a, variable index b)
 
 
 def used_scene_dirs(root: Path) -> set:
@@ -61,72 +75,22 @@ def load_scene(root: Path, scene_dir: str, mode: str):
     if bfile.exists():
         bobjs = sorted(json.load(open(bfile))["objects"], key=lambda o: o["slot"])
         if len(bobjs) == len(scene["objects"]):
-            boxes = [[round(float(x), 1) for x in o["bbox_2d_pixels"]] for o in bobjs]
+            boxes = [[round(float(x), 1) for x in (o.get("bbox_2d_clipped") or o["bbox_2d_pixels"])]
+                     for o in bobjs]
     return scene, cameras, hashes, boxes
 
 
-def descriptor(obj: dict, rng: random.Random, bare_prob: float) -> Tuple[List[str], str]:
-    """Unary predicates for a variable, sampled to be TRUE of ``obj`` (so
-    positives exist) — negatives arise from relations and from swapping."""
-    r = rng.random()
-    if r < bare_prob:
-        return [], "object"
-    kind = rng.choice(["color", "shape", "both"])
-    if kind == "color":
-        return [obj["color"]], f"{obj['color']} object"
-    if kind == "shape":
-        return [obj["shape"]], SHAPE_TEXT[obj["shape"]]
-    return [obj["color"], obj["shape"]], f"{obj['color']} {SHAPE_TEXT[obj['shape']]}"
-
-
-def sample_program(scene, n_views: int, rng: random.Random, max_vars: int, bare_prob: float,
-                   perturb_prob: float):
-    """Sample k variables anchored on k distinct objects, plus random relations.
-
-    Unaries are drawn true of their anchor object; then with ``perturb_prob``
-    one unary is replaced by a random value, so negatives are not only
-    relation failures.  Truth is decided afterwards by exact evaluation.
-    """
-    objs = scene["objects"]
-    n = len(objs)
-    k = rng.randint(1, min(max_vars, n))
-    anchors = rng.sample(range(n), k)
-    unaries: List[List[str]] = []
-    texts: List[str] = []
-    for a in anchors:
-        preds, text = descriptor(objs[a], rng, bare_prob)
-        unaries.append(preds)
-        texts.append(text)
-    if k > 0 and rng.random() < perturb_prob:
-        i = rng.randrange(k)
-        if unaries[i]:
-            j = rng.randrange(len(unaries[i]))
-            pool = COLORS if unaries[i][j] in COLORS else SHAPES
-            unaries[i][j] = rng.choice(pool)
-            texts[i] = " ".join(p if p in COLORS else SHAPE_TEXT[p] for p in unaries[i]) or "object"
-            if len(unaries[i]) == 1 and unaries[i][0] in COLORS:
-                texts[i] += " object"
-    # relations: 0..k-1 edges among distinct pairs, random perspective
-    n_rel = rng.randint(0, max(0, k - 1)) if k >= 2 else 0
-    pairs = list(itertools.permutations(range(k), 2))
-    rng.shuffle(pairs)
-    relations = []
-    persp = set()
-    for (i, j) in pairs[:n_rel]:
-        d = rng.choice(DIRECTIONS)
-        if rng.random() < 0.5:
-            name, kind = f"obj_{d}", "object"
-        else:
-            cam = rng.randrange(n_views)
-            name, kind = f"{d}_{cam}", "camera"
-        relations.append((name, i, j))
-        persp.add(kind)
-    perspective = None if not persp else ("mixed" if len(persp) > 1 else persp.pop())
-    return k, unaries, texts, relations, perspective
+def descriptor_text(preds: Sequence[str]) -> str:
+    if not preds:
+        return "object"
+    words = [p if p in COLORS else SHAPE_TEXT[p] for p in preds]
+    if all(p in COLORS for p in preds):
+        words.append("object")
+    return " ".join(words)
 
 
 def evaluate(scene, rel_matrix, rel_index, k, unaries, relations):
-    """All distinct assignments satisfying the program (exact semantics)."""
+    """Up to two distinct assignments satisfying the program (exact semantics)."""
     objs = scene["objects"]
     n = len(objs)
 
@@ -145,7 +109,7 @@ def evaluate(scene, rel_matrix, rel_index, k, unaries, relations):
     def bt(v, assign):
         if v == k:
             sols.append(dict(assign))
-            return len(sols) >= 2  # we only need to know: none / at least one
+            return len(sols) >= 2
         for i in cands[v]:
             if i in assign.values():
                 continue
@@ -159,14 +123,69 @@ def evaluate(scene, rel_matrix, rel_index, k, unaries, relations):
     return sols
 
 
+def sample_positive(scene, rel_matrix, rel_index, n_views: int, rng: random.Random, max_vars: int,
+                    bare_prob: float):
+    """Variables anchored on distinct objects; every descriptor and relation holds for the anchors."""
+    objs = scene["objects"]
+    n = len(objs)
+    k = rng.randint(1, min(max_vars, n))
+    anchors = rng.sample(range(n), k)
+    unaries: List[List[str]] = []
+    for a in anchors:
+        if rng.random() < bare_prob:
+            unaries.append([])
+            continue
+        o = objs[a]
+        kind = rng.choice(["color", "shape", "both"])
+        unaries.append([o["color"]] if kind == "color" else
+                       [o["shape"]] if kind == "shape" else [o["color"], o["shape"]])
+    n_rel = rng.randint(0, k - 1) if k >= 2 else 0
+    pairs = list(itertools.permutations(range(k), 2))
+    rng.shuffle(pairs)
+    relations: List[Relation] = []
+    for (i, j) in pairs:
+        if len(relations) >= n_rel:
+            break
+        axis = rng.choice(AXES)
+        if rng.random() < 0.5:
+            names = [f"obj_{d}" for d in axis]
+        else:
+            cam = rng.randrange(n_views)
+            names = [f"{d}_{cam}" for d in axis]
+        holding = [nm for nm in names if rel_matrix[anchors[i] * n + anchors[j], rel_index[nm]] > 0.5]
+        if holding:  # exactly one direction of an axis holds unless the objects are aligned
+            relations.append((holding[0], i, j))
+    return k, unaries, relations
+
+
+def negative_twin(scene, rel_matrix, rel_index, k, unaries, relations, rng: random.Random):
+    """One structure-preserving edit that makes the formula unsatisfiable, or None."""
+    edits = [("relation", r) for r in range(len(relations))]
+    edits += [("descriptor", v, t) for v in range(k) for t in range(len(unaries[v]))]
+    rng.shuffle(edits)
+    for edit in edits:
+        new_unaries = [list(u) for u in unaries]
+        new_relations = list(relations)
+        if edit[0] == "relation":
+            name, a, b = new_relations[edit[1]]
+            new_relations[edit[1]] = (F.opposite_relation(name), a, b)
+        else:
+            v, t = edit[1], edit[2]
+            token = new_unaries[v][t]
+            pool = COLORS if token in COLORS else SHAPES
+            new_unaries[v][t] = rng.choice([p for p in pool if p != token])
+        if not evaluate(scene, rel_matrix, rel_index, k, new_unaries, new_relations):
+            return new_unaries, new_relations, edit[0]
+    return None
+
+
 def program_string(k, unaries, relations):
     parts = []
     for v in range(k):
         parts += [f"{p}(x{v + 1})" for p in unaries[v]]
     for name, a, b in relations:
         parts.append(f"{name}(x{a + 1}, x{b + 1})")
-    body = " and ".join(parts) if parts else "True"
-    prog = body
+    prog = " and ".join(parts) if parts else "True"
     for v in range(k, 0, -1):
         prog = f"exists(Object, lambda x{v}: {prog})" if v < k else f"exists(Object, lambda x{v}: {prog} )"
     return prog
@@ -174,16 +193,39 @@ def program_string(k, unaries, relations):
 
 def question_text(k, texts, relations):
     words = ["one", "two", "three", "four", "five", "six"]
-    parts = [f"object {v + 1} is a {texts[v]}" if not texts[v].startswith(("a", "e", "i", "o", "u", "S")) or texts[v] == "object"
-             else f"object {v + 1} is an {texts[v]}" for v in range(k)]
+    parts = [f"object {v + 1} is an {texts[v]}" if texts[v][0] in "aeiouAEIOUS" and texts[v] != "object"
+             else f"object {v + 1} is a {texts[v]}" for v in range(k)]
     for name, a, b in relations:
         if name.startswith("obj_"):
-            d = name[4:]
-            parts.append(f"object {a + 1} is {DIR_TEXT[d]} object {b + 1} from object {b + 1}'s perspective")
+            parts.append(f"object {a + 1} is {DIR_TEXT[name[4:]]} object {b + 1} from object {b + 1}'s perspective")
         else:
             d, cam = name.rsplit("_", 1)
             parts.append(f"object {a + 1} is {DIR_TEXT[d]} object {b + 1} from camera {cam} perspective")
-    return f"Can you find {words[k - 1]} object{'s' if k > 1 else ''} from the image such that: " + "; ".join(parts) + "."
+    return (f"Can you find {words[k - 1]} object{'s' if k > 1 else ''} from the image such that: "
+            + "; ".join(parts) + ".")
+
+
+def make_question(scene_dir, hashes, boxes, k, unaries, relations, answer, solution, pair_id, edit):
+    texts = [descriptor_text(u) for u in unaries]
+    kinds = {"object" if name.startswith("obj_") else "camera" for name, _, _ in relations}
+    perspective = None if not kinds else ("mixed" if len(kinds) > 1 else next(iter(kinds)))
+    return {
+        "image_index": int(scene_dir.split("_")[1]),
+        "image_filename": [f"{SHARED_PREFIX}{scene_dir}/{h}/image.png" for h in hashes],
+        "slot_dict": {**{f"OBJ{v + 1}": texts[v] for v in range(k)},
+                      **{f"R{i}": [a + 1, b + 1, name] for i, (name, a, b) in enumerate(relations)}},
+        "solution": {str(v + 1): solution[v] for v in range(k)} if solution else None,
+        "question": question_text(k, texts, relations),
+        "program": program_string(k, unaries, relations),
+        "answer": answer,
+        "solution_indexes": [solution[v] for v in range(k)] if solution else [],
+        "relation_perspective": perspective,
+        "bboxes": boxes,
+        "n_vars": k,
+        "n_relations": len(relations),
+        "pair_id": pair_id,
+        "negative_edit": edit,
+    }
 
 
 def main():
@@ -191,15 +233,13 @@ def main():
     ap.add_argument("--root", default=str(F.FORCE3D_ROOT))
     ap.add_argument("--out", required=True)
     ap.add_argument("--num-scenes", type=int, default=200)
-    ap.add_argument("--per-scene", type=int, default=10)
+    ap.add_argument("--per-scene", type=int, default=10, help="questions per scene (even: emitted as pairs)")
     ap.add_argument("--views", default="mixed", choices=["fixed_2", "fixed_3", "fixed_4", "mixed"])
     ap.add_argument("--max-vars", type=int, default=5)
     ap.add_argument("--bare-prob", type=float, default=0.1)
-    ap.add_argument("--perturb-prob", type=float, default=0.3)
-    ap.add_argument("--balance", type=float, default=0.5, help="target share of answer=True")
     ap.add_argument("--include-used", action="store_true", help="also use scenes of the released splits")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-tries", type=int, default=60)
+    ap.add_argument("--max-tries", type=int, default=80)
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
@@ -208,8 +248,9 @@ def main():
     scenes = sorted(d for d in os.listdir(root / "multiview") if d.startswith("scene_") and d not in used)
     rng.shuffle(scenes)
     scenes = scenes[: args.num_scenes]
-    rel_index = {n: i for i, n in enumerate(F.FORCE3D_RELATIONS)}
+    rel_index = {n: i for i, n in enumerate(F.QUESTION_RELATIONS)}
     conv = F.RelationConvention()
+    n_pairs = max(1, args.per_scene // 2)
 
     questions = []
     stats = Counter()
@@ -220,48 +261,44 @@ def main():
         except (FileNotFoundError, KeyError):
             stats["scene_skipped"] += 1
             continue
-        rel_matrix = F.compute_relation_labels(scene, cameras, F.FORCE3D_RELATIONS, conv)
-        n_views = len(cameras)
-        got_true = got_false = 0
-        want_true = round(args.per_scene * args.balance)
-        tries = 0
-        while got_true + got_false < args.per_scene and tries < args.max_tries:
+        rel_matrix = F.compute_relation_labels(scene, cameras, F.QUESTION_RELATIONS, conv)
+        made = tries = 0
+        while made < n_pairs and tries < args.max_tries:
             tries += 1
-            k, unaries, texts, relations, persp = sample_program(scene, n_views, rng, args.max_vars,
-                                                                  args.bare_prob, args.perturb_prob)
+            k, unaries, relations = sample_positive(scene, rel_matrix, rel_index, len(cameras), rng,
+                                                    args.max_vars, args.bare_prob)
             if not any(unaries) and not relations:
-                continue  # trivially true "find k objects": no content to learn
-            sols = evaluate(scene, rel_matrix, rel_index, k, unaries, relations)
-            answer = bool(sols)
-            if answer and got_true >= want_true:
+                continue  # "find k objects" with no content
+            solutions = evaluate(scene, rel_matrix, rel_index, k, unaries, relations)
+            if not solutions:
+                stats["positive_check_failed"] += 1  # cannot happen: the anchors satisfy it
                 continue
-            if not answer and got_false >= args.per_scene - want_true:
+            negative = negative_twin(scene, rel_matrix, rel_index, k, unaries, relations, rng)
+            if negative is None:
+                stats["no_structure_preserving_negative"] += 1
                 continue
-            got_true += answer
-            got_false += not answer
-            sol = sols[0] if answer else None
-            questions.append({
-                "image_index": int(scene_dir.split("_")[1]),
-                "image_filename": [f"{SHARED_PREFIX}{scene_dir}/{h}/image.png" for h in hashes],
-                "slot_dict": {**{f"OBJ{v + 1}": texts[v] for v in range(k)},
-                              **{f"R{i}": [a + 1, b + 1, name] for i, (name, a, b) in enumerate(relations)}},
-                "solution": {str(v + 1): sol[v] for v in range(k)} if sol else None,
-                "question": question_text(k, texts, relations),
-                "program": program_string(k, unaries, relations),
-                "answer": answer,
-                "solution_indexes": [sol[v] for v in range(k)] if sol else [],
-                "relation_perspective": persp,
-                "bboxes": boxes,
-                "n_vars": k,
-                "n_relations": len(relations),
-            })
-            stats[f"k={k}"] += 1
-            stats["true" if answer else "false"] += 1
-    out = {"tasks": [{"subset": f"free_{args.views}_seed{args.seed}", "data": {"questions": questions}}]}
+            neg_unaries, neg_relations, edit = negative
+            pair_id = f"{scene_dir}_{mode}_p{made}"
+            questions.append(make_question(scene_dir, hashes, boxes, k, unaries, relations, True,
+                                           solutions[0], pair_id, None))
+            questions.append(make_question(scene_dir, hashes, boxes, k, neg_unaries, neg_relations, False,
+                                           None, pair_id, edit))
+            made += 1
+            stats[f"k={k}"] += 2
+            stats[f"negative_by_{edit}"] += 1
+    out = {"tasks": [{"subset": f"free_pairs_{args.views}_seed{args.seed}", "data": {"questions": questions}}]}
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     json.dump(out, open(args.out, "w"))
-    print(f"wrote {len(questions)} questions from {len(scenes)} scenes -> {args.out}")
+    print(f"wrote {len(questions)} questions ({len(questions) // 2} pairs) from {len(scenes)} scenes -> {args.out}")
     print(dict(sorted(stats.items())))
+
+    # Self-check: question structure must not predict the answer.
+    light = [{"program_str": q["program"], "answer": q["answer"],
+              "scene_dir": q["image_filename"][0].split("/")[-3]} for q in questions]
+    train, test = F.split_by_scene(light, max(1, len({s["scene_dir"] for s in light}) // 10), seed=0)
+    struct_acc, majority_acc, n_eval = F.structure_only_baseline(train, test)
+    print(f"structure-only baseline on 10% held-out scenes: {struct_acc:.1f}% "
+          f"(majority class {majority_acc:.1f}%, n={n_eval})")
 
 
 if __name__ == "__main__":

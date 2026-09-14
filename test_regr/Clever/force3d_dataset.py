@@ -7,8 +7,9 @@ executable logic strings, and derives oracle spatial-relation labels from the
 3D scene geometry.
 
 Sample contract (what ``main.py`` reads):
-    pil_image, image_filename, image_index, objects_raw (float32 n x 4 in the
-    transformed image), all_objects (list of dicts with color/shape/...),
+    pil_image, image_filename, image_index, objects_raw (float32 n x 4, raw pixel
+    coordinates of pil_image; main.py rescales them into the backbone frame),
+    all_objects (list of dicts with color/shape/...),
     logic_str, answer, question_raw, program (list, for curriculum sizing),
     relation_spatial_relation (float32 (n*n, R), oracle mode only) and, for
     REF, a precomputed one-hot ``logic_label``.
@@ -46,23 +47,40 @@ FORCE3D_ATTRIBUTE_CONCEPTS: Dict[str, List[str]] = {
     ],
 }
 
-# Relation vocabulary.  Plain names are aliases of the chosen view's camera
-# (camera 0 in single-view mode) so graph.py's opposite/inverse constraints
-# still attach to them.  ``obj_*`` are anchor-object perspective relations and
-# ``*_k`` are camera-k perspective relations (k indexes the question's
-# image_filename list).
+# Relation vocabulary.
+#
+# Questions name camera relations by camera index (``left_k``: left of, seen
+# from the question's k-th view).  The angle of camera k relative to camera 0
+# depends on the view setup (camera 1 is 180/120/90 degrees away in 2/3/4-view
+# scenes, arbitrary for random views), so one head per index name receives
+# contradictory labels (50% agreement between 2- and 4-view renderings of the
+# same scene).  Every camera relation is a half-plane test along a
+# ground-plane direction, so the model vocabulary expresses it as a direction
+# in camera 0's frame (the fed view), quantised to DIR_BIN_DEG degrees:
+# ``dir0`` = right of (camera 0), ``dir90`` = in front of (toward camera 0),
+# ``dir180`` = left of, ``dir270`` = behind.  ``camera_relation_bins`` maps a
+# question's names onto these bins with that question's cameras; fixed
+# 2/3/4-view setups map exactly, random views within DIR_BIN_DEG / 2.
+# ``obj_*`` are anchor-object perspective relations (heading dependent).
 # ``distinct`` is a fixed (never learned) identity relation: distinct(i, j)
 # iff i != j.  The puzzle/REF semantics require every logical variable to
 # bind a different object, which the existential reading of andL does not
 # enforce on its own; the translator adds distinct('x', 'y') for every pair
 # of variables.  main.py wires it through OracleDummyLearner in all modes.
 DISTINCT = "distinct"
-FORCE3D_RELATIONS: List[str] = (
+DIR_BIN_DEG = 30
+CAMERA_DIRECTION_RELATIONS: List[str] = [f"dir{a}" for a in range(0, 360, DIR_BIN_DEG)]
+OBJECT_RELATIONS: List[str] = [f"obj_{d}" for d in DIRECTIONS]
+# Names that may appear in question programs (exact question semantics; used by
+# the oracle check and the free generator).
+QUESTION_RELATIONS: List[str] = (
     list(DIRECTIONS)
-    + [f"obj_{d}" for d in DIRECTIONS]
+    + OBJECT_RELATIONS
     + [f"{d}_{k}" for k in range(N_CAMERAS) for d in DIRECTIONS]
     + [DISTINCT]
 )
+# Names the model learns, one head each.
+FORCE3D_RELATIONS: List[str] = CAMERA_DIRECTION_RELATIONS + OBJECT_RELATIONS + [DISTINCT]
 FORCE3D_RELATIONAL_CONCEPTS: Dict[str, List[str]] = {
     "spatial_relation": FORCE3D_RELATIONS,
 }
@@ -71,9 +89,12 @@ _OPPOSITE = {"left": "right", "right": "left", "front": "behind", "behind": "fro
 
 
 def opposite_relation(name: str) -> str:
-    """left_2 -> right_2, obj_front -> obj_behind, left -> right, distinct -> distinct."""
+    """left_2 -> right_2, obj_front -> obj_behind, left -> right, dir30 -> dir210,
+    distinct -> distinct."""
     if name == DISTINCT:
         return DISTINCT
+    if name.startswith("dir") and name[3:].isdigit():
+        return f"dir{(int(name[3:]) + 180) % 360}"
     for d in DIRECTIONS:
         if name == d:
             return _OPPOSITE[d]
@@ -89,7 +110,7 @@ def opposite_relation(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 _UNARY = set(v for vals in FORCE3D_ATTRIBUTE_CONCEPTS.values() for v in vals)
-_BINARY = set(FORCE3D_RELATIONS)
+_BINARY = set(FORCE3D_RELATIONS) | set(QUESTION_RELATIONS)
 _QUANTIFIERS = {"exists", "point", "iota"}
 
 
@@ -102,8 +123,8 @@ def _var_letter(index: int) -> str:
 class _Translator:
     """AST walker turning 3D-FORCE lambda programs into DomiKnowS logic."""
 
-    def __init__(self, camera_alias: Optional[int] = 0):
-        self.camera_alias = camera_alias
+    def __init__(self, camera_bins: Optional[Dict[str, str]] = None):
+        self.camera_bins = camera_bins
         self.var_map: Dict[str, str] = {}
         self.unary: Dict[str, List[str]] = defaultdict(list)  # letter -> terms
         self.binary: List[str] = []
@@ -122,11 +143,11 @@ class _Translator:
     def _rel_name(self, name: str) -> str:
         if name not in _BINARY:
             raise ValueError(f"unknown binary predicate {name!r}")
-        if self.camera_alias is not None:
-            suffix = f"_{self.camera_alias}"
-            base = name[: -len(suffix)] if name.endswith(suffix) else None
-            if base in DIRECTIONS:
-                return base
+        is_camera_name = not (name.startswith("obj_") or name.startswith("dir") or name == DISTINCT)
+        if self.camera_bins is not None and is_camera_name:
+            if name not in self.camera_bins:
+                raise ValueError(f"camera relation {name!r} refers to a view this question does not have")
+            return self.camera_bins[name]
         return name
 
     # -- walkers ----------------------------------------------------------
@@ -207,16 +228,17 @@ class _Translator:
         return f"miotaL({inner}, threshold=0.5, hard=False)"
 
 
-def translate_force3d_program(program_str: str, camera_alias: Optional[int] = 0) -> str:
+def translate_force3d_program(program_str: str, camera_bins: Optional[Dict[str, str]] = None) -> str:
     """Translate a 3D-FORCE program string into a DomiKnowS logic string.
 
     Puzzle (``exists``) programs become ``existsL(andL(...))``; REF (``point``)
     programs become ``miotaL(andL(...), threshold=0.5, hard=False)`` whose
     first variable ``'a'`` is the selected object.  Nested ``iota`` anchors are
-    flattened into extra existential variables.  ``camera_alias`` maps
-    ``<dir>_<k>`` for that camera index onto the plain ``<dir>`` relation.
+    flattened into extra existential variables.  ``camera_bins`` (from
+    ``camera_relation_bins``) maps camera-index relation names such as
+    ``left_2`` onto the model's direction bins; without it names are kept.
     """
-    return _Translator(camera_alias).translate(program_str)
+    return _Translator(camera_bins).translate(program_str)
 
 
 def program_predicates(program_str: str) -> List[str]:
@@ -270,6 +292,42 @@ def camera_direction_vectors(scene: dict, camera: dict) -> Dict[str, np.ndarray]
     return {"front": -fwd, "behind": fwd, "left": -right, "right": right}
 
 
+def _direction_unit(camera0_dirs: Dict[str, np.ndarray], bin_name: str) -> np.ndarray:
+    """Ground-plane unit vector of a ``dirA`` bin in camera 0's frame."""
+    a = math.radians(int(bin_name[3:]))
+    c, s = math.cos(a), math.sin(a)
+    # Snap floating-point residue (cos 90 = 6e-17) so axis-aligned bins equal
+    # the camera-0 relations exactly, including for exactly aligned objects.
+    c = 0.0 if abs(c) < 1e-12 else c
+    s = 0.0 if abs(s) < 1e-12 else s
+    return c * camera0_dirs["right"] + s * camera0_dirs["front"]
+
+
+def camera_relation_bins(scene: dict, cameras: Sequence[dict]) -> Tuple[Dict[str, str], float]:
+    """Map a question's camera-relation names to model direction bins.
+
+    Returns ``({"left_1": "dir0", ..., "left": "dir180", ...}, worst_error_deg)``
+    where the error is the largest angle between a relation's exact direction
+    and its bin centre (0 for fixed 2/3/4-view setups).
+    """
+    base = camera_direction_vectors(scene, cameras[0])
+    right0, front0 = base["right"], base["front"]
+    mapping: Dict[str, str] = {}
+    worst = 0.0
+    n_bins = 360 // DIR_BIN_DEG
+    for k, cam in enumerate(cameras):
+        vecs = camera_direction_vectors(scene, cam)
+        for d in DIRECTIONS:
+            v = vecs[d]
+            ang = math.degrees(math.atan2(float(v @ front0), float(v @ right0))) % 360.0
+            b = (int(round(ang / DIR_BIN_DEG)) % n_bins) * DIR_BIN_DEG
+            worst = max(worst, abs((ang - b + 180.0) % 360.0 - 180.0))
+            mapping[f"{d}_{k}"] = f"dir{b}"
+            if k == 0:
+                mapping[d] = f"dir{b}"
+    return mapping, worst
+
+
 def relation_holds(name: str, i: int, j: int, coords: np.ndarray, rotations: Sequence[float],
                    camera_dirs: Dict[int, Dict[str, np.ndarray]],
                    conv: RelationConvention) -> bool:
@@ -287,6 +345,10 @@ def relation_holds(name: str, i: int, j: int, coords: np.ndarray, rotations: Seq
             return val > 0 if direction == "front" else val < 0
         val = float(np.dot(d, left)) * conv.object_lr_sign
         return val > 0 if direction == "left" else val < 0
+    if name.startswith("dir"):
+        if 0 not in camera_dirs:
+            return False
+        return float(np.dot(d, _direction_unit(camera_dirs[0], name))) * conv.camera_sign > 0
     if name in DIRECTIONS:
         direction, cam = name, 0
     else:
@@ -328,6 +390,10 @@ def compute_relation_labels(scene: dict, cameras: Sequence[dict], relations: Seq
             else:
                 val = np.einsum("ijk,jk->ij", d, left_vec) * conv.object_lr_sign
                 mat = val > 0 if direction == "left" else val < 0
+        elif name.startswith("dir"):
+            if 0 not in camera_dirs:
+                continue
+            mat = (d @ _direction_unit(camera_dirs[0], name)) * conv.camera_sign > 0
         else:
             if name in DIRECTIONS:
                 direction, cam = name, 0
@@ -504,16 +570,22 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
         if bfile.exists():
             bobjs = sorted(_load_json(bfile)["objects"], key=lambda o: o["slot"])
             if len(bobjs) == n:
-                boxes = [o["bbox_2d_pixels"] for o in bobjs]
+                # Clipped to the image: objects cut off by the frame have
+                # unclipped boxes that extend past the image edge.
+                boxes = [o.get("bbox_2d_clipped") or o["bbox_2d_pixels"] for o in bobjs]
         if boxes is None:
             boxes = q.get("bboxes")
         if boxes is None or len(boxes) != n:
             skipped["box_count_mismatch"] += 1
             continue
         boxes_np = np.array(boxes, dtype=np.float32).reshape(n, 4)
+        width, height = float(scene.get("width", 1024)), float(scene.get("height", 768))
+        boxes_np[:, [0, 2]] = np.clip(boxes_np[:, [0, 2]], 0.0, width)
+        boxes_np[:, [1, 3]] = np.clip(boxes_np[:, [1, 3]], 0.0, height)
 
         try:
-            logic_str = translate_force3d_program(q["program"], camera_alias=0)
+            camera_bins, bin_error = camera_relation_bins(scene, cameras_of[qi])
+            logic_str = translate_force3d_program(q["program"], camera_bins=camera_bins)
         except ValueError as exc:
             skipped[f"translate:{exc}"[:60]] += 1
             continue
@@ -541,8 +613,10 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
             "image_filename": str(image_path),
             "pil_image": pil_image,
             "image": image_arr,
-            "objects_raw": np.asarray(boxes_t, dtype=np.float32),
-            "_raw_boxes": boxes_np if not with_images else None,
+            # Raw pixel boxes of pil_image (same convention as the CLEVR loader);
+            # main.py rescales them into the backbone's input frame.
+            "objects_raw": boxes_np,
+            "_raw_boxes": boxes_np,
             "all_objects": all_objects,
             "question_raw": q["question"],
             "question": q["question"],
@@ -552,6 +626,7 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
             "relation_perspective": q.get("relation_perspective"),
             "subset": q.get("_subset"),
             "n_views": len(q["image_filename"]),
+            "camera_bin_error_deg": bin_error,
         }
         if split == "puzzle":
             sample["answer"] = bool(q["answer"])
@@ -579,8 +654,10 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
         samples.append(sample)
 
     if verbose:
+        coarse = sum(1 for s in samples if s["camera_bin_error_deg"] > 1.0)
         print(f"[force3d] split={split}: {len(samples)} samples from {len(questions)} questions, "
-              f"{len(scenes)} scenes; skipped={dict(skipped)}")
+              f"{len(scenes)} scenes; skipped={dict(skipped)}; camera relations binned at "
+              f"{DIR_BIN_DEG} deg ({coarse} questions with a >1 deg quantisation error)")
     return samples
 
 
@@ -592,11 +669,10 @@ def attach_images(samples: Sequence[dict], image_transform=None) -> None:
         if s.get("pil_image") is not None:
             continue
         pil_image = Image.open(s["image_filename"]).convert("RGB")
-        image_arr, boxes_t = image_transform(pil_image, s["_raw_boxes"])
+        image_arr, _ = image_transform(pil_image, s["_raw_boxes"])
         s["pil_image"] = pil_image
         s["image"] = image_arr
-        s["objects_raw"] = np.asarray(boxes_t, dtype=np.float32)
-        s["_raw_boxes"] = None
+        s["objects_raw"] = np.asarray(s["_raw_boxes"], dtype=np.float32)  # raw pixels
 
 
 def split_by_scene(samples: Sequence[dict], n_test_scenes: int, seed: int = 0
@@ -681,3 +757,51 @@ def soft_constraint_accuracy(program, dataset, device="cpu", tnorm="P"):
     acc = 100.0 * correct / total if total else 0.0
     mean = lambda xs: sum(xs) / len(xs) if xs else float("nan")
     return acc, correct, total, mean(p_pos), mean(p_neg)
+
+
+# ---------------------------------------------------------------------------
+# Structure-only baseline
+# ---------------------------------------------------------------------------
+
+def structure_signature(program_str: str) -> Tuple[int, int, int, int, int]:
+    """Question structure without scene content.
+
+    (variables, descriptor tokens, bare variables, object-perspective
+    relations, camera relations).  Enough to reproduce the length shortcut
+    that lets a model with chance-level predicates beat 50%.
+    """
+    variables = re.findall(r"lambda\s+(\w+)\s*:", program_str)
+    unary = re.findall(r"\b([a-z]+)\((\w+)\)", program_str)
+    described = {arg for _, arg in unary}
+    binary = re.findall(r"\b([a-z_]+\d*)\(\w+\s*,", program_str)
+    binary = [b for b in binary if b not in _QUANTIFIERS]
+    n_obj = sum(1 for b in binary if b.startswith("obj_"))
+    n_cam = sum(1 for b in binary if not b.startswith("obj_") and b != DISTINCT)
+    return (len(variables), len(unary), len(set(variables) - described), n_obj, n_cam)
+
+
+def structure_only_baseline(train: Sequence[dict], test: Sequence[dict]) -> Tuple[float, float, int]:
+    """Held-out accuracy of answering from question structure alone.
+
+    Fits the majority answer per ``structure_signature`` on ``train`` and
+    scores ``test``.  Returns (structure_accuracy_pct, majority_class_pct, n).
+    A trained model has to beat this number, not 50%.
+    """
+    table: Dict[Tuple, Counter] = defaultdict(Counter)
+    for s in train:
+        table[structure_signature(s["program_str"])][bool(s["answer"])] += 1
+    overall = Counter(bool(s["answer"]) for s in train)
+    majority = overall.most_common(1)[0][0] if overall else True
+    correct = majority_correct = 0
+    for s in test:
+        counts = table.get(structure_signature(s["program_str"]))
+        pred = majority
+        if counts:
+            (top, top_n), *rest = counts.most_common()
+            pred = top if not rest or rest[0][1] < top_n else majority
+        correct += int(pred == bool(s["answer"]))
+        majority_correct += int(majority == bool(s["answer"]))
+    n = len(test)
+    if not n:
+        return float("nan"), float("nan"), 0
+    return 100.0 * correct / n, 100.0 * majority_correct / n, n

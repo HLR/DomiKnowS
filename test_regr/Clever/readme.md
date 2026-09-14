@@ -107,3 +107,35 @@ REF: add `--force3d-split ref --force3d-test-scenes 100`. The log then also prin
 
 Notes: use `--curriculum none` (the CLEVR curriculum buckets are empty for 8-12 object scenes);
 `--train-size/--test-size` cap the scene-split parts; the first load caches to `dataset_cache/force3d_*.pkl`.
+
+### Generated training data and training options
+
+`gen_force3d_free.py` writes free yes/no puzzles (no distractor or uniqueness constraints) over the
+4,459 rendered scenes the released splits do not use. Every question is a contrastive pair: a positive
+anchored on real objects and a negative made by one structure-preserving edit (flip one relation on the
+same axis and perspective, or swap one descriptor value). Question structure therefore predicts the
+answer at chance; the generator prints this structure-only baseline as a self-check. Answers come from
+the scene geometry (100% agreement with the released labels). Load with `--force3d-json <file>`:
+```bash
+python gen_force3d_free.py --out generated/free_pairs_all.json --num-scenes 5000 --per-scene 10 --seed 1
+DOMIKNOWS_JOINT_SOFT_PRUNE_ROWS=20000 python main.py --dataset force3d \
+  --force3d-json $PWD/generated/free_pairs_all.json --train-size 3000 --force3d-test-scenes 60 --test-size 300 \
+  --epochs 5 --batch-size 2 --lr 3e-2 --tnorm P --init-prior --infer-type local --curriculum none \
+  --disable-plugins --skip-train-eval --tensorboard false --step-notebook false
+```
+
+Things that matter when reading results:
+- **Structure-only baseline.** At load time the log prints the held-out accuracy of answering from question
+  structure alone (variables, descriptors, relations; no image). Compare the model against this, not 50%:
+  the released Puzzle split scores 65% this way, and the old unpaired generator 74%.
+- **Camera relations are direction bins.** A question's `left_k` means "left, seen from its k-th view", whose
+  angle to camera 0 depends on the view setup. The model learns one head per 30-degree direction in camera
+  0's frame (`dir0` right, `dir90` front, `dir180` left, `dir270` behind) and the loader maps each question's
+  camera relations onto them with its cameras. This reproduces all 1,150 released Puzzle answers, including
+  random-view puzzles.
+- **Boxes.** `objects_raw` holds raw pixel boxes (clipped to the image); `main.py` rescales them into the
+  ResNet backbone's 224x224 input frame (`modules.boxes_in_backbone_frame`). Before this fix the ROI boxes
+  missed most objects (median pixel correlation 0.08), for CLEVR as well.
+- `--init-prior` (heads start at class priors), the product t-norm, small batches and lr ~3e-2. The log also
+  prints a "soft accuracy" (P(satisfied) > 0.5); the exact evaluator thresholds each predicate at 0.5.
+  `DOMIKNOWS_JOINT_SOFT_PRUNE_ROWS` / `_TOPK` control loss-path pruning of joint tables.
