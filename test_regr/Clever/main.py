@@ -431,6 +431,40 @@ def _print_force3d_ref_top1(args, program, dataset, device, tag):
     print(f"{tag} REF top-1 accuracy: {acc:.2f}% ({correct}/{total})")
 
 
+def _build_optimizer_factory(args, optim_cls):
+    """Optimizer factory for LearningBasedProgram.train, which calls Optim(model.parameters()).
+
+    Binds --lr, which used to be ignored for the model (it trained at Adam's
+    default 1e-3).  Optionally freezes the ROI feature extractors or gives them
+    their own learning rate: at 1e-3 the 134M-parameter object projection lost
+    the information it carries at initialisation (color linear probe 69% at
+    init, 18% after one epoch, majority 25%).
+    """
+    feature_modules = [_models.get(k) for k in ("object_emb", "object_fc", "relation_emb")]
+    feature_params = {id(p): p for m in feature_modules if m is not None for p in m.parameters()}
+    freeze = bool(getattr(args, "freeze_features", False))
+    feature_lr = getattr(args, "feature_lr", None)
+    if freeze:
+        for p in feature_params.values():
+            p.requires_grad_(False)
+    n_feat = sum(p.numel() for p in feature_params.values())
+    print(f"[optim] lr={args.lr} | feature extractors: {n_feat / 1e6:.1f}M params, "
+          f"{'frozen' if freeze else ('lr=' + str(feature_lr) if feature_lr is not None else 'lr=' + str(args.lr))}")
+
+    def factory(params):
+        params = [p for p in params if p.requires_grad]
+        if freeze or feature_lr is None:
+            return optim_cls(params, lr=args.lr)
+        rest = [p for p in params if id(p) not in feature_params]
+        feats = [p for p in params if id(p) in feature_params]
+        groups = [{"params": rest, "lr": args.lr}]
+        if feats:
+            groups.append({"params": feats, "lr": feature_lr})
+        return optim_cls(groups)
+
+    return factory
+
+
 def _init_head_prior(classifier, prior, weight_scale=0.05):
     """Start a 2-way linear head at P(true) = prior.
 
@@ -795,6 +829,13 @@ Examples:
     parser.add_argument("--circuit-backend", default="bdd", help="Semantic-loss circuit backend")
     parser.add_argument("--circuit-max-nodes", type=int, default=200000)
     parser.add_argument("--circuit-size-limit-action", default="raise")
+    parser.add_argument("--freeze-features", action="store_true",
+                        help="Freeze the ROI object/relation embedding layers and train only the "
+                             "predicate heads (the pretrained backbone is never trained).")
+    parser.add_argument("--feature-lr", type=float, default=None,
+                        help="Learning rate for the ROI object/relation embedding layers "
+                             "(default: --lr). Their 134M-parameter projections lose their "
+                             "information at 1e-3.")
     parser.add_argument("--init-prior", action="store_true",
                         help="Initialise each predicate head at its class prior (1/#values for "
                              "attributes, --prior-relation for relations) instead of ~0.5, so "
@@ -1532,6 +1573,11 @@ def main(args):
                 Optim = torch.optim.Adam
             else:
                 Optim = torch.optim.Adam
+            # LearningBasedProgram.train builds the model optimizer as
+            # Optim(model.parameters()) without a learning rate, so --lr used to
+            # reach only the constraint optimizer (c_lr) and the model always
+            # trained at Adam's default 1e-3.  Bind it explicitly.
+            Optim = _build_optimizer_factory(args, Optim)
             
             # Load previous checkpoint if needed
             if args.load_previous_save and args.subset > 1:
