@@ -159,10 +159,18 @@ def sample_positive(scene, rel_matrix, rel_index, n_views: int, rng: random.Rand
 
 
 def negative_twin(scene, rel_matrix, rel_index, k, unaries, relations, rng: random.Random):
-    """One structure-preserving edit that makes the formula unsatisfiable, or None."""
-    edits = [("relation", r) for r in range(len(relations))]
-    edits += [("descriptor", v, t) for v in range(k) for t in range(len(unaries[v]))]
-    rng.shuffle(edits)
+    """One structure-preserving edit that makes the formula unsatisfiable, or None.
+
+    Relation flips are tried before descriptor swaps.  With a random order most
+    negatives came from descriptor swaps (19,062 vs 3,123 relation flips), so a
+    model that learned attributes and assumed every relation true would miss
+    almost nothing; relation-first ordering makes the relations load-bearing.
+    """
+    relation_edits = [("relation", r) for r in range(len(relations))]
+    descriptor_edits = [("descriptor", v, t) for v in range(k) for t in range(len(unaries[v]))]
+    rng.shuffle(relation_edits)
+    rng.shuffle(descriptor_edits)
+    edits = relation_edits + descriptor_edits
     for edit in edits:
         new_unaries = [list(u) for u in unaries]
         new_relations = list(relations)
