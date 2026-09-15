@@ -136,6 +136,17 @@ Things that matter when reading results:
 - **Boxes.** `objects_raw` holds raw pixel boxes (clipped to the image); `main.py` rescales them into the
   ResNet backbone's 224x224 input frame (`modules.boxes_in_backbone_frame`). Before this fix the ROI boxes
   missed most objects (median pixel correlation 0.08), for CLEVR as well.
-- `--init-prior` (heads start at class priors), the product t-norm, small batches and lr ~3e-2. The log also
-  prints a "soft accuracy" (P(satisfied) > 0.5); the exact evaluator thresholds each predicate at 0.5.
+- **Optimizer.** `--lr` now reaches the model optimizer (it used to be silently ignored; the model always
+  trained at Adam 1e-3). The ROI feature layers hold two 134M-parameter projections that lose their
+  information at 1e-3 (object color probe 69% at init, 18% after one epoch): use `--freeze-features`
+  or a small `--feature-lr`.
+- **Existential t-norm.** With the product t-norm `existsL` is a noisy-OR whose gradient mostly teaches that
+  attributes are rare; heads rank better but never cross 0.5, so exact accuracy stays at chance. Gödel
+  (`--tnorm G`) commits: on one-variable contrastive questions, frozen features and head lr 1e-2 give 60.3%
+  held-out after two epochs (color AUC 0.68). On full multi-variable puzzles the same setting is still at
+  chance after one epoch (attributes AUC ~0.58, relations ~0.51): each question sends gradient to a single
+  predicate. For reference, the same heads trained with direct labels reach color AUC 0.94.
+- Recommended starting point: `--init-prior --freeze-features --tnorm G --lr 1e-2 --infer-type local
+  --curriculum none --disable-plugins`. Always check heads against ground truth, not only question
+  accuracy (both exact and "soft" accuracy can sit above 50% from shortcuts).
   `DOMIKNOWS_JOINT_SOFT_PRUNE_ROWS` / `_TOPK` control loss-path pruning of joint tables.
