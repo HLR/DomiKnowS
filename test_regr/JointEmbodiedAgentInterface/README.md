@@ -227,6 +227,8 @@ least a `0.01` positive-return rate and no more than `0.50` IK truncation.
 Failure writes `stage2-skipped` before any multi-hour RL epoch. Success and
 task-coverage thresholds remain available but default to zero because the
 default ten-rollout baseline is too small for a reliable success gate.
+Joint Stage 2 also applies a baseline-relative regression gate: by default an RL checkpoint must match or exceed the fixed-seed Stage 1 VLABench success (`--stage2-max-baseline-success-regression 0.0`). The planner and controller retain stronger Stage 1 anchors by default (`--stage2-planner-anchor-weight 0.25`, `--stage2-controller-bc-weight 0.25`). Configure these values explicitly when running controlled ablations.
+
 Configure these thresholds with the `--stage2-preflight-*` options. Setting
 evaluation rollouts to zero intentionally disables this gate.
 

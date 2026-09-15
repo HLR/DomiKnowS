@@ -141,6 +141,22 @@ def stage2_preflight_eligible(
     )
     return eligible and positive_return_rate >= float(min_positive_return_rate)
 
+def stage2_baseline_regression_eligible(
+    metrics,
+    baseline,
+    *,
+    max_success_regression: float = 0.0,
+) -> bool:
+    """Reject an RL checkpoint that loses too much fixed-seed task success."""
+
+    if not baseline:
+        return True
+    baseline_success = baseline.get("success_rate")
+    candidate_success = metrics.get("success_rate")
+    if baseline_success is None or candidate_success is None:
+        return True
+    return float(candidate_success) + float(max_success_regression) >= float(baseline_success)
+
 
 def _stage2_resume_position(payload, rounds_per_epoch):
     """Resolve old epoch checkpoints and new within-epoch progress checkpoints."""
@@ -308,6 +324,7 @@ def command_train_agent(args):
     start_stage2_round = 0
     resumed_stage2_metrics = None
     resumed_prior_best = None
+    baseline_reference = None
     controller_rewarm_required = False
     cursor = 0
     if args.resume:
@@ -332,6 +349,7 @@ def command_train_agent(args):
                 "language-conditioned action policy"
             )
         resume_stage = payload["stage"]
+        baseline_reference = payload.get("metrics", {}).get("baseline_reference")
         resume_payload = payload
         cursor = int(payload["round_robin_cursor"])
         if resume_stage == "stage1":
@@ -500,8 +518,8 @@ def command_train_agent(args):
         num_samples=args.vlabench_planner_samples,
         execute_horizon=4,
         max_steps=args.simulator_max_steps,
-        supervised_weight=0.1,
-        controller_bc_weight=0.05,
+        supervised_weight=args.stage2_planner_anchor_weight,
+        controller_bc_weight=args.stage2_controller_bc_weight,
         gamma=0.99,
         gae_lambda=0.95,
         ppo_clip=0.2,
@@ -529,6 +547,10 @@ def command_train_agent(args):
             rollouts_per_task=args.stage2_eval_rollouts_per_task,
             seed=args.seed + 100000,
         )
+        baseline_reference = {
+            key: baseline.get(key)
+            for key in ("success_rate", "positive_return_rate", "return", "valid_rate", "steps")
+        }
         eai_baseline = _evaluate_eai(
             planner,
             runtime,
@@ -661,6 +683,14 @@ def command_train_agent(args):
                 min_positive_return_rate=args.stage2_preflight_min_positive_return_rate,
                 max_ik_truncation_rate=args.stage2_preflight_max_ik_truncation_rate,
             )
+        baseline_ok = stage2_baseline_regression_eligible(
+            metrics["vlabench"],
+            baseline_reference,
+            max_success_regression=args.stage2_max_baseline_success_regression,
+        )
+        metrics["baseline_reference"] = baseline_reference
+        metrics["baseline_regression_eligible"] = baseline_ok
+        retention_eligible = retention_eligible and baseline_ok
         metrics["retention_eligible"] = retention_eligible
         metrics["fallback_path"] = (
             str(best_stage1) if best_stage1 is not None else None
@@ -695,6 +725,7 @@ def command_train_agent(args):
             "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
             "minimum_successful_vlabench_tasks": args.stage2_min_successful_tasks,
             "maximum_ik_truncation_rate": args.stage2_max_ik_truncation_rate,
+            "maximum_baseline_success_regression": args.stage2_max_baseline_success_regression,
             "metrics": metrics,
         })
         if not retention_eligible:
@@ -751,6 +782,7 @@ def command_train_agent(args):
             "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
             "minimum_successful_vlabench_tasks": args.stage2_min_successful_tasks,
             "maximum_ik_truncation_rate": args.stage2_max_ik_truncation_rate,
+            "maximum_baseline_success_regression": args.stage2_max_baseline_success_regression,
         })
 
 
@@ -821,6 +853,15 @@ def build_parser():
         type=_unit_interval,
         default=0.50,
         help="maximum fixed-seed baseline IK truncation allowed before Stage 2",
+    )
+    agent.add_argument("--stage2-max-baseline-success-regression", type=_unit_interval, default=0.0,
+        help="maximum fixed-seed VLABench success regression allowed relative to Stage 1",
+    )
+    agent.add_argument("--stage2-planner-anchor-weight", type=float, default=0.25,
+        help="Stage 1 supervised planner-anchor weight during Joint RL",
+    )
+    agent.add_argument("--stage2-controller-bc-weight", type=float, default=0.25,
+        help="Stage 1 controller behavior-cloning anchor weight during Joint RL",
     )
     agent.add_argument("--eai-samples", type=int, default=8)
     agent.add_argument("--vlabench-planner-samples", type=int, default=4)

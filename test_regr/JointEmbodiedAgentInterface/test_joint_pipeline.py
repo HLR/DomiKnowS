@@ -30,6 +30,7 @@ from .main import (
     _stage2_resume_position,
     build_parser,
     stage1_selection_key,
+    stage2_baseline_regression_eligible,
     stage2_checkpoint_eligible,
     stage2_preflight_eligible,
     stage2_selection_key,
@@ -1143,6 +1144,9 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     second = {"eai": {"success": 0.1, "reward": 0.9}, "vlabench": {"success_rate": 0.9, "return": 0.9}}
     assert stage2_selection_key(first) > stage2_selection_key(second)
     assert stage2_checkpoint_eligible(first, min_vlabench_success_rate=0.10)
+    assert stage2_baseline_regression_eligible({"success_rate": 0.80}, {"success_rate": 0.80})
+    assert not stage2_baseline_regression_eligible({"success_rate": 0.79}, {"success_rate": 0.80})
+    assert stage2_baseline_regression_eligible({"success_rate": 0.79}, {"success_rate": 0.80}, max_success_regression=0.01)
     assert not stage2_checkpoint_eligible(
         {"vlabench": {"success_rate": 0.05}},
         min_vlabench_success_rate=0.10,
@@ -1206,6 +1210,9 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.stage2_min_vlabench_success_rate == pytest.approx(0.10)
     assert args.stage2_min_successful_tasks == 3
     assert args.stage2_max_ik_truncation_rate == pytest.approx(0.25)
+    assert args.stage2_max_baseline_success_regression == pytest.approx(0.0)
+    assert args.stage2_planner_anchor_weight == pytest.approx(0.25)
+    assert args.stage2_controller_bc_weight == pytest.approx(0.25)
     assert args.stage2_preflight_min_vlabench_success_rate == pytest.approx(0.0)
     assert args.stage2_preflight_min_successful_tasks == 0
     assert args.stage2_preflight_min_positive_return_rate == pytest.approx(0.01)
