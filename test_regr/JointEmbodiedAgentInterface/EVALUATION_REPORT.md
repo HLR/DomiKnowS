@@ -18,7 +18,7 @@ satisfaction, and reward components are reported as supporting diagnostics.
 |---|---:|---:|---|
 | EAI only | 77.3% goal success | 79.5% goal success | Complete |
 | VLABench only | 76.67% simulator success; 9 successful tasks | 78.75% simulator success; 10 successful tasks | Complete; fresh Stage 1 and best RL runs |
-| Joint EAI and VLABench | 80.0% VLABench success; 10 successful tasks | 73.75% VLABench success; 10 successful tasks | Complete; fresh Stage 1 and best Stage 2 runs |
+| Joint EAI and VLABench | 80.0% VLABench success; 10 successful tasks | 76.25% VLABench success; 10 successful tasks | Complete; fresh Stage 1 and best Stage 2 runs |
 
 The VLABench-only and Joint best runs were completed on physical GPU 4 and GPU 5 respectively. The fresh no-RL baselines below used no `--resume` checkpoint and ran on commit `4e078750`; the RL results use the retained checkpoints from the preceding runs.
 ## EAI-only experiment
@@ -134,9 +134,9 @@ The final retained result is the `agent_rl_best.pt` checkpoint from this run. Su
 ### Evaluation protocol
 
 - Physical GPU: GPU 5
-- Resumed run log: `test_regr/JointEmbodiedAgentInterface/results/joint_full_gpu5_rerun_20260913_054500.log`
-- Resume source: `test_regr/JointEmbodiedAgentInterface/checkpoints/joint_full_gpu5_rerun_20260913_054500/joint_stage2_progress.pt`
-- Best retained checkpoint: `test_regr/JointEmbodiedAgentInterface/checkpoints/joint_full_gpu5_rerun_20260913_054500/joint_stage2_best.pt`
+- Resumed run log: `test_regr/JointEmbodiedAgentInterface/results/joint_rl_from_fresh_20260914_095500.log`
+- Resume source: `test_regr/JointEmbodiedAgentInterface/checkpoints/joint_rl_from_fresh_20260914_095500/joint_stage2_progress.pt`
+- Best retained checkpoint: `test_regr/JointEmbodiedAgentInterface/checkpoints/joint_rl_from_fresh_20260914_095500/joint_stage2_best.pt`
 - EAI training examples: 438 (`394` train, `44` validation)
 - VLABench planning examples: 4,500 (`3,600` train, `450` validation, `450` test)
 - Stage 2 used ten rounds per epoch and eight VLABench rollouts per update.
@@ -154,9 +154,9 @@ The final retained result is the `agent_rl_best.pt` checkpoint from this run. Su
 |---|---:|
 | VLABench simulator success rate | 73.75% |
 | Successful VLABench tasks | 10 |
-| VLABench positive-return/valid rate | See run log |
-| VLABench mean return | See run log |
-| VLABench mean episode steps | See run log |
+| VLABench positive-return/valid rate | 83.75% |
+| VLABench mean return | 0.6941 |
+| VLABench mean episode steps | 81.5 |
 | EAI and VLABench retention gate | Eligible |
 
 VLABench success and EAI goal success remain separate domain-local metrics; they are not merged into one reward or one success percentage. Physics failures affected some VLABench rollouts, but the Joint Stage 2 checkpoint remained retention-eligible under the configured thresholds.
@@ -167,4 +167,5 @@ VLABench success and EAI goal success remain separate domain-local metrics; they
 - VLABench simulator physics failures and invalid rollouts remain concentrated in several task families and should be audited before treating the aggregate success rates as robust.
 - The VLABench-only run retained an earlier RL checkpoint after a later fixed-seed evaluation lost task signal; checkpoint selection therefore matters in the reported result.
 - Each setting should ideally be repeated with at least three seeds, reporting mean, standard deviation, and paired comparisons where possible.
+
 
