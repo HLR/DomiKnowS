@@ -17,7 +17,7 @@ satisfaction, and reward components are reported as supporting diagnostics.
 | Training setting | Without RL | With RL | Status |
 |---|---:|---:|---|
 | EAI only | 77.3% goal success | 79.5% goal success | Complete |
-| VLABench only | 76.67% simulator success; 9 successful tasks | 78.75% simulator success; 10 successful tasks | Complete; fresh Stage 1 and best RL runs |
+| VLABench only | 76.67% simulator success; 9 successful tasks | 83.33% simulator success; 10 successful tasks | Complete; fresh Stage 1 and best RL runs |
 | Joint EAI and VLABench | 80.0% VLABench success; 10 successful tasks | 76.25% VLABench success; 10 successful tasks | Complete; fresh Stage 1 and best Stage 2 runs |
 
 The VLABench-only and Joint best runs were completed on physical GPU 4 and GPU 5 respectively. The fresh no-RL baselines below used no `--resume` checkpoint and ran on commit `4e078750`; the RL results use the retained checkpoints from the preceding runs.
@@ -119,13 +119,13 @@ interpretation.
 
 | Metric | Best retained VLABench RL checkpoint |
 |---|---:|
-| Simulator success rate | 78.75% |
+| Simulator success rate | 83.33% |
 | Successful tasks | 10 tasks |
-| Positive-return rate | See run log |
-| Mean return | See run log |
-| Mean progress | See run log |
-| Valid/executable rate | See run log |
-| Mean episode steps | See run log |
+| Positive-return rate | 90.0% |
+| Mean return | 0.7647 |
+| Mean progress | 0.8702 |
+| Valid/executable rate | 90.0% |
+| Mean episode steps | 82.1 |
 | IK truncation rate | 0.0% in the retained evaluation summary |
 
 The final retained result is the `agent_rl_best.pt` checkpoint from this run. Supporting per-task diagnostics are available in the linked run log. Individual simulator physics failures still occurred in tasks such as `insert_flower`, `select_fruit`, and `select_toy`; these were recorded as invalid rollouts and are included in the aggregate validity rate.
@@ -167,5 +167,6 @@ VLABench success and EAI goal success remain separate domain-local metrics; they
 - VLABench simulator physics failures and invalid rollouts remain concentrated in several task families and should be audited before treating the aggregate success rates as robust.
 - The VLABench-only run retained an earlier RL checkpoint after a later fixed-seed evaluation lost task signal; checkpoint selection therefore matters in the reported result.
 - Each setting should ideally be repeated with at least three seeds, reporting mean, standard deviation, and paired comparisons where possible.
+
 
 
