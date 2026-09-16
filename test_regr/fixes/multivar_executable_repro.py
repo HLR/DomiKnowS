@@ -16,6 +16,7 @@ SCENES = {
     's2': dict(attrs={'A': [1, 0, 0, 0], 'B': [0, 1, 1, 0], 'C': [0, 0, 0, 1]}, left={(0, 1), (2, 3)}),
     # star positive: A(0) is left of both B(1) and C(2)
     's3': dict(attrs={'A': [1, 0, 0], 'B': [0, 1, 0], 'C': [0, 0, 1]}, left={(0, 1), (0, 2)}),
+    's4': dict(attrs={'A': [1, 0, 0, 1], 'B': [0, 1, 0, 0], 'C': [0, 0, 1, 0]}, left={(0, 3), (1, 2), (1, 3)}),
 }
 FORMULAS = {
     'q2':    ("existsL(andL(A('a'), B('b'), left('a', 'b')))", [('A', 'a'), ('B', 'b')], [('a', 'b')]),
@@ -28,6 +29,28 @@ FORMULAS = {
     # repeated unary on an already-bound variable (re-binding path)
     'q3r':   ("existsL(andL(A('a'), A('a'), B('b'), B('b'), C('c'), left('a', 'b'), left('b', 'c')))",
               [('A', 'a'), ('B', 'b'), ('C', 'c')], [('a', 'b'), ('b', 'c')]),
+    # relation inside a nested connective: the outer unaries become paths over
+    # a relation declared only by the nested orL/andL
+    'q2or':  ("existsL(andL(A('a'), B('b'), orL(left('a', 'b'), left('a', 'b'))))",
+              [('A', 'a'), ('B', 'b')], [('a', 'b')]),
+    'q2orneg': ("existsL(andL(A('a'), C('c'), orL(left('a', 'c'), left('a', 'c'))))",
+                [('A', 'a'), ('C', 'c')], [('a', 'c')]),
+    'q2and': ("existsL(andL(A('a'), B('b'), orL(andL(B('b'), left('a', 'b')), andL(C('b'), left('a', 'b')))))",
+              [('A', 'a'), ('B', 'b')], [('a', 'b')]),
+    'q3or':  ("existsL(andL(A('a'), B('b'), C('c'), orL(left('a', 'b'), left('a', 'b')), left('b', 'c')))",
+              [('A', 'a'), ('B', 'b'), ('C', 'c')], [('a', 'b'), ('b', 'c')]),
+    # unary operands inside the nested connective, on a variable of the
+    # enclosing constraint (the 3D-FORCE heading composition shape)
+    'q3and': ("existsL(andL(A('a'), B('b'), C('c'), left('a', 'b'), andL(C('c'), left('b', 'c'))))",
+              [('A', 'a'), ('B', 'b'), ('C', 'c')], [('a', 'b'), ('b', 'c')]),
+    'q3orand': ("existsL(andL(A('a'), B('b'), C('c'), left('a', 'b'), orL(andL(C('c'), left('b', 'c')), andL(B('c'), left('b', 'c')))))",
+                [('A', 'a'), ('B', 'b'), ('C', 'c')], [('a', 'b'), ('b', 'c')]),
+    'q3orandb': ("existsL(andL(A('a'), B('b'), C('c'), left('a', 'b'), orL(andL(B('b'), left('b', 'c')), andL(C('b'), left('b', 'c')))))",
+                 [('A', 'a'), ('B', 'b'), ('C', 'c')], [('a', 'b'), ('b', 'c')]),
+    'q4orand': ("existsL(andL(A('a'), B('b'), C('c'), A('d'), left('a', 'd'), orL(andL(C('c'), left('b', 'c')), andL(B('c'), left('b', 'c'))), left('b', 'd')))",
+                [('A', 'a'), ('B', 'b'), ('C', 'c'), ('A', 'd')], [('a', 'd'), ('b', 'c'), ('b', 'd')]),
+    'q4or2': ("existsL(andL(A('a'), B('b'), C('c'), A('d'), orL(left('a', 'd'), left('a', 'd')), orL(left('b', 'c'), left('b', 'c')), left('b', 'd')))",
+              [('A', 'a'), ('B', 'b'), ('C', 'c'), ('A', 'd')], [('a', 'd'), ('b', 'c'), ('b', 'd')]),
     # entity selection over the first variable (REF-style)
     'm2':    ("miotaL(andL(A('a'), B('b'), left('a', 'b')), threshold=0.5, hard=False)",
               [('A', 'a'), ('B', 'b')], [('a', 'b')]),

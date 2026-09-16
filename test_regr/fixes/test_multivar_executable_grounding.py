@@ -44,6 +44,25 @@ def test_three_variable_chain_verifies_exactly(spec):
     assert "ERR" not in line and "evaluate_condition=100%" in line, line
 
 
+@pytest.mark.parametrize("spec", ["s1/q2or", "s1/q2orneg", "s2/q2or", "s1/q2and", "s2/q2and",
+                                  "s1/q3or", "s2/q3or", "s1/q2or,s1/q2orneg,s2/q3or",
+                                  "s1/q3and", "s2/q3and", "s1/q3orand", "s2/q3orand", "s1/q3orandb",
+                                  "s3/q3orandb", "s4/q4orand", "s2/q4orand", "s4/q4or2", "s2/q4or2",
+                                  "s4/q4orand,s1/q3orandb,s2/q3and"])
+def test_relation_inside_nested_connective_verifies_exactly(spec):
+    # The outer unaries are paths over a relation declared only inside the
+    # nested orL; they used to get no candidates and every such formula was
+    # verified False.  q3and/q3orand*/q4*: a unary on an enclosing variable
+    # inside the nested andL (its binding, shared-variable alignment and the
+    # path projection to one variable were each missing).
+    line = _run("verify", spec)
+    assert "ERR" not in line and "evaluate_condition=100%" in line, line
+
+
+def test_relation_inside_nested_connective_trains():
+    assert "trained" in _run("train", "s1/q2or,s2/q3or,s1/q2and,s4/q4orand,s1/q3orandb")
+
+
 def test_three_variable_chain_trains():
     assert "trained" in _run("train", "s1/q3,s2/q3,s1/q3r,s3/q3s")
 
