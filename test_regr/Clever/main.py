@@ -380,6 +380,13 @@ def _program_size(sample):
     return 0
 
 
+def _num_variables(sample):
+    """Logical variables of a 3D-FORCE question (lambda binders of its program)."""
+    import re
+    prog = sample.get("program_str")
+    return len(re.findall(r"lambda\s+\w+\s*:", prog)) if isinstance(prog, str) else 0
+
+
 def _subset_logic_dataset(logic_dataset, raw_items):
     """Build a LogicDataset restricted to ``raw_items`` without recompiling.
 
@@ -502,6 +509,41 @@ FORCE3D_CURRICULUM_STRATEGY = [
 ]
 
 
+# --curriculum vars (3D-FORCE): stages by the number of logical variables per
+# question, as (first_epoch, max_variables) with None meaning no limit.  Scene
+# size does not separate difficulty here (8-12 objects everywhere); variable
+# count does: a 1-variable question sends its whole gradient to that object's
+# attribute heads, a 5-variable one spreads it over a joint table.
+FORCE3D_VARS_SCHEDULE = [(1, 1), (3, 2), (5, 3), (7, None)]
+# Items per stage (set from --train-size); None uses every eligible item.
+FORCE3D_STAGE_SIZE = None
+
+
+def _parse_vars_schedule(text):
+    """"1:1,3:2,5:3,7:all" -> [(1, 1), (3, 2), (5, 3), (7, None)]."""
+    stages = []
+    for part in text.split(","):
+        epoch, limit = part.split(":")
+        stages.append((int(epoch), None if limit.strip() in ("all", "0") else int(limit)))
+    stages.sort()
+    if not stages or stages[0][0] != 1:
+        raise ValueError("--curriculum-vars-schedule must start at epoch 1")
+    return stages
+
+
+def _vars_limit(epoch):
+    limit = None
+    for first_epoch, max_vars in FORCE3D_VARS_SCHEDULE:
+        if first_epoch <= epoch:
+            limit = max_vars
+    return limit
+
+
+def _vars_stage_items(items, max_vars, size):
+    eligible = [s for s in items if max_vars is None or _num_variables(s) <= max_vars]
+    return eligible if size is None else eligible[:size]
+
+
 def _load_force3d_dataset(args, CACHE_DIR):
     """Load 3D-FORCE, swap the vocabulary, split by scene and apply size caps.
 
@@ -514,12 +556,28 @@ def _load_force3d_dataset(args, CACHE_DIR):
     from preprocess import preprocess_force3d
 
     clevr_dataset.set_vocabulary(FORCE3D_ATTRIBUTE_CONCEPTS, FORCE3D_RELATIONAL_CONCEPTS)
-    if args.curriculum != "none":
+    global FORCE3D_VARS_SCHEDULE, FORCE3D_STAGE_SIZE
+    if args.curriculum == "vars":
+        FORCE3D_VARS_SCHEDULE = _parse_vars_schedule(args.curriculum_vars_schedule)
+        FORCE3D_STAGE_SIZE = args.train_size
+        print("[force3d] variable-count curriculum (first epoch, max variables):",
+              FORCE3D_VARS_SCHEDULE, f"| items per stage: {FORCE3D_STAGE_SIZE or 'all eligible'}")
+    elif args.curriculum != "none":
         CURRICULUM_STRATEGY[:] = FORCE3D_CURRICULUM_STRATEGY
         print("[force3d] using scene-size curriculum:", FORCE3D_CURRICULUM_STRATEGY[:-1])
     samples = preprocess_force3d(args, CACHE_DIR)
     train, test = split_by_scene(samples, args.force3d_test_scenes, seed=args.force3d_split_seed)
-    if args.train_size is not None:
+    if args.curriculum == "vars":
+        # --train-size caps each stage, not the split: keep the union of every
+        # stage's items (in split order) and attach images only to those.
+        pool, chosen = train[args.train_start:], {}
+        for _, max_vars in FORCE3D_VARS_SCHEDULE:
+            stage = _vars_stage_items(pool, max_vars, FORCE3D_STAGE_SIZE)
+            chosen.update((id(s), s) for s in stage)
+            print(f"[force3d] curriculum stage vars<={max_vars if max_vars is not None else 'all'}: "
+                  f"{len(stage)} items")
+        train = [s for s in pool if id(s) in chosen]
+    elif args.train_size is not None:
         train = train[args.train_start: args.train_start + args.train_size]
     if args.test_size is not None:
         test = test[: args.test_size]
@@ -549,6 +607,16 @@ def _get_curriculum_limits(epoch):
 
 
 def _select_curriculum_train_raw(train_raw, epoch, mode):
+    if mode == "vars":
+        max_vars = _vars_limit(epoch)
+        filtered = _vars_stage_items(train_raw, max_vars, FORCE3D_STAGE_SIZE)
+        limit = f"vars<={max_vars if max_vars is not None else 'all'}"
+        kind = "none" if filtered else "full"
+        info = {"mode": mode, "scene_limit": None, "program_limit": limit,
+                "selected": len(filtered), "total": len(train_raw), "fallback": kind != "none",
+                "fallback_kind": kind, "min_violation": None}
+        return (filtered or train_raw), (mode, None, limit, kind), info
+
     max_scene_size, max_program_size = _get_curriculum_limits(epoch)
 
     filtered = train_raw
@@ -649,9 +717,14 @@ Examples:
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Mini-batch size for training (default: 1)")
     parser.add_argument("--curriculum", type=str, default="all",
-                        choices=["none", "scene", "program", "all"],
+                        choices=["none", "scene", "program", "all", "vars"],
                         help="Curriculum learning mode using LEFT staged limits "
-                             "on scene size and/or program size")
+                             "on scene size and/or program size; 'vars' (3D-FORCE) stages "
+                             "by logical variables per question (--curriculum-vars-schedule), "
+                             "with --train-size items per stage")
+    parser.add_argument("--curriculum-vars-schedule", type=str, default="1:1,3:2,5:3,7:all",
+                        help="--curriculum vars stages as first_epoch:max_variables "
+                             "('all' = no limit)")
     parser.add_argument("--subset", type=int, default=-1,
                         help="Subset index 1-6 for memory-efficient training (default: -1)")
     parser.add_argument("--load-epoch", type=int, default=0,
@@ -836,6 +909,9 @@ Examples:
                         help="Learning rate for the ROI object/relation embedding layers "
                              "(default: --lr). Their 134M-parameter projections lose their "
                              "information at 1e-3.")
+    parser.add_argument("--backbone-size", type=int, default=224,
+                        help="ResNet input resolution (square). 448 doubles the ROI feature map; "
+                             "on 3D-FORCE it lifts shape and object-heading probes substantially.")
     parser.add_argument("--init-prior", action="store_true",
                         help="Initialise each predicate head at its class prior (1/#values for "
                              "attributes, --prior-relation for relations) instead of ~0.5, so "
@@ -1377,7 +1453,10 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
 
 def main(args):
     global _models
-    
+    # Before any sample is prepared or ResnetLEFT is built: both read the size.
+    sys.modules[boxes_in_backbone_frame.__module__].set_backbone_input_size(
+        getattr(args, "backbone_size", 224))
+
     CACHE_DIR = preprocess_folders_and_files(args.dummy, skip_extract=(args.dataset == "force3d"))
     NUM_INSTANCES = args.num_instances
     device = args.device

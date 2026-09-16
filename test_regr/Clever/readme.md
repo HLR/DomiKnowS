@@ -129,13 +129,21 @@ Things that matter when reading results:
   structure alone (variables, descriptors, relations; no image). Compare the model against this, not 50%:
   the released Puzzle split scores 65% this way, and the old unpaired generator 74%.
 - **Camera relations are direction bins.** A question's `left_k` means "left, seen from its k-th view", whose
-  angle to camera 0 depends on the view setup. The model learns one head per 30-degree direction in camera
+  angle to camera 0 depends on the view setup. The model learns one head per 15-degree direction in camera
   0's frame (`dir0` right, `dir90` front, `dir180` left, `dir270` behind) and the loader maps each question's
   camera relations onto them with its cameras. This reproduces all 1,150 released Puzzle answers, including
   random-view puzzles.
-- **Boxes.** `objects_raw` holds raw pixel boxes (clipped to the image); `main.py` rescales them into the
-  ResNet backbone's 224x224 input frame (`modules.boxes_in_backbone_frame`). Before this fix the ROI boxes
-  missed most objects (median pixel correlation 0.08), for CLEVR as well.
+- **Object-perspective relations are composed, not learned.** A frozen ROI encoder separates `obj_left` etc.
+  at only 57% (224 px) / 69% (448 px) with a supervised MLP probe, but reads an object's heading well. Each
+  object has a heading concept `hd0`..`hd345` (heading angle in camera 0's frame, 15-degree bins), and the
+  translator writes `obj_front(a, b)` as `orL(andL(hdH('b'), dirH('a', 'b')), ...)` over all H (left:
+  `dir(H-90)`, behind: `dir(H+180)`, right: `dir(H+90)`; camera 0's right/front basis is left-handed). With
+  true bins the rule matches the exact relations on 97.7-98.0% of pairs. See `object_relation_formula`.
+- **Boxes and resolution.** `objects_raw` holds raw pixel boxes (clipped to the image); `main.py` rescales them
+  into the ResNet backbone's square input frame (`modules.boxes_in_backbone_frame`). Before this fix the ROI
+  boxes missed most objects (median pixel correlation 0.08), for CLEVR as well. `--backbone-size 448` (default
+  224) doubles the feature map; frozen-feature probes go from shape 80.6% to 98.0% and 8-bin heading from
+  50.5% to 75.3%.
 - **Optimizer.** `--lr` now reaches the model optimizer (it used to be silently ignored; the model always
   trained at Adam 1e-3). The ROI feature layers hold two 134M-parameter projections that lose their
   information at 1e-3 (object color probe 69% at init, 18% after one epoch): use `--freeze-features`
@@ -146,6 +154,13 @@ Things that matter when reading results:
   held-out after two epochs (color AUC 0.68). On full multi-variable puzzles the same setting is still at
   chance after one epoch (attributes AUC ~0.58, relations ~0.51): each question sends gradient to a single
   predicate. For reference, the same heads trained with direct labels reach color AUC 0.94.
+- **Curriculum by variable count.** `--curriculum vars` stages training by logical variables per question
+  (`--curriculum-vars-schedule`, default `1:1,3:2,5:3,7:all` = epochs 1-2 one variable, 3-4 up to two,
+  5-6 up to three, then all). `--train-size` becomes the number of items per stage; images are attached
+  only to the union of the stages. Scene-size curricula do not separate difficulty on 3D-FORCE (8-12
+  objects everywhere). Without it, 448 px heading composition stayed at chance after one epoch
+  (heading and direction head AUC 0.50-0.51, test 53.0%): one answer per 4-5 variable question is too
+  little signal for 48 untrained bins.
 - Recommended starting point: `--init-prior --freeze-features --tnorm G --lr 1e-2 --infer-type local
   --curriculum none --disable-plugins`. Always check heads against ground truth, not only question
   accuracy (both exact and "soft" accuracy can sit above 50% from shortcuts).

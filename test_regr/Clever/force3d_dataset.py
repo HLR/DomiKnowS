@@ -61,16 +61,34 @@ FORCE3D_ATTRIBUTE_CONCEPTS: Dict[str, List[str]] = {
 # ``dir180`` = left of, ``dir270`` = behind.  ``camera_relation_bins`` maps a
 # question's names onto these bins with that question's cameras; fixed
 # 2/3/4-view setups map exactly, random views within DIR_BIN_DEG / 2.
-# ``obj_*`` are anchor-object perspective relations (heading dependent).
+# ``obj_*`` are anchor-object perspective relations (heading dependent).  The
+# model has no heads for them: a frozen ROI encoder separates them at 57-69%
+# while it reads an object's heading well (75% exact / 92% within one of 8
+# bins at 448 px).  Every object has a heading concept ``hdA`` (the heading's
+# angle in camera 0's frame, quantised to HEADING_BIN_DEG), and the translator
+# writes ``obj_front(a, b)`` as "b's heading is hdH and a lies in the dirH
+# half-plane of b", OR-ed over H (``object_relation_formula``).  With true
+# bins that rule agrees with the exact relations on 97.7-98.0% of pairs.
 # ``distinct`` is a fixed (never learned) identity relation: distinct(i, j)
 # iff i != j.  The puzzle/REF semantics require every logical variable to
 # bind a different object, which the existential reading of andL does not
 # enforce on its own; the translator adds distinct('x', 'y') for every pair
 # of variables.  main.py wires it through OracleDummyLearner in all modes.
 DISTINCT = "distinct"
-DIR_BIN_DEG = 30
+DIR_BIN_DEG = 15
 CAMERA_DIRECTION_RELATIONS: List[str] = [f"dir{a}" for a in range(0, 360, DIR_BIN_DEG)]
 OBJECT_RELATIONS: List[str] = [f"obj_{d}" for d in DIRECTIONS]
+# Heading bins must coincide with direction bins: the composition uses the
+# direction half-plane at the heading angle (+/- 90, 180).
+HEADING_BIN_DEG = DIR_BIN_DEG
+HEADING_CONCEPTS: List[str] = [f"hd{a}" for a in range(0, 360, HEADING_BIN_DEG)]
+FORCE3D_ATTRIBUTE_CONCEPTS["heading"] = HEADING_CONCEPTS
+# Half-plane (relative to the anchor's heading angle) each object relation
+# tests.  camera 0's (right, front) basis is left-handed, so "left of the
+# anchor" is heading - 90 degrees.
+OBJECT_RELATION_OFFSET_DEG = {"front": 0, "left": -90, "behind": 180, "right": 90}
+# Bumped whenever loader output changes, so stale pickle caches are not reused.
+FORCE3D_VOCAB_VERSION = "hd15"
 # Names that may appear in question programs (exact question semantics; used by
 # the oracle check and the free generator).
 QUESTION_RELATIONS: List[str] = (
@@ -79,8 +97,8 @@ QUESTION_RELATIONS: List[str] = (
     + [f"{d}_{k}" for k in range(N_CAMERAS) for d in DIRECTIONS]
     + [DISTINCT]
 )
-# Names the model learns, one head each.
-FORCE3D_RELATIONS: List[str] = CAMERA_DIRECTION_RELATIONS + OBJECT_RELATIONS + [DISTINCT]
+# Names the model learns, one head each (obj_* are composed, see above).
+FORCE3D_RELATIONS: List[str] = CAMERA_DIRECTION_RELATIONS + [DISTINCT]
 FORCE3D_RELATIONAL_CONCEPTS: Dict[str, List[str]] = {
     "spatial_relation": FORCE3D_RELATIONS,
 }
@@ -112,6 +130,14 @@ def opposite_relation(name: str) -> str:
 _UNARY = set(v for vals in FORCE3D_ATTRIBUTE_CONCEPTS.values() for v in vals)
 _BINARY = set(FORCE3D_RELATIONS) | set(QUESTION_RELATIONS)
 _QUANTIFIERS = {"exists", "point", "iota"}
+
+
+def object_relation_formula(name: str, a: str, b: str) -> str:
+    """``obj_<d>(a, b)`` as logic over b's heading concept and direction bins."""
+    offset = OBJECT_RELATION_OFFSET_DEG[name[len("obj_"):]]
+    terms = [f"andL(hd{h}('{b}'), dir{(h + offset) % 360}('{a}', '{b}'))"
+             for h in range(0, 360, HEADING_BIN_DEG)]
+    return f"orL({', '.join(terms)})"
 
 
 def _var_letter(index: int) -> str:
@@ -188,7 +214,10 @@ class _Translator:
             rel = self._rel_name(fn)
             a = self._arg(node.args[0])
             b = self._arg(node.args[1])
-            self.binary.append(f"{rel}('{a}', '{b}')")
+            if rel.startswith("obj_"):
+                self.binary.append(object_relation_formula(rel, a, b))
+            else:
+                self.binary.append(f"{rel}('{a}', '{b}')")
             return
         raise ValueError(f"unsupported call arity for {fn}")
 
@@ -326,6 +355,21 @@ def camera_relation_bins(scene: dict, cameras: Sequence[dict]) -> Tuple[Dict[str
             if k == 0:
                 mapping[d] = f"dir{b}"
     return mapping, worst
+
+
+def heading_bins(scene: dict, camera: dict,
+                 conv: Optional[RelationConvention] = None) -> List[str]:
+    """Per-object heading concept name (``hdA``) in ``camera``'s frame."""
+    conv = conv or RelationConvention()
+    base = camera_direction_vectors(scene, camera)
+    n_bins = 360 // HEADING_BIN_DEG
+    out = []
+    for o in scene["objects"]:
+        t = math.radians(float(o.get("rotation", 0.0)) + conv.object_heading_offset_deg)
+        h = np.array([math.cos(t), math.sin(t)]) * conv.object_fb_sign
+        ang = math.degrees(math.atan2(float(h @ base["front"]), float(h @ base["right"]))) % 360.0
+        out.append(f"hd{(int(round(ang / HEADING_BIN_DEG)) % n_bins) * HEADING_BIN_DEG}")
+    return out
 
 
 def relation_holds(name: str, i: int, j: int, coords: np.ndarray, rotations: Sequence[float],
@@ -604,6 +648,8 @@ def load_force3d(split: str = "puzzle", root: Path = FORCE3D_ROOT, image_transfo
             {k: o.get(k) for k in ("color", "shape", "size", "material", "3d_coords", "rotation")}
             for o in objs
         ]
+        for o, hd in zip(all_objects, heading_bins(scene, cameras_of[qi][0], convention)):
+            o["heading"] = hd  # read by OracleModule and the head diagnostics
         sample = {
             "force3d_split": split,
             "scene_index": int(scene_dir.split("_")[1]),

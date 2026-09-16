@@ -21,7 +21,8 @@ def test_translate_puzzle_golden():
             "exists(Object, lambda x4: brown(x1) and brown(x2) and school(x3) and school(x4) "
             "and obj_left(x2, x4) ))))")
     assert F.translate_force3d_program(prog) == (
-        "existsL(andL(brown('a'), brown('b'), school('c'), school('d'), obj_left('b', 'd'), "
+        "existsL(andL(brown('a'), brown('b'), school('c'), school('d'), "
+        + F.object_relation_formula("obj_left", "b", "d") + ", "
         "distinct('a', 'b'), distinct('a', 'c'), distinct('a', 'd'), distinct('b', 'c'), "
         "distinct('b', 'd'), distinct('c', 'd')))")
 
@@ -43,8 +44,50 @@ def test_translate_ref_golden_flattens_iota_chain():
             "yellow(y) and obj_front(y, iota(Object, lambda z: scooter(z))))))")
     out = F.translate_force3d_program(prog)
     assert out == ("miotaL(andL(yellow('a'), suv('a'), yellow('b'), scooter('c'), "
-                   "obj_front('b', 'c'), obj_left('a', 'b'), distinct('a', 'b'), "
+                   + F.object_relation_formula("obj_front", "b", "c") + ", "
+                   + F.object_relation_formula("obj_left", "a", "b") + ", distinct('a', 'b'), "
                    "distinct('a', 'c'), distinct('b', 'c')), threshold=0.5, hard=False)")
+
+
+def test_object_relation_formula_uses_heading_and_direction_bins():
+    out = F.object_relation_formula("obj_left", "a", "b")
+    n = 360 // F.HEADING_BIN_DEG
+    assert out.startswith("orL(andL(hd0('b'), dir270('a', 'b')), ")
+    assert out.count("andL(") == n and "obj_" not in out
+    assert "andL(hd90('b'), dir0('a', 'b'))" in out  # heading 90 (toward camera): its left is camera-right
+    assert "andL(hd0('b'), dir90('a', 'b'))" in F.object_relation_formula("obj_right", "a", "b")
+    assert set(F.HEADING_CONCEPTS) == set(F.FORCE3D_ATTRIBUTE_CONCEPTS["heading"])
+    assert not any(r.startswith("obj_") for r in F.FORCE3D_RELATIONS)
+
+
+@needs_data
+def test_composed_object_relations_match_exact_relations():
+    """hd(b) AND dir-half-plane(a, b), with true bins, vs the exact obj_* labels."""
+    samples = F.load_force3d(split="puzzle", limit=300, with_images=False, verbose=False)
+    conv = F.RelationConvention()
+    agree = total = 0
+    seen = set()
+    for s in samples:
+        if s["image_index"] in seen:
+            continue
+        seen.add(s["image_index"])
+        objs = s["all_objects"]
+        n = len(objs)
+        coords = np.array([o["3d_coords"][:2] for o in objs], dtype=np.float64)
+        rots = [o["rotation"] for o in objs]
+        dirs = s["relation_spatial_relation"]
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    continue
+                h = int(objs[j]["heading"][2:])
+                for d, off in F.OBJECT_RELATION_OFFSET_DEG.items():
+                    b = F.FORCE3D_RELATIONS.index(f"dir{(h + off) % 360}")
+                    pred = dirs[i * n + j, b] > 0.5
+                    truth = F.relation_holds(f"obj_{d}", i, j, coords, rots, {}, conv)
+                    agree += int(pred == truth)
+                    total += 1
+    assert total > 1000 and agree / total >= 0.96, (agree, total)
 
 
 def test_translate_single_predicate_and_unknown_predicate():
@@ -167,7 +210,9 @@ def test_loader_contract(split):
         assert not re.search(r"\b(?:left|right|front|behind)(?:_\d)?\(", s["logic_str"])
         assert isinstance(s["program"], list) and len(s["program"]) >= 1
         assert s["relation_spatial_relation"].shape == (n * n, len(F.FORCE3D_RELATIONS))
-        assert set(s["all_objects"][0]) >= {"color", "shape"}
+        assert set(s["all_objects"][0]) >= {"color", "shape", "heading"}
+        assert all(o["heading"] in F.HEADING_CONCEPTS for o in s["all_objects"])
+        assert "obj_" not in s["logic_str"]
         if split == "puzzle":
             assert isinstance(s["answer"], bool)
             assert s["logic_str"].startswith("existsL(")

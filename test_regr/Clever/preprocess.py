@@ -271,13 +271,13 @@ def load_full_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation'):
 
 def preprocess_force3d(args, CACHE_DIR):
     """Load (and pickle-cache) the 3D-FORCE split selected by ``args``."""
-    from force3d_dataset import load_force3d
+    from force3d_dataset import load_force3d, FORCE3D_VOCAB_VERSION
 
     split = getattr(args, "force3d_split", "puzzle")
     view = getattr(args, "force3d_view", "first")
     json_name = getattr(args, "force3d_json", None)
     tag = f"_{Path(json_name).stem}" if json_name else ""
-    cache_file = CACHE_DIR / f"force3d_{split}_{view}{tag}.pkl"
+    cache_file = CACHE_DIR / f"force3d_{split}_{view}{tag}_{FORCE3D_VOCAB_VERSION}.pkl"
     if cache_file.exists():
         with cache_file.open("rb") as f:
             dataset = pickle.load(f)
