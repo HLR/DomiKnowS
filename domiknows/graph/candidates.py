@@ -101,25 +101,33 @@ def getDatanoteForVariable(dn, e, variable, lcVariablesDns, lc, logger, _log, _d
         and hasattr(lc, 'e')
     ):
         try:
-            _lc_es = lc.e
-            for _k in range(len(_lc_es)):
-                _cand = _lc_es[_k]
-                if _k + 1 >= len(_lc_es):
-                    break
-                _candV = _lc_es[_k + 1]
-                if not isinstance(_candV, V):
-                    continue
-                if getattr(_candV, 'name', None) != lookupName:
-                    continue
-                if not hasattr(_cand, '__class__'):
-                    continue
+            # The declaration may sit inside a nested constraint: in
+            # andL(A('a'), orL(left('a', 'b'), ...)) the operand A('a') is the
+            # path (left_3, arg1) while left_3 is declared by the orL.
+            def _find_declaration(owner):
+                _lc_es = getattr(owner, 'e', ())
+                for _k in range(len(_lc_es)):
+                    _cand = _lc_es[_k]
+                    if (_k + 1 < len(_lc_es) and isinstance(_lc_es[_k + 1], V)
+                            and getattr(_lc_es[_k + 1], 'name', None) == lookupName
+                            and hasattr(_cand, '__class__')):
+                        return owner, _cand, _lc_es[_k + 1]
+                for _cand in _lc_es:
+                    if isinstance(_cand, LcElement) and not isinstance(_cand, CandidateSelection):
+                        _found = _find_declaration(_cand)
+                        if _found is not None:
+                            return _found
+                return None
+
+            _found = _find_declaration(lc)
+            if _found is not None:
+                _owner, _cand, _candV = _found
                 # Found the declaring element. Recursively build its dns.
                 _result = getCandidates(
-                    dn, _cand, _candV, lcVariablesDns, lc, logger,
+                    dn, _cand, _candV, lcVariablesDns, _owner, logger,
                 )
                 if _result is not None and _result[0] is not None:
                     lcVariablesDns[lookupName] = _result[0]
-                break
         except Exception as _exc:
             if logger is not None:
                 try:

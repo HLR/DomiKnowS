@@ -83,12 +83,12 @@ from domiknows.program.plugins.grad_chain_diagnostic import GradChainDiagnostic
 try:
     from .preprocess import preprocess_dataset, preprocess_folders_and_files, load_full_dataset
     from .graph import create_graph
-    from .modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+    from .modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer, boxes_in_backbone_frame
     from .dataset import g_relational_concepts, g_attribute_concepts
 except ImportError:
     from preprocess import preprocess_dataset, preprocess_folders_and_files, load_full_dataset
     from graph import create_graph
-    from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+    from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer, boxes_in_backbone_frame
     from dataset import g_relational_concepts, g_attribute_concepts
 
 RUN_DIR = Path(__file__).parent.resolve()
@@ -197,6 +197,24 @@ class _CallbacksMixin:
         self.after_test_epoch = []
         self.before_test_step = []
         self.after_test_step = []
+
+
+from domiknows.program.lossprogram import SemanticLossProgram
+
+
+class SemanticLossProgramWithCallbacks(_CallbacksMixin, CallbackProgram, SemanticLossProgram):
+    """Exact semantic loss (-log P(satisfied) via circuits) with the Clever callbacks."""
+    # The constraint-accuracy evaluator is defined on InferenceProgram but only
+    # needs populate() and the graph; reuse it unchanged.
+    evaluate_condition = InferenceProgram.evaluate_condition
+
+    def default_after_train_step(self, output=None):
+        """No-op: the loss program's epoch already runs backward and step."""
+        pass
+
+    def __init__(self, graph, Model, **kwargs):
+        super().__init__(graph, Model, **kwargs)
+        self._init_callback_hooks()
 
 
 class InferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, InferenceProgram):
@@ -362,6 +380,223 @@ def _program_size(sample):
     return 0
 
 
+def _num_variables(sample):
+    """Logical variables of a 3D-FORCE question (lambda binders of its program)."""
+    import re
+    prog = sample.get("program_str")
+    return len(re.findall(r"lambda\s+\w+\s*:", prog)) if isinstance(prog, str) else 0
+
+
+def _subset_logic_dataset(logic_dataset, raw_items):
+    """Build a LogicDataset restricted to ``raw_items`` without recompiling.
+
+    The program's models snapshot the graph's properties/sensors and the loss
+    model's constraint registry at construction time, so constraints compiled
+    afterwards (via ``graph.compile_executable``) never receive labels and are
+    silently ignored during both training and evaluation. Re-using the
+    already-compiled executable constraints avoids that and keeps the graph
+    from growing on every curriculum stage.
+    """
+    from domiknows.graph.executable import LogicDataset
+
+    index_by_id = {id(item): idx for idx, item in enumerate(logic_dataset.data)}
+    indices = [index_by_id[id(item)] for item in raw_items if id(item) in index_by_id]
+    if len(indices) != len(raw_items):
+        raise ValueError(
+            f"{len(raw_items) - len(indices)} curriculum items are not part of the "
+            "compiled dataset; compile the subset before creating the program."
+        )
+    return LogicDataset(
+        [logic_dataset.data[i] for i in indices],
+        [logic_dataset.lc_name_list[i] for i in indices],
+        logic_keyword=logic_dataset.logic_keyword,
+        logic_label_keyword=logic_dataset.logic_label_keyword,
+        vector_label_names=logic_dataset.vector_label_names,
+        deduplicated=logic_dataset.deduplicated,
+        concept_bindings=[logic_dataset.concept_bindings[i] for i in indices],
+        parameterized=logic_dataset.parameterized,
+    )
+
+
+def _print_force3d_soft_acc(args, program, dataset, device, tag):
+    """Puzzle-only: P(satisfied) > 0.5 accuracy plus mean P per class."""
+    if getattr(args, "dataset", "clevr") != "force3d" or args.force3d_split != "puzzle" or dataset is None:
+        return
+    from force3d_dataset import soft_constraint_accuracy
+    acc, correct, total, p_pos, p_neg = soft_constraint_accuracy(
+        program, dataset, device=device, tnorm=("P" if args.tnorm in ("default", "auto") else args.tnorm))
+    print(f"{tag} soft accuracy: {acc:.2f}% ({correct}/{total})  mean P | yes={p_pos:.3f} no={p_neg:.3f}")
+
+
+def _print_force3d_ref_top1(args, program, dataset, device, tag):
+    """REF-only: argmax-of-selection accuracy next to the built-in miotaL score."""
+    if getattr(args, "dataset", "clevr") != "force3d" or args.force3d_split != "ref" or dataset is None:
+        return
+    from force3d_dataset import force3d_ref_top1
+    with torch.no_grad():
+        acc, correct, total = force3d_ref_top1(program, dataset, device=device)
+    print(f"{tag} REF top-1 accuracy: {acc:.2f}% ({correct}/{total})")
+
+
+def _build_optimizer_factory(args, optim_cls):
+    """Optimizer factory for LearningBasedProgram.train, which calls Optim(model.parameters()).
+
+    Binds --lr, which used to be ignored for the model (it trained at Adam's
+    default 1e-3).  Optionally freezes the ROI feature extractors or gives them
+    their own learning rate: at 1e-3 the 134M-parameter object projection lost
+    the information it carries at initialisation (color linear probe 69% at
+    init, 18% after one epoch, majority 25%).
+    """
+    feature_modules = [_models.get(k) for k in ("object_emb", "object_fc", "relation_emb")]
+    feature_params = {id(p): p for m in feature_modules if m is not None for p in m.parameters()}
+    freeze = bool(getattr(args, "freeze_features", False))
+    feature_lr = getattr(args, "feature_lr", None)
+    if freeze:
+        for p in feature_params.values():
+            p.requires_grad_(False)
+    n_feat = sum(p.numel() for p in feature_params.values())
+    print(f"[optim] lr={args.lr} | feature extractors: {n_feat / 1e6:.1f}M params, "
+          f"{'frozen' if freeze else ('lr=' + str(feature_lr) if feature_lr is not None else 'lr=' + str(args.lr))}")
+
+    def factory(params):
+        params = [p for p in params if p.requires_grad]
+        if freeze or feature_lr is None:
+            return optim_cls(params, lr=args.lr)
+        rest = [p for p in params if id(p) not in feature_params]
+        feats = [p for p in params if id(p) in feature_params]
+        groups = [{"params": rest, "lr": args.lr}]
+        if feats:
+            groups.append({"params": feats, "lr": feature_lr})
+        return optim_cls(groups)
+
+    return factory
+
+
+def _init_head_prior(classifier, prior, weight_scale=0.05):
+    """Start a 2-way linear head at P(true) = prior.
+
+    Random heads output ~0.5 per predicate; an existsL over a joint table of
+    thousands of rows is then saturated at 1.0 for every question and the
+    label carries no signal (see the 3D-FORCE diagnosis).  Setting the bias to
+    the class log-odds and shrinking the weights makes the formula start
+    unsatisfied for most questions, so gradients discriminate.
+    """
+    import math
+    prior = min(max(float(prior), 1e-4), 1 - 1e-4)
+    with torch.no_grad():
+        classifier.weight.mul_(weight_scale)
+        classifier.bias.zero_()
+        classifier.bias[1] = math.log(prior / (1.0 - prior))
+    return classifier
+
+
+def _prior_for_name(attr_name, args):
+    """Class prior for a predicate head from the vocabulary structure."""
+    for group, values in g_attribute_concepts.items():
+        if attr_name in values:
+            return 1.0 / max(len(values), 2)
+    return getattr(args, "prior_relation", 0.25)
+
+
+FORCE3D_CURRICULUM_STRATEGY = [
+    # (start_epoch_exclusive, max_scene_size, max_program_size): scene-size only,
+    # 3D-FORCE has no short programs.  Small scenes keep the joint tables small
+    # while the predicate heads move away from their priors.
+    (0, 8, None),
+    (3, 10, None),
+    (6, None, None),
+    (10**9, None, None),
+]
+
+
+# --curriculum vars (3D-FORCE): stages by the number of logical variables per
+# question, as (first_epoch, max_variables) with None meaning no limit.  Scene
+# size does not separate difficulty here (8-12 objects everywhere); variable
+# count does: a 1-variable question sends its whole gradient to that object's
+# attribute heads, a 5-variable one spreads it over a joint table.
+FORCE3D_VARS_SCHEDULE = [(1, 1), (3, 2), (5, 3), (7, None)]
+# Items per stage (set from --train-size); None uses every eligible item.
+FORCE3D_STAGE_SIZE = None
+
+
+def _parse_vars_schedule(text):
+    """"1:1,3:2,5:3,7:all" -> [(1, 1), (3, 2), (5, 3), (7, None)]."""
+    stages = []
+    for part in text.split(","):
+        epoch, limit = part.split(":")
+        stages.append((int(epoch), None if limit.strip() in ("all", "0") else int(limit)))
+    stages.sort()
+    if not stages or stages[0][0] != 1:
+        raise ValueError("--curriculum-vars-schedule must start at epoch 1")
+    return stages
+
+
+def _vars_limit(epoch):
+    limit = None
+    for first_epoch, max_vars in FORCE3D_VARS_SCHEDULE:
+        if first_epoch <= epoch:
+            limit = max_vars
+    return limit
+
+
+def _vars_stage_items(items, max_vars, size):
+    eligible = [s for s in items if max_vars is None or _num_variables(s) <= max_vars]
+    return eligible if size is None else eligible[:size]
+
+
+def _load_force3d_dataset(args, CACHE_DIR):
+    """Load 3D-FORCE, swap the vocabulary, split by scene and apply size caps.
+
+    Returns train + test samples tagged with ``force3d_role`` so the split
+    block in ``main`` can separate them after the min/max-object filters.
+    """
+    import dataset as clevr_dataset
+    from force3d_dataset import (FORCE3D_ATTRIBUTE_CONCEPTS, FORCE3D_RELATIONAL_CONCEPTS,
+                                 split_by_scene)
+    from preprocess import preprocess_force3d
+
+    clevr_dataset.set_vocabulary(FORCE3D_ATTRIBUTE_CONCEPTS, FORCE3D_RELATIONAL_CONCEPTS)
+    global FORCE3D_VARS_SCHEDULE, FORCE3D_STAGE_SIZE
+    if args.curriculum == "vars":
+        FORCE3D_VARS_SCHEDULE = _parse_vars_schedule(args.curriculum_vars_schedule)
+        FORCE3D_STAGE_SIZE = args.train_size
+        print("[force3d] variable-count curriculum (first epoch, max variables):",
+              FORCE3D_VARS_SCHEDULE, f"| items per stage: {FORCE3D_STAGE_SIZE or 'all eligible'}")
+    elif args.curriculum != "none":
+        CURRICULUM_STRATEGY[:] = FORCE3D_CURRICULUM_STRATEGY
+        print("[force3d] using scene-size curriculum:", FORCE3D_CURRICULUM_STRATEGY[:-1])
+    samples = preprocess_force3d(args, CACHE_DIR)
+    train, test = split_by_scene(samples, args.force3d_test_scenes, seed=args.force3d_split_seed)
+    if args.curriculum == "vars":
+        # --train-size caps each stage, not the split: keep the union of every
+        # stage's items (in split order) and attach images only to those.
+        pool, chosen = train[args.train_start:], {}
+        for _, max_vars in FORCE3D_VARS_SCHEDULE:
+            stage = _vars_stage_items(pool, max_vars, FORCE3D_STAGE_SIZE)
+            chosen.update((id(s), s) for s in stage)
+            print(f"[force3d] curriculum stage vars<={max_vars if max_vars is not None else 'all'}: "
+                  f"{len(stage)} items")
+        train = [s for s in pool if id(s) in chosen]
+    elif args.train_size is not None:
+        train = train[args.train_start: args.train_start + args.train_size]
+    if args.test_size is not None:
+        test = test[: args.test_size]
+    if args.force3d_split == "puzzle" and train and test:
+        from force3d_dataset import structure_only_baseline
+        struct_acc, majority_acc, n_eval = structure_only_baseline(train, test)
+        print(f"[force3d] structure-only baseline (question structure, no image): {struct_acc:.1f}% "
+              f"held-out, majority class {majority_acc:.1f}%, n={n_eval}; a model must beat "
+              f"the structure baseline, not 50%")
+    for d in train:
+        d["force3d_role"] = "train"
+    for d in test:
+        d["force3d_role"] = "test"
+    from force3d_dataset import attach_images
+    attach_images(train + test)
+    print(f"[force3d] images attached for {len(train)} train + {len(test)} test samples")
+    return train + test
+
+
 def _get_curriculum_limits(epoch):
     for i in range(len(CURRICULUM_STRATEGY) - 1):
         start, max_scene_size, max_program_size = CURRICULUM_STRATEGY[i]
@@ -372,6 +607,16 @@ def _get_curriculum_limits(epoch):
 
 
 def _select_curriculum_train_raw(train_raw, epoch, mode):
+    if mode == "vars":
+        max_vars = _vars_limit(epoch)
+        filtered = _vars_stage_items(train_raw, max_vars, FORCE3D_STAGE_SIZE)
+        limit = f"vars<={max_vars if max_vars is not None else 'all'}"
+        kind = "none" if filtered else "full"
+        info = {"mode": mode, "scene_limit": None, "program_limit": limit,
+                "selected": len(filtered), "total": len(train_raw), "fallback": kind != "none",
+                "fallback_kind": kind, "min_violation": None}
+        return (filtered or train_raw), (mode, None, limit, kind), info
+
     max_scene_size, max_program_size = _get_curriculum_limits(epoch)
 
     filtered = train_raw
@@ -472,9 +717,14 @@ Examples:
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Mini-batch size for training (default: 1)")
     parser.add_argument("--curriculum", type=str, default="all",
-                        choices=["none", "scene", "program", "all"],
+                        choices=["none", "scene", "program", "all", "vars"],
                         help="Curriculum learning mode using LEFT staged limits "
-                             "on scene size and/or program size")
+                             "on scene size and/or program size; 'vars' (3D-FORCE) stages "
+                             "by logical variables per question (--curriculum-vars-schedule), "
+                             "with --train-size items per stage")
+    parser.add_argument("--curriculum-vars-schedule", type=str, default="1:1,3:2,5:3,7:all",
+                        help="--curriculum vars stages as first_epoch:max_variables "
+                             "('all' = no limit)")
     parser.add_argument("--subset", type=int, default=-1,
                         help="Subset index 1-6 for memory-efficient training (default: -1)")
     parser.add_argument("--load-epoch", type=int, default=0,
@@ -629,6 +879,49 @@ Examples:
     plugin_manager.register(GradientFlowPlugin(), 'GradientFlow')
     plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
     
+    # ---- 3D-FORCE adapter (see force3d_dataset.py) ----
+    parser.add_argument("--dataset", choices=["clevr", "force3d"], default="clevr",
+                        help="Dataset adapter: CLEVR (default) or 3D-FORCE via force3d_dataset.py")
+    parser.add_argument("--force3d-root", type=str,
+                        default="/localscratch/kamalida/projects/SaPy/datasets/3D-FORCE",
+                        help="3D-FORCE root containing 3DForcePuzzle.json/3DForceRef.json and multiview/")
+    parser.add_argument("--force3d-split", choices=["puzzle", "ref"], default="puzzle",
+                        help="3D-FORCE split: puzzle (yes/no existsL) or ref (object selection via miotaL)")
+    parser.add_argument("--force3d-json", type=str, default=None,
+                        help="Question file to load instead of the released split (e.g. output of "
+                             "gen_force3d_free.py); relative paths resolve under --force3d-root.")
+    parser.add_argument("--force3d-test-scenes", type=int, default=20,
+                        help="Number of whole scenes held out as the 3D-FORCE test set")
+    parser.add_argument("--force3d-split-seed", type=int, default=0,
+                        help="Seed for the 3D-FORCE scene split")
+    parser.add_argument("--force3d-view", choices=["first"], default="first",
+                        help="Which view to feed the model (only 'first' = camera 0 for now)")
+    parser.add_argument("--program", choices=["inference", "semantic"], default="inference",
+                        help="Training objective: t-norm constraint loss (inference, default) or exact "
+                             "circuit semantic loss -log P(satisfied) (semantic).")
+    parser.add_argument("--circuit-backend", default="bdd", help="Semantic-loss circuit backend")
+    parser.add_argument("--circuit-max-nodes", type=int, default=200000)
+    parser.add_argument("--circuit-size-limit-action", default="raise")
+    parser.add_argument("--freeze-features", action="store_true",
+                        help="Freeze the ROI object/relation embedding layers and train only the "
+                             "predicate heads (the pretrained backbone is never trained).")
+    parser.add_argument("--feature-lr", type=float, default=None,
+                        help="Learning rate for the ROI object/relation embedding layers "
+                             "(default: --lr). Their 134M-parameter projections lose their "
+                             "information at 1e-3.")
+    parser.add_argument("--backbone-size", type=int, default=224,
+                        help="ResNet input resolution (square). 448 doubles the ROI feature map; "
+                             "on 3D-FORCE it lifts shape and object-heading probes substantially.")
+    parser.add_argument("--init-prior", action="store_true",
+                        help="Initialise each predicate head at its class prior (1/#values for "
+                             "attributes, --prior-relation for relations) instead of ~0.5, so "
+                             "existsL over large joint tables is not saturated at start.")
+    parser.add_argument("--prior-relation", type=float, default=0.25,
+                        help="Prior P(true) used by --init-prior for relation heads.")
+    parser.add_argument("--infer-type", choices=["ILP", "local"], default="ILP",
+                        help="Inference run by the model on every populate: 'ILP' (default, Gurobi) or "
+                             "'local' (local/argmax only; ~2-10x faster evaluation, identical accuracy "
+                             "numbers since the metric reads local argmax)")
     plugin_manager.add_arguments_to_parser(parser)
     
     args = parser.parse_args()
@@ -704,9 +997,23 @@ def program_declaration(train, dev, args, device='cpu'):
             else:
                 dataset[i]["logic_label"] = torch.LongTensor([0]).to(device)
             dataset[i]["query_type"] = query_types[i]
+        elif torch.is_tensor(dataset[i].get("logic_label")):
+            # Precomputed vector label (3D-FORCE REF one-hot for miotaL).
+            dataset[i]["logic_label"] = dataset[i]["logic_label"].to(device)
+            dataset[i]["query_type"] = None
         else:
             dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['answer'])]).to(device)
             dataset[i]["query_type"] = None
+
+    # Boxes for the ResNet path, in the backbone's input frame.  ResnetLEFT
+    # resizes every image to BACKBONE_INPUT_SIZE squared, so raw pixel boxes
+    # (objects_raw) must be rescaled per axis.  Feeding them unscaled pooled
+    # features from the wrong region: 60% of 3D-FORCE objects had zero overlap
+    # with their box and 59% of CLEVR object centres fell outside the map.
+    # objects_raw itself stays in pixels for the VLM and oracle paths.
+    for i in range(len(dataset)):
+        dataset[i]["objects_backbone"] = boxes_in_backbone_frame(
+            dataset[i].get("objects_raw"), dataset[i].get("pil_image"))
 
     # Pre-compute oracle ground truth
     if args.oracle_mode:
@@ -720,12 +1027,14 @@ def program_declaration(train, dev, args, device='cpu'):
             oracle_logit = math.log(oracle_conf / (1.0 - oracle_conf))
 
         spatial_list = g_relational_concepts.get("spatial_relation", [])
-        inverse_for_reverse = {
-            "left": "right",
-            "right": "left",
-            "front": "behind",
-            "behind": "front",
-        }
+        _base_opposite = {"left": "right", "right": "left", "front": "behind", "behind": "front"}
+        inverse_for_reverse = {}
+        for _rel in spatial_list:
+            if _rel in _base_opposite:
+                inverse_for_reverse[_rel] = _base_opposite[_rel]
+            else:
+                from force3d_dataset import opposite_relation
+                inverse_for_reverse[_rel] = opposite_relation(_rel)
         for i in range(len(dataset)):
             all_objs = dataset[i].get('all_objects', [])
             # Use bounding-box count (objects_raw) as the authoritative object
@@ -757,7 +1066,7 @@ def program_declaration(train, dev, args, device='cpu'):
                     if src_key in dataset[i]:
                         dataset[i][f"oracle_is_{rev_name}_rev"] = list(dataset[i][src_key])
 
-            for attr in ['size', 'color', 'material', 'shape']:
+            for attr in list(g_attribute_concepts.keys()):
                 oracle_data = []
                 for obj_i in range(n):
                     for obj_j in range(n):
@@ -777,6 +1086,9 @@ def program_declaration(train, dev, args, device='cpu'):
     image["image_id"] = FunctionalReaderSensor(keyword='image_index', forward=lambda data: [data])
     object["bounding_boxes"] = FunctionalReaderSensor(keyword="objects_raw",
                                                       forward=lambda data: torch.Tensor(data).to(device))
+    # Same boxes rescaled into the ResNet backbone frame (used for ROI pooling).
+    object["backbone_boxes"] = FunctionalReaderSensor(keyword="objects_backbone",
+                                                      forward=lambda data: torch.Tensor(data).to(device))
     object["properties"] = ReaderSensor(keyword="all_objects")
     object["image_id"] = FunctionalSensor(image["image_id"], "bounding_boxes",
                                           forward=lambda data, data2: data * len(data2))
@@ -786,10 +1098,10 @@ def program_declaration(train, dev, args, device='cpu'):
         resnet_model = ResnetLEFT(device=device)
         image["emb"] = ModuleSensor("image_id", "pil_image", module=resnet_model, device=device)
         object_feature_extraction_model = LEFTObjectEMB(device=device)
-        object["feature_emb"] = ModuleLearner(image["emb"], "bounding_boxes", 
+        object["feature_emb"] = ModuleLearner(image["emb"], "backbone_boxes", 
                                               module=object_feature_extraction_model, device=device)
         object_feature_fc = LinearLayer(128 * 32 * 32, 1024, device=device)
-        object["emb"] = ModuleLearner("feature_emb", "bounding_boxes", 
+        object["emb"] = ModuleLearner("feature_emb", "backbone_boxes", 
                                       module=object_feature_fc, device=device)
         _models['resnet'] = resnet_model
         _models['object_emb'] = object_feature_extraction_model
@@ -807,13 +1119,13 @@ def program_declaration(train, dev, args, device='cpu'):
     
     if not args.use_vlm and not args.oracle_mode:
         object_relation_extraction = LEFTRelationEMB(input_size=256, output_size=1024, device=device)
-        relaton_2_obj["emb"] = ModuleLearner(image["emb"], object["bounding_boxes"], 
+        relaton_2_obj["emb"] = ModuleLearner(image["emb"], object["backbone_boxes"], 
                                              object["feature_emb"],
                                              module=object_relation_extraction, device=device)
         if relation_2_obj_rev is not None:
             relation_2_obj_rev["emb"] = ModuleLearner(
                 image["emb"],
-                object["bounding_boxes"],
+                object["backbone_boxes"],
                 object["feature_emb"],
                 module=object_relation_extraction,
                 device=device,
@@ -830,6 +1142,16 @@ def program_declaration(train, dev, args, device='cpu'):
         relation_target = relaton_2_obj
         if attr_name in spatial_relations_rev and relation_2_obj_rev is not None:
             relation_target = relation_2_obj_rev
+
+        if attr_name in ("distinct", "distinct_rev"):
+            # Fixed identity relation (3D-FORCE adapter): distinct(i, j) iff i != j.
+            # Never learned; the loader provides the logits in every mode.
+            relation_target[f"{attr_variable}_label"] = FunctionalReaderSensor(
+                keyword=f"oracle_is_{attr_name}",
+                forward=lambda data: torch.Tensor(data).to(device))
+            relation_target[attr_variable] = ModuleLearner(
+                f"{attr_name}_label", module=OracleDummyLearner(), device=device)
+            continue
 
         if args.oracle_mode:
             if attr_name in spatial_relation_names:
@@ -852,14 +1174,20 @@ def program_declaration(train, dev, args, device='cpu'):
         elif not args.use_vlm:
             if attr_name in spatial_relation_names:
                 classifier = torch.nn.Linear(1024, 2).to(device)
+                if getattr(args, "init_prior", False):
+                    _init_head_prior(classifier, _prior_for_name(attr_name, args))
                 classifiers[attr_name] = classifier
                 relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
             elif attr_name.startswith("same_"):
                 classifier = torch.nn.Linear(1024, 2).to(device)
+                if getattr(args, "init_prior", False):
+                    _init_head_prior(classifier, _prior_for_name(attr_name, args))
                 classifiers[attr_name] = classifier
                 relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
             else:
                 classifier = torch.nn.Linear(1024, 2).to(device)
+                if getattr(args, "init_prior", False):
+                    _init_head_prior(classifier, _prior_for_name(attr_name, args))
                 classifiers[attr_name] = classifier
                 object[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
         else:
@@ -939,6 +1267,8 @@ def program_declaration(train, dev, args, device='cpu'):
         'tnorm': args.tnorm,
         'pos_weight': args.pos_weight,
     }
+    if getattr(args, "infer_type", "ILP") == "local":
+        program_kwargs['inferTypes'] = ['local/argmax']
     if args.use_gumbel:
         program_kwargs.update({
             'use_gumbel': args.use_gumbel,
@@ -949,7 +1279,18 @@ def program_declaration(train, dev, args, device='cpu'):
             'hard_gumbel': args.hard_gumbel,
         })
 
-    program = InferenceProgramWithCallbacks(graph, SolverModel, **program_kwargs)
+    if getattr(args, "program", "inference") == "semantic":
+        # Exact -log P(formula) in log space: no vanishing product and no
+        # single-element Gödel gradient over large joint tables.
+        program_kwargs = {k: v for k, v in program_kwargs.items()
+                          if k not in ("tnorm", "pos_weight", "use_gumbel", "initial_temp", "final_temp",
+                                       "anneal_start_epoch", "anneal_epochs", "hard_gumbel")}
+        program_kwargs.update(circuit_backend=args.circuit_backend,
+                              circuit_max_nodes=args.circuit_max_nodes,
+                              circuit_size_limit_action=args.circuit_size_limit_action)
+        program = SemanticLossProgramWithCallbacks(graph, SolverModel, **program_kwargs)
+    else:
+        program = InferenceProgramWithCallbacks(graph, SolverModel, **program_kwargs)
 
     return program, train_dataset, dev_dataset, attribute_names_dict
 
@@ -1112,8 +1453,11 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
 
 def main(args):
     global _models
-    
-    CACHE_DIR = preprocess_folders_and_files(args.dummy)
+    # Before any sample is prepared or ResnetLEFT is built: both read the size.
+    sys.modules[boxes_in_backbone_frame.__module__].set_backbone_input_size(
+        getattr(args, "backbone_size", 224))
+
+    CACHE_DIR = preprocess_folders_and_files(args.dummy, skip_extract=(args.dataset == "force3d"))
     NUM_INSTANCES = args.num_instances
     device = args.device
 
@@ -1131,6 +1475,8 @@ def main(args):
             dataset = filtered[: args.train_size]
         else:
             dataset = filtered
+    elif args.dataset == "force3d":
+        dataset = _load_force3d_dataset(args, CACHE_DIR)
     else:
         dataset = preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=args.question_type)
 
@@ -1154,7 +1500,12 @@ def main(args):
     #      dataset so it can be disjoint from --train-start.
     #   2. Else if --test-split is set, hold out the tail of the train slice.
     #   3. Else use the full train slice for training only.
-    if args.test_start is not None and args.test_size is not None and not args.eval_only:
+    if args.dataset == "force3d":
+        train_raw = [d for d in dataset if d.get("force3d_role") == "train"]
+        test_raw = [d for d in dataset if d.get("force3d_role") == "test"] or None
+        print(f"[force3d] scene split: {len(train_raw)} train, {len(test_raw or [])} test questions "
+              f"({args.force3d_test_scenes} held-out scenes, seed {args.force3d_split_seed})")
+    elif args.test_start is not None and args.test_size is not None and not args.eval_only:
         full_dataset = load_full_dataset(args, NUM_INSTANCES, CACHE_DIR,
                                          question_type=args.question_type)
         t_start = max(0, int(args.test_start))
@@ -1231,12 +1582,7 @@ def main(args):
 
     test_dataset_filtered = None
     if test_raw_filtered is not None and test_raw is not None and len(test_raw_filtered) < len(test_raw):
-        test_dataset_filtered = program.graph.compile_executable(
-            test_raw_filtered,
-            logic_keyword='logic_str',
-            logic_label_keyword='logic_label',
-            extra_namespace_values=attribute_names_dict,
-        )
+        test_dataset_filtered = _subset_logic_dataset(test_dataset, test_raw_filtered)
 
     eval_dataset = test_dataset if test_dataset is not None else train_dataset
     eval_dataset_name = "test" if test_dataset is not None else "train"
@@ -1306,6 +1652,11 @@ def main(args):
                 Optim = torch.optim.Adam
             else:
                 Optim = torch.optim.Adam
+            # LearningBasedProgram.train builds the model optimizer as
+            # Optim(model.parameters()) without a learning rate, so --lr used to
+            # reach only the constraint optimizer (c_lr) and the model always
+            # trained at Adam's default 1e-3.  Bind it explicitly.
+            Optim = _build_optimizer_factory(args, Optim)
             
             # Load previous checkpoint if needed
             if args.load_previous_save and args.subset > 1:
@@ -1405,11 +1756,8 @@ def main(args):
                                 "even after relaxation; using full training set"
                             )
                         else:
-                            cached_curriculum_dataset = program.graph.compile_executable(
-                                epoch_train_raw,
-                                logic_keyword='logic_str',
-                                logic_label_keyword='logic_label',
-                                extra_namespace_values=attribute_names_dict,
+                            cached_curriculum_dataset = _subset_logic_dataset(
+                                train_dataset, epoch_train_raw
                             )
                             if curriculum_info["fallback_kind"] == "relaxed_or":
                                 print(
@@ -1469,10 +1817,13 @@ def main(args):
                     with torch.no_grad():
                         epoch_train_acc = program.evaluate_condition(active_train_dataset, device=device)
                     print(f"Epoch {i + 1} {active_train_label} accuracy: {epoch_train_acc :.2f}%")
+                    _print_force3d_soft_acc(args, program, active_train_dataset, device, f"Epoch {i + 1} {active_train_label}")
                 if test_dataset is not None:
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
+                    _print_force3d_ref_top1(args, program, test_dataset, device, f"Epoch {i + 1}")
+                    _print_force3d_soft_acc(args, program, test_dataset, device, f"Epoch {i + 1} test")
                     if _tb_writer is not None:
                         _tb_writer.add_scalar("test/acc", epoch_test_acc, i + 1)
 
@@ -1497,6 +1848,7 @@ def main(args):
                 print(f"{active_train_label.capitalize()} accuracy after training: {final_train_acc:.2f}%")
             if final_test_acc is not None:
                 print(f"Test accuracy after training: {final_test_acc:.2f}%")
+                _print_force3d_ref_top1(args, program, test_dataset, device, "Final")
             if final_test_acc_filtered is not None:
                 print(f"Test accuracy (<={args.max_objects} objects): {final_test_acc_filtered:.2f}%")
             

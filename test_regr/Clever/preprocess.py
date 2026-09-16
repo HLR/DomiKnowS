@@ -269,8 +269,32 @@ def load_full_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation'):
     )
 
 
-def preprocess_folders_and_files(dummy):
-    if not dummy and not Path("train/vocab.json").exists():
+def preprocess_force3d(args, CACHE_DIR):
+    """Load (and pickle-cache) the 3D-FORCE split selected by ``args``."""
+    from force3d_dataset import load_force3d, FORCE3D_VOCAB_VERSION
+
+    split = getattr(args, "force3d_split", "puzzle")
+    view = getattr(args, "force3d_view", "first")
+    json_name = getattr(args, "force3d_json", None)
+    tag = f"_{Path(json_name).stem}" if json_name else ""
+    cache_file = CACHE_DIR / f"force3d_{split}_{view}{tag}_{FORCE3D_VOCAB_VERSION}.pkl"
+    if cache_file.exists():
+        with cache_file.open("rb") as f:
+            dataset = pickle.load(f)
+        print(f"[force3d] re-loaded {len(dataset)} samples from {cache_file}")
+        return dataset
+    # Light load (no images): the caller splits/caps first and then attaches
+    # images to the subset it trains and tests on.  Caches stay small.
+    dataset = load_force3d(split=split, root=Path(args.force3d_root), view_policy=view,
+                           json_name=json_name, with_images=False)
+    with cache_file.open("wb") as f:
+        pickle.dump(dataset, f)
+    print(f"[force3d] cached {len(dataset)} light samples -> {cache_file}")
+    return dataset
+
+
+def preprocess_folders_and_files(dummy, skip_extract=False):
+    if not dummy and not skip_extract and not Path("train/vocab.json").exists():
         print("Extracting json files...")
         with py7zr.SevenZipFile(Path("train/output-vocab.7z"), mode="r") as z:
             z.extractall(path="train/")

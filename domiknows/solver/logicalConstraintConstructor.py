@@ -1,5 +1,5 @@
 import math
-from collections import OrderedDict
+from collections import ChainMap, OrderedDict
 import torch
 
 from domiknows.graph.concept import Concept, EnumConcept
@@ -489,6 +489,92 @@ class LogicalConstraintConstructor:
             return None
         return [columns]
 
+    def _recordRelationArguments(self, variableName, binding):
+        """Remember which logical variables a relation variable ranges over.
+
+        Relation variable names (``left_3``) are globally unique, so the record
+        can outlive the (possibly nested) constraint that grounded it; see
+        ``fillNestedPathBindings``.
+        """
+        if binding is None or len(binding[0]) < 2:
+            return
+        if not hasattr(self, '_relation_argument_names'):
+            self._relation_argument_names = {}
+        self._relation_argument_names[variableName] = tuple(binding[0])
+
+    def fillNestedPathBindings(self, useLcVariables, variableVs, lcVariablesDns, bindings):
+        """Bind path operands whose source relation was grounded in a nested constraint.
+
+        In ``andL(A('a'), B('b'), orL(left('a','b'), ...))`` the compiler rewrites
+        ``A('a')`` as a path ``(left_3, arg1)``.  The relation is grounded inside
+        the nested ``orL`` only, so its binding never reaches this level,
+        ``fillPathBindings`` cannot resolve the path, the unary operands stay
+        unbound, joint grounding declines and the constraint silently evaluates
+        False.  The path's argument names the logical variable directly
+        (``arg1`` of ``left_3`` is ``a``); each operand row is matched to that
+        variable's candidates by datanode identity.
+        """
+        registry = getattr(self, '_relation_argument_names', None)
+        if not registry:
+            return bindings
+
+        def _node(candidate):
+            if isinstance(candidate, (list, tuple)):
+                return candidate[0] if len(candidate) == 1 else None
+            return candidate
+
+        for name, groups in useLcVariables.items():
+            if name in bindings or not groups or name not in lcVariablesDns:
+                continue
+            path = getattr(variableVs.get(name), 'v', None)
+            if not (isinstance(path, tuple) and len(path) == 2 and isinstance(path[0], str)):
+                continue
+            source, step = path
+            if source in bindings or source not in registry:
+                continue
+            try:
+                attr_names = [rel.name for rel in step.src.has_a()]
+            except AttributeError:
+                continue
+            names = registry[source]
+            if getattr(step, 'name', None) not in attr_names or len(attr_names) != len(names):
+                continue
+            var = names[attr_names.index(step.name)]
+            if var not in lcVariablesDns:
+                continue
+            rows = len(groups)
+            if (len(groups) == 1 and groups[0] and torch.is_tensor(groups[0][0])
+                    and groups[0][0].numel() > 1):
+                rows = groups[0][0].numel()
+            # Enumerated row-for-row with the source relation (the usual
+            # case).  The value depends on the projected argument only, so bind
+            # it to that variable (repeated keys): a nested andL(B('b'),
+            # left('b', 'c')) can then align it onto left's rows, which the
+            # over-specified (a, b) grid would not allow.
+            if len(names) == 2 and all(n in lcVariablesDns for n in names):
+                n_src, n_dest = len(lcVariablesDns[names[0]]), len(lcVariablesDns[names[1]])
+                if n_dest and rows == n_src * n_dest == len(lcVariablesDns.get(source, ())):
+                    axis = attr_names.index(step.name)
+                    bindings[name] = ((var,), [((r // n_dest) if axis == 0 else (r % n_dest),)
+                                               for r in range(rows)])
+                    continue
+            position = {}
+            for index, candidate in enumerate(lcVariablesDns[var]):
+                node = _node(candidate)
+                if node is not None:
+                    position.setdefault(id(node), index)
+            keys = []
+            for candidate in lcVariablesDns[name]:
+                node = _node(candidate)
+                if node is None or id(node) not in position:
+                    keys = None
+                    break
+                keys.append((position[id(node)],))
+            if keys is None or len(keys) != rows:
+                continue
+            bindings[name] = ((var,), keys)
+        return bindings
+
     @classmethod
     def fillPathBindings(cls, useLcVariables, variableVs, lcVariablesDns, bindings):
         """Give path-derived variables the grounding of the variable they walk from.
@@ -502,6 +588,7 @@ class LogicalConstraintConstructor:
         # A later relation expansion can duplicate values without changing the
         # original datanode list.  Mirror that deterministic nested-loop
         # expansion in the saved binding keys.
+        cls._materializeBindingKeys(bindings)
         for name, groups in useLcVariables.items():
             if name not in bindings or not groups:
                 continue
@@ -569,6 +656,12 @@ class LogicalConstraintConstructor:
         }
         if primary is None or not bound:
             return useLcVariables
+        fast = LogicalConstraintConstructor._reduceSelectorOnJointGrid(
+            primary, useLcVariables, bound, booleanProcessor, model)
+        if fast is not None:
+            return fast
+        LogicalConstraintConstructor._materializeBindingKeys(bindings)
+        bound = {name: bindings[name] for name in bound}
 
         primary_order = []
         for names, keys in bound.values():
@@ -675,6 +768,97 @@ class LogicalConstraintConstructor:
         return OrderedDict((('_selector_condition', aligned),))
 
     @staticmethod
+    def commonGroundingBinding(useLcVariables, bindings):
+        """``(names, LongTensor grid)`` when every bound operand shares one
+        grounding (the co-grounded case that needs no join), else None.  Lets a
+        parent entity selector reduce a nested result the same way as a joined
+        one."""
+        bound = [bindings[n] for n in useLcVariables if n in bindings]
+        if not bound:
+            return None
+        names0, keys0 = bound[0]
+        for names, keys in bound[1:]:
+            if tuple(names) != tuple(names0):
+                return None
+            if torch.is_tensor(keys0) and torch.is_tensor(keys):
+                if keys.shape != keys0.shape or not torch.equal(keys, keys0):
+                    return None
+            elif torch.is_tensor(keys0) or torch.is_tensor(keys) or list(keys) != list(keys0):
+                return None
+        device = None
+        for groups in useLcVariables.values():
+            for group in groups or ():
+                for value in group or ():
+                    if torch.is_tensor(value):
+                        device = value.device
+                        break
+                if device is not None:
+                    break
+            if device is not None:
+                break
+        grid = keys0 if torch.is_tensor(keys0) else torch.tensor(
+            [tuple(k) for k in keys0], dtype=torch.long, device=device
+        ).reshape(len(keys0), len(names0))
+        return (tuple(names0), grid)
+
+    @staticmethod
+    def _reduceSelectorOnJointGrid(primary, useLcVariables, bound, booleanProcessor, model):
+        """Vectorised selector reduction when an operand carries a joint grid.
+
+        Every bound operand must be in loss layout (``[[col, ...]]`` with one
+        value per joint row) and share the same grid; scalars broadcast.
+        Rows are conjoined with the boolean processor, then OR-ed per primary
+        candidate with the processor's t-norm.  Returns None to fall back.
+        """
+        grids = [keys for names, keys in bound.values() if torch.is_tensor(keys)]
+        if not grids:
+            return None
+        grid = grids[0]
+        names0 = next(names for names, keys in bound.values() if torch.is_tensor(keys))
+        if any(not torch.is_tensor(k) or k.shape != grid.shape or not torch.equal(k, grid)
+               for _, k in bound.values()):
+            return None
+        rows = grid.shape[0]
+        columns = []
+        for name, groups in useLcVariables.items():
+            if not groups:
+                continue
+            if len(groups) == 1 and groups[0] and all(torch.is_tensor(c) for c in groups[0]):
+                for c in groups[0]:
+                    if c.numel() == rows:
+                        columns.append(c.reshape(rows))
+                    elif c.numel() == 1:
+                        columns.append(c.reshape(1).expand(rows))
+                    else:
+                        return None
+            else:
+                return None
+        if not columns:
+            return None
+        conj = columns[0] if len(columns) == 1 else booleanProcessor.andVar(model, *columns)
+        if not torch.is_tensor(conj) or conj.numel() != rows:
+            return None
+        conj = conj.reshape(rows)
+        grid = grid.to(conj.device)
+        pidx = grid[:, names0.index(primary)]
+        candidates = torch.unique(pidx, sorted=True)
+        positions = torch.searchsorted(candidates, pidx)
+        tnorm = getattr(booleanProcessor, 'tnorm', 'P')
+        n = candidates.numel()
+        if tnorm == 'G':
+            out = torch.full((n,), float('-inf'), dtype=conj.dtype, device=conj.device)
+            out = out.scatter_reduce(0, positions, conj, reduce='amax', include_self=True)
+        elif tnorm == 'L':
+            out = torch.zeros(n, dtype=conj.dtype, device=conj.device).scatter_add(0, positions, conj)
+            out = out.clamp(max=1.0)
+        else:  # product t-norm: OR = 1 - prod(1 - p)
+            log_c = torch.log((1 - conj).clamp(min=1e-12))
+            out = 1 - torch.exp(torch.zeros(n, dtype=conj.dtype, device=conj.device)
+                                .scatter_add(0, positions, log_c))
+        aligned = [[out[i]] for i in range(n)]
+        return OrderedDict((('_selector_condition', aligned),))
+
+    @staticmethod
     def groundingBinding(variable, dnsList, lcVariablesDns):
         """Which logical variables a candidate set ranges over, and per-row indices.
 
@@ -712,6 +896,16 @@ class LogicalConstraintConstructor:
         return None
 
     @staticmethod
+    def _materializeBindingKeys(bindings):
+        """Joint-grounding bindings keep their row keys as a LongTensor grid;
+        the row-wise helpers below want lists of index tuples."""
+        for name, binding in list(bindings.items()):
+            names, keys = binding
+            if torch.is_tensor(keys):
+                bindings[name] = (names, [tuple(row) for row in keys.tolist()])
+        return bindings
+
+    @staticmethod
     def reduceToCommonGrounding(useLcVariables, bindings, booleanProcessor):
         """Existentially quantify each operand down to the shared variables.
 
@@ -734,6 +928,7 @@ class LogicalConstraintConstructor:
         No-ops unless at least two operands have known, *differing* variable
         sets, so co-grounded constraints keep their exact current behaviour.
         """
+        LogicalConstraintConstructor._materializeBindingKeys(bindings)
         bound = {n: bindings[n] for n in useLcVariables if n in bindings}
         varSets = {n: set(b[0]) for n, b in bound.items()}
         if len(bound) < 2 or len({frozenset(s) for s in varSets.values()}) < 2:
@@ -786,6 +981,216 @@ class LogicalConstraintConstructor:
             reduced[name] = [columns]
 
         return reduced
+
+    # Joint tables above this many rows are declined (the caller keeps the
+    # previous behaviour) so a pathological formula cannot exhaust memory.
+    JOINT_GROUNDING_MAX_ROWS = 3_000_000
+    # Above this many rows the loss path also prunes non-protected variables,
+    # keeping the top-k candidates per variable ranked by the product of their
+    # unary evidence (an approximation that drops the candidates the current
+    # predictions rank lowest); below it the table is exact.  Both knobs can
+    # be set through environment variables for experiments.
+    JOINT_GROUNDING_SOFT_PRUNE_ROWS = int(__import__('os').environ.get(
+        'DOMIKNOWS_JOINT_SOFT_PRUNE_ROWS', 300_000))
+    JOINT_GROUNDING_SOFT_PRUNE_TOPK = int(__import__('os').environ.get(
+        'DOMIKNOWS_JOINT_SOFT_PRUNE_TOPK', 4))
+
+    @staticmethod
+    def expandToJointGrounding(useLcVariables, bindings, lcVariablesDns, prune=False,
+                               logger=None, protect=()):
+        """Join operands enumerated over different variable tuples onto one table.
+
+        ``reduceToCommonGrounding`` handles operands that share a variable by
+        quantifying the others away.  A chain such as
+        ``andL(A('a'), B('b'), C('c'), left('a','b'), left('b','c'))`` shares no
+        variable across *all* operands, so the reduction declines and the
+        row-wise combination that follows either raises a size mismatch (loss)
+        or silently drops the constraint (verify).  This method builds the
+        exact joint grounding instead: one row per tuple of the union of the
+        operands' variables, every operand gathered onto those rows.
+
+        Gate (so co-grounded and single-shared-variable formulas are untouched):
+        at least two bound operands, differing variable sets, and no variable
+        common to all of them.  Unbound operands must be scalars.
+
+        ``prune`` (verify mode, hard 0/1 values) restricts each variable's
+        domain to the candidates accepted by every unary operand bound to that
+        variable alone; this is exact for boolean values and keeps the table
+        small.  In loss mode the same pruning is applied only when the full
+        table would exceed ``JOINT_GROUNDING_SOFT_PRUNE_ROWS``, and never to
+        variables in ``protect`` (an enclosing entity selector's answer
+        variable must keep one row group per object).
+        Returns ``(operands, joined, binding)`` where ``binding`` is
+        ``(joint_variable_names, LongTensor grid)`` describing the rows, so a
+        parent entity selector can reduce the joined result to its answer
+        variable.
+        """
+        bound = {n: bindings[n] for n in useLcVariables if n in bindings}
+        if len(bound) < 2:
+            return useLcVariables, False, None
+        varSets = {n: set(b[0]) for n, b in bound.items()}
+        if len({frozenset(v) for v in varSets.values()}) < 2:
+            return useLcVariables, False, None
+        # An operand spanning every variable (``left('b','c')`` next to
+        # ``C('c')``) fixes the rows: align the others onto its grounding.
+        # This is what relation expansion does at the top level; inside a
+        # nested constraint the expansion does not re-ground the enclosing
+        # constraint's variables, and without it the operands were combined
+        # row-wise at different lengths and the formula silently failed.
+        union = set().union(*varSets.values())
+        spanning = next((n for n in bound if varSets[n] == union), None)
+        if set.intersection(*varSets.values()) and spanning is None:
+            return useLcVariables, False, None  # reduceToCommonGrounding's case
+        if all(len(v) < 2 for v in varSets.values()):
+            # Only plain per-entity variables (e.g. ``sameL(color, 'x', 'y')``
+            # comparing each entity with itself): the historical row-wise
+            # pairing is the intended semantics, not a Cartesian product.
+            return useLcVariables, False, None
+        for name, groups in useLcVariables.items():
+            if name in bound:
+                continue
+            if not (groups and len(groups) == 1 and len(groups[0]) >= 1
+                    and torch.is_tensor(groups[0][0]) and groups[0][0].numel() == 1):
+                return useLcVariables, False, None
+
+        # --- normalise every bound operand to (format, columns) ----------
+        # loss format:   [[col, col, ...]]  one group, 1-D tensors over rows
+        # verify format: [[v], [v], ...]    one group per row, scalar values
+        normalised = {}
+        for name, groups in useLcVariables.items():
+            if name not in bound:
+                continue
+            names, keys = bound[name]
+            rows = len(keys)
+            if (len(groups) == 1 and groups[0]
+                    and all(torch.is_tensor(c) and c.dim() == 1 and c.numel() == rows
+                            for c in groups[0])):
+                normalised[name] = ("loss", [c for c in groups[0]])
+            elif len(groups) == rows and all(g and len(g) == 1 for g in groups):
+                try:
+                    col = torch.stack([torch.as_tensor(g[0]) for g in groups])
+                except Exception:
+                    return useLcVariables, False, None
+                normalised[name] = ("verify", [col])
+            else:
+                return useLcVariables, False, None
+
+        joint = []
+        for names, _ in bound.values():
+            for v in names:
+                if v not in joint:
+                    joint.append(v)
+        if any(v not in lcVariablesDns for v in joint):
+            return useLcVariables, False, None
+        domains = {v: len(lcVariablesDns[v]) for v in joint}
+        if any(d == 0 for d in domains.values()):
+            return useLcVariables, False, None
+        # Operands can live on different devices (verify-mode values of a
+        # nested orL/andL are stacked on CPU while predicate columns are on the
+        # model device): move every column to one device, preferring an
+        # accelerator.
+        devices = [c.device for _, cols in normalised.values() for c in cols]
+        device = next((d for d in devices if d.type != "cpu"), devices[0])
+        normalised = {name: (fmt, [c.to(device) for c in cols])
+                      for name, (fmt, cols) in normalised.items()}
+
+        # --- optional pruning by unary evidence -----------------------------
+        # Per-variable evidence = product over unary operands (plain, or
+        # re-grounded along a relation but constant on the other axis).
+        # Verify mode (hard 0/1 values): keep candidates with evidence > 0.5,
+        # exact.  Loss mode above the row budget: keep the top-k candidates
+        # per variable by evidence (soft values), never touching ``protect``.
+        allowed = {v: torch.ones(domains[v], dtype=torch.bool, device=device) for v in joint}
+        full_rows = 1
+        for v in joint:
+            full_rows *= domains[v]
+        soft_prune = ((not prune) and spanning is None
+                      and full_rows > LogicalConstraintConstructor.JOINT_GROUNDING_SOFT_PRUNE_ROWS)
+        protect = set(protect or ())
+        if (prune and spanning is None) or soft_prune:
+            evidence = {v: torch.ones(domains[v], dtype=torch.float32, device=device) for v in joint}
+            for name, (fmt, cols) in normalised.items():
+                names, keys = bound[name]
+                dims = [domains[v] for v in names]
+                if len(keys) != int(torch.tensor(dims).prod()):
+                    continue
+                key_t = torch.tensor(keys, dtype=torch.long, device=device).reshape(len(keys), len(names))
+                for col in cols:
+                    full = torch.zeros(dims, dtype=torch.float32, device=device)
+                    full[tuple(key_t[:, i] for i in range(len(names)))] = col.float()
+                    if len(names) == 1:
+                        evidence[names[0]] = evidence[names[0]] * full
+                        continue
+                    for axis, v in enumerate(names):
+                        first = full.movedim(axis, 0).reshape(full.shape[axis], -1)
+                        if bool(torch.allclose(first, first[:, :1].expand_as(first))):
+                            evidence[v] = evidence[v] * first[:, 0]
+            topk = LogicalConstraintConstructor.JOINT_GROUNDING_SOFT_PRUNE_TOPK
+            for v in joint:
+                if v in protect:
+                    continue
+                if prune:
+                    allowed[v] &= evidence[v] > 0.5
+                else:
+                    k = min(topk, domains[v])
+                    keep = torch.topk(evidence[v], k).indices
+                    mask = torch.zeros(domains[v], dtype=torch.bool, device=device)
+                    mask[keep] = True
+                    allowed[v] &= mask
+        axes = [torch.nonzero(allowed[v]).reshape(-1) for v in joint]
+        empty = any(a.numel() == 0 for a in axes)
+        if empty:
+            # No assignment can satisfy the unaries.  Keep the protected
+            # variables' full domains (a selector needs one group per object)
+            # and collapse the rest to a dummy index; every operand value on
+            # these rows is forced to false below.
+            axes = [torch.arange(domains[v], device=device) if v in protect
+                    else torch.zeros(1, dtype=torch.long, device=device) for v in joint]
+        total = 1
+        for a in axes:
+            total *= a.numel()
+        if total > LogicalConstraintConstructor.JOINT_GROUNDING_MAX_ROWS:
+            if logger is not None:
+                logger.warning("joint grounding declined: %d rows over %s", total, joint)
+            return useLcVariables, False, None
+        grid = torch.cartesian_prod(*axes) if len(axes) > 1 else axes[0].reshape(-1, 1)
+        grid = grid.reshape(-1, len(joint))
+        if spanning is not None:
+            joint = list(bound[spanning][0])
+            span_keys = bound[spanning][1]
+            grid = (span_keys.to(device) if torch.is_tensor(span_keys) else torch.tensor(
+                [tuple(k) for k in span_keys], dtype=torch.long, device=device
+            )).reshape(-1, len(joint))
+            empty = False
+
+        # --- gather every operand onto the joint rows ----------------------
+        expanded = OrderedDict()
+        for name, groups in useLcVariables.items():
+            if name not in normalised:
+                expanded[name] = groups
+                continue
+            fmt, cols = normalised[name]
+            names, keys = bound[name]
+            dims = [domains[v] for v in names]
+            lookup = torch.full(dims, -1, dtype=torch.long, device=device)
+            key_idx = torch.tensor(keys, dtype=torch.long, device=device).reshape(len(keys), len(names))
+            lookup[tuple(key_idx[:, i] for i in range(len(names)))] = torch.arange(len(keys), device=device)
+            rows_idx = lookup[tuple(grid[:, joint.index(v)] for v in names)]
+            if empty:
+                rows_idx = torch.full_like(rows_idx, -1)
+            valid = rows_idx >= 0
+            safe = rows_idx.clamp(min=0)
+            new_cols = []
+            for col in cols:
+                gathered = col[safe]
+                gathered = torch.where(valid, gathered, torch.zeros_like(gathered))
+                new_cols.append(gathered)
+            if fmt == "loss":
+                expanded[name] = [new_cols]
+            else:
+                col = new_cols[0]
+                expanded[name] = [[col[i]] for i in range(col.numel())]
+        return expanded, True, (tuple(joint), grid)
 
     @staticmethod
     def splitLossColumns(variable):
@@ -1027,6 +1432,18 @@ class LogicalConstraintConstructor:
                     vNo[0] += 1
 
                     lcVariablesDns[newVariableName] = lcVariablesDns[variableName]
+                    # A re-bound variable ranges over the same rows as the original;
+                    # carry the grounding binding so joint expansion can place it.
+                    if variableName in lcVariableBindings:
+                        lcVariableBindings[newVariableName] = lcVariableBindings[variableName]
+                    elif variableName in (getattr(self, '_outer_bindings', None) or {}):
+                        # Re-binding a variable of an enclosing constraint, as
+                        # C('c') in andL(C('c'), ..., andL(C('c'), left('b', 'c'))):
+                        # without its binding the operand cannot be joined and
+                        # the nested formula silently evaluates False.
+                        lcVariableBindings[newVariableName] = self._outer_bindings[variableName]
+                    if variableName in lcVariableVs:
+                        lcVariableVs[newVariableName] = lcVariableVs[variableName]
 
                     # When the current element is a Concept/tuple with a different concept
                     # than what the variable was originally bound to, we need to look up
@@ -1119,6 +1536,7 @@ class LogicalConstraintConstructor:
                     binding = self.groundingBinding(variable, dnsList, lcVariablesDns)
                     if binding is not None:
                         lcVariableBindings[variableName] = binding
+                    self._recordRelationArguments(variableName, binding)
 
                     # Apply expansion to lcVariables if expansion occurred
                     if expansionInfo is not None:
@@ -1302,6 +1720,8 @@ class LogicalConstraintConstructor:
                                    
                     if isinstance(e, LogicalConstrain):
                         self.myLogger.info('Processing Nested %r - %s'%(e, e.strEs()))
+                        _prev_outer = getattr(self, '_outer_bindings', None)
+                        self._outer_bindings = ChainMap(lcVariableBindings, _prev_outer or {})
 
                         if sample:
                             vDns, sampleInfoLC, lcVariablesLC, lcVariableUpdated = self.constructLogicalConstrains(
@@ -1312,12 +1732,24 @@ class LogicalConstraintConstructor:
                             sampleInfo = {**sampleInfo, **sampleInfoLC}
                             lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
                             lcVariables = lcVariableUpdated 
+                            self._outer_bindings = _prev_outer
                         else:
+                            self._pending_joint_binding = None
+                            _prev_protected = getattr(self, '_protected_variables', ())
+                            if isinstance(lc, (iotaL, miotaL)) and getattr(lc, 'selection_variable', None):
+                                self._protected_variables = tuple(_prev_protected) + (lc.selection_variable,)
                             vDns, lcVariableUpdated = self.constructLogicalConstrains(
                                 e, booleanProcessor, m, dn, p, key=key, 
                                 lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
                                 headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify,
                                 circuit=circuit)
+                            self._protected_variables = _prev_protected
+                            self._outer_bindings = _prev_outer
+                            if getattr(self, '_pending_joint_binding', None) is not None:
+                                # The nested constraint was grounded on a joint
+                                # table; its rows are described by this binding.
+                                lcVariableBindings[variableName] = self._pending_joint_binding
+                                self._pending_joint_binding = None
                             
                             # Ensure vDns has the correct structure
                             if verify and not loss and not sample:
@@ -1364,6 +1796,8 @@ class LogicalConstraintConstructor:
         if isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
                                   lcVariablesDns, lcVariableBindings)
+            self.fillNestedPathBindings(useLcVariables, lcVariableVs,
+                                        lcVariablesDns, lcVariableBindings)
             useLcVariables = self.reduceSelectorToPrimaryGrounding(
                 lc, useLcVariables, lcVariableBindings, booleanProcessor, m)
 
@@ -1375,13 +1809,25 @@ class LogicalConstraintConstructor:
         elif verify and headLC:
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
         else:
-            if loss and not isEntitySelector:
+            joined = False
+            if (loss or verify or circuit) and not sample and not isEntitySelector:
                 # Align operands enumerated over different variable tuples
                 # before combining them (no-op when they are co-grounded).
                 self.fillPathBindings(useLcVariables, lcVariableVs,
                                       lcVariablesDns, lcVariableBindings)
-                useLcVariables = self.reduceToCommonGrounding(
-                    useLcVariables, lcVariableBindings, booleanProcessor)
+                self.fillNestedPathBindings(useLcVariables, lcVariableVs,
+                                            lcVariablesDns, lcVariableBindings)
+                useLcVariables, joined, joint_binding = self.expandToJointGrounding(
+                    useLcVariables, lcVariableBindings, lcVariablesDns,
+                    prune=(verify and not loss), logger=self.myLogger,
+                    protect=getattr(self, '_protected_variables', ()))
+                self._pending_joint_binding = (
+                    joint_binding if joined
+                    else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
+            if loss and not isEntitySelector:
+                if not joined:
+                    useLcVariables = self.reduceToCommonGrounding(
+                        useLcVariables, lcVariableBindings, booleanProcessor)
 
                 slpitT = False
                 for v in useLcVariables:

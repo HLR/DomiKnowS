@@ -195,11 +195,16 @@ def create_graph(
         program = current_instance.get("program", [])
         question_raw = current_instance.get("question_raw", "")
 
-        execution, query_type = create_execution_for_question(
-            program,
-            i,
-            relation_syntax=relation_syntax,
-        )
+        if isinstance(current_instance.get("logic_str"), str) and current_instance.get("program_str"):
+            # Precompiled executable (e.g. 3D-FORCE adapter): keep the string
+            # as-is; ``program`` is only a token list used for curriculum sizing.
+            execution, query_type = current_instance["logic_str"], None
+        else:
+            execution, query_type = create_execution_for_question(
+                program,
+                i,
+                relation_syntax=relation_syntax,
+            )
 
         if " or " in question_raw:
             print(f"Found 'or' in question {i}")

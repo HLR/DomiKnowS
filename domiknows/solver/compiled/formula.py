@@ -27,7 +27,7 @@ hard 0/1 substitution is replicated per concept in ``ProbabilityStore`` (see
 ``_fixed_spec`` / ``_apply_fixed``).
 """
 
-from collections import OrderedDict
+from collections import ChainMap, OrderedDict
 from threading import RLock
 from time import perf_counter_ns
 
@@ -417,6 +417,18 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                     vNo[0] += 1
 
                     lcVariablesDns[newVariableName] = lcVariablesDns[variableName]
+                    # A re-bound variable ranges over the same rows as the original;
+                    # carry the grounding binding so joint expansion can place it.
+                    if variableName in lcVariableBindings:
+                        lcVariableBindings[newVariableName] = lcVariableBindings[variableName]
+                    elif variableName in (getattr(self, '_outer_bindings', None) or {}):
+                        # Re-binding a variable of an enclosing constraint, as
+                        # C('c') in andL(C('c'), ..., andL(C('c'), left('b', 'c'))):
+                        # without its binding the operand cannot be joined and
+                        # the nested formula silently evaluates False.
+                        lcVariableBindings[newVariableName] = self._outer_bindings[variableName]
+                    if variableName in lcVariableVs:
+                        lcVariableVs[newVariableName] = lcVariableVs[variableName]
 
                     is_concept_tuple = isinstance(e, tuple) and len(e) >= 1 and isinstance(e[0], Concept)
                     if is_concept_tuple:
@@ -452,6 +464,7 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                     binding = self.groundingBinding(variable, dnsList, lcVariablesDns)
                     if binding is not None:
                         lcVariableBindings[variableName] = binding
+                    self._recordRelationArguments(variableName, binding)
 
                     if expansionInfo is not None:
                         # Realign previously collected variable tensors with
@@ -559,6 +572,12 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                     if isinstance(e, LogicalConstrain):
                         self.myLogger.info('Processing Nested %r - %s' % (e, e.strEs()))
 
+                        self._pending_joint_binding = None
+                        _prev_protected = getattr(self, '_protected_variables', ())
+                        if isinstance(lc, (iotaL, miotaL)) and getattr(lc, 'selection_variable', None):
+                            self._protected_variables = tuple(_prev_protected) + (lc.selection_variable,)
+                        _prev_outer = getattr(self, '_outer_bindings', None)
+                        self._outer_bindings = ChainMap(lcVariableBindings, _prev_outer or {})
                         nested = self.constructCompiled(
                             e, booleanProcessor, dn, key=key,
                             lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
@@ -566,6 +585,11 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                             model=model, p=p, loss=loss, sample=sample,
                             verify=verify, circuit=circuit,
                             concept_bindings=bound_concepts)
+                        self._protected_variables = _prev_protected
+                        self._outer_bindings = _prev_outer
+                        if getattr(self, '_pending_joint_binding', None) is not None:
+                            lcVariableBindings[variableName] = self._pending_joint_binding
+                            self._pending_joint_binding = None
                         if sample:
                             vDns, nested_sample_info, nested_sets, lcVariableUpdated = nested
                             sampleInfo.update(nested_sample_info)
@@ -614,18 +638,33 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
         if isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
                                   lcVariablesDns, lcVariableBindings)
+            self.fillNestedPathBindings(useLcVariables, lcVariableVs,
+                                        lcVariablesDns, lcVariableBindings)
             useLcVariables = self.reduceSelectorToPrimaryGrounding(
                 lc, useLcVariables, lcVariableBindings, booleanProcessor, model)
 
         if isinstance(lc, CandidateSelection):
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
 
-        # Same per-element alignment the interpreter applies in loss mode.
-        if loss and not sample and not isEntitySelector:
+        # Same per-element alignment the interpreter applies in loss mode
+        # (joint grounding first; the common-variable reduction otherwise).
+        joined = False
+        if (loss or verify or circuit) and not sample and not isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
                                   lcVariablesDns, lcVariableBindings)
-            useLcVariables = self.reduceToCommonGrounding(
-                useLcVariables, lcVariableBindings, booleanProcessor)
+            self.fillNestedPathBindings(useLcVariables, lcVariableVs,
+                                        lcVariablesDns, lcVariableBindings)
+            useLcVariables, joined, joint_binding = self.expandToJointGrounding(
+                useLcVariables, lcVariableBindings, lcVariablesDns,
+                prune=(verify and not loss), logger=self.myLogger,
+                protect=getattr(self, '_protected_variables', ()))
+            self._pending_joint_binding = (
+                joint_binding if joined
+                else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
+        if loss and not sample and not isEntitySelector:
+            if not joined:
+                useLcVariables = self.reduceToCommonGrounding(
+                    useLcVariables, lcVariableBindings, booleanProcessor)
 
             split_tensors = any(
                 useLcVariables[v] and len(useLcVariables[v]) > 1
