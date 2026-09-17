@@ -359,8 +359,8 @@ def _reported_episode_progress(episode: "JointEpisode") -> float:
         return 1.0
     diagnostics = episode.diagnostics if isinstance(episode.diagnostics, dict) else {}
     return max(
-        float(diagnostics.get("final_progress", 0.0)),
-        float(diagnostics.get("distance_progress", 0.0)),
+        float(diagnostics.get("final_progress") or 0.0),
+        float(diagnostics.get("distance_progress") or 0.0),
     )
 
 
@@ -608,6 +608,10 @@ def _live_task_container_interior_point(env: Any, attribute: str) -> np.ndarray 
     if not callable(contain) or physics is None or base is None:
         return None
     offsets = [(dx, dy, dz) for dx in np.linspace(-0.20, 0.20, 5) for dy in np.linspace(-0.20, 0.20, 5) for dz in np.linspace(-0.80, 0.20, 21)]
+    # Search nearest to the official waypoint first. Lexicographic iteration
+    # starts 80 cm below it and can command a deep, colliding placement even
+    # when a safe point just inside the opening satisfies the predicate.
+    offsets.sort(key=lambda xyz: sum(float(value) ** 2 for value in xyz))
     for dx, dy, dz in offsets:
         candidate = base + np.asarray([dx, dy, dz], dtype=np.float64)
         try:
@@ -996,6 +1000,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         previous_progress = previous_intention = 0.0
         last_progress_report = time.monotonic()
         diagnostics = RolloutDiagnostics()
+        cameras = None
         pick_assist_steps = grasp_assist_steps = pull_assist_steps = pour_assist_steps = 0
         place_assist_steps = insert_assist_steps = lift_assist_steps = 0
         press_assist_steps = 0
@@ -2416,9 +2421,21 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     f"VLABench simulator physics failure task={descriptor.get('task', 'unknown')} "
                     f"steps={steps}: {type(exc).__name__}"
                 )
-                return JointEpisode(planner_logprobs, [], 0.0, False, False, steps, [
-                    0.0 for _ in planner_logprobs
-                ])
+                # Keep the last valid observation without querying broken physics.
+                failure_diagnostics = {
+                    **diagnostics.result(),
+                    "cameras": cameras,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                    "failure_phase": "reset" if steps == 0 else "rollout",
+                    "final_progress": previous_progress,
+                    "final_intention": previous_intention,
+                }
+                return JointEpisode(
+                    planner_logprobs, [], 0.0, False, False, steps,
+                    [0.0 for _ in planner_logprobs], ik_failures, ik_recoveries,
+                    "physics_failure", failure_diagnostics,
+                )
             raise
         finally:
             close = getattr(env, "close", None)

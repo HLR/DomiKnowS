@@ -2732,3 +2732,77 @@ def test_condiment_rotation_steps_follow_shortest_arc_through_euler_singularity(
         assert remaining == pytest.approx(max(0., error - 0.1), abs=1e-6)
         current = stepped
     assert abs(np.dot(euler_to_quaternion(*current), target)) == pytest.approx(1.)
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_environment_configuration_isolated_after_construction(monkeypatch, fail):
+    from test_regr.VLABenchAgentInterface import environment as adapter
+    task_config = {"default": {"engine": {"option": {"impratio": 10}}}}
+    robot_config = {"franka": {"position": [0, -0.4, 0.78]}}
+    module = SimpleNamespace(TASK_CONFIG=task_config, ROBOT_CONFIG=robot_config)
+    captured = []
+
+    def load_env(task, **kwargs):
+        captured.append(module.ROBOT_CONFIG["franka"])
+        module.TASK_CONFIG["default"]["engine"]["option"]["impratio"] = 2
+        module.ROBOT_CONFIG["franka"]["position"][2] = 0.6
+        if fail:
+            raise RuntimeError("constructor failed")
+        return captured[-1]
+
+    module.load_env = load_env
+    monkeypatch.setattr(adapter.importlib, "import_module", lambda name: module)
+    if fail:
+        with pytest.raises(RuntimeError, match="constructor failed"):
+            adapter.create_environment("add_condiment")
+    else:
+        assert adapter.create_environment("add_condiment")["position"][2] == 0.6
+    assert module.TASK_CONFIG is task_config
+    assert module.ROBOT_CONFIG is robot_config
+    assert task_config["default"]["engine"]["option"]["impratio"] == 10
+    assert robot_config["franka"]["position"][2] == 0.78
+    assert captured[0] is not robot_config["franka"]
+
+
+def test_rollout_physics_failure_preserves_diagnostics():
+    world = build_vlabench_world_graph("physics_failure_evidence_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="physics_failure_evidence"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    simulator = FakeSimulator(success=True)
+    physics_error = type("PhysicsError", (RuntimeError,), {"__module__": "dm_control.mujoco.engine"})
+    def fail_step(action):
+        raise physics_error("Physics state is invalid: mjWARN_BADQACC")
+    simulator.step = fail_step
+    program = _joint_program(runtime, planner, controller, lambda **kwargs: simulator, num_samples=1)
+    episode = program.collect_episode({"task": "select_book"})
+    assert not episode.valid and not episode.success
+    assert episode.termination_reason == "physics_failure"
+    assert episode.diagnostics["error_type"] == "PhysicsError"
+    assert "mjWARN_BADQACC" in episode.diagnostics["error_message"]
+    assert episode.diagnostics["cameras"] is not None
+
+
+def test_environment_seeds_composer_rng_and_restores_constructor(monkeypatch):
+    from test_regr.VLABenchAgentInterface import environment as adapter
+    seen = []
+    def constructor(**kwargs):
+        seen.append(kwargs["random_state"])
+        return kwargs
+    module = SimpleNamespace(LM4ManipDMEnv=constructor)
+    module.load_env = lambda *args, **kwargs: module.LM4ManipDMEnv()
+    monkeypatch.setattr(adapter.importlib, "import_module", lambda name: module)
+    rng = np.random.get_state()
+    try:
+        np.random.seed(42)
+        adapter.create_environment("select_toy")
+        np.random.seed(42)
+        adapter.create_environment("select_toy")
+        adapter.create_environment("select_toy", simulator_seed=123)
+    finally:
+        np.random.set_state(rng)
+    assert seen[0] == seen[1]
+    assert seen[2] == 123
+    assert module.LM4ManipDMEnv is constructor

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import importlib
+from functools import partial
+from copy import deepcopy
+from threading import RLock
 import math
 from typing import Any, Mapping
 
@@ -15,6 +18,7 @@ class InverseKinematicsError(ValueError):
 
 
 CONTROLLER_FRAME_VERSION = 2
+_ENV_CONFIG_LOCK = RLock()
 
 
 def robot_frame_position(env: Any) -> np.ndarray:
@@ -274,7 +278,8 @@ def create_environment(
         # ``franka`` and the task names absent from that registry.
         importlib.import_module("VLABench.robots")
         importlib.import_module("VLABench.tasks")
-        load_env = importlib.import_module("VLABench.envs").load_env
+        env_module = importlib.import_module("VLABench.envs")
+        load_env = env_module.load_env
     except ImportError as exc:
         raise RuntimeError(
             "VLABench is required only for online rollout; install the OpenMOSS/VLABench clone editable"
@@ -285,4 +290,30 @@ def create_environment(
     # unupdated.  Online rollouts must use the evaluation contract unless a
     # caller explicitly supplies another mode for a specialised diagnostic.
     kwargs.setdefault("run_mode", "eval")
-    return load_env(task, robot=robot, time_limit=time_limit, **kwargs)
+    # Upstream mutates TASK_CONFIG['default'] and ROBOT_CONFIG in place.
+    # Private copies prevent task order and constructor failures from leaking
+    # configuration. Existing environments retain their own referenced objects.
+    with _ENV_CONFIG_LOCK:
+        originals = {
+            name: getattr(env_module, name)
+            for name in ("TASK_CONFIG", "ROBOT_CONFIG")
+            if hasattr(env_module, name)
+        }
+        # Composer otherwise creates an entropy-seeded RandomState of its own.
+        # Drawing from the evaluator-seeded NumPy stream keeps task layout and
+        # physics randomization reproducible across baseline/candidate checks.
+        constructor = getattr(env_module, "LM4ManipDMEnv", None)
+        simulator_seed = kwargs.pop("simulator_seed", None)
+        if simulator_seed is None:
+            simulator_seed = int(np.random.randint(0, 2**31 - 1))
+        try:
+            for name, value in originals.items():
+                setattr(env_module, name, deepcopy(value))
+            if constructor is not None:
+                env_module.LM4ManipDMEnv = partial(constructor, random_state=int(simulator_seed))
+            return load_env(task, robot=robot, time_limit=time_limit, **deepcopy(kwargs))
+        finally:
+            if constructor is not None:
+                env_module.LM4ManipDMEnv = constructor
+            for name, value in originals.items():
+                setattr(env_module, name, value)

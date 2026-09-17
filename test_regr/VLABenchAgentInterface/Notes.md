@@ -41,3 +41,32 @@ Controller shaping is `0.25 * delta(progress) + 0.10 * delta(intention)`. The fi
 ```
 
 The smoke/audit override `--rl-preflight-min-successful-tasks 999` records diagnostics while preventing PPO. The simulator preflight prints a Markdown table with `Task`, `Success`, `Progress`, and `IK` columns; progress is the average authoritative final task-progress signal, falling back to normalized distance progress when the upstream signal remains zero. Do not treat an audit with that override as evidence that reinforcement learning is ready.
+
+
+## September 17 rollout investigation
+
+The September 15 Joint run's rejected evaluation contains physics failures for all
+three `insert_flower` episodes, one `select_fruit` episode, and one `select_toy`
+episode. These were previously returned with `termination_reason=unknown` and no
+diagnostics. Two failed drink episodes never reached the grasp point (minimum
+distance roughly 0.49 and 0.52 m). The IK-truncated toy episode already had its
+target over 2 m away at the first observation. These observations do not establish
+that a successful grasp was subsequently lost.
+
+The adapter now isolates upstream mutable task/robot configuration during each
+construction and seeds Composer's independent RNG from the evaluation-seeded
+NumPy stream. `simulator_seed` in environment kwargs can override that seed.
+Old fixed-seed reports did not control this simulator RNG; re-evaluate both the
+baseline and candidate before interpreting their difference as an RL effect.
+A repeated GPU4 toy reset after this change produced exactly identical positions.
+
+Placement searches now try the closest predicate-valid point to the official
+waypoint first, rather than starting 80 cm below it. Physics exceptions retain
+the last valid diagnostics and are labeled `physics_failure`; missing distance
+progress no longer crashes aggregate reporting.
+
+Camera alias selection is still configuration, not paired-frame verification.
+The existing held-out replay checks require the original scene restorer and
+paired dataset/live images. Do not change `unverified` to `verified` based solely
+on matching camera names, and do not interpret a reset reproducibility check as
+camera parity or end-to-end task success.
