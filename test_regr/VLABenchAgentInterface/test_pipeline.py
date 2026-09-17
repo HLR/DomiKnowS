@@ -2806,3 +2806,39 @@ def test_environment_seeds_composer_rng_and_restores_constructor(monkeypatch):
     assert seen[0] == seen[1]
     assert seen[2] == 123
     assert module.LM4ManipDMEnv is constructor
+
+
+def test_generic_pick_ramps_physical_aperture_only_at_current_keypoint():
+    world = build_vlabench_world_graph("generic_grasp_ramp_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="generic_grasp_ramp")
+    class Task(SimpleNamespace):
+        __module__ = "VLABench.tasks.tests"
+    class Simulator(FakeSimulator):
+        def __init__(self):
+            super().__init__(success=False)
+            self.commands = []
+            self.robot.get_qpos = lambda _: np.full(7, self.count, dtype=float)
+            self.task = Task(**vars(self.task))
+            self.task.target_entity = "apple"
+            self.task.entities["apple"] = SimpleNamespace(
+                get_xpos=lambda _: np.array([0.2, 0., 0.]),
+                get_grasped_keypoints=lambda _: [np.array([0.2, 0., 0.])],
+                is_grasped=lambda *_: False,
+            )
+        def get_observation(self, require_pcd=False):
+            observation = super().get_observation(require_pcd)
+            observation["ee_state"][0] = 0.195 if self.count >= 2 else 0.1
+            return observation
+        def step(self, command):
+            self.commands.append(np.asarray(command).copy())
+            return super().step(command)
+    simulator = Simulator()
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    program = _joint_program(runtime, planner, controller, lambda **_: simulator)
+    program.max_steps = 13
+    program.collect_episode({"task": "select_fruit"})
+    commands = np.asarray(simulator.commands)
+    expected = [0.04, 0.04] + [0.04 * (1-i/10) for i in range(11)]
+    np.testing.assert_allclose(commands[:, -2:], np.repeat(np.array(expected)[:, None], 2, axis=1))
+    np.testing.assert_allclose(commands[2:, :-2], 2.0)

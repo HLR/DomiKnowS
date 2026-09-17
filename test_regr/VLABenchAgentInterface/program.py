@@ -1005,6 +1005,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         place_assist_steps = insert_assist_steps = lift_assist_steps = 0
         press_assist_steps = 0
         pick_grasp_latched = False
+        pick_grasp_qpos = None
         grasp_close_steps = 0
         condiment_prepare_reached = False
         condiment_grasp_pose = None
@@ -1797,24 +1798,26 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             and operation_cursor == 0 and active_skill == "pick"
                         )
                         if operation_cursor == 0 and active_skill == "pick" and not condiment_pick:
+                            # A historical minimum or the old 30 cm approach
+                            # envelope is not a current physical grasp. Close
+                            # only near the live keypoint in official tasks.
+                            close_distance = (
+                                min(self.pick_grasp_distance, 0.03)
+                                if task_type.__module__.startswith("VLABench.")
+                                else self.pick_grasp_distance
+                            )
                             within_grasp_envelope = (
                                 current_target_distance is not None
-                                and current_target_distance <= self.pick_grasp_distance
-                                or target_min_distance is not None
-                                and target_min_distance <= self.pick_grasp_distance
+                                and current_target_distance <= close_distance
                             )
-                            if within_grasp_envelope:
+                            if within_grasp_envelope and not pick_grasp_latched:
                                 pick_grasp_latched = True
+                                getter = getattr(getattr(env, "robot", None), "get_qpos", None)
+                                if callable(getter):
+                                    pick_grasp_qpos = np.asarray(getter(env.physics), dtype=np.float64).copy()
+                            bounded[6] = 0.0 if pick_grasp_latched else 1.0
                             if pick_grasp_latched:
-                                # Match SkillLib.close_gripper: close over
-                                # several transitions while holding the live
-                                # grasp pose, instead of one abrupt pulse.
-                                bounded[6] = max(
-                                    0.0,
-                                    0.04 * (1.0 - min(grasp_close_steps, 10) / 10.0),
-                                )
-                                grasp_close_steps += 1
-                                grasp_assist_steps += 1
+                                bounded[:6] = current[:6]
                         if condiment_pick:
                             grasp_orientation, orientation_error = _condiment_orientation_step(
                                 current[3:6], self.max_rotation_step
@@ -1978,6 +1981,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         valid = False
                         termination_reason = "invalid_action"
                         break
+                    if operation_cursor == 0 and active_skill == "pick" and not condiment_pick and pick_grasp_latched:
+                        # Binary EE open state cannot represent a metre-valued
+                        # aperture. Ramp the converted physical finger joints.
+                        if pick_grasp_qpos is not None:
+                            command[:-2] = pick_grasp_qpos
+                        command[-2:] = 0.04 * max(0.0, 1.0 - grasp_close_steps / 10.0)
+                        grasp_close_steps += 1
+                        grasp_assist_steps += 1
                     if condiment_pick and condiment_grasp_pose is not None:
                         # EE gripper state is binary; apply the physical
                         # aperture ramp only after conversion to joint control.
@@ -2194,7 +2205,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         task_type.__module__.startswith("VLABench.")
                                         and descriptor.get("task") == "add_condiment"
                                     )
-                                    else 8
+                                    else 11
                                 )
                                 required_contact_streak = (
                                     10
@@ -2246,7 +2257,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             )
                             grasp_advance = (
                                 recovered[6] < 0.5
-                                and grasp_close_steps >= 8
+                                and grasp_close_steps >= 11
                                 and latest_target_distance is not None
                                 and latest_target_distance <= self.pick_grasp_distance
                             )
