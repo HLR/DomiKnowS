@@ -270,3 +270,6 @@ nested_constraints_demo/.venv/include/site/python3.12/greenlet/greenlet.h
 # Ignore .venv directory generally
 .venv/
 
+clevr_inference_vs_gumbel/data/multiview/**/*
+clevr_inference_vs_gumbel/ISSUE_multivar_joint_grounding.md
+clevr_inference_vs_gumbel/ISSUE_nested_connective_grounding.md
