@@ -60,22 +60,37 @@ from test_regr.VLABenchAgentInterface.main import (
     reinforcement_selection_key,
 )
 from test_regr.VLABenchAgentInterface.program import (
+    GRIPPER_SETTLED_TOLERANCE,
+    INSERT_FLOWER_POSE,
     ControllerTransition,
     JointEpisode,
     PlannerReplayDecision,
     VLABenchHierarchicalReinforcementProgram,
     _controller_inputs,
     _blend_pick_target,
+    _carried_entity_fits_container,
+    _carry_reseat_pose,
     _condiment_orientation_step,
     _entity_pointer_dfa,
+    _flower_grasp_euler,
+    _gripper_finger_positions,
+    _live_task_condiment_grasp_point,
+    _live_task_entity_bounds,
     _live_task_entity_position,
+    _live_task_flower_stem_axis,
     _live_task_grasp_keypoint,
     _live_task_container_interior_point,
     _mark_task_target_grasped,
     _observation_state,
+    _orientation_step,
+    _quat_rotate,
     _signal,
     _task_signals,
     _press_button_fallback_plan,
+    _quat_conjugate,
+    _quat_multiply,
+    _release_live_task_entity,
+    _set_live_task_entity_pose,
     _task_pattern_dfa,
     generalized_advantage_estimate,
     ppo_clipped_loss,
@@ -2282,8 +2297,10 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture(f
     episode = program.collect_episode({"task": "add_condiment"})
     if follows_lift is not None:
         # Identical finger contact and arm motion, differing only in whether
-        # the object is actually carried: contact alone must not pass lift.
-        assert episode.termination_reason == ("max_steps" if follows_lift else "grasp_lost")
+        # the object is actually carried. A stale physics frame no longer
+        # truncates the rollout (the attachment synchronizer is the source of
+        # truth), so both variants run out the step budget without success.
+        assert episode.termination_reason == "max_steps"
         assert not episode.success
         return
     assert episode.steps == 14
@@ -2295,6 +2312,564 @@ def test_condiment_keeps_fingers_open_until_keypoint_then_ramps_joint_aperture(f
     # Nearness and closed commands cannot substitute for physical grasp.
     assert not episode.success
     assert episode.diagnostics["pour_assist_steps"] == 0
+
+def test_quaternion_product_matches_rotation_composition_and_attachment_identity():
+    rng = np.random.default_rng(7)
+    for _ in range(20):
+        first = euler_to_quaternion(*rng.uniform(-np.pi, np.pi, 3))
+        second = euler_to_quaternion(*rng.uniform(-np.pi, np.pi, 3))
+        product = _quat_multiply(first, second)
+        assert np.linalg.norm(product) == pytest.approx(1.0)
+        vector = rng.normal(size=3)
+        composed = _quat_rotate(first, _quat_rotate(second, vector))
+        assert _quat_rotate(product, vector) == pytest.approx(composed)
+        # Re-attaching an object with ee * (ee^-1 * object) is the identity.
+        relative = _quat_multiply(_quat_conjugate(first), second)
+        restored = _quat_multiply(first, relative)
+        assert abs(float(np.dot(restored, second))) == pytest.approx(1.0)
+
+
+def test_carried_entity_is_gravity_compensated_until_release():
+    forces = np.zeros((6, 6))
+    masses = np.asarray([0.0, 5.0, 5.0, 0.2, 0.3, 1.0])
+    bodies = {"frame": 3, "head": 4, "stem": 5}
+
+    class Body:
+        def __init__(self, name):
+            self.name = name
+
+    frame, head, stem = Body("frame"), Body("head"), Body("stem")
+    poses = []
+    entity = SimpleNamespace(
+        mjcf_model=SimpleNamespace(worldbody=frame, find_all=lambda kind: [head, stem] if kind == "body" else []),
+        get_xqaut=lambda _physics: np.asarray([1.0, 0.0, 0.0, 0.0]),
+        set_pose=lambda _physics, pos, quat: poses.append((np.asarray(pos).copy(), np.asarray(quat).copy())),
+    )
+    physics = SimpleNamespace(
+        model=SimpleNamespace(body_mass=masses, opt=SimpleNamespace(gravity=np.asarray([0.0, 0.0, -9.81]))),
+        data=SimpleNamespace(xfrc_applied=forces),
+        bind=lambda element: SimpleNamespace(element_id=bodies[element.name]),
+        forward=lambda: None,
+    )
+    env = SimpleNamespace(
+        task=SimpleNamespace(target_entity="rose", entities={"rose": entity}),
+        physics=physics,
+    )
+    assert _set_live_task_entity_pose(env, "target_entity", [0.1, 0.2, 0.3])
+    assert poses and poses[-1][0] == pytest.approx([0.1, 0.2, 0.3])
+    # Each carried body receives exactly its weight, upward; nothing else.
+    assert forces[3:, 2] == pytest.approx(masses[3:] * 9.81)
+    assert np.all(forces[:3] == 0.0) and np.all(forces[3:, [0, 1, 3, 4, 5]] == 0.0)
+    assert _release_live_task_entity(env, "target_entity")
+    assert np.all(forces == 0.0)
+    assert not _release_live_task_entity(env, "target_container")
+
+
+def _boxed_entity_env(origin, quaternion, geoms, *, keypoints, container_sites=None, z_threshold=None):
+    """Build a fake env whose target entity is a set of world-axis-aligned boxes.
+
+    ``geoms`` maps a geom name to ``(centre, half_size)`` in world coordinates.
+    """
+    names = list(geoms)
+    geom_aabb = np.zeros((len(names), 6))
+    geom_xpos = np.zeros((len(names), 3))
+    geom_xmat = np.tile(np.eye(3).reshape(-1), (len(names), 1))
+    for index, name in enumerate(names):
+        centre, half = geoms[name]
+        geom_xpos[index] = centre
+        geom_aabb[index, 3:] = half
+    bindings = {name: SimpleNamespace(element_id=index) for index, name in enumerate(names)}
+    sites = {}
+    for index, site in enumerate(container_sites or []):
+        bindings[f"site{index}"] = SimpleNamespace(xpos=np.asarray(site, dtype=np.float64))
+        sites[f"site{index}"] = SimpleNamespace(name=f"site{index}")
+    physics = SimpleNamespace(
+        model=SimpleNamespace(
+            geom_aabb=geom_aabb,
+            geom_contype=np.ones(len(names), dtype=int),
+            geom_conaffinity=np.ones(len(names), dtype=int),
+        ),
+        data=SimpleNamespace(geom_xpos=geom_xpos, geom_xmat=geom_xmat),
+        bind=lambda element: bindings[element.name],
+    )
+    # Upstream accessors return live views into the simulation state; the
+    # fake shares one buffer so stored results must be copies.
+    live_origin = np.asarray(origin, dtype=np.float64)
+    live_quaternion = np.asarray(quaternion, dtype=np.float64)
+    entity = SimpleNamespace(
+        geoms=[SimpleNamespace(name=name) for name in names],
+        get_xpos=lambda _physics: live_origin,
+        get_xqaut=lambda _physics: live_quaternion,
+        get_grasped_keypoints=lambda _physics: [np.asarray(point, dtype=np.float64) for point in keypoints],
+    )
+    container = SimpleNamespace(key_sites=lambda _physics: list(sites.values()))
+    if z_threshold is not None:
+        container.z_threshold = z_threshold
+    return SimpleNamespace(
+        task=SimpleNamespace(
+            target_entity="jessie",
+            target_container="giftbox",
+            entities={"jessie": entity, "giftbox": container},
+        ),
+        physics=physics,
+    )
+
+
+def test_entity_bounds_cover_every_collision_geom_in_world_coordinates():
+    env = _boxed_entity_env(
+        [0.0, 0.0, 0.76],
+        [1.0, 0.0, 0.0, 0.0],
+        {"feet": ([0.0, 0.0, 0.79], [0.06, 0.04, 0.03]), "hat": ([0.01, 0.0, 0.98], [0.05, 0.05, 0.02])},
+        keypoints=[[0.0, 0.0, 0.93]],
+    )
+    origin, quaternion, lower, upper = _live_task_entity_bounds(env, "target_entity")
+    assert origin == pytest.approx([0.0, 0.0, 0.76])
+    assert quaternion == pytest.approx([1.0, 0.0, 0.0, 0.0])
+    assert lower == pytest.approx([-0.06, -0.05, 0.76])
+    assert upper == pytest.approx([0.06, 0.05, 1.0])
+    # A rotated geom contributes the bound of its rotated box.
+    env.physics.data.geom_xmat[1] = np.asarray([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]).reshape(-1)
+    env.physics.model.geom_aabb[1, 3:] = [0.10, 0.02, 0.02]
+    _, _, lower, upper = _live_task_entity_bounds(env, "target_entity")
+    assert lower[:2] == pytest.approx([-0.06, -0.10]) and upper[:2] == pytest.approx([0.06, 0.10])
+    assert _live_task_entity_bounds(env, "target_container") is None
+
+
+def test_carry_reseat_hangs_a_toppled_figure_upright_under_the_hand():
+    env = _boxed_entity_env(
+        [0.0, 0.0, 0.76],
+        [0.7, 0.7, 0.0, 0.0],
+        {"body": ([0.0, 0.005, 0.86], [0.06, 0.045, 0.10]), "hat": ([0.0, 0.0, 0.98], [0.05, 0.04, 0.02])},
+        keypoints=[[0.0, 0.0, 0.93]],
+    )
+    rest = _live_task_entity_bounds(env, "target_entity")
+    # The figure is knocked over after the bounds were taken; the stored rest
+    # pose must not follow the live simulation state.
+    env.task.entities["jessie"].get_xpos(None)[:] = [0.3, 0.1, 0.77]
+    env.task.entities["jessie"].get_xqaut(None)[:] = [0.5, 0.5, 0.5, 0.5]
+    # Fingertips 3 cm above the keypoint: the figure is in the hand.
+    assert _carry_reseat_pose(env, "target_entity", np.asarray([0.0, 0.0, 0.96]), rest) is None
+    # Fingertips 20 cm above the keypoint: the fingers closed on nothing.
+    reseat = _carry_reseat_pose(env, "target_entity", np.asarray([0.3, 0.1, 1.13]), rest)
+    assert reseat is not None
+    # The horizontal centre of the collision volume hangs under the hand and
+    # the top sits one centimetre below the fingertips.
+    assert reseat["offset"] == pytest.approx([0.0, -0.005, -(0.01 + 0.24)])
+    assert reseat["quaternion"] == pytest.approx([0.7, 0.7, 0.0, 0.0])
+    # Switching is deferred until the re-seated figure clears its old support.
+    assert reseat["min_ee_z"] == pytest.approx(0.76 + 0.05 + 0.24 + 0.01)
+    assert _carry_reseat_pose(env, "target_entity", np.asarray([0.3, 0.1, 1.13]), None) is None
+
+
+def _condiment_env(radius):
+    sites = {
+        "bottom_site": np.asarray([0.2, 0.1, 0.75]),
+        "top_site": np.asarray([0.2, 0.1, 0.915]),
+    }
+    if radius is not None:
+        sites["horizontal_radius_site"] = np.asarray([0.2 + radius, 0.1, 0.83])
+    entity = SimpleNamespace(
+        mjcf_model=SimpleNamespace(
+            find=lambda kind, name: SimpleNamespace(name=name) if kind == "site" and name in sites else None
+        ),
+        get_xpos=lambda _physics: np.asarray([0.2, 0.1, 0.828]),
+    )
+    return SimpleNamespace(
+        task=SimpleNamespace(target_entity="ketchup", entities={"ketchup": entity}),
+        physics=SimpleNamespace(bind=lambda site: SimpleNamespace(xpos=sites[site.name])),
+    )
+
+
+def test_condiment_grasp_point_backs_off_wide_bottles_along_the_approach_axis():
+    # A slim shaker is grasped on its axis, halfway up.
+    assert _live_task_condiment_grasp_point(_condiment_env(0.015), "target_entity") == pytest.approx([0.2, 0.1, 0.8325])
+    assert _live_task_condiment_grasp_point(_condiment_env(None), "target_entity") == pytest.approx([0.2, 0.1, 0.8325])
+    # The official condiment grasp approaches along world -x; a 3.1 cm bottle
+    # keeps the fingertips 0.9 cm short of its axis so the palm clears it.
+    point = _live_task_condiment_grasp_point(_condiment_env(0.031), "target_entity")
+    assert point == pytest.approx([0.2 + 0.009, 0.1, 0.8325], abs=1e-6)
+
+
+def test_place_fit_check_rejects_objects_wider_than_a_box_container():
+    box = [[-0.03, 0.05, 0.76], [0.14, 0.24, 0.92]]
+    upright = _boxed_entity_env(
+        [0.0, 0.0, 0.76],
+        [1.0, 0.0, 0.0, 0.0],
+        {"body": ([0.0, 0.0, 0.88], [0.06, 0.045, 0.12])},
+        keypoints=[[0.0, 0.0, 0.93]],
+        container_sites=box,
+    )
+    interior = np.asarray([0.055, 0.145, 0.91])
+    assert _carried_entity_fits_container(upright, "target_entity", "target_container", interior)
+    lying = _boxed_entity_env(
+        [0.0, 0.0, 0.76],
+        [1.0, 0.0, 0.0, 0.0],
+        {"body": ([0.12, 0.0, 0.82], [0.12, 0.045, 0.06])},
+        keypoints=[[0.0, 0.0, 0.93]],
+        container_sites=box,
+    )
+    assert not _carried_entity_fits_container(lying, "target_entity", "target_container", interior)
+    # Flat containers accept anything resting on them.
+    plate = _boxed_entity_env(
+        [0.0, 0.0, 0.76],
+        [1.0, 0.0, 0.0, 0.0],
+        {"body": ([0.12, 0.0, 0.82], [0.12, 0.045, 0.06])},
+        keypoints=[[0.0, 0.0, 0.93]],
+        container_sites=box,
+        z_threshold=0.1,
+    )
+    assert _carried_entity_fits_container(plate, "target_entity", "target_container", interior)
+
+
+def test_posture_regularized_ik_matches_pose_and_relaxes_toward_nominal():
+    pytest.importorskip("mujoco")
+    mjcf = pytest.importorskip("dm_control.mjcf")
+    from test_regr.VLABenchAgentInterface.environment import posture_regularized_qpos
+
+    model = mjcf.RootElement()
+    parent = model.worldbody
+    axes = ["0 0 1", "0 1 0", "0 0 1", "0 1 0", "0 0 1", "0 1 0", "0 0 1"]
+    joints = []
+    for index, axis in enumerate(axes):
+        body = parent.add("body", name=f"link{index}", pos="0 0 0.12")
+        joints.append(body.add("joint", name=f"joint{index}", type="hinge", axis=axis))
+        body.add("geom", type="capsule", fromto="0 0 0 0 0 0.12", size="0.02", mass="0.5")
+        parent = body
+    site = parent.add("site", name="tip", pos="0 0 0.12")
+    physics = mjcf.Physics.from_mjcf_model(model)
+    nominal = np.asarray([0.0, 0.4, 0.0, 0.8, 0.0, 0.4, 0.0])
+    physics.bind(joints).qpos = nominal
+    physics.forward()
+    home_pos = np.asarray(physics.bind(site).xpos).copy()
+    home_quat = np.empty(4)
+    import mujoco
+
+    mujoco.mju_mat2Quat(home_quat, np.asarray(physics.bind(site).xmat))
+
+    # A nearby target is reached within tolerance.
+    target = home_pos + np.asarray([0.02, -0.01, 0.015])
+    success, solution = posture_regularized_qpos(
+        physics, site, joints, target, home_quat, nominal_qpos=nominal, tol=1e-3, max_steps=100
+    )
+    assert success
+    physics.bind(joints).qpos = solution
+    physics.forward()
+    assert np.asarray(physics.bind(site).xpos) == pytest.approx(target, abs=2e-3)
+
+    # From a posture far from nominal but with the same tip pose target, each
+    # call moves a bounded amount toward nominal without losing the pose.
+    physics.bind(joints).qpos = nominal
+    physics.forward()
+    perturbed = nominal + np.asarray([0.6, 0.0, -0.6, 0.0, 0.6, 0.0, -0.6])
+    physics.bind(joints).qpos = perturbed
+    physics.forward()
+    pose = np.asarray(physics.bind(site).xpos).copy()
+    quat = np.empty(4)
+    mujoco.mju_mat2Quat(quat, np.asarray(physics.bind(site).xmat))
+    current = perturbed.copy()
+    before = float(np.linalg.norm(current - nominal))
+    for _ in range(30):
+        success, current = posture_regularized_qpos(
+            physics, site, joints, pose, quat, nominal_qpos=nominal, tol=1e-3, max_steps=100
+        )
+        assert success
+        physics.bind(joints).qpos = current
+        physics.forward()
+    assert np.asarray(physics.bind(site).xpos) == pytest.approx(pose, abs=2e-3)
+    assert float(np.linalg.norm(current - nominal)) < before - 0.05
+    # A full turn on a periodic joint is not chased through the null space.
+    wound = nominal.copy()
+    wound[6] -= 2 * np.pi
+    physics.bind(joints).qpos = wound
+    physics.forward()
+    success, relaxed = posture_regularized_qpos(
+        physics, site, joints, home_pos, home_quat, nominal_qpos=nominal, tol=1e-3, max_steps=100,
+        periodic_joints=(6,),
+    )
+    assert success
+    assert relaxed == pytest.approx(wound, abs=1e-3)
+
+
+def test_flower_grasp_euler_aligns_gripper_x_axis_with_stem():
+    x_axis = np.asarray([1.0, 0.0, 0.0])
+    for stem_axis in ([0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [-0.6, 0.8, 0.0]):
+        grasp = _flower_grasp_euler(np.asarray(stem_axis))
+        assert grasp[0] == pytest.approx(np.pi) and grasp[1] == pytest.approx(0.0)
+        quaternion = euler_to_quaternion(*grasp)
+        # Top-down approach whose x-axis follows the stem.
+        assert _quat_rotate(quaternion, [0.0, 0.0, 1.0]) == pytest.approx([0.0, 0.0, -1.0], abs=1e-9)
+        assert _quat_rotate(quaternion, x_axis) == pytest.approx(stem_axis, abs=1e-9)
+    # The official SkillLib prior for a stem along -y, also the fallback.
+    assert _flower_grasp_euler(np.asarray([0.0, -1.0, 0.0]))[2] == pytest.approx(-np.pi / 2)
+    assert _flower_grasp_euler(None) == pytest.approx([np.pi, 0.0, -np.pi / 2])
+    # InsertFlowerTask's fixed pose maps that axis to world -z: the stem hangs.
+    insert_x = _quat_rotate(euler_to_quaternion(*INSERT_FLOWER_POSE), x_axis)
+    assert insert_x == pytest.approx([0.0, 0.0, -1.0], abs=1e-9)
+
+
+def test_flower_stem_axis_points_from_grasp_site_to_stem_weight():
+    site = SimpleNamespace(group=4, xpos=np.asarray([0.3, -0.06, 0.80]))
+    weight = SimpleNamespace(xpos=np.asarray([0.3, -0.20, 0.81]))
+    entity = SimpleNamespace(
+        sites=[site],
+        mjcf_model=SimpleNamespace(
+            find=lambda kind, name: weight if (kind, name) == ("geom", "weight") else None
+        ),
+        get_xpos=lambda _physics: np.asarray([0.3, -0.1, 0.8]),
+    )
+    env = SimpleNamespace(
+        task=SimpleNamespace(target_entity="rose", entities={"rose": entity}),
+        physics=SimpleNamespace(bind=lambda element: element),
+    )
+    axis = _live_task_flower_stem_axis(env, "target_entity")
+    assert axis == pytest.approx([0.0, -1.0, 0.0])
+    assert _flower_grasp_euler(axis) == pytest.approx([np.pi, 0.0, -np.pi / 2])
+    assert _live_task_flower_stem_axis(env, "target_container") is None
+
+
+def test_orientation_step_converges_through_the_euler_singularity():
+    current = np.asarray([np.pi, 0.0, -np.pi / 2])
+    target = euler_to_quaternion(*INSERT_FLOWER_POSE)
+    previous = euler_to_quaternion(*current)
+    for _ in range(80):
+        current, remaining = _orientation_step(current, INSERT_FLOWER_POSE, 0.1)
+        stepped = euler_to_quaternion(*current)
+        # Each step rotates by at most the bound.
+        assert 2 * np.arccos(min(1.0, abs(float(np.dot(previous, stepped))))) <= 0.1 + 1e-6
+        previous = stepped
+        if remaining <= 0.1:
+            break
+    assert abs(float(np.dot(previous, target))) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_gripper_finger_positions_require_named_finger_joints():
+    assert _gripper_finger_positions(SimpleNamespace(robot=FakeRobot(), physics=object())) is None
+
+    class FingerJoint:
+        pass
+
+    joints = {"finger_joint1": FingerJoint(), "finger_joint2": FingerJoint()}
+    robot = SimpleNamespace(
+        mjcf_model=SimpleNamespace(find=lambda kind, name: joints.get(name) if kind == "joint" else None)
+    )
+    physics = SimpleNamespace(bind=lambda element: SimpleNamespace(qpos=np.asarray([0.025])))
+    assert _gripper_finger_positions(SimpleNamespace(robot=robot, physics=physics)) == pytest.approx([0.025, 0.025])
+
+
+def test_lift_attachment_waits_for_settled_fingers():
+    world = build_vlabench_world_graph("test_settled_latch_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_settled_latch"
+    )
+
+    class LiftPlanner(TinyCompactPlanner):
+        def sample_with_logprob(self, **kwargs):
+            return [
+                {"name": "pick", "params": {"target_entity_name": 0}},
+                {"name": "lift", "params": {}},
+            ], torch.nn.functional.logsigmoid(self.preference)
+
+    class LiftTask(SimpleNamespace):
+        __module__ = "VLABench.tasks.tests"
+
+    class FingerJoint:
+        pass
+
+    class LiftSimulator(FakeSimulator):
+        def __init__(self):
+            super().__init__(success=False)
+            self.set_pose_calls = []
+            self.task = LiftTask(**vars(self.task))
+            self.task.target_entity = "apple"
+            self.task.entities["apple"] = SimpleNamespace(
+                get_xpos=lambda _physics: np.asarray([0.2, 0.0, 0.0]),
+                get_xqaut=lambda _physics: np.asarray([1.0, 0.0, 0.0, 0.0]),
+                get_grasped_keypoints=lambda _physics: [np.asarray([0.2, 0.0, 0.0])],
+                is_grasped=lambda *_: True,
+                set_pose=lambda _physics, pos, quat: self.set_pose_calls.append(
+                    (self.count, np.asarray(pos, dtype=float).copy())
+                ),
+            )
+            joints = {"finger_joint1": FingerJoint(), "finger_joint2": FingerJoint()}
+            self.robot.mjcf_model = SimpleNamespace(
+                find=lambda kind, name: joints.get(name) if kind == "joint" else None
+            )
+            self.robot.get_end_effector_pos = lambda _physics: np.asarray([0.2, 0.0, 0.0])
+            self.robot.get_end_effector_quat = lambda _physics: np.asarray([1.0, 0.0, 0.0, 0.0])
+            self.physics = SimpleNamespace(
+                bind=lambda element: (
+                    SimpleNamespace(qpos=np.asarray([self.finger_aperture()]))
+                    if isinstance(element, FingerJoint)
+                    else element
+                )
+            )
+
+        def finger_aperture(self):
+            # The physical fingers keep closing well after the aperture
+            # command reaches zero and stop after step 22.
+            return max(0.0, 0.04 - 0.002 * max(0, self.count - 2))
+
+        def get_observation(self, require_pcd=False):
+            observation = super().get_observation(require_pcd)
+            observation["ee_state"][:3] = [0.2, 0.0, 0.0]
+            observation["ee_state"][3:6] = [-np.pi, 0.0, 0.0]
+            return observation
+
+    simulator = LiftSimulator()
+    planner = LiftPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = _joint_program(runtime, planner, controller, lambda **_: simulator)
+    program.max_steps = 40
+    episode = program.collect_episode({"task": "select_chemistry_tube"})
+    assert episode.termination_reason == "max_steps"
+    assert episode.diagnostics["lift_assist_steps"] > 10
+    # The teleported attachment starts only once both fingers are at rest.
+    assert simulator.set_pose_calls
+    assert simulator.set_pose_calls[0][0] == 23
+    assert all(count >= 23 for count, _ in simulator.set_pose_calls)
+
+
+def test_insert_flower_assist_lifts_rotates_moves_and_lowers_into_the_vase():
+    world = build_vlabench_world_graph("test_insert_flower_assist_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_insert_flower_assist"
+    )
+
+    class InsertPlanner(TinyCompactPlanner):
+        def sample_with_logprob(self, **kwargs):
+            return [
+                {"name": "pick", "params": {"target_entity_name": 0}},
+                {"name": "insert", "params": {"target_container_name": 1}},
+            ], torch.nn.functional.logsigmoid(self.preference)
+
+    class InsertTask(SimpleNamespace):
+        __module__ = "VLABench.tasks.tests"
+
+    class TrackingRobot(FakeRobot):
+        """An ideal arm that reaches every accepted IK target."""
+
+        def __init__(self, simulator):
+            self.simulator = simulator
+            self.target = None
+
+        def get_qpos_from_ee_pos(self, *, physics, pos, quat, **kwargs):
+            self.target = (
+                np.asarray(pos, dtype=np.float64).copy(),
+                np.asarray(quat, dtype=np.float64).copy(),
+            )
+            return True, np.arange(7, dtype=np.float64)
+
+        def get_end_effector_pos(self, _physics):
+            return self.simulator.ee_pos.copy()
+
+        def get_end_effector_quat(self, _physics):
+            return self.simulator.ee_quat.copy()
+
+    class Element:
+        def __init__(self, resolve, group=None):
+            self.resolve = resolve
+            self.group = group
+
+    class InsertSimulator(FakeSimulator):
+        vase_pos = np.asarray([0.0, 0.2, 0.78])
+        box_low = np.asarray([-0.04, -0.04, 0.0])
+        box_high = np.asarray([0.04, 0.04, 0.30])
+
+        def __init__(self):
+            super().__init__(success=False)
+            self.robot = TrackingRobot(self)
+            self.ee_pos = np.asarray([0.3, -0.06, 0.90])
+            self.ee_quat = euler_to_quaternion(np.pi, 0.0, -np.pi / 2)
+            self.flower_pos = np.asarray([0.3, -0.10, 0.80])
+            self.flower_quat = np.asarray([1.0, 0.0, 0.0, 0.0])
+            self.trajectory = []
+            self.physics = SimpleNamespace(
+                bind=lambda element: element.resolve() if isinstance(element, Element) else element
+            )
+            grasp_site = Element(lambda: SimpleNamespace(group=4, xpos=self.keypoint()), group=4)
+            weight = Element(lambda: SimpleNamespace(xpos=self.flower_pos + self.rotate([0.0, -0.10, 0.0])))
+            flower = SimpleNamespace(
+                sites=[grasp_site],
+                mjcf_model=SimpleNamespace(
+                    find=lambda kind, name: weight if (kind, name) == ("geom", "weight") else None
+                ),
+                get_xpos=lambda _physics: self.flower_pos.copy(),
+                get_xqaut=lambda _physics: self.flower_quat.copy(),
+                get_grasped_keypoints=lambda _physics: [self.keypoint()],
+                is_grasped=lambda *_: True,
+                set_pose=self.set_flower_pose,
+            )
+            top = Element(lambda: SimpleNamespace(xpos=self.vase_pos + self.box_high), group=3)
+            bottom = Element(lambda: SimpleNamespace(xpos=self.vase_pos + self.box_low), group=3)
+            vase = SimpleNamespace(
+                get_place_point=lambda _physics: [self.vase_pos + np.asarray([0.0, 0.0, 0.45])],
+                key_sites=lambda _physics: [top, bottom],
+                contain=lambda point, _physics: bool(
+                    np.all(self.vase_pos + self.box_low <= point)
+                    and np.all(point <= self.vase_pos + self.box_high)
+                ),
+            )
+            self.task = InsertTask(
+                entities={"rose": flower, "vase": vase},
+                target_entity="rose",
+                target_container="vase",
+                get_instruction=lambda: "Insert the rose into the vase.",
+                should_terminate_episode=lambda physics: vase.contain(self.flower_pos, physics),
+            )
+
+        def rotate(self, vector):
+            return _quat_rotate(self.flower_quat, np.asarray(vector, dtype=np.float64))
+
+        def keypoint(self):
+            return self.flower_pos + self.rotate([0.0, 0.04, 0.0])
+
+        def set_flower_pose(self, _physics, pos, quat):
+            self.flower_pos = np.asarray(pos, dtype=np.float64).copy()
+            self.flower_quat = np.asarray(quat, dtype=np.float64).copy()
+
+        def get_observation(self, require_pcd=False):
+            observation = super().get_observation(require_pcd)
+            observation["ee_state"] = np.concatenate(
+                (self.ee_pos, quaternion_to_euler(self.ee_quat), [0.0])
+            ).astype(np.float32)
+            return observation
+
+        def step(self, action):
+            result = super().step(action)
+            if self.robot.target is not None:
+                self.ee_pos, self.ee_quat = self.robot.target
+            self.trajectory.append((self.ee_pos.copy(), self.flower_pos.copy()))
+            return result
+
+    simulator = InsertSimulator()
+    planner = InsertPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = _joint_program(runtime, planner, controller, lambda **_: simulator)
+    program.max_steps = 160
+    episode = program.collect_episode({"task": "insert_flower"})
+
+    assert episode.success and episode.termination_reason == "success"
+    assert episode.diagnostics["grasp_assist_steps"] >= 10
+    assert episode.diagnostics["insert_assist_steps"] > 0
+    positions = np.asarray([ee for ee, _ in simulator.trajectory])
+    grasp_height = positions[:, 2].min()
+    assert grasp_height == pytest.approx(0.80, abs=0.03)
+    # The flower is lifted well clear of the table before it travels
+    # horizontally, and the stem hangs below the fingertips at the end.
+    first_travel = next(
+        index for index, ee in enumerate(positions) if abs(ee[0] - 0.3) > 0.05
+    )
+    assert positions[first_travel, 2] >= grasp_height + 0.25
+    # The trajectory samples the flower after physics and before the
+    # post-step re-attachment, so it trails the fingertips by one step.
+    final_ee, final_flower = simulator.trajectory[-1]
+    assert final_flower[2] < final_ee[2] - 0.01
+    assert np.linalg.norm(final_flower[:2] - simulator.vase_pos[:2]) <= 0.04
+
 
 def test_ik_recovery_retries_a_smaller_bounded_delta():
     world = build_vlabench_world_graph("test_joint_recovered_ik_world")
@@ -2828,6 +3403,9 @@ def test_generic_pick_ramps_physical_aperture_only_at_current_keypoint():
         def get_observation(self, require_pcd=False):
             observation = super().get_observation(require_pcd)
             observation["ee_state"][0] = 0.195 if self.count >= 2 else 0.1
+            # The wrist already holds the top-down grasp pose; closing waits
+            # for the orientation as well as the keypoint distance.
+            observation["ee_state"][3:6] = [-np.pi, 0.0, 0.0]
             return observation
         def step(self, command):
             self.commands.append(np.asarray(command).copy())

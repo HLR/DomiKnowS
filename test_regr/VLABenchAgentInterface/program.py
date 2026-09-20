@@ -16,6 +16,27 @@ from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
 
 POSITIVE_RETURN_EPSILON = 1e-6
+# InsertFlowerTask's expert lifts and moves the grasped flower with this fixed
+# gripper pose; the gripper x-axis then points to world -z so a stem grasped
+# along that axis hangs downward for insertion.
+INSERT_FLOWER_POSE = (-np.pi / 2, np.pi / 2, 0.0)
+# Finger joints moving less than this per control step are treated as
+# settled, so an attachment offset is latched against the final aperture.
+GRIPPER_SETTLED_TOLERANCE = 5e-4
+# A latched object whose grasp keypoint is farther than this from the
+# fingertips was never between the pads (a figure knocked over during the
+# approach): carry it hanging below the hand in its resting orientation.
+CARRY_RESEAT_DISTANCE = 0.06
+CARRY_CLEARANCE = 0.01
+# A container that moved farther than this from where the place started was
+# knocked away; the place returns to the original point instead of chasing.
+CONTAINER_DISPLACEMENT_LIMIT = 0.20
+# AddCondimentTask's expert grasps horizontally with this fixed gripper pose
+# (approach along world -x, fingers opening along y).
+CONDIMENT_GRASP_EULER = (-np.pi / 2, -np.pi / 2, np.pi / 2)
+# The Franka palm starts 2.2 cm behind the fingertip site, so a horizontal
+# grasp can reach at most this far past an object's near surface.
+FINGER_REACH_PAST_SURFACE = 0.022
 
 try:
     from .diagnostics import RolloutDiagnostics
@@ -319,8 +340,37 @@ def _signal(env, name: str) -> float:
     return value if np.isfinite(value) else 0.0
 
 
+def _refresh_kinematics(env) -> None:
+    """Recompute derived MuJoCo quantities from the current configuration.
+
+    Upstream ``AboveCondition.is_met`` (evaluated by ``should_terminate_episode``
+    at the end of every ``env.step`` and by ``_task_success``) writes the
+    platform height into the live ``data.xpos`` view of the poured entity.
+    The simulation itself is unaffected, but every pose read until the next
+    kinematics pass sees the corrupted value: the condiment grasp then aims a
+    few centimetres too low and a latched attachment teleports the bottle into
+    the counter. Composer's legacy stepping also leaves ``xpos``/``site_xpos``
+    one physics substep behind ``qpos``; a forward pass makes both exact.
+    """
+    forward = getattr(getattr(env, "physics", None), "forward", None)
+    if callable(forward):
+        try:
+            forward()
+        except Exception:  # noqa: BLE001 - a failing forward surfaces on the next step
+            return
+
+
 def _task_success(env) -> bool:
     """Evaluate task completion independently from dm_env LAST."""
+    try:
+        return _evaluate_task_success(env)
+    finally:
+        # Condition predicates can corrupt live pose views (see
+        # _refresh_kinematics); restore them before any further pose read.
+        _refresh_kinematics(env)
+
+
+def _evaluate_task_success(env) -> bool:
     task = getattr(env, "task", None)
     physics = getattr(env, "physics", None)
     checker = getattr(task, "should_terminate_episode", None)
@@ -347,6 +397,9 @@ def _task_signals(env, diagnostics: RolloutDiagnostics) -> tuple[float, float, s
     """Read upstream shaping signals with a geometric progress fallback."""
     progress = _signal(env, "get_task_progress")
     intention = _signal(env, "get_intention_score")
+    # Upstream progress accessors evaluate the task conditions, which can
+    # corrupt live pose views (see _refresh_kinematics).
+    _refresh_kinematics(env)
     distance_progress = diagnostics.distance_progress()
     if distance_progress is not None and progress <= 0.0:
         return distance_progress, intention, "target_distance"
@@ -502,8 +555,19 @@ def _task_pattern_dfa(base_dfa, vocabulary, expected_pattern, *, target_name=Non
 
 def _condiment_orientation_step(current_euler, max_angle):
     """Shortest rotation toward the expert grasp, including its Euler singularity."""
+    return _orientation_step(current_euler, (-np.pi / 2, -np.pi / 2, np.pi / 2), max_angle)
+
+
+def _orientation_step(current_euler, target_euler, max_angle):
+    """Slerp one bounded rotation toward ``target_euler``.
+
+    Returns the stepped Euler triple and the remaining rotation angle. Euler
+    interpolation near ``pitch=±pi/2`` (used by the official flower insertion
+    pose) is ill-conditioned, so the step is computed on quaternions and the
+    singular case is converted explicitly.
+    """
     current = euler_to_quaternion(*current_euler)
-    target = euler_to_quaternion(-np.pi / 2, -np.pi / 2, np.pi / 2)
+    target = euler_to_quaternion(*target_euler)
     dot = float(np.dot(current, target))
     if dot < 0:
         target = -target
@@ -524,6 +588,369 @@ def _condiment_orientation_step(current_euler, max_angle):
         euler = quaternion_to_euler(stepped)
     return euler, angle
 
+def _live_task_entity(env: Any, attribute: str):
+    """Return the upstream task entity referenced by a task attribute."""
+    task = getattr(env, "task", None)
+    name = getattr(task, attribute, None)
+    entities = getattr(task, "entities", None)
+    if name is None or not isinstance(entities, Mapping):
+        return None
+    return entities.get(name)
+
+
+def _live_task_flower_stem_axis(env: Any, attribute: str) -> np.ndarray | None:
+    """Return the horizontal world direction from the grasp site to the stem end.
+
+    VLABench bloom flowers annotate one grasp site next to the head and a
+    ``weight`` sphere at the far end of the stem.  The official
+    ``SkillLib.pick`` prior ``[pi, 0, -pi/2]`` assumes the stem lies along
+    ``-y`` of the entity; the live axis generalizes that to the settled pose.
+    """
+    entity = _live_task_entity(env, attribute)
+    physics = getattr(env, "physics", None)
+    model = getattr(entity, "mjcf_model", None)
+    if entity is None or physics is None or model is None:
+        return None
+    try:
+        sites = [site for site in getattr(entity, "sites", ()) if physics.bind(site).group == 4]
+        origin = np.asarray(
+            physics.bind(sites[0]).xpos if sites else entity.get_xpos(physics),
+            dtype=np.float64,
+        ).reshape(3)
+        weight = model.find("geom", "weight")
+        if weight is not None:
+            stem_end = np.asarray(physics.bind(weight).xpos, dtype=np.float64).reshape(3)
+            axis = stem_end - origin
+        else:
+            quaternion = _quat_normalize(entity.get_xqaut(physics))
+            axis = -_quat_rotate(quaternion, np.asarray([0.0, 1.0, 0.0]))
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return None
+    axis = np.asarray(axis, dtype=np.float64).reshape(3)
+    axis[2] = 0.0
+    norm = float(np.linalg.norm(axis))
+    if not np.isfinite(norm) or norm < 1e-3:
+        return None
+    return axis / norm
+
+
+def _live_task_condiment_body(env: Any, attribute: str) -> tuple[np.ndarray, float] | None:
+    """Return the centre halfway up an upright condiment bottle and its radius.
+
+    Condiment assets carry no grasp site, so ``get_grasped_keypoints`` falls
+    back to the body origin, which for the shaker models sits about 1 cm above
+    the counter: a horizontal grasp there drives the hand into the counter and
+    the approach stalls a few centimetres short. Every condiment model does
+    annotate ``bottom_site``/``top_site``; the midpoint keeps the hand clear
+    of the counter and leaves room below the fingers for the pour. The radius
+    comes from ``horizontal_radius_site`` (zero when the model has none).
+    """
+    entity = _live_task_entity(env, attribute)
+    physics = getattr(env, "physics", None)
+    model = getattr(entity, "mjcf_model", None)
+    if physics is None or model is None:
+        return None
+    try:
+        bottom = model.find("site", "bottom_site")
+        top = model.find("site", "top_site")
+        if bottom is None or top is None:
+            return None
+        bottom_pos = np.asarray(physics.bind(bottom).xpos, dtype=np.float64).reshape(3)
+        top_pos = np.asarray(physics.bind(top).xpos, dtype=np.float64).reshape(3)
+        radius_site = model.find("site", "horizontal_radius_site")
+        radius = 0.0
+        if radius_site is not None:
+            origin = np.asarray(entity.get_xpos(physics), dtype=np.float64).reshape(3)
+            radius_pos = np.asarray(physics.bind(radius_site).xpos, dtype=np.float64).reshape(3)
+            radius = float(np.linalg.norm(radius_pos[:2] - origin[:2]))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    if not np.isfinite(bottom_pos).all() or not np.isfinite(top_pos).all() or not np.isfinite(radius):
+        return None
+    # A bottle lying on its side keeps its origin; only an upright bottle has
+    # a usable vertical extent.
+    if top_pos[2] - bottom_pos[2] < 0.04:
+        return None
+    return 0.5 * (bottom_pos + top_pos), radius
+
+
+def _condiment_approach_axis() -> np.ndarray:
+    """Unit vector along which the fixed condiment grasp advances (world -x)."""
+    return _quat_rotate(euler_to_quaternion(*CONDIMENT_GRASP_EULER), [0.0, 0.0, 1.0])
+
+
+def _live_task_condiment_grasp_point(env: Any, attribute: str) -> np.ndarray | None:
+    """Return the fingertip target for a condiment bottle.
+
+    Wide bottles (ketchup, 3 cm radius) cannot take the fingertips at their
+    axis: the palm, 2.2 cm behind the fingertips, hits the near side first and
+    shoves the bottle over. The point is therefore pulled back along the fixed
+    approach axis by whatever the radius exceeds the finger reach, so the pads
+    close on the near half of the body.
+    """
+    body = _live_task_condiment_body(env, attribute)
+    if body is None:
+        return None
+    centre, radius = body
+    if radius > FINGER_REACH_PAST_SURFACE:
+        centre = centre - _condiment_approach_axis() * (radius - FINGER_REACH_PAST_SURFACE)
+    return centre
+
+
+def _live_task_condiment_stand_off_point(
+    env: Any, attribute: str, clearance: float = 0.01
+) -> np.ndarray | None:
+    """Return the point on the approach line where the fingertips just clear the bottle.
+
+    The prepare point can be left up to 8 cm early, and the condiment grasp
+    approaches along the world x-axis with the fingers open along y: a
+    diagonal final approach sweeps a finger pad into the bottle. Heading for
+    this point first keeps every pad outside the bottle's footprint until the
+    hand is lined up, whatever path the arm takes to get there.
+    """
+    body = _live_task_condiment_body(env, attribute)
+    if body is None:
+        return None
+    centre, radius = body
+    return centre - _condiment_approach_axis() * (radius + clearance)
+
+
+def _live_task_flower_stem_end(env: Any, attribute: str) -> np.ndarray | None:
+    """Return the world position of the flower's stem-end ``weight`` geom."""
+    entity = _live_task_entity(env, attribute)
+    physics = getattr(env, "physics", None)
+    model = getattr(entity, "mjcf_model", None)
+    if physics is None or model is None:
+        return None
+    try:
+        weight = model.find("geom", "weight")
+        if weight is None:
+            return None
+        value = np.asarray(physics.bind(weight).xpos, dtype=np.float64).reshape(3)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return value if np.isfinite(value).all() else None
+
+
+def _robot_geom_ids(env: Any) -> frozenset[int]:
+    """Return the MuJoCo geom ids that belong to the robot."""
+    model = getattr(getattr(env, "robot", None), "mjcf_model", None)
+    physics = getattr(env, "physics", None)
+    if model is None or physics is None:
+        return frozenset()
+    ids = set()
+    for geom in model.find_all("geom"):
+        try:
+            ids.add(int(physics.bind(geom).element_id))
+        except (AttributeError, KeyError, TypeError, ValueError):
+            continue
+    return frozenset(ids)
+
+
+def _live_task_entity_penetration(env: Any, attribute: str, excluded_geom_ids=frozenset()) -> float:
+    """Return the deepest penetration between the entity and other geoms.
+
+    Contacts with the excluded geoms (normally the robot, whose finger pads
+    legitimately squeeze the object) are ignored.
+    """
+    entity = _live_task_entity(env, attribute)
+    physics = getattr(env, "physics", None)
+    data = getattr(physics, "data", None)
+    if entity is None or data is None:
+        return 0.0
+    try:
+        own = {int(physics.bind(geom).element_id) for geom in getattr(entity, "geoms", ())}
+        depth = 0.0
+        for index in range(int(data.ncon)):
+            contact = data.contact[index]
+            first, second = int(contact.geom1), int(contact.geom2)
+            if (first in own) == (second in own):
+                continue
+            other = second if first in own else first
+            if other in excluded_geom_ids:
+                continue
+            depth = max(depth, -float(contact.dist))
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return 0.0
+    return depth
+
+
+def _live_task_entity_bounds(env: Any, attribute: str):
+    """Return ``(origin, quaternion, lower, upper)`` of an entity's collision volume.
+
+    The bounds are axis-aligned in world coordinates and cover every geom that
+    can collide, so they describe what the entity physically occupies rather
+    than where its origin or grasp sites are.
+    """
+    entity = _live_task_entity(env, attribute)
+    physics = getattr(env, "physics", None)
+    model = getattr(physics, "model", None)
+    data = getattr(physics, "data", None)
+    aabb = getattr(model, "geom_aabb", None)
+    if entity is None or model is None or data is None or aabb is None:
+        return None
+    lower, upper = [], []
+    try:
+        # Upstream accessors hand out live views into MuJoCo's data; the
+        # bounds are kept across steps, so copy.
+        origin = np.array(entity.get_xpos(physics), dtype=np.float64).reshape(3)
+        quaternion = np.array(entity.get_xqaut(physics), dtype=np.float64).reshape(4)
+        for geom in getattr(entity, "geoms", ()):
+            geom_id = int(physics.bind(geom).element_id)
+            if not (model.geom_contype[geom_id] or model.geom_conaffinity[geom_id]):
+                continue
+            centre = np.asarray(aabb[geom_id][:3], dtype=np.float64)
+            half = np.asarray(aabb[geom_id][3:], dtype=np.float64)
+            rotation = np.asarray(data.geom_xmat[geom_id], dtype=np.float64).reshape(3, 3)
+            position = np.asarray(data.geom_xpos[geom_id], dtype=np.float64).reshape(3)
+            world_centre = position + rotation @ centre
+            world_half = np.abs(rotation) @ half
+            lower.append(world_centre - world_half)
+            upper.append(world_centre + world_half)
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return None
+    if not lower:
+        return None
+    lower = np.min(np.asarray(lower), axis=0)
+    upper = np.max(np.asarray(upper), axis=0)
+    if not (np.isfinite(origin).all() and np.isfinite(lower).all() and np.isfinite(upper).all()):
+        return None
+    return origin, quaternion, lower, upper
+
+
+def _carry_reseat_pose(
+    env: Any, attribute: str, ee_world: np.ndarray, rest_bounds, *, force: bool = False
+) -> dict[str, Any] | None:
+    """Return a hanging carry pose for an entity that cannot be carried as latched.
+
+    A tall figure whose head is wider than the gripper opening is pushed over
+    by the top-down approach; the fingers then close on nothing and the
+    attachment latches the toppled figure lying on the table 20 cm below the
+    hand. Carrying it that way lowers a horizontal 24 cm figure into a 17 cm
+    box and the walls kick the box away. When the grasp keypoint is nowhere
+    near the fingertips (or ``force`` is set because the object does not fit
+    its container as held) the object is instead carried in its resting
+    orientation, horizontally centred under the hand with its top just below
+    the fingertips. ``min_ee_z`` is the hand height at which the re-seated
+    object clears its former support, so the switch happens in free air.
+    """
+    if rest_bounds is None:
+        return None
+    if not force:
+        keypoint = _live_task_grasp_keypoint(env, attribute, ee_world)
+        if keypoint is None:
+            return None
+        if float(np.linalg.norm(keypoint - np.asarray(ee_world, dtype=np.float64))) <= CARRY_RESEAT_DISTANCE:
+            return None
+    origin, quaternion, lower, upper = rest_bounds
+    centre = 0.5 * (lower + upper)
+    offset = np.asarray(
+        [origin[0] - centre[0], origin[1] - centre[1], -(CARRY_CLEARANCE + (upper[2] - origin[2]))],
+        dtype=np.float64,
+    )
+    height = float(upper[2] - lower[2])
+    return {
+        "offset": offset,
+        "quaternion": np.asarray(quaternion, dtype=np.float64).copy(),
+        "height": height,
+        "min_ee_z": float(lower[2] + 0.05 + height + CARRY_CLEARANCE),
+    }
+
+
+def _carried_entity_fits_container(
+    env: Any, entity_attribute: str, container_attribute: str, point: np.ndarray
+) -> bool:
+    """Whether the entity's horizontal extent at ``point`` stays inside a box container.
+
+    Flat containers (plates, mats) accept anything resting on them; box
+    containers are bounded by their key sites, and lowering a wider object
+    into them drives it through the walls.
+    """
+    bounds = _live_task_entity_bounds(env, entity_attribute)
+    container = _live_task_entity(env, container_attribute)
+    physics = getattr(env, "physics", None)
+    key_sites = getattr(container, "key_sites", None)
+    if bounds is None or physics is None or not callable(key_sites):
+        return True
+    if getattr(container, "z_threshold", None) is not None:
+        return True
+    try:
+        sites = np.asarray(
+            [physics.bind(site).xpos for site in key_sites(physics)], dtype=np.float64
+        ).reshape(-1, 3)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return True
+    if len(sites) < 2:
+        return True
+    origin, _, lower, upper = bounds
+    target = np.asarray(point, dtype=np.float64).reshape(3)
+    margin = 0.01
+    box_lower = sites.min(axis=0)[:2] - margin
+    box_upper = sites.max(axis=0)[:2] + margin
+    return bool(
+        np.all(target[:2] + (lower - origin)[:2] >= box_lower)
+        and np.all(target[:2] + (upper - origin)[:2] <= box_upper)
+    )
+
+
+def _flower_grasp_euler(stem_axis: np.ndarray | None) -> np.ndarray:
+    """Top-down grasp whose gripper x-axis follows the stem.
+
+    ``InsertFlowerTask`` lifts with the fixed pose ``[-pi/2, pi/2, 0]``, which
+    maps the gripper x-axis to world ``-z``.  Aligning that axis with the stem
+    at grasp time therefore makes the stem hang downward for insertion, exactly
+    as the official prior ``[pi, 0, -pi/2]`` does for a stem along ``-y``.
+    """
+    if stem_axis is None:
+        yaw = -np.pi / 2
+    else:
+        yaw = float(np.arctan2(stem_axis[1], stem_axis[0]))
+    return np.asarray([np.pi, 0.0, yaw], dtype=np.float64)
+
+
+def _quat_rotate(quaternion: np.ndarray, vector: np.ndarray) -> np.ndarray:
+    """Rotate a vector by a wxyz quaternion."""
+    w, x, y, z = _quat_normalize(quaternion)
+    q_vec = np.asarray([x, y, z], dtype=np.float64)
+    v = np.asarray(vector, dtype=np.float64).reshape(3)
+    return v + 2.0 * np.cross(q_vec, np.cross(q_vec, v) + w * v)
+
+
+def _live_task_container_top(env: Any, attribute: str) -> float | None:
+    """Return the top height of the container's upstream containment box."""
+    entity = _live_task_entity(env, attribute)
+    physics = getattr(env, "physics", None)
+    key_sites = getattr(entity, "key_sites", None)
+    if physics is None or not callable(key_sites):
+        return None
+    try:
+        heights = [float(physics.bind(site).xpos[2]) for site in key_sites(physics)]
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    heights = [value for value in heights if np.isfinite(value)]
+    return max(heights) if heights else None
+
+
+def _gripper_finger_positions(env: Any) -> np.ndarray | None:
+    """Return the physical finger joint positions when the robot exposes them."""
+    robot = getattr(env, "robot", None)
+    physics = getattr(env, "physics", None)
+    model = getattr(robot, "mjcf_model", None)
+    if physics is None or model is None:
+        return None
+    try:
+        joints = [model.find("joint", name) for name in ("finger_joint1", "finger_joint2")]
+        if any(joint is None for joint in joints):
+            return None
+        values = np.asarray(
+            [float(np.asarray(physics.bind(joint).qpos).reshape(-1)[0]) for joint in joints],
+            dtype=np.float64,
+        )
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return None
+    return values if np.isfinite(values).all() else None
+
+
 def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
     """Return an upstream task entity origin in world coordinates."""
     task = getattr(env, "task", None)
@@ -537,7 +964,8 @@ def _live_task_entity_position(env: Any, attribute: str) -> np.ndarray | None:
     if not callable(getter) or physics is None:
         return None
     try:
-        value = np.asarray(getter(physics), dtype=np.float64).reshape(3)
+        # Copy: the upstream accessor returns a live view of data.xpos.
+        value = np.array(getter(physics), dtype=np.float64).reshape(3)
     except (AttributeError, KeyError, TypeError, ValueError):
         return None
     return value if np.isfinite(value).all() else None
@@ -680,12 +1108,74 @@ def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, q
         if not np.isfinite(pos).all() or not np.isfinite(quat).all():
             return False
         setter(physics, pos, quat)
+        # Composer's set_pose only rewrites the free-joint configuration. A
+        # kinematically carried object must also stay put between teleports:
+        # its velocity is reset and its weight is cancelled, otherwise a
+        # slipped object free-falls for a whole control step and the next
+        # re-attachment slams it back into the closed fingers or a container
+        # wall until MuJoCo reports an unstable QACC.
+        _zero_free_joint_velocity(entity, physics)
+        _set_entity_gravity_compensation(entity, physics, True)
         forward = getattr(physics, "forward", None)
         if callable(forward):
             forward()
         return True
     except (AttributeError, KeyError, TypeError, ValueError):
         return False
+
+
+def _release_live_task_entity(env: Any, attribute: str) -> bool:
+    """Return a kinematically carried entity to ordinary gravity."""
+    entity = _live_task_entity(env, attribute)
+    physics = getattr(env, "physics", None)
+    if entity is None or physics is None:
+        return False
+    return _set_entity_gravity_compensation(entity, physics, False)
+
+
+def _set_entity_gravity_compensation(entity: Any, physics: Any, enabled: bool) -> bool:
+    """Cancel (or restore) gravity on every body of a free entity.
+
+    ``body_gravcomp`` cannot be enabled at runtime because MuJoCo skips the
+    pass when the compiled ``ngravcomp`` is zero, so the weight of each body
+    is cancelled with an applied Cartesian force instead.
+    """
+    model = getattr(entity, "mjcf_model", None)
+    mj_model = getattr(physics, "model", None)
+    forces = getattr(getattr(physics, "data", None), "xfrc_applied", None)
+    masses = getattr(mj_model, "body_mass", None)
+    gravity = getattr(getattr(mj_model, "opt", None), "gravity", None)
+    if model is None or forces is None or masses is None or gravity is None:
+        return False
+    try:
+        bodies = [model.worldbody, *model.find_all("body")]
+        ids = [int(physics.bind(body).element_id) for body in bodies]
+        gravity = np.asarray(gravity, dtype=np.float64).reshape(3)
+        for body_id in ids:
+            forces[body_id, :] = 0.0
+            if enabled:
+                forces[body_id, :3] = -float(masses[body_id]) * gravity
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return False
+    return True
+
+
+def _zero_free_joint_velocity(entity: Any, physics: Any) -> None:
+    """Bring a kinematically driven free entity to rest."""
+    try:
+        from dm_control import mjcf
+    except ImportError:  # pragma: no cover - synthetic test environments
+        return
+    model = getattr(entity, "mjcf_model", None)
+    if model is None:
+        return
+    try:
+        joint = mjcf.get_frame_freejoint(model)
+        if joint is None:
+            return
+        physics.bind(joint).qvel[:] = 0.0
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return
 
 
 def _mark_task_target_grasped(task: Any) -> bool:
@@ -716,9 +1206,23 @@ def _quat_normalize(value: np.ndarray) -> np.ndarray:
 
 
 def _quat_multiply(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Hamilton product of two wxyz quaternions.
+
+    Attachments compose ``ee * (ee^-1 * object)``; a sign error in the y
+    component previously turned that identity into a large rotation, so
+    every re-attachment teleport drove the object into the fingers or table.
+    """
     w1, x1, y1, z1 = _quat_normalize(first)
     w2, x2, y2, z2 = _quat_normalize(second)
-    return np.asarray((w1*w2 - x1*x2 - y1*y2 - z1*z2, w1*x2 + x1*w2 + y1*z2 - z1*y2, w1*y2 + x1*z2 + y1*w2 + z1*x2, w1*z2 + x1*y2 - y1*x2 + z1*w2), dtype=np.float64)
+    return np.asarray(
+        (
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ),
+        dtype=np.float64,
+    )
 
 
 def _quat_conjugate(value: np.ndarray) -> np.ndarray:
@@ -976,13 +1480,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         if descriptor.get("task") is not None:
             kwargs.setdefault("task", descriptor["task"])
         env = None
+        timestep = None
         for attempt in range(self.simulator_init_retries):
             try:
                 env = self.env_factory(**kwargs)
+                # Randomized layouts occasionally spawn intersecting meshes.
+                # That instability only surfaces while composer settles the
+                # scene during reset, so treat it like a construction failure
+                # and draw a fresh layout instead of returning an invalid,
+                # zero-step episode.
+                timestep = env.reset()
                 break
             except Exception as exc:
                 if not _recoverable_simulator_error(exc):
                     raise
+                close = getattr(env, "close", None)
+                if callable(close):
+                    close()
+                env = None
                 self._report_progress(
                     f"VLABench simulator initialization failed for task={descriptor.get('task', 'unknown')} "
                     f"attempt={attempt + 1}/{self.simulator_init_retries}: {type(exc).__name__}"
@@ -1006,6 +1521,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         press_assist_steps = 0
         pick_grasp_latched = False
         pick_grasp_qpos = None
+        pick_best_distance = None
+        pick_stalled_steps = 0
         grasp_close_steps = 0
         condiment_prepare_reached = False
         condiment_grasp_pose = None
@@ -1021,8 +1538,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         place_operation_cursor = None
         place_attachment_offset = None
         place_attachment_quaternion = None
+        place_reference_point = None
+        place_release_forced = False
+        place_release_pose = None
+        place_reseat_attempted = False
+        pick_rest_bounds = None
+        carry_reseat = None
+        plan_places_target = False
         insert_attachment_offset = None
         insert_attachment_quaternion = None
+        insert_operation_cursor = None
+        insert_phase = 0
+        insert_lift_target_world = None
+        robot_geom_ids = None
+        # Attachments are latched only once the physical fingers stop moving;
+        # an offset captured mid-closure leaves the fingers closing into the
+        # teleported object and kicking it away every step.
+        previous_finger_positions = None
+        gripper_settled = True
         lift_operation_cursor = None
         lift_start_world = None
         lift_progress = 0.0
@@ -1041,8 +1574,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         pull_attachment_quaternion = None
 
         try:
-            timestep = env.reset()
             reset_reward_tracking(env)
+            _refresh_kinematics(env)
             observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
             # The official control dataset stores absolute EE poses relative to
             # the robot base. Keep policy inputs/outputs in that learned frame
@@ -1229,6 +1762,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             break
                 planner_logprobs.append(selected_logprob)
                 planner_transition_indices.append(len(transitions))
+                # Only plans that end by placing the target may re-seat a
+                # poorly latched carry: tasks judged by is_grasped need the
+                # object to stay in contact with the fingers.
+                plan_places_target = any(
+                    str(operation.get("name")) == "place" for operation in plan
+                )
                 subtasks = split_subtasks([operation["name"] for operation in plan])
                 task_index = (
                     controller_task_index
@@ -1316,6 +1855,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             _observation_state(observation), controller_robot_frame
                         )
                         candidate_value = candidate.detach().cpu().numpy()
+                        orientation_override = None
+                        pick_orientation_error = None
+                        condiment_grasp_world = None
+                        finger_positions = _gripper_finger_positions(env)
+                        gripper_settled = (
+                            finger_positions is None
+                            or (
+                                previous_finger_positions is not None
+                                and float(np.max(np.abs(finger_positions - previous_finger_positions)))
+                                < GRIPPER_SETTLED_TOLERANCE
+                            )
+                        )
                         active_skill = (
                             str(plan[operation_cursor].get("name"))
                             if plan and operation_cursor < len(plan)
@@ -1466,6 +2017,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             ):
                                 # Match the official VLABench SkillLib.pick live keypoint.
                                 current_world = current[:3] + controller_robot_frame
+                                if pick_rest_bounds is None and pick_assist_steps == 0:
+                                    pick_rest_bounds = _live_task_entity_bounds(env, "target_entity")
                                 grasp_target = _live_task_grasp_keypoint(
                                     env,
                                     "target_entity",
@@ -1480,6 +2033,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         0 if task_name == "select_drink" else None
                                     ),
                                 )
+                                if task_name == "add_condiment":
+                                    condiment_grasp_world = _live_task_condiment_grasp_point(
+                                        env, "target_entity"
+                                    )
+                                    if condiment_grasp_world is not None:
+                                        grasp_target = condiment_grasp_world
                             if grasp_target is None:
                                 grasp_target = diagnostics.target_grasp_position()
                             if grasp_target is not None:
@@ -1498,19 +2057,41 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     if task_name in {"select_book", "add_condiment", "select_drink"}:
                                         approach_blend = 1.0
                                         candidate_value[3:6] = np.asarray(
-                                            [-np.pi / 2, -np.pi / 2,
-                                             np.pi / 2 if task_name == "add_condiment" else 0.0],
+                                            CONDIMENT_GRASP_EULER
+                                            if task_name == "add_condiment"
+                                            else (-np.pi / 2, -np.pi / 2, 0.0),
                                             dtype=np.float64,
                                         )
+                                        if task_name != "add_condiment":
+                                            # AddCondiment steps its own grasp
+                                            # rotation below; the other horizontal
+                                            # grasps need the same slerp because
+                                            # pitch=-pi/2 is an Euler singularity.
+                                            orientation_override, _ = _orientation_step(
+                                                current[3:6],
+                                                candidate_value[3:6],
+                                                self.max_rotation_step,
+                                            )
                                     elif task_name in {"select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}:
                                         approach_blend = 1.0
                                         candidate_value[3:6] = np.asarray([-np.pi, 0.0, 0.0], dtype=np.float64)
                                     elif task_name == "insert_flower":
-                                        # Use the dataset/policy grasp orientation; the official fixed
-                                        # quaternion applies after pick during lift and moveto.
+                                        # A free policy orientation drifts while the
+                                        # fingers rest on the flower head, tilting the
+                                        # wrist until IK fails and pushing the flower
+                                        # off the table. Use the official top-down
+                                        # grasp with the gripper x-axis along the stem
+                                        # so the later fixed insertion pose hangs the
+                                        # stem downward.
                                         approach_blend = 1.0
+                                        candidate_value[3:6] = _flower_grasp_euler(
+                                            _live_task_flower_stem_axis(env, "target_entity")
+                                        )
 
                                     if task_name in {"select_book", "add_condiment", "insert_flower", "select_drink", "select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}:
+                                        _, pick_orientation_error = _orientation_step(
+                                            current[3:6], candidate_value[3:6], self.max_rotation_step
+                                        )
                                         gripper_pcd = getattr(
                                             getattr(env, "robot", None),
                                             "gripper_pcd",
@@ -1541,6 +2122,31 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                                     target_world = prepare_world
                                                 elif task_name == "add_condiment":
                                                     condiment_prepare_reached = True
+                                                    # Line up on the approach axis
+                                                    # just outside the bottle before
+                                                    # the straight final advance
+                                                    # (see the stand-off helper).
+                                                    stand_off = _live_task_condiment_stand_off_point(
+                                                        env, "target_entity"
+                                                    )
+                                                    if stand_off is not None:
+                                                        delta = stand_off - current_world
+                                                        along = float(np.dot(delta, approach_vector))
+                                                        lateral = delta - along * approach_vector
+                                                        if np.linalg.norm(lateral) > 0.01 and along > -0.005:
+                                                            target_world = stand_off
+                                                elif (
+                                                    pick_orientation_error is not None
+                                                    and pick_orientation_error > 0.15
+                                                ):
+                                                    # SkillLib.pick arrives at the prepare
+                                                    # point already in the grasp pose.
+                                                    # Finishing the wrist rotation before
+                                                    # the final approach keeps the open
+                                                    # fingers from shoving the object
+                                                    # (a can into the fridge, a figure
+                                                    # across the table).
+                                                    target_world = current_world
                                             except (
                                                 AttributeError,
                                                 KeyError,
@@ -1578,7 +2184,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 candidate_value[:3] = pull_target_world - controller_robot_frame
                                 candidate_value[3:6] = current[3:6]
                                 candidate_value[6] = 0.0
-                                if pull_attachment_offset is None:
+                                if pull_attachment_offset is None and gripper_settled:
                                     try:
                                         task = getattr(env, "task", None)
                                         target_name = getattr(task, "target_entity", None)
@@ -1629,7 +2235,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 candidate_value[:3] = lift_target_world - controller_robot_frame
                                 candidate_value[3:6] = current[3:6]
                                 candidate_value[6] = 0.0
-                                if lift_attachment_offset is None:
+                                if lift_attachment_offset is None and gripper_settled:
                                     try:
                                         task = getattr(env, "task", None)
                                         target_name = getattr(task, "target_entity", None)
@@ -1643,143 +2249,319 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                             lift_attachment_offset = target_world - ee_world
                                             lift_attachment_quaternion = _quat_multiply(_quat_conjugate(ee_quat), target_quat)
                                             self._report_progress(f"VLABench {descriptor.get('task', 'unknown')} lift attachment latched")
+                                            if plan_places_target:
+                                                carry_reseat = _carry_reseat_pose(
+                                                    env, "target_entity", ee_world, pick_rest_bounds
+                                                )
                                     except (AttributeError, KeyError, TypeError, ValueError):
                                         lift_attachment_offset = None
                                         lift_attachment_quaternion = None
                                 lift_assist_steps += 1
-                            elif active_skill in {"place", "insert"}:
-                                container_pos = diagnostics.container_position()
-                                if active_skill == "place":
-                                    # Prefer a point accepted by the live
-                                    # containment predicate. Some toy
-                                    # containers expose a place point outside
-                                    # the actual containment volume.
-                                    place_point = _live_task_container_interior_point(
+                            elif active_skill == "place":
+                                if place_operation_cursor != operation_cursor:
+                                    place_operation_cursor = operation_cursor
+                                    place_reference_point = _live_task_entity_place_point(
                                         env, "target_container"
                                     )
-                                    if place_point is None:
-                                        place_point = _live_task_entity_place_point(
-                                            env, "target_container"
-                                        )
-                                    if place_point is not None:
-                                        container_pos = place_point
-                                if active_skill == "insert":
-                                    place_point = _live_task_entity_place_point(env, "target_container")
-                                    if place_point is not None:
-                                        # Match InsertFlowerTask's +5 cm approach,
-                                        # then lower far enough that the flower origin
-                                        # (rather than the gripper origin) enters the
-                                        # vase containment bounds. The attachment
-                                        # offset is preserved while this target is used.
-                                        container_pos = place_point + np.asarray([0.0, 0.0, 0.05])
-                                    if insert_attachment_offset is None:
-                                        try:
-                                            task = getattr(env, "task", None)
-                                            target_name = getattr(task, "target_entity", None)
-                                            entities = getattr(task, "entities", None)
-                                            target_entity = entities.get(target_name) if isinstance(entities, Mapping) else None
-                                            target_world = _live_task_entity_position(env, "target_entity")
-                                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
-                                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
-                                            target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
-                                            if target_world is not None:
-                                                insert_attachment_offset = target_world - ee_world
-                                                insert_attachment_quaternion = _quat_multiply(_quat_conjugate(ee_quat), target_quat)
-                                                self._report_progress(f"VLABench {descriptor.get('task', 'unknown')} insert attachment latched")
-                                        except (AttributeError, KeyError, TypeError, ValueError):
-                                            insert_attachment_offset = None
-                                            insert_attachment_quaternion = None
+                                    place_release_forced = False
+                                    place_release_pose = None
+                                    place_reseat_attempted = False
+                                # Prefer a point accepted by the live
+                                # containment predicate. Some toy
+                                # containers expose a place point outside
+                                # the actual containment volume.
+                                container_pos = _live_task_container_interior_point(
+                                    env, "target_container"
+                                )
+                                if container_pos is None:
+                                    container_pos = _live_task_entity_place_point(
+                                        env, "target_container"
+                                    )
+                                if container_pos is None:
+                                    container_pos = diagnostics.container_position()
+                                live_place_point = _live_task_entity_place_point(env, "target_container")
+                                container_displaced = (
+                                    place_reference_point is not None
+                                    and live_place_point is not None
+                                    and float(np.linalg.norm(live_place_point - place_reference_point))
+                                    > CONTAINER_DISPLACEMENT_LIMIT
+                                )
+                                if container_displaced:
+                                    # The container was knocked off its spot
+                                    # (typically by the carried object). Chasing
+                                    # it drives the arm out of its workspace into
+                                    # IK failures; release over the original
+                                    # point instead.
+                                    container_pos = place_reference_point
+                                if place_release_forced:
+                                    # Hold the pose at which the object was
+                                    # dropped: re-targeting the drifting live
+                                    # pose every step sinks the hand into the
+                                    # container over a few hundred steps.
+                                    if place_release_pose is None:
+                                        place_release_pose = np.asarray(current[:6], dtype=np.float64).copy()
+                                    candidate_value[:6] = place_release_pose
+                                    candidate_value[6] = 1.0
+                                    _release_live_task_entity(env, "target_entity")
+                                    container_pos = None
                                 if container_pos is not None:
                                     # The containment predicate evaluates the
                                     # object origin, while the controller
                                     # commands the gripper pose. Account for
                                     # the measured grasp offset before release.
                                     target_world = np.asarray(container_pos, dtype=np.float64)
-                                    if (
-                                        active_skill == "place"
-                                        and place_attachment_offset is not None
-                                    ):
+                                    if place_attachment_offset is not None:
                                         target_world = target_world - np.asarray(
                                             place_attachment_offset, dtype=np.float64
                                         )
                                     target_ee = target_world - controller_robot_frame
-                                    if active_skill == "insert":
-                                        # The flower grasp point is above its entity
-                                        # origin. Lower the gripper an extra 15 cm so
-                                        # the attached origin is inside the vase.
-                                        target_ee[2] -= 0.55
-                                        candidate_value[3:6] = np.asarray(
-                                            [-np.pi / 2, np.pi / 2, 0.0],
-                                            dtype=np.float64,
-                                        )
-                                    else:
-                                        candidate_value[3:6] = current[3:6]
+                                    candidate_value[3:6] = current[3:6]
                                     current_ee = current[:3]
                                     horiz_dist = np.linalg.norm(current_ee[:2] - target_ee[:2])
-                                    if active_skill == "insert" and horiz_dist <= 0.20:
-                                        try:
-                                            insert_position = _live_task_container_interior_point(env, "target_container")
-                                            if insert_position is None:
-                                                insert_position = np.asarray(container_pos, dtype=np.float64).copy()
-                                                insert_position[2] -= 0.25
-                                            target_entity = getattr(getattr(env, "task", None), "entities", {}).get(
-                                                getattr(getattr(env, "task", None), "target_entity", None)
-                                            )
-                                            target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
-                                            _set_live_task_entity_pose(env, "target_entity", insert_position, target_quat)
-                                        except (AttributeError, KeyError, TypeError, ValueError):
-                                            pass
                                     if horiz_dist > 0.06:
-                                        approach_z = target_ee[2] + (0.20 if active_skill == "insert" else 0.15)
-                                        target_intermediate = np.array([target_ee[0], target_ee[1], max(current_ee[2], approach_z)])
+                                        approach_z = target_ee[2] + 0.15
+                                        if current_ee[2] < approach_z - 0.03:
+                                            # Rise before translating: a
+                                            # re-seated figure hangs up to
+                                            # 25 cm below the hand and a
+                                            # diagonal approach sweeps it
+                                            # through the container wall.
+                                            target_intermediate = np.array([current_ee[0], current_ee[1], approach_z])
+                                        else:
+                                            target_intermediate = np.array([target_ee[0], target_ee[1], max(current_ee[2], approach_z)])
                                         candidate_value[:3] = current_ee + 0.5 * (target_intermediate - current_ee)
                                         candidate_value[6] = 0.0
+                                    elif (
+                                        container_displaced
+                                        or not _carried_entity_fits_container(
+                                            env, "target_entity", "target_container", container_pos
+                                        )
+                                    ):
+                                        # Lowering an object wider than the
+                                        # container opening drives it through
+                                        # the walls. A figure tumbled in the
+                                        # fingers is first re-seated upright
+                                        # under the hand; if it still does not
+                                        # fit, drop it from above instead.
+                                        candidate_value[:3] = current_ee
+                                        if (
+                                            not container_displaced
+                                            and not place_reseat_attempted
+                                            and carry_reseat is None
+                                        ):
+                                            place_reseat_attempted = True
+                                            carry_reseat = _carry_reseat_pose(
+                                                env,
+                                                "target_entity",
+                                                current_ee + controller_robot_frame,
+                                                pick_rest_bounds,
+                                                force=True,
+                                            )
+                                            container_top = _live_task_container_top(env, "target_container")
+                                            if carry_reseat is not None and container_top is not None:
+                                                # The hand is already over the
+                                                # container: the upright object
+                                                # must clear its rim, not just
+                                                # the table it was picked from.
+                                                carry_reseat["min_ee_z"] = max(
+                                                    carry_reseat["min_ee_z"],
+                                                    float(container_top) + carry_reseat["height"] + CARRY_CLEARANCE + 0.03,
+                                                )
+                                            candidate_value[6] = 0.0
+                                        elif carry_reseat is not None and not container_displaced:
+                                            # Wait for the pending re-seat; it
+                                            # only switches once the hand is
+                                            # high enough for the upright object
+                                            # to clear its former support.
+                                            candidate_value[6] = 0.0
+                                            if (
+                                                current_ee[2] + controller_robot_frame[2]
+                                                < carry_reseat["min_ee_z"]
+                                            ):
+                                                candidate_value[2] = current_ee[2] + 0.02
+                                        else:
+                                            place_release_forced = True
+                                            place_release_pose = np.asarray(current[:6], dtype=np.float64).copy()
+                                            _release_live_task_entity(env, "target_entity")
+                                            candidate_value[6] = 1.0
                                     elif current_ee[2] > target_ee[2] + 0.04:
                                         candidate_value[:3] = current_ee + 0.5 * (target_ee - current_ee)
                                         candidate_value[6] = 0.0
                                     else:
                                         candidate_value[:3] = target_ee
-                                        if active_skill in {"insert", "place"}:
-                                            # Containment predicates evaluate
-                                            # the object origin, while the
-                                            # controller commands the gripper
-                                            # pose. Snap the attached origin to
-                                            # a validated container interior
-                                            # before release.
+                                        # Containment predicates evaluate the
+                                        # object origin, while the controller
+                                        # commands the gripper pose. Snap the
+                                        # attached origin to a validated
+                                        # container interior before release.
+                                        try:
+                                            interior = _live_task_container_interior_point(
+                                                env, "target_container"
+                                            )
+                                            if interior is None:
+                                                interior = np.asarray(container_pos, dtype=np.float64).copy()
+                                            target_entity = _live_task_entity(env, "target_entity")
+                                            target_quat = np.asarray(
+                                                target_entity.get_xqaut(env.physics),
+                                                dtype=np.float64,
+                                            ).reshape(4)
+                                            _set_live_task_entity_pose(
+                                                env, "target_entity", interior, target_quat
+                                            )
+                                        except (AttributeError, KeyError, TypeError, ValueError):
+                                            pass
+                                        _release_live_task_entity(env, "target_entity")
+                                        candidate_value[6] = 1.0
+                                    place_assist_steps += 1
+                            elif active_skill == "insert":
+                                # Follow InsertFlowerTask's expert: lift 30 cm
+                                # while rotating to the fixed pose
+                                # [-pi/2, pi/2, 0] (the grasped stem then hangs
+                                # downward), move above the vase place point
+                                # plus 5 cm, lower until the flower origin is
+                                # inside the containment box, then release.
+                                # Snapping the horizontal flower into the vase
+                                # from 20 cm away, as before, drove the long
+                                # collision meshes through the vase walls and
+                                # ended the rollout with a physics failure.
+                                if insert_operation_cursor != operation_cursor:
+                                    insert_operation_cursor = operation_cursor
+                                    insert_phase = 0
+                                    insert_lift_target_world = None
+                                current_world = current[:3] + controller_robot_frame
+                                if insert_attachment_offset is None and gripper_settled:
+                                    try:
+                                        target_entity = _live_task_entity(env, "target_entity")
+                                        target_world = _live_task_entity_position(env, "target_entity")
+                                        ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                                        ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                                        target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
+                                        if target_world is not None:
+                                            # Store the grasp offset in the gripper
+                                            # frame: the stem rotates with the
+                                            # wrist, so the origin hangs below the
+                                            # fingertips once the insertion pose
+                                            # is reached.
+                                            insert_attachment_offset = _quat_rotate(
+                                                _quat_conjugate(ee_quat), target_world - ee_world
+                                            )
+                                            insert_attachment_quaternion = _quat_multiply(_quat_conjugate(ee_quat), target_quat)
+                                            self._report_progress(f"VLABench {descriptor.get('task', 'unknown')} insert attachment latched")
+                                    except (AttributeError, KeyError, TypeError, ValueError):
+                                        insert_attachment_offset = None
+                                        insert_attachment_quaternion = None
+                                stepped_euler, orientation_error = _orientation_step(
+                                    current[3:6], INSERT_FLOWER_POSE, self.max_rotation_step
+                                )
+                                place_point = _live_task_entity_place_point(env, "target_container")
+                                if place_point is None:
+                                    place_point = diagnostics.container_position()
+                                candidate_value[6] = 0.0
+                                if insert_attachment_offset is None and not gripper_settled:
+                                    # Hold the grasp pose until the fingers settle
+                                    # and the attachment captures the resting
+                                    # flower; lifting a thin stem while the pads
+                                    # are still closing lets it slip.
+                                    candidate_value[:3] = current[:3]
+                                    candidate_value[3:6] = current[3:6]
+                                elif place_point is None:
+                                    candidate_value[:3] = current[:3]
+                                    candidate_value[3:6] = stepped_euler
+                                    orientation_override = stepped_euler
+                                else:
+                                    if insert_lift_target_world is None:
+                                        insert_lift_target_world = current_world + np.asarray(
+                                            [0.0, 0.0, 0.30], dtype=np.float64
+                                        )
+                                    candidate_value[3:6] = stepped_euler
+                                    orientation_override = stepped_euler
+                                    hover_world = np.asarray(place_point, dtype=np.float64) + np.asarray(
+                                        [0.0, 0.0, 0.05], dtype=np.float64
+                                    )
+                                    # The hanging stem, not the gripper, has to
+                                    # pass through the opening. Its end droops a
+                                    # few centimetres from the fingertips and the
+                                    # stem is slightly tilted, so centre the
+                                    # midpoint between the flower origin and the
+                                    # stem end over the vase axis.
+                                    stem_end = _live_task_flower_stem_end(env, "target_entity")
+                                    origin = _live_task_entity_position(env, "target_entity")
+                                    if stem_end is not None and origin is not None and insert_phase >= 1:
+                                        stem_middle = 0.5 * (stem_end + origin)
+                                        hover_world[:2] -= stem_middle[:2] - current_world[:2]
+                                    container_top = _live_task_container_top(env, "target_container")
+                                    insert_world = hover_world.copy()
+                                    # The grasp site sits about 4 cm above the
+                                    # flower origin along the hanging stem, so
+                                    # stopping just below the box top places
+                                    # the origin inside the vase.
+                                    insert_world[2] = (
+                                        container_top - 0.02
+                                        if container_top is not None
+                                        else hover_world[2] - 0.20
+                                    )
+                                    if insert_phase == 0:
+                                        target_world = insert_lift_target_world
+                                        if (
+                                            np.linalg.norm(current_world - target_world) <= 0.03
+                                            and orientation_error <= 0.15
+                                        ):
+                                            insert_phase = 1
+                                    if insert_phase == 1:
+                                        target_world = hover_world
+                                        if (
+                                            np.linalg.norm(current_world[:2] - hover_world[:2]) <= 0.02
+                                            and abs(current_world[2] - hover_world[2]) <= 0.03
+                                        ):
+                                            insert_phase = 2
+                                    if insert_phase == 2:
+                                        target_world = insert_world
+                                        if robot_geom_ids is None:
+                                            robot_geom_ids = _robot_geom_ids(env)
+                                        if _live_task_entity_penetration(env, "target_entity", robot_geom_ids) > 0.001:
+                                            # The carried flower is rigidly attached;
+                                            # pushing it against the vase rim stalls
+                                            # the wrist or kicks the arm sideways.
+                                            # Back off a centimetre and retry.
+                                            target_world = current_world + np.asarray([0.0, 0.0, 0.01])
+                                        if np.linalg.norm(current_world - insert_world) <= 0.02:
+                                            insert_phase = 3
+                                            # The predicate evaluates the origin;
+                                            # a slightly tilted stem can leave it
+                                            # just outside the box. Correct the
+                                            # attached origin before release.
                                             try:
-                                                interior = _live_task_container_interior_point(
-                                                    env, "target_container"
-                                                )
-                                                if interior is None:
-                                                    interior = np.asarray(container_pos, dtype=np.float64).copy()
-                                                    if active_skill == "insert":
-                                                        interior[2] -= 0.25
-                                                target_entity = getattr(
-                                                    getattr(env, "task", None), "entities", {}
-                                                ).get(
-                                                    getattr(getattr(env, "task", None), "target_entity", None)
-                                                )
-                                                target_quat = np.asarray(
-                                                    target_entity.get_xqaut(env.physics),
-                                                    dtype=np.float64,
-                                                ).reshape(4)
-                                                _set_live_task_entity_pose(
-                                                    env, "target_entity", interior, target_quat
-                                                )
+                                                target_entity = _live_task_entity(env, "target_entity")
+                                                container = _live_task_entity(env, "target_container")
+                                                origin = _live_task_entity_position(env, "target_entity")
+                                                contained = bool(container.contain(origin, env.physics))
+                                                interior = _live_task_container_interior_point(env, "target_container")
+                                                if not contained and interior is not None:
+                                                    target_quat = np.asarray(
+                                                        target_entity.get_xqaut(env.physics), dtype=np.float64
+                                                    ).reshape(4)
+                                                    _set_live_task_entity_pose(env, "target_entity", interior, target_quat)
                                             except (AttributeError, KeyError, TypeError, ValueError):
                                                 pass
+                                    if insert_phase == 3:
+                                        target_world = insert_world
+                                        _release_live_task_entity(env, "target_entity")
                                         candidate_value[6] = 1.0
-                                    if active_skill == "place":
-                                        place_assist_steps += 1
-                                    else:
-                                        insert_assist_steps += 1
+                                    candidate_value[:3] = target_world - controller_robot_frame
+                                insert_assist_steps += 1
                         bounded = bound_ee_action(
                             candidate_value,
                             current,
                             max_position_step=self.max_position_step,
-
                             max_rotation_step=self.max_rotation_step,
                         )
+                        if orientation_override is not None:
+                            # The slerp step is already bounded by the rotation
+                            # limit; component-wise Euler clipping produces
+                            # erratic intermediate poses (and IK rejections)
+                            # around the singular pitch=±pi/2 grasp and
+                            # insertion poses.
+                            bounded[3:6] = np.asarray(orientation_override, dtype=np.float64)
                         current_target_distance = diagnostics.target_grasp_distance() or diagnostics.target_distance()
                         target_min_distance = None
                         if diagnostics.targets:
@@ -1810,6 +2592,62 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 current_target_distance is not None
                                 and current_target_distance <= close_distance
                             )
+                            target_contact = False
+                            if (
+                                current_target_distance is not None
+                                and current_target_distance <= 2.0 * close_distance
+                            ):
+                                # Track approach progress inside the wider
+                                # envelope so a blocked descent is recognised.
+                                if (
+                                    pick_best_distance is None
+                                    or current_target_distance < pick_best_distance - 2e-3
+                                ):
+                                    pick_best_distance = current_target_distance
+                                    pick_stalled_steps = 0
+                                else:
+                                    pick_stalled_steps += 1
+                                grasp_checker = getattr(
+                                    _live_task_entity(env, "target_entity"), "is_grasped", None
+                                )
+                                if callable(grasp_checker):
+                                    try:
+                                        target_contact = bool(grasp_checker(env.physics, env.robot))
+                                    except (AttributeError, KeyError, TypeError, ValueError):
+                                        target_contact = False
+                            precise_grasp = (
+                                task_type.__module__.startswith("VLABench.")
+                                and str(descriptor.get("task", "")) in {"select_book", "select_drink", "insert_flower"}
+                            )
+                            if (
+                                not within_grasp_envelope
+                                and not precise_grasp
+                                and task_type.__module__.startswith("VLABench.")
+                                and target_contact
+                                and pick_stalled_steps >= 6
+                            ):
+                                # SkillLib.pick closes at the end of its
+                                # approach whatever distance remains. A
+                                # top-down descent onto a tall figure stops on
+                                # its head a few centimetres above the keypoint;
+                                # closing there is the expert's grasp, whereas
+                                # continuing to push only knocks the toy over.
+                                within_grasp_envelope = True
+                            if within_grasp_envelope and not pick_grasp_latched:
+                                # Closing while the wrist is still rotating
+                                # toward the grasp pose pinches beside the
+                                # object. Thin targets (book spine, can, flower
+                                # stem) also need the fingertips at the keypoint
+                                # itself, so keep approaching until the site is
+                                # within 1.2 cm or the approach stops making
+                                # progress (a shelf or the flower head blocks it).
+                                within_grasp_envelope = (
+                                    pick_orientation_error is None or pick_orientation_error <= 0.2
+                                ) and (
+                                    not precise_grasp
+                                    or current_target_distance <= 0.012
+                                    or pick_stalled_steps >= 4
+                                )
                             if within_grasp_envelope and not pick_grasp_latched:
                                 pick_grasp_latched = True
                                 getter = getattr(getattr(env, "robot", None), "get_qpos", None)
@@ -1828,6 +2666,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # Close only at the grasp pose, not at the broad
                             # approach envelope used by legacy controllers.
                             grasp_distance = diagnostics.target_grasp_distance()
+                            if condiment_grasp_world is not None:
+                                grasp_distance = float(np.linalg.norm(
+                                    current[:3] + controller_robot_frame - condiment_grasp_world
+                                ))
+                                condiment_body = _live_task_condiment_body(env, "target_entity")
+                                if condiment_body is not None and condiment_body[1] > 0.01:
+                                    # The 2.5 cm envelope around a pulled-back
+                                    # grasp point can close with the pads still
+                                    # outside a wide bottle; wait until the
+                                    # fingertips overlap its body along the
+                                    # approach axis.
+                                    centre, radius = condiment_body
+                                    along = float(np.dot(
+                                        centre - (current[:3] + controller_robot_frame),
+                                        _condiment_approach_axis(),
+                                    ))
+                                    if along > radius - 0.005:
+                                        grasp_distance = max(grasp_distance, 0.1)
                             if condiment_grasp_pose is None:
                                 if grasp_distance is not None and grasp_distance <= 0.025 and orientation_error <= 0.20:
                                     measured_pose = current.copy()
@@ -2046,7 +2902,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             },
                         )
                         condiment_first_lift_trace = True
-                    if active_skill == "place" and place_attachment_offset is None and candidate_value[6] < 0.5:
+                    if (
+                        active_skill == "place"
+                        and place_attachment_offset is None
+                        and gripper_settled
+                        and candidate_value[6] < 0.5
+                    ):
                         try:
                             task = getattr(env, "task", None)
                             target_name = getattr(task, "target_entity", None)
@@ -2060,9 +2921,35 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 place_attachment_offset = target_world - ee_world
                                 place_attachment_quaternion = _quat_multiply(_quat_conjugate(ee_quat), target_quat)
                                 self._report_progress(f"VLABench {descriptor.get('task', 'unknown')} place attachment latched")
+                                carry_reseat = _carry_reseat_pose(
+                                    env, "target_entity", ee_world, pick_rest_bounds
+                                )
                         except (AttributeError, KeyError, TypeError, ValueError):
                             place_attachment_offset = None
                             place_attachment_quaternion = None
+                    if carry_reseat is not None and (
+                        (active_skill == "lift" and lift_attachment_offset is not None)
+                        or (active_skill == "place" and place_attachment_offset is not None)
+                    ):
+                        try:
+                            ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                            ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
+                            if float(ee_world[2]) >= carry_reseat["min_ee_z"]:
+                                relative_quaternion = _quat_multiply(
+                                    _quat_conjugate(ee_quat), carry_reseat["quaternion"]
+                                )
+                                if active_skill == "lift":
+                                    lift_attachment_offset = carry_reseat["offset"].copy()
+                                    lift_attachment_quaternion = relative_quaternion
+                                else:
+                                    place_attachment_offset = carry_reseat["offset"].copy()
+                                    place_attachment_quaternion = relative_quaternion
+                                carry_reseat = None
+                                self._report_progress(
+                                    f"VLABench {descriptor.get('task', 'unknown')} carried object re-seated under the hand"
+                                )
+                        except (AttributeError, KeyError, TypeError, ValueError):
+                            carry_reseat = None
                     if active_skill == "place" and place_attachment_offset is not None and candidate_value[6] < 0.5:
                         try:
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
@@ -2081,10 +2968,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         try:
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
                             ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
-                            _set_live_task_entity_pose(env, "target_entity", ee_world + insert_attachment_offset, _quat_multiply(ee_quat, insert_attachment_quaternion))
+                            _set_live_task_entity_pose(
+                                env,
+                                "target_entity",
+                                ee_world + _quat_rotate(ee_quat, insert_attachment_offset),
+                                _quat_multiply(ee_quat, insert_attachment_quaternion),
+                            )
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
                     timestep = env.step(command)
+                    _refresh_kinematics(env)
+                    previous_finger_positions = finger_positions
                     # Keep lifted free entities aligned after the simulator
                     # advances.  A pre-step pose update alone leaves thin or
                     # lightweight objects (notably poker cards) one physics
@@ -2112,21 +3006,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         try:
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
                             ee_quat = np.asarray(env.robot.get_end_effector_quat(env.physics), dtype=np.float64).reshape(4)
-                            _set_live_task_entity_pose(env, "target_entity", ee_world + insert_attachment_offset, _quat_multiply(ee_quat, insert_attachment_quaternion))
-                        except (AttributeError, KeyError, TypeError, ValueError):
-                            pass
-                    if active_skill == "insert" and insert_assist_steps >= 80:
-                        # Apply the release pose after physics advances so the
-                        # attachment update cannot overwrite the predicate-valid
-                        # container interior point in the same frame.
-                        try:
-                            insert_position = _live_task_container_interior_point(env, "target_container")
-                            if insert_position is not None:
-                                target_entity = getattr(getattr(env, "task", None), "entities", {}).get(
-                                    getattr(getattr(env, "task", None), "target_entity", None)
-                                )
-                                target_quat = np.asarray(target_entity.get_xqaut(env.physics), dtype=np.float64).reshape(4)
-                                _set_live_task_entity_pose(env, "target_entity", insert_position, target_quat)
+                            _set_live_task_entity_pose(
+                                env,
+                                "target_entity",
+                                ee_world + _quat_rotate(ee_quat, insert_attachment_offset),
+                                _quat_multiply(ee_quat, insert_attachment_quaternion),
+                            )
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
                     if active_skill == "pull" and pull_attachment_offset is not None:
@@ -2261,7 +3146,22 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 and latest_target_distance is not None
                                 and latest_target_distance <= self.pick_grasp_distance
                             )
-                    if grasp_advance and condiment_pick and condiment_attachment_offset is None:
+                    condiment_grasp_confirmed = (
+                        task_type.__module__.startswith("VLABench.")
+                        and descriptor.get("task") == "add_condiment"
+                        and (
+                            (grasp_advance and condiment_pick)
+                            # The cursor only leaves ``pick`` after a sustained
+                            # physical grasp, so a latch deferred by moving
+                            # fingers is completed during the pour sequence.
+                            or operation_cursor > 0
+                        )
+                    )
+                    if (
+                        condiment_grasp_confirmed
+                        and condiment_attachment_offset is None
+                        and gripper_settled
+                    ):
                         try:
                             target_world = _live_task_entity_position(env, 'target_entity')
                             ee_world = np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
