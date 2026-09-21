@@ -11,6 +11,7 @@ from domiknows.generation.prompting import (
     encode_label_prefix_prompt,
     label_prefix_token_ids,
 )
+from test_regr.common_backbone import is_vision_language_config, language_hidden_size
 
 
 CAUSAL_PROMPT_FORMAT = "qwen-chat-label-prefix-v1"
@@ -387,6 +388,7 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         super().__init__()
         _prepare_transformers_imports()
         from transformers import AutoModelForCausalLM, AutoTokenizer
+        import transformers
 
         self.label_count = label_count
         self.eos_label = int(eos_label)
@@ -403,8 +405,17 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         self.label_adapter_rank = int(label_adapter_rank)
         if self.use_lora and shared_model is not None:
             raise ValueError("shared_model cannot be used with --use-lora because LoRA mutates the backbone")
+        config_class = getattr(transformers, "AutoConfig", None)
+        backbone_config = (
+            config_class.from_pretrained(model_path, trust_remote_code=True)
+            if config_class is not None else None
+        )
+        self.is_vision_language_backbone = is_vision_language_config(backbone_config)
         self.tokenizer = shared_tokenizer or AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        dtype = torch.float16 if str(device).startswith("cuda") else torch.float32
+        dtype = (
+            torch.bfloat16 if self.is_vision_language_backbone
+            else torch.float16
+        ) if str(device).startswith("cuda") else torch.float32
         if shared_model is None:
             model_kwargs = {
                 "dtype": dtype,
@@ -413,7 +424,16 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
             }
             if device_map and str(device_map).lower() != "none":
                 model_kwargs["device_map"] = device_map
-            self.model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+            if self.is_vision_language_backbone:
+                model_class = getattr(transformers, "AutoModelForImageTextToText", None)
+                if model_class is None:
+                    raise ImportError(
+                        "the selected vision-language EAI backbone requires "
+                        "transformers.AutoModelForImageTextToText"
+                    )
+            else:
+                model_class = AutoModelForCausalLM
+            self.model = model_class.from_pretrained(model_path, **model_kwargs)
         else:
             self.model = shared_model
         if shared_model is None and not (
@@ -457,7 +477,7 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
                     param.requires_grad = False
             self.model.eval() if freeze else self.model.train()
 
-        model_hidden = getattr(self.model.config, "hidden_size", hidden_dim or 768)
+        model_hidden = language_hidden_size(self.model.config) or hidden_dim or 768
         if label_head == "pretrained-adapter":
             self.output = PretrainedLabelAdapter(
                 self.model,

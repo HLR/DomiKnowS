@@ -24,7 +24,7 @@ try:
         load_planning_examples,
     )
     from .graph import PlanVocabulary
-    from .models import FrozenSigLIPEncoder, MultiViewController, QwenVLPlanner, TinyImageEncoder
+    from .models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
     from .training import (
         build_constraint_runtime,
         create_stage1_program,
@@ -44,7 +44,7 @@ except ImportError:
     from agent import HierarchicalVLABenchAgent
     from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples
     from graph import PlanVocabulary
-    from models import FrozenSigLIPEncoder, MultiViewController, QwenVLPlanner, TinyImageEncoder
+    from models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
     from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch, train_controller_steps
     from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
 
@@ -570,6 +570,8 @@ def command_train_agent(args) -> None:
         gae_lambda=args.gae_lambda,
         ppo_clip=args.ppo_clip,
         ppo_epochs=args.ppo_epochs,
+        ppo_max_log_ratio=args.ppo_max_log_ratio,
+        ppo_target_action_log_ratio=args.ppo_target_kl,
         value_weight=args.value_weight,
         entropy_weight=args.entropy_weight,
         max_position_step=args.max_position_step,
@@ -1032,7 +1034,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def planner_options(command):
         command.add_argument("--planning-dir", required=True)
-        command.add_argument("--planner-model", default="Qwen/Qwen2.5-VL-3B-Instruct")
+        command.add_argument("--planner-model", default=PLANNER_MODEL_ID)
         command.add_argument("--resume-adapter")
         command.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
         command.add_argument("--max-entities", type=int, default=64)
@@ -1056,7 +1058,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--output", required=True)
     agent.add_argument("--task", choices=["all", *PRIMITIVE_TASK_PATTERNS], default="all")
     agent.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.environment:create_environment")
-    agent.add_argument("--planner-model", default="Qwen/Qwen2.5-VL-3B-Instruct")
+    agent.add_argument("--planner-model", default=PLANNER_MODEL_ID)
     agent.add_argument("--resume-adapter")
     agent.add_argument("--resume", help="standalone agent .pt checkpoint")
     agent.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
@@ -1144,6 +1146,8 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--gae-lambda", type=float, default=0.95)
     agent.add_argument("--ppo-clip", type=float, default=0.2)
     agent.add_argument("--ppo-epochs", type=int, default=4)
+    agent.add_argument("--ppo-target-kl", type=float, default=0.03)
+    agent.add_argument("--ppo-max-log-ratio", type=float, default=2.0)
     agent.add_argument("--value-weight", type=float, default=0.5)
     agent.add_argument("--entropy-weight", type=float, default=0.01)
     agent.add_argument("--max-position-step", type=float, default=0.02)
@@ -1168,7 +1172,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="resample this many infeasible action chunks before truncating an episode",
     )
-    agent.add_argument("--eval-rollouts-per-task", type=int, default=1)
+    agent.add_argument(
+        "--eval-rollouts-per-task", type=int, default=3,
+        help="Fixed-seed simulator rollouts per task used for retention and reporting.",
+    )
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)
 
@@ -1188,7 +1195,7 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.add_argument("--max-steps", type=int, default=400)
     rollout.add_argument("--max-operations", type=int, default=8)
     rollout.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
-    rollout.add_argument("--planner-model", default="Qwen/Qwen2.5-VL-3B-Instruct")
+    rollout.add_argument("--planner-model", default=PLANNER_MODEL_ID)
     rollout.add_argument("--resume-adapter")
     rollout.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
     rollout.add_argument("--device")

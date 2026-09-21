@@ -9,6 +9,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from test_regr.common_backbone import COMMON_VLM_MODEL_ID
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
     planner_prompt,
@@ -19,11 +20,11 @@ from test_regr.VLABenchAgentInterface.models import (
 
 
 DOMAINS = ("eai", "vlabench")
-DEFAULT_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
+DEFAULT_MODEL_ID = COMMON_VLM_MODEL_ID
 
 
 class JointQwenVLPlanner(nn.Module):
-    """A single Qwen2.5-VL/LoRA policy with two compact graph label heads.
+    """A single Qwen-VL/LoRA policy with two compact graph label heads.
 
     The backbone and LoRA adapter are registered exactly once.  Domain views
     route the existing standalone program APIs into this module without

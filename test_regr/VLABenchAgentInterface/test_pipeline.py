@@ -1187,7 +1187,7 @@ def test_standalone_agent_uses_bounded_report_defaults():
     assert args.rl_preflight_min_successful_tasks == 10
     assert args.rl_preflight_min_positive_return_rate == pytest.approx(0.01)
     assert args.rl_preflight_max_ik_truncation_rate == pytest.approx(0.50)
-    assert args.eval_rollouts_per_task == 1
+    assert args.eval_rollouts_per_task == 3
     assert args.ik_tolerance == pytest.approx(5e-3)
     assert args.max_consecutive_ik_rejections == 3
 
@@ -2962,6 +2962,7 @@ def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
     assert not torch.equal(value_before, controller.value_head.weight)
     assert program.last_controller_update["actor_update_attempted"] is False
     assert program.last_controller_update["rolled_back"] is False
+    assert program.last_controller_update["parameters_changed"] is False
 
 
 def test_controller_ppo_rolls_back_complete_update_when_policy_drift_exceeds_limit():
@@ -3000,6 +3001,7 @@ def test_controller_ppo_rolls_back_complete_update_when_policy_drift_exceeds_lim
     assert loss == pytest.approx(0.0)
     assert program.last_controller_update["rolled_back"] is True
     assert program.last_controller_update["ppo_epochs_completed"] == 0
+    assert program.last_controller_update["parameters_changed"] is False
     for name, value in controller.state_dict().items():
         torch.testing.assert_close(value, before[name])
 
@@ -3046,8 +3048,14 @@ def test_joint_simulator_training_updates_planner_and_controller():
     assert task_metrics["steps"] == 1.0
     assert task_metrics["ik_truncation_rate"] == 0.0
     assert task_metrics["execution_complete_rate"] == 1.0
+    assert task_metrics["assist_steps"] == 0
+    assert task_metrics["assisted_episode_rate"] == 0.0
+    assert task_metrics["unassisted_success_rate"] == 0.5
     assert planner.preference.item() != planner_before.item()
     assert not torch.equal(controller.value_head.weight, controller_before)
+    assert metrics["controller_update"]["parameters_changed"] is True
+    assert metrics["controller_update"]["parameter_delta_l2"] > 0.0
+    assert metrics["controller_update"]["approximate_kl"] >= 0.0
 
 
 def test_fixed_seed_rollout_evaluation_does_not_update_models():
@@ -3066,6 +3074,9 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     assert metrics["episodes"] == 2
     assert metrics["successful_task_count"] == 2
     assert metrics["success_rate"] == 1.0
+    assert metrics["assist_steps"] == 0
+    assert metrics["assisted_episode_rate"] == 0.0
+    assert metrics["unassisted_success_rate"] == 1.0
     assert metrics["per_task"]["select_book"]["progress"] == pytest.approx(1.0)
     assert metrics["per_task"]["select_fruit"]["progress"] == pytest.approx(1.0)
     assert len(metrics["episode_diagnostics"]) == 2

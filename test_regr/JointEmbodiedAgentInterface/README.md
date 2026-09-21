@@ -2,7 +2,7 @@
 
 This package is the canonical workflow for training EmbodiedAgentInterface
 (EAI) and VLABench together. It creates one DomiKnowS root graph, one
-Qwen2.5-VL-3B backbone with one 4-bit LoRA adapter, two compact label heads,
+Qwen3-VL-8B-Instruct backbone with one 4-bit LoRA adapter, two compact label heads,
 and one sequential program lifecycle. The standalone EAI and VLABench CLIs
 remain supported for component debugging.
 
@@ -127,9 +127,16 @@ batches contrast successful and unsuccessful valid executions, and a singleton
 positive advantage remains uncentered so sparse success is preserved.
 PPO stores the bounded sampled action and its change-of-variables-corrected
 log probability. Likelihood ratios are bounded before exponentiation, and every
-actor-changing objective is checked against the mean per-action log-ratio after
-the final PPO pass as well as between passes. A trust-region violation restores
-the complete pre-update controller and clears stale optimizer moments.
+actor-changing objective is checked with the standard nonnegative approximate
+KL, `exp(log_ratio) - 1 - log_ratio`, using a default target of `0.03`; the
+maximum absolute per-action log ratio remains a separate safety bound. This
+avoids treating ordinary signed probability redistribution as policy collapse.
+Every Stage 2 update records accepted PPO epochs, rollback status, approximate
+KL, actor parameter-delta L2, and whether actor parameters actually changed.
+Rollout summaries also report deterministic assist steps, assisted-episode
+rate, and success among episodes that used zero deterministic assist steps.
+The latter is observational evidence, not a separate intervention with the
+assist implementation disabled.
 An infeasible action is retried at smaller Cartesian scales. If all scales
 fail, the unchanged observation is resampled up to three consecutive chunks
 by default before the rollout is IK-truncated; each rejection remains negative
@@ -195,6 +202,33 @@ python -m test_regr.VLABenchAgentInterface.main download `
   --control-dir test_regr\VLABenchAgentInterface\data\control
 ```
 
+The EAI, VLABench, and Joint planner defaults now use the same
+`Qwen/Qwen3-VL-8B-Instruct` base model. On GPU2, download it once to a
+persistent host path shared with the `vigorous_easley` container:
+
+```bash
+docker exec vigorous_easley /opt/dominows/venv/bin/hf download \
+  Qwen/Qwen3-VL-8B-Instruct \
+  --local-dir /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct \
+  --max-workers 4
+```
+
+The September 20 GPU2 download completed at that path. Pass
+`--planner-model /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct` to use
+those files without fetching the model again. The three workflows share
+the base model files, not a trained adapter or a checkpoint. Start a fresh
+output directory when changing backbones; checkpoints from Qwen2.5-VL or
+text-only Qwen3-8B cannot be resumed as Qwen3-VL-8B runs. The EAI standalone
+CLI also requires `--baseline-model causal-lm --use-lora` to select this
+backbone; its tiny-transformer debugging default is unchanged.
+
+For a quick model-loading check on GPU2, run inside the container:
+
+```bash
+python -m test_regr.smoke_common_backbone --component joint \
+  --model-path /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct
+```
+
 Canonical joint training uses all EAI data, all ten VLABench tasks, five
 Stage 1 epochs, a 20,000-step controller BC warm-up, three Stage 2 epochs, and
 equal round-robin scheduling:
@@ -202,6 +236,11 @@ equal round-robin scheduling:
 ```powershell
 python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage
 ```
+
+On GPU2, add `--planner-model
+/home/auszok/models/Qwen/Qwen3-VL-8B-Instruct` and choose a fresh
+`--output` directory to load the downloaded files and avoid legacy
+checkpoint collisions.
 
 Dataset indexing, model initialization, Stage 1 rounds, Stage 2 domain turns,
 and simulator rollouts emit flushed, newline-based progress. The messages
@@ -216,18 +255,24 @@ Control-video decoding uses a per-task LRU capped at eight TorchCodec decoders,
 preventing full shuffled runs from exhausting the process file-descriptor
 limit. The cap is configurable with `--video-decoder-cache-size`.
 
-By default, training also runs one fixed-seed simulator rollout per task before
+By default, training runs three fixed-seed simulator rollouts per task before
 RL and after every Stage 2 epoch. Checkpoint ranking and acceptance use these
 evaluation rollouts; the update-producing rollouts remain under
-`vlabench_training` in the checkpoint metrics. Increase this to at least three
-for a final report with `--stage2-eval-rollouts-per-task 3`, or set it to `0`
+`vlabench_training` in the checkpoint metrics. Override the default with
+`--stage2-eval-rollouts-per-task`, or set it to `0`
 for a fast diagnostic run that intentionally uses training-rollout metrics.
 The pre-RL evaluation is also a controller preflight: by default it requires at
 least a `0.01` positive-return rate and no more than `0.50` IK truncation.
 Failure writes `stage2-skipped` before any multi-hour RL epoch. Success and
 task-coverage thresholds remain available but default to zero because the
-default ten-rollout baseline is too small for a reliable success gate.
+fixed-seed baseline remains too small for a definitive statistical claim.
 Joint Stage 2 also applies a baseline-relative regression gate: by default an RL checkpoint must match or exceed the fixed-seed Stage 1 VLABench success (`--stage2-max-baseline-success-regression 0.0`). The planner and controller retain stronger Stage 1 anchors by default (`--stage2-planner-anchor-weight 0.25`, `--stage2-controller-bc-weight 0.25`). Configure these values explicitly when running controlled ablations.
+
+Joint uses the same ordered 80/20 EAI split as the standalone EAI workflow and
+scores the complete 88-example holdout by default. `paired_eai_eval.py` can
+score any retained standalone or Joint checkpoint on those exact row identities
+with `--selection canonical-validation`, including decoded actions and missed
+goal facts for every failure.
 
 Configure these thresholds with the `--stage2-preflight-*` options. Setting
 evaluation rollouts to zero intentionally disables this gate.
@@ -348,7 +393,7 @@ All non-test source files in this package are listed below.
 | --- | --- |
 | `__init__.py` | Exposes the joint runtime, graph builder, shared planner, and both program classes. |
 | `world_graph.py` | Builds the shared semantic spine, attaches sibling domain and generation graphs, compiles both DFAs, creates identity-based activation profiles, provides locked domain scopes, and computes joint checksums. |
-| `models.py` | Loads one Qwen2.5-VL/LoRA backbone, encodes each observation once, owns separate EAI/VLABench graph-token embeddings, recurrent decoders, label heads, and prompts, and provides teacher-forced and DFA-masked autoregressive domain APIs. |
+| `models.py` | Loads one Qwen3-VL-8B/LoRA backbone, encodes each observation once, owns separate EAI/VLABench graph-token embeddings, recurrent decoders, label heads, and prompts, and provides teacher-forced and DFA-masked autoregressive domain APIs. |
 | `program.py` | Implements equal Stage 1 round-robin updates, the controller-only BC warm-up, and equal Stage 2 EAI-REINFORCE/VLABench-REINFORCE-plus-PPO updates with domain-local activation and rewards. |
 | `checkpoint.py` | Atomically saves and restores the complete joint state, RNGs, scheduling cursor, and compatibility metadata. |
 | `main.py` | Defines the canonical `train-agent --two-stage` CLI, data/model construction, balanced checkpoint keys, exploration gate, and per-epoch resume files. |

@@ -417,6 +417,18 @@ def _reported_episode_progress(episode: "JointEpisode") -> float:
     )
 
 
+_ASSIST_DIAGNOSTIC_KEYS = (
+    "pick_assist_steps", "grasp_assist_steps", "pull_assist_steps",
+    "pour_assist_steps", "place_assist_steps", "insert_assist_steps",
+    "lift_assist_steps", "press_assist_steps",
+)
+
+
+def _episode_assist_steps(episode: "JointEpisode") -> int:
+    diagnostics = episode.diagnostics if isinstance(episode.diagnostics, dict) else {}
+    return sum(int(diagnostics.get(key, 0) or 0) for key in _ASSIST_DIAGNOSTIC_KEYS)
+
+
 def _press_button_fallback_plan(
     expected_pattern: Sequence[str],
     diagnostics: RolloutDiagnostics,
@@ -1358,7 +1370,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         ppo_clip: float = 0.2,
         ppo_epochs: int = 4,
         ppo_max_log_ratio: float = 2.0,
-        ppo_target_action_log_ratio: float = 0.2,
+        ppo_target_action_log_ratio: float = 0.03,
         max_controller_loss: float = 50.0,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
@@ -1424,7 +1436,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             not np.isfinite(self.ppo_target_action_log_ratio)
             or self.ppo_target_action_log_ratio <= 0
         ):
-            raise ValueError("PPO target action log-ratio must be finite and positive")
+            raise ValueError("PPO target approximate KL must be finite and positive")
         if not np.isfinite(self.max_controller_loss) or self.max_controller_loss <= 0:
             raise ValueError("maximum controller loss must be finite and positive")
         if self.max_position_step <= 0 or self.max_rotation_step <= 0:
@@ -3529,7 +3541,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             if informative and executed > 0:
                 old_logprob = item.old_logprob.to(self.device_name).reshape(())
                 target.append(
-                    (logprob[0, :executed].sum().detach() - old_logprob).abs()
+                    (logprob[0, :executed].sum().detach() - old_logprob)
                     / executed
                 )
             if (
@@ -3546,8 +3558,22 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     self.device_name
                 ).reshape(())
                 target.append(
-                    (logprob[0, feasibility_index].detach() - old_feasibility).abs()
+                    logprob[0, feasibility_index].detach() - old_feasibility
                 )
+
+        def action_ratio_statistics(values) -> tuple[float, float, float]:
+            if not values:
+                return 0.0, 0.0, 0.0
+            log_ratios = torch.stack(values)
+            mean_absolute = float(log_ratios.abs().mean())
+            maximum_absolute = float(log_ratios.abs().max())
+            # Schulman's numerically stable PPO approximate KL.  Unlike the
+            # old mean-|log ratio| gate, this estimates policy divergence and
+            # does not reject every useful signed probability adjustment.
+            approximate_kl = float(
+                (torch.exp(log_ratios) - 1.0 - log_ratios).mean()
+            )
+            return mean_absolute, maximum_absolute, approximate_kl
 
         for ppo_epoch in range(self.ppo_epochs):
             losses = []
@@ -3614,27 +3640,23 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     - entropy_bonus
                     + feasibility_loss
                 )
-            mean_action_log_ratio = (
-                float(torch.stack(action_log_ratios).mean())
-                if action_log_ratios else 0.0
-            )
-            max_action_log_ratio = (
-                float(torch.stack(action_log_ratios).max())
-                if action_log_ratios else 0.0
+            mean_action_log_ratio, max_action_log_ratio, approximate_kl = (
+                action_ratio_statistics(action_log_ratios)
             )
             last_action_log_ratio = mean_action_log_ratio
             last_max_action_log_ratio = max_action_log_ratio
             if (
                 ppo_epoch
                 and (
-                    mean_action_log_ratio > self.ppo_target_action_log_ratio
+                    approximate_kl > self.ppo_target_action_log_ratio
                     or max_action_log_ratio > self.ppo_max_log_ratio
                 )
             ):
                 restore_batch_start(
                     "VLABench controller PPO early stop: "
-                    f"mean action log-ratio={mean_action_log_ratio:.4f} "
+                    f"approximate KL={approximate_kl:.4f} "
                     f"(limit {self.ppo_target_action_log_ratio:.4f}), "
+                    f"mean |action log-ratio|={mean_action_log_ratio:.4f}, "
                     f"max={max_action_log_ratio:.4f} "
                     f"(limit {self.ppo_max_log_ratio:.4f}); "
                     "rolled back the complete controller update"
@@ -3705,25 +3727,44 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     add_action_log_ratios(
                         post_update_ratios, logprob, item, informative
                     )
-            last_action_log_ratio = (
-                float(torch.stack(post_update_ratios).mean())
-                if post_update_ratios else 0.0
-            )
-            last_max_action_log_ratio = (
-                float(torch.stack(post_update_ratios).max())
-                if post_update_ratios else 0.0
+            last_action_log_ratio, last_max_action_log_ratio, last_approximate_kl = (
+                action_ratio_statistics(post_update_ratios)
             )
             if (
-                last_action_log_ratio > self.ppo_target_action_log_ratio
+                last_approximate_kl > self.ppo_target_action_log_ratio
                 or last_max_action_log_ratio > self.ppo_max_log_ratio
             ):
                 restore_batch_start(
-                    "VLABench controller PPO rollback: final action log-ratio "
-                    f"mean={last_action_log_ratio:.4f} "
+                    "VLABench controller PPO rollback: final policy drift "
+                    f"approximate KL={last_approximate_kl:.4f} "
                     f"(limit {self.ppo_target_action_log_ratio:.4f}), "
+                    f"mean |action log-ratio|={last_action_log_ratio:.4f}, "
                     f"max={last_max_action_log_ratio:.4f} "
                     f"(limit {self.ppo_max_log_ratio:.4f})"
                 )
+
+        parameter_delta_l2 = 0.0
+        if batch_start is not None:
+            parameter_delta_l2 = float(
+                torch.sqrt(sum(
+                    (parameter.detach() - previous).float().pow(2).sum()
+                    for parameter, previous in zip(trainable, batch_start)
+                ))
+            )
+        final_ratios = []
+        if actor_update_enabled and completed_epochs and not rolled_back:
+            with torch.no_grad():
+                for item, informative in entries:
+                    logprob, _entropy, _value = self.controller.evaluate_action_chunk(
+                        item.images.to(self.device_name),
+                        item.state.to(self.device_name),
+                        item.task_index.to(self.device_name),
+                        item.actions.to(self.device_name),
+                        item.plan_context.to(self.device_name)
+                        if item.plan_context is not None else None,
+                    )
+                    add_action_log_ratios(final_ratios, logprob, item, informative)
+        _mean_abs, _max_abs, final_approximate_kl = action_ratio_statistics(final_ratios)
 
         self.last_controller_update = {
             "task_signal_episodes": int(task_signal_episodes),
@@ -3732,6 +3773,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "ppo_epochs_completed": int(completed_epochs),
             "mean_action_log_ratio": float(last_action_log_ratio),
             "max_action_log_ratio": float(last_max_action_log_ratio),
+            "approximate_kl": float(final_approximate_kl),
+            "parameter_delta_l2": parameter_delta_l2,
+            "parameters_changed": bool(parameter_delta_l2 > 0.0),
+            "actor_parameter_delta_l2": parameter_delta_l2,
+            "actor_parameters_changed": bool(parameter_delta_l2 > 0.0),
         }
         return total / max(1, completed_epochs)
 
@@ -3768,6 +3814,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     "ik_recoveries": 0.0, "ik_truncations": 0.0,
                     "execution_complete": 0.0,
                     "progress": 0.0,
+                    "assist_steps": 0.0, "assisted_episodes": 0.0,
+                    "unassisted_successes": 0.0,
                 },
             )
             totals["episodes"] += 1.0
@@ -3785,6 +3833,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 episode.valid and episode.termination_reason != "ik_failure"
             )
             totals["progress"] += _reported_episode_progress(episode)
+            assist_steps = _episode_assist_steps(episode)
+            totals["assist_steps"] += assist_steps
+            totals["assisted_episodes"] += float(assist_steps > 0)
+            totals["unassisted_successes"] += float(episode.success and assist_steps == 0)
         per_task = {
             task_name: {
                 "episodes": int(totals["episodes"]),
@@ -3802,6 +3854,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "ik_truncation_rate": totals["ik_truncations"] / totals["episodes"],
                 "execution_complete_rate": totals["execution_complete"] / totals["episodes"],
                 "progress": totals["progress"] / totals["episodes"],
+                "assist_steps": int(totals["assist_steps"]),
+                "assisted_episode_rate": totals["assisted_episodes"] / totals["episodes"],
+                "unassisted_success_rate": totals["unassisted_successes"] / totals["episodes"],
             }
             for task_name, totals in sorted(task_totals.items())
         }
@@ -3820,6 +3875,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "successful_task_count": sum(any(item.success for name, item in zip(episode_tasks, episodes) if name == task) for task in set(episode_tasks)),
             "ik_failures": sum(item.ik_failures for item in episodes),
             "ik_recoveries": sum(item.ik_recoveries for item in episodes),
+            "assist_steps": sum(_episode_assist_steps(item) for item in episodes),
+            "assisted_episode_rate": sum(_episode_assist_steps(item) > 0 for item in episodes) / len(episodes),
+            "unassisted_success_rate": sum(item.success and _episode_assist_steps(item) == 0 for item in episodes) / len(episodes),
             "ik_truncation_rate": sum(item.termination_reason == "ik_failure" for item in episodes) / len(episodes),
             "execution_complete_rate": sum(
                 item.valid and item.termination_reason != "ik_failure" for item in episodes
@@ -3880,6 +3938,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "ik_recoveries": 0.0, "ik_truncations": 0.0,
                 "execution_complete": 0.0,
                 "progress": 0.0,
+                "assist_steps": 0.0, "assisted_episodes": 0.0,
+                "unassisted_successes": 0.0,
             })
             totals["episodes"] += 1.0
             totals["successes"] += float(episode.success)
@@ -3896,6 +3956,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 episode.valid and episode.termination_reason != "ik_failure"
             )
             totals["progress"] += _reported_episode_progress(episode)
+            assist_steps = _episode_assist_steps(episode)
+            totals["assist_steps"] += assist_steps
+            totals["assisted_episodes"] += float(assist_steps > 0)
+            totals["unassisted_successes"] += float(episode.success and assist_steps == 0)
         per_task = {
             name: {
                 "episodes": int(values["episodes"]),
@@ -3913,6 +3977,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "ik_truncation_rate": values["ik_truncations"] / values["episodes"],
                 "execution_complete_rate": values["execution_complete"] / values["episodes"],
                 "progress": values["progress"] / values["episodes"],
+                "assist_steps": int(values["assist_steps"]),
+                "assisted_episode_rate": values["assisted_episodes"] / values["episodes"],
+                "unassisted_success_rate": values["unassisted_successes"] / values["episodes"],
             }
             for name, values in sorted(task_totals.items())
         }
@@ -3929,6 +3996,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "successful_task_count": sum(int(value["successes"] > 0) for value in per_task.values()),
             "ik_failures": sum(item.ik_failures for item in episodes),
             "ik_recoveries": sum(item.ik_recoveries for item in episodes),
+            "assist_steps": sum(_episode_assist_steps(item) for item in episodes),
+            "assisted_episode_rate": sum(_episode_assist_steps(item) > 0 for item in episodes) / count,
+            "unassisted_success_rate": sum(item.success and _episode_assist_steps(item) == 0 for item in episodes) / count,
             "ik_truncation_rate": sum(item.termination_reason == "ik_failure" for item in episodes) / count,
             "execution_complete_rate": sum(
                 item.valid and item.termination_reason != "ik_failure" for item in episodes

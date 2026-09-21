@@ -1,7 +1,7 @@
 # Embodied Agent Interface (EAI) DomiKnowS Framework
 
 For canonical joint EAI/VLABench training with one dynamically activated root
-graph and shared Qwen2.5-VL/LoRA backbone, see
+graph and shared Qwen3-VL-8B/LoRA backbone, see
 [`../JointEmbodiedAgentInterface/README.md`](../JointEmbodiedAgentInterface/README.md).
 
 This directory implements the DomiKnowS baseline and reinforcement learning framework for the **Embodied Agent Interface (EAI)** benchmark ([`Inevitablevalor/EmbodiedAgentInterface`](https://huggingface.co/datasets/Inevitablevalor/EmbodiedAgentInterface)).
@@ -29,7 +29,7 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
-  - **Small LLM (Qwen)**: Causal-LM backbone support, including `Qwen/Qwen3-8B`, with optional PEFT / LoRA adaptation. EAI task fields are rendered as a structured user message through the tokenizer's native chat template with one assistant generation marker and Qwen3 thinking disabled. The assistant-side action prefix uses the same token IDs and next-label boundaries in Stage 1 teacher forcing, batched KV-cached RL rollout sampling, and differentiable rescoring. Checkpoint metadata records `prompt_format=qwen-chat-label-prefix-v1`; checkpoints trained with the older raw prompt are rejected and must be retrained. The default EAI label head uses fixed vectors from Qwen's native output embeddings plus a trainable low-rank residual, bias, and temperature; `--causal-label-head linear` preserves older linear-head architecture, but not old prompt semantics.
+  - **Small LLM (Qwen)**: Text-only inference with the shared `Qwen/Qwen3-VL-8B-Instruct` vision-language backbone, or a legacy causal LM, with optional PEFT / LoRA adaptation. EAI task fields are rendered as a structured user message through the tokenizer's native chat template with one assistant generation marker and Qwen3 thinking disabled. The assistant-side action prefix uses the same token IDs and next-label boundaries in Stage 1 teacher forcing, batched KV-cached RL rollout sampling, and differentiable rescoring. Checkpoint metadata records `prompt_format=qwen-chat-label-prefix-v1`; checkpoints trained with the older raw prompt are rejected and must be retrained. The default EAI label head uses fixed vectors from Qwen's native output embeddings plus a trainable low-rank residual, bias, and temperature; `--causal-label-head linear` preserves older linear-head architecture, but not old prompt semantics.
 
 - **DFA Relational Constraints & Hybrid Inference**:
   - The DomiKnowS generation graph declares the first-token action rule, action/object successors, zero-argument actions, action/object compatibility, EOS closure, and maximum length. These marked logical constraints compile into the single `EAIProgramBundle.policy_dfa`; EAI adds no runtime policy overlays.
@@ -147,18 +147,23 @@ uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage
 
 ### 3. Small LLM Backbone Training (Qwen)
 
-Run two-stage training with a Qwen causal language model backbone:
+Run two-stage training with the common Qwen3-VL-8B backbone. EAI supplies
+text-only prompts. Its default `--baseline-model tiny-transformer` remains a
+debugging option, so select `--baseline-model causal-lm --use-lora` explicitly.
+On GPU2 the model is already downloaded to
+`/home/auszok/models/Qwen/Qwen3-VL-8B-Instruct` and is shared with the
+VLABench and Joint runs. Use a fresh output path; an existing Qwen3-8B or
+Qwen2.5 checkpoint is not a Qwen3-VL-8B resume point.
 
-```powershell
+```bash
 # Dummy verification with Qwen
-uv run python test_regr/EmbodiedAgentInterface/main.py --dummy --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --two-stage --epochs 1 --rl-epochs 1 --max-steps 4 --evaluate
+uv run python test_regr/EmbodiedAgentInterface/main.py --dummy --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-VL-8B-Instruct --two-stage --epochs 1 --rl-epochs 1 --max-steps 4 --evaluate
 
 # Qwen training on full EAI dataset with LoRA
-uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --limit 50 --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --use-lora --lora-r 16 --two-stage --epochs 3 --rl-epochs 3 --max-steps 20 --evaluate
+uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --limit 50 --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-VL-8B-Instruct --use-lora --lora-r 16 --two-stage --epochs 3 --rl-epochs 3 --max-steps 20 --evaluate
 
-# Target one-H100 Qwen3-8B experiment
-$env:CUDA_VISIBLE_DEVICES=3
-uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-8B --llm-device-map auto --use-lora --lora-r 8 --lora-alpha 16 --rl-num-samples 8 --device cuda:0 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_8b_lora.pth
+# One-H100 common Qwen3-VL-8B experiment on GPU2 (inside the container)
+CUDA_VISIBLE_DEVICES=4 python -u test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct --llm-device-map auto --use-lora --lora-r 8 --lora-alpha 16 --rl-num-samples 8 --device cuda:0 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_vl_8b_lora.pth
 ```
 
 #### Optional text-only VLABench warm-up
@@ -173,9 +178,8 @@ temporary adapter and optimizer are released after the best auxiliary epoch is
 restored; EAI then trains with its original vocabulary, adapter, graph, DFA,
 simulator, SimpleTL reward, and official split.
 
-```powershell
-$env:CUDA_VISIBLE_DEVICES=3
-uv run python -u test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-8B --use-lora --lora-r 8 --lora-alpha 16 --device cuda:0 --vlabench-aux-epochs 2 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_8b_lora.pth
+```bash
+CUDA_VISIBLE_DEVICES=4 python -u test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct --use-lora --lora-r 8 --lora-alpha 16 --device cuda:0 --vlabench-aux-epochs 2 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_vl_8b_aux_lora.pth
 ```
 
 `--vlabench-aux-limit` limits locally loaded planning episodes and
@@ -283,7 +287,7 @@ When training or running inference, you may encounter different model artifacts 
 | `--rl-constraint-aggregate` | `str` | `"mean"` | Constraint aggregation: `mean`, `min`, or `prod`. |
 | `--no-world-constraints` | `flag` | `False` | Disable the default world and transition constraints and bypass reward blending. |
 | `--baseline-model` | `str` | `"tiny-transformer"` | Model backbone: `"tiny-transformer"` or `"causal-lm"`. |
-| `--llm-backbone-path`| `str` | `None` | Hugging Face model path or ID (e.g. `Qwen/Qwen2.5-1.5B-Instruct`). |
+| `--llm-backbone-path`| `str` | `Qwen/Qwen3-VL-8B-Instruct` | Local path or Hugging Face ID used when `--baseline-model causal-lm` is selected. |
 | `--causal-label-head` | `str` | `"pretrained-adapter"` | Native Qwen label-vector adapter, or legacy `linear`. |
 | `--label-adapter-rank` | `int` | `64` | Low-rank residual size for the pretrained label adapter. |
 | `--use-lora` | `flag` | `False` | Enable PEFT / LoRA adapters for Causal-LM backbone. |

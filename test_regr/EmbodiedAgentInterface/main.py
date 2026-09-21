@@ -1,6 +1,7 @@
 import argparse
 import gc
 import os
+import random
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -12,10 +13,13 @@ if os.path.exists(_default_hf_home):
     os.environ.setdefault("HF_DATASETS_CACHE", _default_hf_home)
 
 import torch
+import numpy as np
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.append(str(SCRIPT_DIR))
 sys.path.append(str(SCRIPT_DIR.parents[1]))
+
+from test_regr.common_backbone import COMMON_VLM_MODEL_ID
 
 from dataset import (
     ACTION_VOCAB,
@@ -1547,7 +1551,7 @@ def parse_args():
     parser.add_argument("--rl-epochs", type=int, default=3, help="Epochs for Stage 2 RL fine-tuning.")
     parser.add_argument("--rl-lr", type=float, default=None, help="Stage 2 learning rate. Defaults to 1e-5 for causal-lm/LoRA and 1e-4 for smaller baselines.")
     parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")
-    parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-1.5B-Instruct", help="Causal LM backbone for --baseline-model causal-lm.")
+    parser.add_argument("--llm-backbone-path", default=COMMON_VLM_MODEL_ID, help="Text-only or vision-language backbone for --baseline-model causal-lm.")
     parser.add_argument("--causal-label-head", choices=["pretrained-adapter", "linear"], default="pretrained-adapter", help="Use Qwen's native output embeddings or the legacy random linear label classifier.")
     parser.add_argument("--label-adapter-rank", type=int, default=64, help="Rank of the trainable residual in the pretrained causal label adapter.")
     parser.add_argument("--use-lora", action="store_true", help="Train LoRA adapters on the causal LM backbone.")
@@ -1573,6 +1577,7 @@ def parse_args():
     parser.add_argument("--finetune-encoder", action="store_true", help="Allow gradients through the BERT encoder. Default freezes it.")
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for data loading, sampling, and optimization.")
     parser.add_argument("--train", action="store_true", help="Train the selected --program and save --model.")
     parser.add_argument("--evaluate", action="store_true", help="Evaluate the selected --program, loading --model unless training in the same run.")
     parser.add_argument("--eval-every-epoch", action="store_true", help="Report train/dev sequence accuracy after each training epoch.")
@@ -1626,6 +1631,11 @@ def parse_args():
 
 def main():
     args = parse_args()
+    random.seed(args.seed)
+    np.random.seed(args.seed % (2**32 - 1))
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
     if args.lr is None:
         args.lr = 1e-4 if args.baseline_model == "causal-lm" else 1e-3
         print(f"Using architecture-aware Stage 1 learning rate: {args.lr:g}")

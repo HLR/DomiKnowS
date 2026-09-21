@@ -17,7 +17,10 @@ except ImportError:
     from graph import PlanVocabulary, labels_to_plan, plan_to_tokens
 
 
-PLANNER_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
+from test_regr.common_backbone import COMMON_VLM_MODEL_ID
+
+
+PLANNER_MODEL_ID = COMMON_VLM_MODEL_ID
 VISION_MODEL_ID = "google/siglip-base-patch16-224"
 
 
@@ -212,6 +215,7 @@ def resolve_vision_language_loader():
     failures = []
     for class_name in (
         "AutoModelForImageTextToText",
+        "Qwen3VLForConditionalGeneration",
         "Qwen2_5_VLForConditionalGeneration",
         "AutoModelForVision2Seq",
     ):
@@ -224,9 +228,10 @@ def resolve_vision_language_loader():
     version = getattr(transformers, "__version__", "unknown")
     details = "; ".join(failures) or "no compatible class is exported"
     raise ImportError(
-        "No compatible Qwen2.5-VL model loader is available in transformers "
+        "No compatible Qwen vision-language model loader is available in transformers "
         f"{version}. Tried AutoModelForImageTextToText, "
-        "Qwen2_5_VLForConditionalGeneration, and AutoModelForVision2Seq. "
+        "Qwen3VLForConditionalGeneration, Qwen2_5_VLForConditionalGeneration, "
+        "and AutoModelForVision2Seq. "
         f"Details: {details}"
     )
 
@@ -632,7 +637,7 @@ def controller_loss(
 
 
 class QwenVLPlanner(nn.Module):
-    """Qwen2.5-VL context encoder plus compact graph-token decoder.
+    """Qwen vision-language context encoder plus compact graph-token decoder.
 
     Qwen processes each observation once. A small recurrent decoder then
     teacher-forces or autoregressively samples the complete graph trajectory;

@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
-from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset
+from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset, split_train_dev
 from test_regr.EmbodiedAgentInterface.reward import (
     evaluate_goal_satisfaction,
     make_eai_reward_function,
@@ -189,32 +189,37 @@ def _evaluate_eai(planner, runtime, examples, *, limit=32):
     view = planner.for_domain("eai")
     exact = success = recall = positive = 0.0
     selected = list(examples)[:limit]
-    with runtime.domain_scope("eai"):
-        for item in selected:
-            labels, _ = view.sample_labels(
-                {
-                    "instruction": item.get("causal_prompt_text", item.get("text", "")),
-                    "goal": item.get("tl_goal", ""),
-                },
-                runtime.dfa_for("eai", item),
-                max_steps=runtime.max_eai_steps,
-                deterministic=True,
-            )
-            gold = [int(value) for value in torch.as_tensor(item["target_action_labels"]).tolist()]
-            eos = int(runtime.eai_vocabulary.eos_label)
-            if eos in gold:
-                gold = gold[: gold.index(eos) + 1]
-            exact += float(labels == gold)
-            result = evaluate_goal_satisfaction(
-                labels,
-                item,
-                runtime.eai_vocabulary,
-                world_bundle=runtime.world.eai,
-            )
-            success += float(result["is_success"])
-            recall += float(result["recall"])
-            reward = item["reward_function"](labels, data_item=item)
-            positive += float(float(torch.as_tensor(reward).mean()) > 0.0)
+    was_training = planner.training
+    planner.eval()
+    try:
+        with runtime.domain_scope("eai"):
+            for item in selected:
+                labels, _ = view.sample_labels(
+                    {
+                        "instruction": item.get("causal_prompt_text", item.get("text", "")),
+                        "goal": item.get("tl_goal", ""),
+                    },
+                    runtime.dfa_for("eai", item),
+                    max_steps=runtime.max_eai_steps,
+                    deterministic=True,
+                )
+                gold = [int(value) for value in torch.as_tensor(item["target_action_labels"]).tolist()]
+                eos = int(runtime.eai_vocabulary.eos_label)
+                if eos in gold:
+                    gold = gold[: gold.index(eos) + 1]
+                exact += float(labels == gold)
+                result = evaluate_goal_satisfaction(
+                    labels,
+                    item,
+                    runtime.eai_vocabulary,
+                    world_bundle=runtime.world.eai,
+                )
+                success += float(result["is_success"])
+                recall += float(result["recall"])
+                reward = item["reward_function"](labels, data_item=item)
+                positive += float(float(torch.as_tensor(reward).mean()) > 0.0)
+    finally:
+        planner.train(was_training)
     count = max(1, len(selected))
     return {
         "exact_sequence": exact / count,
@@ -270,9 +275,10 @@ def _prepare(args, device):
         name: prepare_planner_program_examples(values, _runtime_adapter(runtime, "vlabench"))
         for name, values in vlabench_splits.items()
     }
-    random.Random(args.seed).shuffle(eai_examples)
-    cut = max(1, int(0.9 * len(eai_examples)))
-    return runtime, eai_examples[:cut], eai_examples[cut:] or eai_examples[:1], vlabench_splits, prepared
+    # Match the standalone EAI workflow exactly so standalone and joint
+    # checkpoints are selected and compared on the same row identities.
+    eai_train, eai_valid = split_train_dev(eai_examples, dev_fraction=0.2)
+    return runtime, eai_train, eai_valid or eai_examples[:1], vlabench_splits, prepared
 
 
 def command_train_agent(args):
@@ -524,6 +530,8 @@ def command_train_agent(args):
         gae_lambda=0.95,
         ppo_clip=0.2,
         ppo_epochs=4,
+        ppo_max_log_ratio=args.ppo_max_log_ratio,
+        ppo_target_action_log_ratio=args.ppo_target_kl,
         value_weight=0.5,
         entropy_weight=0.01,
         max_position_step=args.max_position_step,
@@ -863,13 +871,18 @@ def build_parser():
     agent.add_argument("--stage2-controller-bc-weight", type=float, default=0.25,
         help="Stage 1 controller behavior-cloning anchor weight during Joint RL",
     )
+    agent.add_argument(
+        "--ppo-target-kl", type=float, default=0.03,
+        help="Approximate-KL trust-region target for controller PPO.",
+    )
+    agent.add_argument("--ppo-max-log-ratio", type=float, default=2.0)
     agent.add_argument("--eai-samples", type=int, default=8)
     agent.add_argument("--vlabench-planner-samples", type=int, default=4)
     agent.add_argument("--vlabench-rollouts", type=int, default=8)
     agent.add_argument(
         "--stage2-eval-rollouts-per-task",
         type=int,
-        default=1,
+        default=3,
         help="fixed-seed held-out simulator rollouts per task before RL and after each Stage 2 epoch; use 0 to disable",
     )
     agent.add_argument("--planner-learning-rate", type=float, default=2e-5)
@@ -878,7 +891,10 @@ def build_parser():
     agent.add_argument("--stage1-min-positive-reward-rate", type=float, default=0.05)
     agent.add_argument("--stage1-min-goal-recall", type=float, default=0.05)
     agent.add_argument("--stage1-min-goal-success", type=float, default=0.0)
-    agent.add_argument("--validation-limit", type=int, default=32)
+    agent.add_argument(
+        "--validation-limit", type=int, default=None,
+        help="Maximum validation examples; the default scores the complete canonical holdout.",
+    )
     agent.add_argument("--task", choices=["all", *PRIMITIVE_TASK_PATTERNS], default="all")
     agent.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.environment:create_environment")
     agent.add_argument("--simulator-max-steps", type=int, default=400)

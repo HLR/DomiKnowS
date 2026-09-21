@@ -498,6 +498,14 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         vla_episode_count = 0
         vla_ik_failures = 0
         vla_ik_recoveries = 0
+        controller_evidence = {
+            "updates_attempted": 0,
+            "updates_rolled_back": 0,
+            "updates_with_parameter_change": 0,
+            "ppo_epochs_completed": 0,
+            "parameter_delta_l2": 0.0,
+            "approximate_kl": 0.0,
+        }
         if initial_metrics is not None:
             for key in eai_totals:
                 eai_totals[key] = float(initial_metrics.get("eai", {}).get(key, 0.0)) * start_round
@@ -506,6 +514,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             vla_episode_count = int(initial_metrics.get("vlabench", {}).get("episodes", 0))
             vla_ik_failures = int(initial_metrics.get("vlabench", {}).get("ik_failures", 0))
             vla_ik_recoveries = int(initial_metrics.get("vlabench", {}).get("ik_recoveries", 0))
+            saved_evidence = initial_metrics.get("vlabench", {}).get("controller_evidence", {})
+            for key in controller_evidence:
+                controller_evidence[key] = type(controller_evidence[key])(
+                    saved_evidence.get(key, controller_evidence[key])
+                )
             for task_name, task_metrics in initial_metrics.get("vlabench", {}).get("per_task", {}).items():
                 episodes = int(task_metrics.get("episodes", 0))
                 vla_task_totals[task_name] = {
@@ -555,6 +568,13 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                     "episodes": vla_episode_count,
                     "ik_failures": vla_ik_failures,
                     "ik_recoveries": vla_ik_recoveries,
+                    "controller_evidence": {
+                        **controller_evidence,
+                        "mean_approximate_kl": (
+                            controller_evidence["approximate_kl"]
+                            / max(1, controller_evidence["updates_attempted"])
+                        ),
+                    },
                     "successful_task_count": sum(
                         int(metrics["successes"] > 0) for metrics in per_task.values()
                     ),
@@ -587,6 +607,25 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             vla_episode_count += int(vla["episodes"])
             vla_ik_failures += int(vla.get("ik_failures", 0))
             vla_ik_recoveries += int(vla.get("ik_recoveries", 0))
+            update = vla.get("controller_update", {})
+            controller_evidence["updates_attempted"] += int(
+                bool(update.get("actor_update_attempted", False))
+            )
+            controller_evidence["updates_rolled_back"] += int(
+                bool(update.get("rolled_back", False))
+            )
+            controller_evidence["updates_with_parameter_change"] += int(
+                bool(update.get("parameters_changed", False))
+            )
+            controller_evidence["ppo_epochs_completed"] += int(
+                update.get("ppo_epochs_completed", 0)
+            )
+            controller_evidence["parameter_delta_l2"] += float(
+                update.get("parameter_delta_l2", 0.0)
+            )
+            controller_evidence["approximate_kl"] += float(
+                update.get("approximate_kl", 0.0)
+            )
             for task_name, task_metrics in vla.get("per_task", {}).items():
                 episodes = int(task_metrics["episodes"])
                 totals = vla_task_totals.setdefault(

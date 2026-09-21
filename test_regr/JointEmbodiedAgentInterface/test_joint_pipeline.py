@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import random
 import threading
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import numpy as np
@@ -27,6 +28,7 @@ from .checkpoint import (
     save_joint_checkpoint,
 )
 from .main import (
+    _evaluate_eai,
     _stage2_resume_position,
     build_parser,
     stage1_selection_key,
@@ -36,6 +38,7 @@ from .main import (
     stage2_selection_key,
 )
 from .models import JointQwenVLPlanner
+from .paired_eai_eval import paired_indices
 from .program import JointReinforcementProgram, JointSolverPOIProgram, _TrainingProgress
 from .world_graph import build_joint_runtime, build_joint_world_graph
 
@@ -70,6 +73,65 @@ class FakeBackbone(torch.nn.Module):
     def forward(self, input_ids, **_kwargs):
         self.forward_calls += 1
         return SimpleNamespace(hidden_states=(self.embedding(input_ids),))
+
+
+def test_eai_evaluation_restores_planner_mode(monkeypatch):
+    class Planner(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.raise_on_sample = False
+
+        def for_domain(self, domain):
+            assert domain == "eai"
+            return self
+
+        def sample_labels(self, *_args, **_kwargs):
+            assert not self.training
+            if self.raise_on_sample:
+                raise RuntimeError("decode failed")
+            return [2], torch.zeros(())
+
+    runtime = SimpleNamespace(
+        domain_scope=lambda _domain: nullcontext(),
+        dfa_for=lambda _domain, _item: object(),
+        max_eai_steps=2,
+        eai_vocabulary=SimpleNamespace(eos_label=2),
+        world=SimpleNamespace(eai=None),
+    )
+    monkeypatch.setattr(
+        "test_regr.JointEmbodiedAgentInterface.main.evaluate_goal_satisfaction",
+        lambda *_args, **_kwargs: {"is_success": 0.0, "recall": 0.0},
+    )
+    item = {
+        "target_action_labels": torch.tensor([2]),
+        "reward_function": lambda *_args, **_kwargs: 0.0,
+    }
+    planner = Planner()
+    assert _evaluate_eai(planner, runtime, [item])["examples"] == 1
+    assert planner.training
+    planner.raise_on_sample = True
+    with pytest.raises(RuntimeError, match="decode failed"):
+        _evaluate_eai(planner, runtime, [item])
+    assert planner.training
+    planner.eval()
+    with pytest.raises(RuntimeError, match="decode failed"):
+        _evaluate_eai(planner, runtime, [item])
+    assert not planner.training
+
+
+def test_paired_eai_indices_are_held_out_by_both_training_splits():
+    count = 438
+    canonical = paired_indices(count, seed=42, selection="canonical-validation")
+    joint_valid = paired_indices(count, seed=42, selection="joint-validation-32")
+    mutual = paired_indices(count, seed=42, selection="mutual-holdout")
+    assert canonical == list(range(350, 438))
+    assert len(joint_valid) == 32
+    assert len(mutual) == 10
+    assert len(set(mutual)) == len(mutual)
+    assert all(index >= 350 for index in mutual)
+    shuffled = list(range(count))
+    random.Random(42).shuffle(shuffled)
+    assert set(mutual).issubset(set(shuffled[394:]))
 
 
 class TinyController(torch.nn.Module):
@@ -1203,7 +1265,7 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert (args.stage1_epochs, args.stage2_epochs) == (5, 3)
     assert (args.eai_samples, args.vlabench_planner_samples, args.vlabench_rollouts) == (8, 4, 8)
     assert args.stage2_rounds_per_epoch == 10
-    assert args.stage2_eval_rollouts_per_task == 1
+    assert args.stage2_eval_rollouts_per_task == 3
     assert args.planner_decoder_hidden_dim == 512
     assert args.video_decoder_cache_size == 8
     assert args.controller_warmup_steps == 20000
