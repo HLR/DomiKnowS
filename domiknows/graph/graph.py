@@ -1,6 +1,8 @@
 from collections import OrderedDict, namedtuple
+from contextlib import contextmanager
 from itertools import chain
 import inspect
+import threading
 
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree
@@ -135,6 +137,10 @@ class Graph(BaseGraphTree):
         # the graph structure changes.
         self._activation_concepts_cache = None
         self._activation_concept_members = frozenset()
+        self._activation_listeners = []
+        self._active_parameter_policy = None
+        self._activation_lock = threading.RLock()
+        self._active_scope_stack = []
 
     @property
     def constraint_revision(self):
@@ -544,7 +550,7 @@ class Graph(BaseGraphTree):
             graph = graph.sup
         return None
 
-    def set_active_concepts(self, concepts=None):
+    def set_active_concepts(self, concepts=None, *, parameter_policy=None):
         """Replace the concepts active for subsequent sequential execution.
 
         ``concepts`` may contain concept names and/or :class:`Concept` objects.
@@ -552,51 +558,148 @@ class Graph(BaseGraphTree):
         enabled automatically.  Passing ``None`` restores the default in which
         every concept is active.
 
-        The activation set is mutable graph state.  Callers sharing a graph
-        concurrently must provide their own synchronization.
+        ``parameter_policy`` controls parameter coordination for models attached
+        to this graph. Supported values include ``None`` (execution filtering only),
+        ``"freeze_inactive"``, ``"freeze_shared"``, or a callable policy.
+
+        The activation set is mutable graph state.  Calls are serialized with
+        the graph's reentrant activation lock.
 
         Returns:
             tuple: Active concepts in graph declaration order.
         """
-        if concepts is None:
-            self._active_concepts = None
-            return self.get_active_concepts()
+        controller = self._activation_controller() or self
+        lock = getattr(controller, "_activation_lock", None)
+        if lock is None:
+            controller._activation_lock = threading.RLock()
+            lock = controller._activation_lock
 
-        if isinstance(concepts, (str, bytes)):
-            raise TypeError(
-                "set_active_concepts expects an iterable of concept names or "
-                "Concept instances, not a single string."
-            )
+        with lock:
+            controller._active_parameter_policy = parameter_policy
 
-        try:
-            requested = list(concepts)
-        except TypeError:
-            raise TypeError(
-                "set_active_concepts expects an iterable of concept names or "
-                "Concept instances, or None."
-            ) from None
+            if concepts is None:
+                self._active_concepts = None
+                active_tuple = self.get_active_concepts()
+                self._notify_activation_listeners(self._active_concepts, parameter_policy)
+                return active_tuple
 
-        available = self._activation_concepts()
-        available_values = set(available.values())
-        active = set()
-        pending = [self._resolve_activation_concept(item, available) for item in requested]
+            if isinstance(concepts, (str, bytes)):
+                raise TypeError(
+                    "set_active_concepts expects an iterable of concept names or "
+                    "Concept instances, not a single string."
+                )
 
-        while pending:
-            concept = pending.pop()
-            if concept in active:
-                continue
-            active.add(concept)
-            for relation in concept.is_a():
-                if relation.dst in available_values:
-                    pending.append(relation.dst)
+            try:
+                requested = list(concepts)
+            except TypeError:
+                raise TypeError(
+                    "set_active_concepts expects an iterable of concept names or "
+                    "Concept instances, or None."
+                ) from None
 
-        for concept in available_values:
-            owner = concept.getOntologyGraph()
-            if isinstance(owner, Graph) and owner.constraint is concept:
+            available = self._activation_concepts()
+            available_values = set(available.values())
+            active = set()
+            pending = [self._resolve_activation_concept(item, available) for item in requested]
+
+            while pending:
+                concept = pending.pop()
+                if concept in active:
+                    continue
                 active.add(concept)
+                for relation in concept.is_a():
+                    if relation.dst in available_values:
+                        pending.append(relation.dst)
 
-        self._active_concepts = frozenset(active)
-        return self.get_active_concepts()
+            for concept in available_values:
+                owner = concept.getOntologyGraph()
+                if isinstance(owner, Graph) and owner.constraint is concept:
+                    active.add(concept)
+
+            self._active_concepts = frozenset(active)
+            active_tuple = self.get_active_concepts()
+            self._notify_activation_listeners(self._active_concepts, parameter_policy)
+            return active_tuple
+
+    @contextmanager
+    def active_scope(self, concepts=None, *, parameter_policy=None):
+        """Context manager for temporary concept activation with automatic restoration.
+
+        Supports nested calls via an activation stack and ensures synchronized,
+        thread-safe activation state transitions.
+        """
+        controller = self._activation_controller() or self
+        lock = getattr(controller, "_activation_lock", None)
+        if lock is None:
+            controller._activation_lock = threading.RLock()
+            lock = controller._activation_lock
+
+        with lock:
+            if not hasattr(controller, "_active_scope_stack"):
+                controller._active_scope_stack = []
+            prev_active = controller._active_concepts
+            prev_policy = getattr(controller, "_active_parameter_policy", None)
+            controller._active_scope_stack.append((prev_active, prev_policy))
+            self._notify_scope_enter()
+            try:
+                active = self.set_active_concepts(concepts, parameter_policy=parameter_policy)
+                yield active
+            finally:
+                restored_active, restored_policy = controller._active_scope_stack.pop()
+                self._notify_scope_exit()
+                self.set_active_concepts(
+                    restored_active if restored_active is not None else None,
+                    parameter_policy=restored_policy,
+                )
+
+    def _notify_scope_enter(self):
+        controller = self._activation_controller() or self
+        seen = set()
+        for obj in (self, controller):
+            if id(obj) not in seen:
+                seen.add(id(obj))
+                for listener in list(getattr(obj, "_activation_listeners", ())):
+                    target = getattr(listener, "__self__", None)
+                    if target is not None and hasattr(target, "_on_scope_enter"):
+                        target._on_scope_enter()
+
+    def _notify_scope_exit(self):
+        controller = self._activation_controller() or self
+        seen = set()
+        for obj in (self, controller):
+            if id(obj) not in seen:
+                seen.add(id(obj))
+                for listener in list(getattr(obj, "_activation_listeners", ())):
+                    target = getattr(listener, "__self__", None)
+                    if target is not None and hasattr(target, "_on_scope_exit"):
+                        target._on_scope_exit()
+
+    def register_activation_listener(self, listener):
+        """Register a callback ``listener(graph, active_concepts, parameter_policy)`` called on activation change."""
+        if not hasattr(self, "_activation_listeners"):
+            self._activation_listeners = []
+        if listener not in self._activation_listeners:
+            self._activation_listeners.append(listener)
+
+    def unregister_activation_listener(self, listener):
+        if hasattr(self, "_activation_listeners") and listener in self._activation_listeners:
+            self._activation_listeners.remove(listener)
+
+    def _notify_activation_listeners(self, active_concepts, parameter_policy):
+        controller = self._activation_controller() or self
+        seen = set()
+        for obj in (self, controller):
+            if id(obj) not in seen:
+                seen.add(id(obj))
+                for listener in list(getattr(obj, "_activation_listeners", ())):
+                    listener(self, active_concepts, parameter_policy)
+        parent = self.sup
+        while isinstance(parent, Graph):
+            if id(parent) not in seen:
+                seen.add(id(parent))
+                for listener in list(getattr(parent, "_activation_listeners", ())):
+                    listener(self, active_concepts, parameter_policy)
+            parent = parent.sup
 
     def get_active_concepts(self):
         """Return active concepts in graph declaration order."""

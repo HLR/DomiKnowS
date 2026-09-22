@@ -1,4 +1,4 @@
-from itertools import combinations, product
+from itertools import combinations, product, chain
 import hashlib
 import pickle
 from typing import Iterable
@@ -38,9 +38,14 @@ class TorchModel(torch.nn.Module):
         self.build = True
         self.device = device
 
+        self._base_parameter_requires_grad = None
+        self._parameter_policy_stack = []
         if not ignore_modules: ### added for the inference only models which do not update the initial parameters
             for learner in self.graph.get_sensors(TorchLearner):
                 self.add_module(learner.fullname, learner.model)
+
+        if hasattr(self.graph, "register_activation_listener"):
+            self.graph.register_activation_listener(self._on_graph_activation_changed)
 
     def mode(self, mode=None):
         """
@@ -159,6 +164,339 @@ class TorchModel(torch.nn.Module):
         for prop in self.poi:
             if self.graph.is_property_active(prop):
                 yield prop
+
+    def _on_graph_activation_changed(self, graph, active_concepts, parameter_policy):
+        """Callback invoked by the Graph when active concepts or parameter policy changes."""
+        self.apply_parameter_policy(parameter_policy, active_concepts=active_concepts)
+
+    def classify_parameters(self, active_concepts=None):
+        """Classify model parameters relative to concept activation.
+
+        Returns:
+            dict with keys:
+                'active_private': list of parameters exclusive to active concepts
+                'inactive_private': list of parameters exclusive to inactive concepts
+                'shared': list of parameters shared across active and inactive concepts
+                'active': active_private + shared
+                'inactive': inactive_private
+                'unmapped': parameters not mapped to any concept learner
+        """
+        if active_concepts is None:
+            active_list = list(self.graph.get_active_concepts())
+        else:
+            active_list = list(active_concepts)
+
+        active_set = set()
+        for item in active_list:
+            active_set.add(item)
+            fullname = getattr(item, 'fullname', None)
+            if fullname:
+                active_set.add(fullname)
+            if isinstance(item, str) and hasattr(self.graph, 'get_apply'):
+                try:
+                    resolved = self.graph.get_apply(item)
+                    if resolved is not None:
+                        active_set.add(resolved)
+                        if getattr(resolved, 'fullname', None):
+                            active_set.add(resolved.fullname)
+                except Exception:
+                    pass
+
+        param_id_to_concepts = {}
+        param_id_to_param = {}
+        from domiknows.graph.concept import Concept
+        from domiknows.sensor.pytorch.learners import TorchLearner
+
+        for prop in self.graph.get_properties():
+            prop_name = getattr(prop, 'prop_name', None)
+            owner = getattr(prop, 'sup', None)
+            if isinstance(prop_name, Concept):
+                concept = prop_name
+            elif isinstance(owner, Concept):
+                concept = owner
+            else:
+                continue
+
+            for learner in prop.find(TorchLearner):
+                model = getattr(learner, 'model', None) or getattr(learner, 'module', None)
+                params = []
+                if hasattr(learner, 'domain_parameters') and callable(getattr(learner, 'domain_parameters', None)):
+                    params = list(learner.domain_parameters())
+                elif hasattr(model, 'domain_parameters') and callable(getattr(model, 'domain_parameters', None)):
+                    params = list(model.domain_parameters())
+                elif hasattr(learner, 'parameters') and callable(getattr(learner, 'parameters', None)):
+                    try:
+                        p_iter = learner.parameters()
+                        if p_iter is not None:
+                            params = list(p_iter)
+                    except TypeError:
+                        pass
+                elif hasattr(learner, 'parameters') and learner.parameters is not None:
+                    params = list(learner.parameters)
+                elif model is not None and hasattr(model, 'parameters'):
+                    params = list(model.parameters())
+
+                for p in params:
+                    pid = id(p)
+                    param_id_to_concepts.setdefault(pid, set()).add(concept)
+                    param_id_to_param[pid] = p
+
+                shared_func = getattr(learner, 'shared_parameters', None) or getattr(model, 'shared_parameters', None)
+                if callable(shared_func):
+                    for p in shared_func():
+                        pid = id(p)
+                        param_id_to_concepts.setdefault(pid, set()).add(concept)
+                        param_id_to_param[pid] = p
+
+        active_private = []
+        inactive_private = []
+        shared = []
+        unmapped = []
+
+        all_params = []
+        seen_pids = set()
+        for p in chain(self.parameters(), param_id_to_param.values()):
+            pid = id(p)
+            if pid not in seen_pids:
+                seen_pids.add(pid)
+                all_params.append(p)
+
+        def _is_concept_ancestor(anc, desc):
+            if not hasattr(desc, "is_a") or not callable(desc.is_a):
+                return False
+            visited = set()
+            queue = [desc]
+            anc_fullname = getattr(anc, 'fullname', None) or getattr(anc, 'name', None)
+            while queue:
+                curr = queue.pop(0)
+                cid = id(curr)
+                if cid in visited:
+                    continue
+                visited.add(cid)
+                for rel in curr.is_a():
+                    dst = getattr(rel, 'dst', None)
+                    if dst is None:
+                        continue
+                    if dst is anc:
+                        return True
+                    dst_fullname = getattr(dst, 'fullname', None) or getattr(dst, 'name', None)
+                    if dst_fullname and dst_fullname == anc_fullname:
+                        return True
+                    queue.append(dst)
+            return False
+
+        for p in all_params:
+            pid = id(p)
+            concepts = param_id_to_concepts.get(pid)
+            if not concepts:
+                unmapped.append(p)
+                continue
+
+            # Automatically activated is_a ancestors must not accidentally classify
+            # a domain-private parameter as shared. Prune any concept in this parameter's
+            # set that is a transitive is_a ancestor of another concept in the set.
+            effective_concepts = set()
+            for c in concepts:
+                if any(_is_concept_ancestor(c, other) for other in concepts if other is not c):
+                    continue
+                effective_concepts.add(c)
+
+            has_active = any((c in active_set or getattr(c, 'fullname', None) in active_set) for c in effective_concepts)
+            has_inactive = any((c not in active_set and getattr(c, 'fullname', None) not in active_set) for c in effective_concepts)
+
+            if has_active and not has_inactive:
+                active_private.append(p)
+            elif not has_active and has_inactive:
+                inactive_private.append(p)
+            else:
+                shared.append(p)
+
+        return {
+            'active_private': active_private,
+            'inactive_private': inactive_private,
+            'shared': shared,
+            'active': active_private + shared,
+            'inactive': inactive_private,
+            'unmapped': unmapped,
+        }
+
+    def _all_managed_parameters(self):
+        classification = self.classify_parameters(None)
+        return (
+            classification['active_private']
+            + classification['inactive_private']
+            + classification['shared']
+            + classification['unmapped']
+        )
+
+    def _on_scope_enter(self):
+        all_params = self._all_managed_parameters()
+        if self._base_parameter_requires_grad is None:
+            self._base_parameter_requires_grad = {p: p.requires_grad for p in all_params}
+        if not hasattr(self, "_parameter_policy_stack"):
+            self._parameter_policy_stack = []
+        self._parameter_policy_stack.append({p: p.requires_grad for p in all_params})
+
+    def _on_scope_exit(self):
+        if getattr(self, "_parameter_policy_stack", None):
+            restored = self._parameter_policy_stack.pop()
+            for p, state in restored.items():
+                p.requires_grad = state
+                if not state:
+                    p.grad = None
+            if not self._parameter_policy_stack:
+                self._base_parameter_requires_grad = None
+        elif self._base_parameter_requires_grad is not None:
+            for p, state in self._base_parameter_requires_grad.items():
+                p.requires_grad = state
+                if not state:
+                    p.grad = None
+            self._base_parameter_requires_grad = None
+
+    def apply_parameter_policy(self, policy, active_concepts=None, unmapped_policy="shared"):
+        """Apply a parameter coordination policy to this model's parameters."""
+        classification = self.classify_parameters(active_concepts)
+        all_params = (
+            classification['active_private']
+            + classification['inactive_private']
+            + classification['shared']
+            + classification['unmapped']
+        )
+
+        if self._base_parameter_requires_grad is None:
+            self._base_parameter_requires_grad = {p: p.requires_grad for p in all_params}
+
+        # If transitioning from managed policy back to None/execution_only, restore base states
+        if policy is None or policy == "execution_only":
+            if self._base_parameter_requires_grad is not None:
+                for p, state in self._base_parameter_requires_grad.items():
+                    p.requires_grad = state
+                    if not state:
+                        p.grad = None
+                if not getattr(self, "_parameter_policy_stack", None):
+                    self._base_parameter_requires_grad = None
+            return
+
+        base_states = self._base_parameter_requires_grad
+        # Reset to base states before applying the policy
+        for p, s in base_states.items():
+            p.requires_grad = s
+
+        if policy == "freeze_inactive":
+            for p in classification['inactive_private']:
+                p.requires_grad = False
+                p.grad = None
+            for p in classification['active']:
+                if p in base_states:
+                    p.requires_grad = base_states[p]
+            for p in classification['unmapped']:
+                if unmapped_policy == "freeze":
+                    p.requires_grad = False
+                    p.grad = None
+                elif p in base_states:
+                    p.requires_grad = base_states[p]
+        elif policy == "freeze_shared":
+            for p in classification['inactive_private']:
+                p.requires_grad = False
+                p.grad = None
+            for p in classification['shared']:
+                p.requires_grad = False
+                p.grad = None
+            for p in classification['unmapped']:
+                p.requires_grad = False
+                p.grad = None
+            for p in classification['active_private']:
+                if p in base_states:
+                    p.requires_grad = base_states[p]
+        elif callable(policy):
+            policy(self, active_concepts, classification)
+        else:
+            raise ValueError(f"unknown parameter policy: {policy!r}")
+
+    def iter_active_parameters(self):
+        """Iterate parameters that are active and trainable in the current step."""
+        classification = self.classify_parameters()
+        for p in classification['active']:
+            if p.requires_grad:
+                yield p
+
+    def get_learnable_parameter_names(self) -> set[str]:
+        """Return parameter names that are trainable in the baseline configuration."""
+        names = set()
+        base_states = getattr(self, "_base_parameter_requires_grad", None)
+        for name, param in self.named_parameters():
+            if base_states is not None:
+                if base_states.get(param, False):
+                    names.add(name)
+            elif param.requires_grad:
+                names.add(name)
+        return names
+
+    def trainable_state_dict(self) -> dict[str, torch.Tensor]:
+        """Return state_dict containing only learnable parameters based on baseline configuration."""
+        learnable = self.get_learnable_parameter_names()
+        state = self.state_dict()
+        return {name: val for name, val in state.items() if name in learnable}
+
+    def compute_parameter_ownership_checksum(self) -> str:
+        """Compute a deterministic checksum of underlying parameter-to-concept ownership mapping."""
+        import hashlib
+        from domiknows.graph.concept import Concept
+        from domiknows.sensor.pytorch.learners import TorchLearner
+
+        param_id_to_concepts: dict[int, set[Any]] = {}
+        for prop in self.graph.get_properties():
+            prop_name = getattr(prop, 'prop_name', None)
+            owner = getattr(prop, 'sup', None)
+            if isinstance(prop_name, Concept):
+                concept = prop_name
+            elif isinstance(owner, Concept):
+                concept = owner
+            else:
+                continue
+
+            for learner in prop.find(TorchLearner):
+                model = getattr(learner, 'model', None) or getattr(learner, 'module', None)
+                params = []
+                if hasattr(learner, 'domain_parameters') and callable(getattr(learner, 'domain_parameters', None)):
+                    params = list(learner.domain_parameters())
+                elif hasattr(model, 'domain_parameters') and callable(getattr(model, 'domain_parameters', None)):
+                    params = list(model.domain_parameters())
+                elif hasattr(learner, 'parameters') and callable(getattr(learner, 'parameters', None)):
+                    try:
+                        p_iter = learner.parameters()
+                        if p_iter is not None:
+                            params = list(p_iter)
+                    except TypeError:
+                        pass
+                elif hasattr(learner, 'parameters') and learner.parameters is not None:
+                    params = list(learner.parameters)
+                elif model is not None and hasattr(model, 'parameters'):
+                    params = list(model.parameters())
+
+                for p in params:
+                    param_id_to_concepts.setdefault(id(p), set()).add(concept)
+
+                shared_func = getattr(learner, 'shared_parameters', None) or getattr(model, 'shared_parameters', None)
+                if callable(shared_func):
+                    for p in shared_func():
+                        param_id_to_concepts.setdefault(id(p), set()).add(concept)
+
+        records = []
+        for name, param in sorted(self.named_parameters(), key=lambda x: x[0]):
+            pid = id(param)
+            concepts = param_id_to_concepts.get(pid)
+            if concepts:
+                concept_names = sorted(
+                    getattr(c, 'fullname', None) or getattr(c, 'name', str(c))
+                    for c in concepts
+                )
+            else:
+                concept_names = ["__unmapped__"]
+            records.append((name, tuple(param.shape), tuple(concept_names)))
+
+        return hashlib.sha256(repr(records).encode('utf-8')).hexdigest()
+
 
 def model_helper(Model, *args, **kwargs):
     return lambda graph: Model(graph, *args, **kwargs)

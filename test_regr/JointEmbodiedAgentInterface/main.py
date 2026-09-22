@@ -530,17 +530,30 @@ def command_train_agent(args):
             "controller optimizer entered PPO regime "
             f"lr={args.controller_rl_learning_rate:g}; BC moments reset"
         )
-    if args.stage2_freeze_shared_backbone:
+    stage2_policy = getattr(args, "stage2_parameter_policy", "freeze_shared")
+    if getattr(args, "stage2_freeze_shared_backbone", None) is not None:
+        if not args.stage2_freeze_shared_backbone and stage2_policy == "freeze_shared":
+            stage2_policy = "freeze_inactive"
+        elif args.stage2_freeze_shared_backbone:
+            stage2_policy = "freeze_shared"
+
+    if stage2_policy == "freeze_shared":
+        _status(
+            "Stage 2 parameter policy is 'freeze_shared'; domain scopes dynamically "
+            "freeze shared Qwen/LoRA during execution to eliminate cross-domain policy interference"
+        )
+    else:
+        _status(
+            f"WARNING: Stage 2 parameter policy is set to {stage2_policy!r}. "
+            "This is an experimental ablation where the shared backbone remains trainable without "
+            "gradient projection, which may lead to cross-domain policy interference."
+        )
+
+    if getattr(planner, "_checkpoint_parameter_names", None) is None:
         planner._checkpoint_parameter_names = tuple(
             name
             for name, parameter in planner.named_parameters()
             if parameter.requires_grad
-        )
-        for parameter in planner.model.parameters():
-            parameter.requires_grad_(False)
-        _status(
-            "Stage 2 shared Qwen/LoRA backbone frozen; reinforcement updates "
-            "are confined to domain-specific graph-token decoders"
         )
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     descriptors = [{"task": task, "env_kwargs": {}} for task in tasks]
@@ -558,6 +571,7 @@ def command_train_agent(args):
         controller_anchor_loader=control_loaders["train"],
         eai_num_samples=args.eai_samples,
         eai_supervised_weight=0.5,
+        parameter_policy=None if stage2_policy == "none" else stage2_policy,
         device=device,
         num_samples=args.vlabench_planner_samples,
         execute_horizon=4,
@@ -950,8 +964,14 @@ def build_parser():
     agent.add_argument(
         "--stage2-freeze-shared-backbone",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="freeze shared Qwen/LoRA during Stage 2 to prevent cross-domain policy interference",
+        default=None,
+        help="(Deprecated) Use --stage2-parameter-policy instead.",
+    )
+    agent.add_argument(
+        "--stage2-parameter-policy",
+        choices=("freeze_shared", "freeze_inactive", "none"),
+        default="freeze_shared",
+        help="parameter coordination policy for Stage 2 RL domain scoping (default: freeze_shared)",
     )
     agent.add_argument(
         "--stage2-max-eai-success-regression",

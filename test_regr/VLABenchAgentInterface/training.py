@@ -87,6 +87,14 @@ def _planner_trainable_state(planner: torch.nn.Module) -> dict[str, Any]:
         name for name, parameter in planner.named_parameters()
         if parameter.requires_grad
     }
+    if hasattr(planner, "get_learnable_parameter_names"):
+        names.update(planner.get_learnable_parameter_names())
+    base_states = getattr(planner, "_base_parameter_requires_grad", None)
+    if base_states is not None:
+        for name, param in planner.named_parameters():
+            if base_states.get(param, False):
+                names.add(name)
+    names.update(getattr(planner, "_checkpoint_parameter_names", ()))
     state = planner.state_dict()
     return {name: state[name] for name in names}
 
@@ -96,6 +104,14 @@ def _load_planner_trainable_state(planner: torch.nn.Module, state: Mapping[str, 
         name for name, parameter in planner.named_parameters()
         if parameter.requires_grad
     }
+    if hasattr(planner, "get_learnable_parameter_names"):
+        required.update(planner.get_learnable_parameter_names())
+    base_states = getattr(planner, "_base_parameter_requires_grad", None)
+    if base_states is not None:
+        for name, param in planner.named_parameters():
+            if base_states.get(param, False):
+                required.add(name)
+    required.update(getattr(planner, "_checkpoint_parameter_names", ()))
     missing = sorted(required.difference(state))
     if missing:
         raise RuntimeError(
@@ -555,6 +571,8 @@ def save_checkpoint(
         "torch_rng": torch.get_rng_state(),
         "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
     }
+    if hasattr(model, "compute_parameter_ownership_checksum"):
+        payload["parameter_ownership_checksum"] = model.compute_parameter_ownership_checksum()
     torch.save(payload, temporary)
     os.replace(temporary, path)
     return path
@@ -568,6 +586,18 @@ def load_checkpoint(
     map_location: str | torch.device = "cpu",
 ) -> dict[str, Any]:
     payload = torch.load(Path(path), map_location=map_location, weights_only=False)
+    if "parameter_ownership_checksum" in payload:
+        if not hasattr(model, "compute_parameter_ownership_checksum"):
+            raise ValueError(
+                f"checkpoint contains parameter_ownership_checksum, but current model {type(model).__name__} "
+                "does not implement compute_parameter_ownership_checksum()"
+            )
+        current_checksum = model.compute_parameter_ownership_checksum()
+        if payload["parameter_ownership_checksum"] != current_checksum:
+            raise ValueError(
+                "checkpoint parameter_ownership_checksum differs from current model: "
+                f"saved={payload['parameter_ownership_checksum']!r}, current={current_checksum!r}"
+            )
     model.load_state_dict(payload["model"])
     if optimizer is not None and payload.get("optimizer") is not None:
         optimizer.load_state_dict(payload["optimizer"])
@@ -615,6 +645,8 @@ def save_joint_checkpoint(
         "torch_rng": torch.get_rng_state(),
         "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
     }
+    if hasattr(planner, "compute_parameter_ownership_checksum"):
+        payload["parameter_ownership_checksum"] = planner.compute_parameter_ownership_checksum()
     if next_round is not None:
         if int(next_round) < 0:
             raise ValueError("next reinforcement round cannot be negative")
@@ -664,6 +696,34 @@ def load_joint_checkpoint(
         raise ValueError("checkpoint domain checksum differs from the current world graph")
     if payload.get("vocabulary_checksum") != runtime.vocabulary.checksum:
         raise ValueError("checkpoint vocabulary checksum differs from the current graph vocabulary")
+    if int(checkpoint_version) >= STANDALONE_CHECKPOINT_VERSION:
+        saved_checksum = payload.get("parameter_ownership_checksum")
+        if saved_checksum is None:
+            raise ValueError("checkpoint is missing required parameter_ownership_checksum")
+        if not hasattr(planner, "compute_parameter_ownership_checksum"):
+            raise ValueError(
+                f"current planner class {type(planner).__name__} does not implement "
+                "compute_parameter_ownership_checksum() required for standalone checkpoint version 5+"
+            )
+        current_checksum = planner.compute_parameter_ownership_checksum()
+        if saved_checksum != current_checksum:
+            raise ValueError(
+                "checkpoint parameter_ownership_checksum differs from the current planner: "
+                f"saved={saved_checksum!r}, current={current_checksum!r}"
+            )
+    elif "parameter_ownership_checksum" in payload:
+        saved_checksum = payload.get("parameter_ownership_checksum")
+        if not hasattr(planner, "compute_parameter_ownership_checksum"):
+            raise ValueError(
+                f"checkpoint contains parameter_ownership_checksum, but current planner {type(planner).__name__} "
+                "does not implement compute_parameter_ownership_checksum()"
+            )
+        current_checksum = planner.compute_parameter_ownership_checksum()
+        if saved_checksum != current_checksum:
+            raise ValueError(
+                "checkpoint parameter_ownership_checksum differs from the current planner: "
+                f"saved={saved_checksum!r}, current={current_checksum!r}"
+            )
     if payload.get("planner_configuration") != _planner_configuration(planner):
         raise ValueError("checkpoint planner configuration differs from the current graph decoder")
     saved_controller = payload.get("controller_configuration")

@@ -1,6 +1,7 @@
 from .program import LearningBasedProgram
 from .model_program import POIProgram, IMLProgram, POILossProgram, SolverPOIProgram, SolverPOIDictLossProgram
 from .callbackprogram import CallbackProgram
+from .gradient_manager import GradientConflictManager
 from .lossprogram import (
     PrimalDualModel,
     SampleLossModel,

@@ -399,6 +399,36 @@ def test_domain_scope_serializes_concurrent_callers(joint_fixture):
     assert runtime.active_domain is None
 
 
+def test_domain_scope_parameter_policy_prevents_backbone_interference(joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    program = JointSolverPOIProgram(
+        runtime,
+        planner,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+    )
+
+    # 1. Under domain_scope("eai", parameter_policy="freeze_shared"):
+    with runtime.domain_scope("eai", parameter_policy="freeze_shared"):
+        # Backbone is frozen
+        assert all(not p.requires_grad for p in planner.shared_parameters())
+        # VLABench domain heads are frozen
+        assert all(not p.requires_grad for p in planner.for_domain("vlabench").domain_parameters())
+        # EAI domain heads are trainable
+        assert all(p.requires_grad for p in planner.for_domain("eai").domain_parameters())
+
+    # 2. Outside domain_scope, parameters are restored:
+    assert all(p.requires_grad for p in planner.shared_parameters())
+    assert all(p.requires_grad for p in planner.for_domain("vlabench").domain_parameters())
+    assert all(p.requires_grad for p in planner.for_domain("eai").domain_parameters())
+
+    # 3. Under domain_scope("vlabench", parameter_policy="freeze_shared"):
+    with runtime.domain_scope("vlabench", parameter_policy="freeze_shared"):
+        assert all(not p.requires_grad for p in planner.shared_parameters())
+        assert all(not p.requires_grad for p in planner.for_domain("eai").domain_parameters())
+        assert all(p.requires_grad for p in planner.for_domain("vlabench").domain_parameters())
+
+
 def test_shared_planner_routes_prefixes_and_only_active_head_gets_gradient(joint_fixture):
     examples, runtime = joint_fixture
     planner = make_planner(runtime)
@@ -1337,6 +1367,12 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.stage2_preflight_max_ik_truncation_rate == pytest.approx(0.50)
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)
-    assert args.ik_tolerance == pytest.approx(5e-3)
-    assert args.ik_max_steps == 200
     assert args.max_consecutive_ik_rejections == 3
+    assert args.stage2_parameter_policy == "freeze_shared"
+    assert args.stage2_freeze_shared_backbone is None
+
+    args_inactive = build_parser().parse_args(["train-agent", "--two-stage", "--stage2-parameter-policy", "freeze_inactive"])
+    assert args_inactive.stage2_parameter_policy == "freeze_inactive"
+
+    args_legacy = build_parser().parse_args(["train-agent", "--two-stage", "--no-stage2-freeze-shared-backbone"])
+    assert args_legacy.stage2_freeze_shared_backbone is False

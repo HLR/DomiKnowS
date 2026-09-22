@@ -1318,6 +1318,15 @@ class TinyCompactPlanner(torch.nn.Module):
         self.preference = torch.nn.Parameter(torch.tensor(0.0))
         self.calls = 0
 
+    def compute_parameter_ownership_checksum(self) -> str:
+        import hashlib
+        h = hashlib.sha256()
+        h.update(b"tiny_compact_planner")
+        for name, param in self.named_parameters():
+            h.update(name.encode("utf-8"))
+            h.update(str(tuple(param.shape)).encode("utf-8"))
+        return h.hexdigest()
+
     def forward(self, _contains, _context, target_labels):
         return self.preference.expand(len(target_labels), self.vocabulary.label_count)
 

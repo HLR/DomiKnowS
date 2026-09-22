@@ -176,8 +176,56 @@ class JointQwenVLPlanner(nn.Module):
             raise ValueError(f"unknown planner domain {domain!r}")
         return self.vocabularies[domain]
 
+    def shared_parameters(self, recurse: bool = True):
+        return self.model.parameters(recurse=recurse)
+
+    def domain_parameters(self, domain: str, recurse: bool = True):
+        if domain not in DOMAINS:
+            raise ValueError(f"unknown planner domain {domain!r}")
+        from itertools import chain
+        return chain(
+            self.context_projections[domain].parameters(recurse=recurse),
+            self.token_embeddings[domain].parameters(recurse=recurse),
+            self.graph_decoders[domain].parameters(recurse=recurse),
+            self.label_heads[domain].parameters(recurse=recurse),
+        )
+
     def for_domain(self, domain: str) -> "JointPlannerDomainView":
         return JointPlannerDomainView(self, domain)
+
+    def get_learnable_parameter_names(self) -> set[str]:
+        """Return parameter names that are trainable in the baseline unmanaged state."""
+        names = set()
+        base_states = getattr(self, "_base_parameter_requires_grad", None)
+        for name, param in self.named_parameters():
+            if base_states is not None:
+                if base_states.get(param, False):
+                    names.add(name)
+            elif param.requires_grad:
+                names.add(name)
+        names.update(getattr(self, "_checkpoint_parameter_names", ()))
+        return names
+
+    def compute_parameter_ownership_checksum(self) -> str:
+        """Compute a deterministic checksum of planner parameter structure, shapes, and domain ownership."""
+        import hashlib
+        shared_pids = {id(p) for p in self.shared_parameters()}
+        eai_pids = {id(p) for p in self.domain_parameters("eai")}
+        vlabench_pids = {id(p) for p in self.domain_parameters("vlabench")}
+
+        records = []
+        for name, param in sorted(self.named_parameters(), key=lambda x: x[0]):
+            pid = id(param)
+            if pid in shared_pids:
+                owner = "shared"
+            elif pid in eai_pids:
+                owner = "eai_private"
+            elif pid in vlabench_pids:
+                owner = "vlabench_private"
+            else:
+                owner = "unmapped"
+            records.append((name, tuple(param.shape), owner))
+        return hashlib.sha256(repr(records).encode('utf-8')).hexdigest()
 
     def _prompt(self, domain: str, context: Mapping[str, Any], prefix_labels: Sequence[int]) -> str:
         vocabulary = self.vocabulary(domain)
@@ -526,11 +574,30 @@ class JointPlannerDomainView(nn.Module):
     def device(self):
         return self.joint.device
 
+    def domain_parameters(self, recurse: bool = True):
+        return self.joint.domain_parameters(self.domain, recurse=recurse)
+
+    def shared_parameters(self, recurse: bool = True):
+        return self.joint.shared_parameters(recurse=recurse)
+
     def parameters(self, recurse: bool = True):
-        return self.joint.parameters(recurse=recurse)
+        from itertools import chain
+        return chain(self.shared_parameters(recurse=recurse), self.domain_parameters(recurse=recurse))
 
     def named_parameters(self, prefix: str = "", recurse: bool = True, remove_duplicate: bool = True):
-        return self.joint.named_parameters(prefix=prefix, recurse=recurse, remove_duplicate=remove_duplicate)
+        from itertools import chain
+        memo = set()
+        for name, param in chain(
+            self.joint.model.named_parameters(prefix=f"{prefix}model." if prefix else "model.", recurse=recurse),
+            self.joint.context_projections[self.domain].named_parameters(prefix=f"{prefix}context_projections.{self.domain}." if prefix else f"context_projections.{self.domain}.", recurse=recurse),
+            self.joint.token_embeddings[self.domain].named_parameters(prefix=f"{prefix}token_embeddings.{self.domain}." if prefix else f"token_embeddings.{self.domain}.", recurse=recurse),
+            self.joint.graph_decoders[self.domain].named_parameters(prefix=f"{prefix}graph_decoders.{self.domain}." if prefix else f"graph_decoders.{self.domain}.", recurse=recurse),
+            self.joint.label_heads[self.domain].named_parameters(prefix=f"{prefix}label_heads.{self.domain}." if prefix else f"label_heads.{self.domain}.", recurse=recurse),
+        ):
+            if remove_duplicate and param in memo:
+                continue
+            memo.add(param)
+            yield name, param
 
     def train(self, mode: bool = True):
         self.joint.train(mode)

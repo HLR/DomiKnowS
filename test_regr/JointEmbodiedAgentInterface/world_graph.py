@@ -121,10 +121,12 @@ class JointDomainRuntime:
         self,
         domain: str | None,
         extra_concepts: Iterable[Any] = (),
+        *,
+        parameter_policy: Any = None,
     ) -> tuple[Any, ...]:
         """Activate one complete domain profile, or reset all concepts."""
         if domain is None:
-            active = self.root.set_active_concepts(None)
+            active = self.root.set_active_concepts(None, parameter_policy=parameter_policy)
             self._selected_domain = None
             return active
         if domain not in DOMAINS:
@@ -132,7 +134,7 @@ class JointDomainRuntime:
         active = self.root.set_active_concepts([
             *self.activation_profiles[domain],
             *tuple(extra_concepts),
-        ])
+        ], parameter_policy=parameter_policy)
         self._selected_domain = domain
         return active
 
@@ -160,20 +162,26 @@ class JointDomainRuntime:
         self,
         domain: str,
         extra_concepts: Iterable[Any] = (),
+        *,
+        parameter_policy: Any = None,
     ):
-        """Serialize mutable activation and restore the preceding selection."""
+        """Serialize mutable activation and restore the preceding selection via Graph.active_scope()."""
+        if domain not in DOMAINS:
+            raise ValueError(f"unknown joint domain {domain!r}; expected one of {DOMAINS}")
         with self._lock:
-            previous = self.active_domain
-            entered = False
-            try:
-                self.activate_domain(domain, extra_concepts)
+            concepts = [
+                *self.activation_profiles[domain],
+                *tuple(extra_concepts),
+            ]
+            with self.root.active_scope(concepts, parameter_policy=parameter_policy):
+                previous = self._selected_domain
+                self._selected_domain = domain
                 self._domain_stack.append(domain)
-                entered = True
-                yield self
-            finally:
-                if entered:
+                try:
+                    yield self
+                finally:
                     self._domain_stack.pop()
-                self.activate_domain(previous)
+                    self._selected_domain = previous
 
 
 def build_joint_world_graph(

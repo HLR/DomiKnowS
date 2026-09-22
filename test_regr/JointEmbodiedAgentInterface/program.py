@@ -12,6 +12,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import torch
 
 from domiknows.program import SolverPOIProgram
+from domiknows.program.gradient_manager import GradientConflictManager
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
@@ -175,6 +176,7 @@ class JointSolverPOIProgram(SolverPOIProgram):
         self.planner_optimizer = planner_optimizer
         self.controller = controller
         self.controller_optimizer = controller_optimizer
+        self.gradient_manager = GradientConflictManager(self.planner_head, self.planner_optimizer)
         self.round_robin_cursor = 0
 
     def _planner_step(self, domain: str, item: Mapping[str, Any]) -> float:
@@ -278,61 +280,25 @@ class JointSolverPOIProgram(SolverPOIProgram):
         """
 
         self.planner_head.train()
-        parameters = [
-            parameter for parameter in self.planner_head.parameters()
-            if parameter.requires_grad
-        ]
-        with self.runtime.domain_scope("eai"):
+        self.gradient_manager.begin_step()
+
+        with self.runtime.domain_scope("eai", parameter_policy="freeze_inactive"):
             eai_tensor = self.planner_head.supervised_loss(
                 "eai",
                 context=_context(eai_item, "eai"),
                 target_labels=_labels(eai_item, "eai").to(self.planner_head.device),
             )
-            eai_gradients = torch.autograd.grad(
-                eai_tensor, parameters, allow_unused=True
-            )
-        with self.runtime.domain_scope("vlabench"):
+            self.gradient_manager.capture("eai", eai_tensor)
+
+        with self.runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
             vlabench_tensor = self.planner_head.supervised_loss(
                 "vlabench",
                 context=_context(vlabench_item, "vlabench"),
                 target_labels=_labels(vlabench_item, "vlabench").to(self.planner_head.device),
             )
-            vlabench_gradients = torch.autograd.grad(
-                vlabench_tensor, parameters, allow_unused=True
-            )
-        shared = [
-            (eai_gradient, vlabench_gradient)
-            for eai_gradient, vlabench_gradient in zip(
-                eai_gradients, vlabench_gradients
-            )
-            if eai_gradient is not None and vlabench_gradient is not None
-        ]
-        if shared:
-            dot = sum((left * right).sum() for left, right in shared)
-            eai_norm = sum((left * left).sum() for left, _right in shared).clamp_min(1e-12)
-            vlabench_norm = sum((right * right).sum() for _left, right in shared).clamp_min(1e-12)
-        else:
-            dot = torch.zeros((), device=self.planner_head.device)
-            eai_norm = vlabench_norm = torch.ones((), device=self.planner_head.device)
-        conflict = bool(dot.detach() < 0)
-        self.planner_optimizer.zero_grad(set_to_none=True)
-        for parameter, eai_gradient, vlabench_gradient in zip(
-            parameters, eai_gradients, vlabench_gradients
-        ):
-            if eai_gradient is None:
-                combined = vlabench_gradient
-            elif vlabench_gradient is None:
-                combined = eai_gradient
-            elif conflict:
-                combined = 0.5 * (
-                    eai_gradient - dot / vlabench_norm * vlabench_gradient
-                    + vlabench_gradient - dot / eai_norm * eai_gradient
-                )
-            else:
-                combined = 0.5 * (eai_gradient + vlabench_gradient)
-            parameter.grad = None if combined is None else combined.detach()
-        torch.nn.utils.clip_grad_norm_(parameters, 1.0)
-        self.planner_optimizer.step()
+            self.gradient_manager.capture("vlabench", vlabench_tensor)
+
+        self.gradient_manager.step(self.planner_optimizer, method="pcgrad", clip_grad_norm=1.0)
         eai_loss = float(eai_tensor.detach())
         vlabench_loss = float(vlabench_tensor.detach())
         bc_loss = self._controller_step(controller_batch)
@@ -402,6 +368,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         controller_anchor_loader=None,
         eai_num_samples: int = 8,
         eai_supervised_weight: float = 0.5,
+        parameter_policy: str | None = "freeze_shared",
         device: str | torch.device = "cpu",
         **kwargs,
     ):
@@ -412,6 +379,16 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         self.eai_supervised_examples = tuple(eai_supervised_examples)
         self.eai_num_samples = int(eai_num_samples)
         self.eai_supervised_weight = float(eai_supervised_weight)
+        self.parameter_policy = parameter_policy
+        if self.parameter_policy != "freeze_shared":
+            import warnings
+            warnings.warn(
+                f"Stage 2 JointReinforcementProgram initialized with parameter_policy={self.parameter_policy!r}. "
+                "This policy is an experimental ablation: the shared Qwen/LoRA backbone remains trainable during "
+                "independent domain updates without gradient conflict projection, which may lead to cross-domain policy interference.",
+                UserWarning,
+                stacklevel=2,
+            )
         self.round_robin_cursor = 0
         kwargs.setdefault("progress_callback", _emit_progress)
         super().__init__(
@@ -430,7 +407,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         self.planner_head = planner
 
     def collect_episode(self, descriptor):
-        with self.joint_runtime.domain_scope("vlabench"):
+        with self.joint_runtime.domain_scope("vlabench", parameter_policy=self.parameter_policy):
             # The parent implementation invokes methods through planner_head;
             # temporarily expose its non-owning VLABench view.
             planner = self.planner_head
@@ -441,7 +418,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 self.planner_head = planner
 
     def _planner_anchor(self):
-        with self.joint_runtime.domain_scope("vlabench"):
+        with self.joint_runtime.domain_scope("vlabench", parameter_policy=self.parameter_policy):
             planner = self.planner_head
             self.planner_head = self.vlabench_planner
             try:
@@ -466,7 +443,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             raise ValueError("EAI reinforcement items require reward_function")
         context = _context(item, "eai")
         pairs = []
-        with self.joint_runtime.domain_scope("eai"):
+        with self.joint_runtime.domain_scope("eai", parameter_policy=self.parameter_policy):
             encoded_context = self.eai_planner.encode_context(context)
             for _ in range(self.eai_num_samples):
                 policy_dfa = self.joint_runtime.dfa_for("eai", item)
@@ -512,7 +489,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
     ) -> dict[str, float]:
         self.joint_planner.train()
         self.controller.train()
-        with self.joint_runtime.domain_scope("vlabench"):
+        with self.joint_runtime.domain_scope("vlabench", parameter_policy=self.parameter_policy):
             planner = self.planner_head
             self.planner_head = self.vlabench_planner
             try:

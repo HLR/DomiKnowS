@@ -1065,3 +1065,12 @@ class QwenVLPlanner(nn.Module):
             target / "graph_decoder.pt",
         )
         self.vocabulary.save(target / "vocab.json")
+
+    def compute_parameter_ownership_checksum(self) -> str:
+        """Compute a deterministic checksum of standalone planner parameter structure and shapes."""
+        import hashlib
+        records = []
+        for name, param in sorted(self.named_parameters(), key=lambda x: x[0]):
+            records.append((name, tuple(param.shape), "vlabench_planner"))
+        return hashlib.sha256(repr(records).encode("utf-8")).hexdigest()
+

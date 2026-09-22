@@ -34,6 +34,13 @@ def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
     # Stage 2 can freeze the learned shared Qwen/LoRA while keeping the two
     # domain decoders trainable. Preserve those pre-freeze adapter weights in
     # compact checkpoints without serializing immutable NF4 base weights.
+    if hasattr(planner, "get_learnable_parameter_names"):
+        trainable.update(planner.get_learnable_parameter_names())
+    base_states = getattr(planner, "_base_parameter_requires_grad", None)
+    if base_states is not None:
+        for name, param in planner.named_parameters():
+            if base_states.get(param, False):
+                trainable.add(name)
     trainable.update(getattr(planner, "_checkpoint_parameter_names", ()))
     state = planner.state_dict()
     return {name: value for name, value in state.items() if name in trainable}
@@ -264,7 +271,7 @@ def _controller_configuration(controller) -> Mapping[str, Any]:
 
 
 def _compatibility(runtime: JointDomainRuntime, planner, controller) -> Mapping[str, Any]:
-    return {
+    payload = {
         "combined_domain_checksum": runtime.world.combined_checksum,
         "eai_domain_checksum": runtime.world.eai_domain_checksum,
         "vlabench_domain_checksum": runtime.world.vlabench_domain_checksum,
@@ -280,6 +287,9 @@ def _compatibility(runtime: JointDomainRuntime, planner, controller) -> Mapping[
         "model_configuration": _model_configuration(planner),
         "controller_configuration": _controller_configuration(controller),
     }
+    if hasattr(planner, "compute_parameter_ownership_checksum"):
+        payload["parameter_ownership_checksum"] = planner.compute_parameter_ownership_checksum()
+    return payload
 
 
 def save_joint_checkpoint(
@@ -383,6 +393,30 @@ def load_joint_checkpoint(
             raise ValueError(
                 f"joint checkpoint {key} differs from the current runtime: "
                 f"saved={saved_value!r}, current={current_value!r}"
+            )
+    if int(checkpoint_version) >= JOINT_CHECKPOINT_VERSION:
+        if "parameter_ownership_checksum" not in actual:
+            raise ValueError("joint checkpoint is missing required parameter_ownership_checksum")
+        if "parameter_ownership_checksum" not in expected:
+            raise ValueError(
+                f"current planner class {type(planner).__name__} does not implement "
+                "compute_parameter_ownership_checksum() required for joint checkpoint version 8+"
+            )
+        if actual["parameter_ownership_checksum"] != expected["parameter_ownership_checksum"]:
+            raise ValueError(
+                "joint checkpoint parameter_ownership_checksum differs from the current runtime: "
+                f"saved={actual['parameter_ownership_checksum']!r}, current={expected['parameter_ownership_checksum']!r}"
+            )
+    elif "parameter_ownership_checksum" in actual:
+        if "parameter_ownership_checksum" not in expected:
+            raise ValueError(
+                f"joint checkpoint contains parameter_ownership_checksum, but current planner {type(planner).__name__} "
+                "does not implement compute_parameter_ownership_checksum()"
+            )
+        if actual["parameter_ownership_checksum"] != expected["parameter_ownership_checksum"]:
+            raise ValueError(
+                "joint checkpoint parameter_ownership_checksum differs from the current runtime: "
+                f"saved={actual['parameter_ownership_checksum']!r}, current={expected['parameter_ownership_checksum']!r}"
             )
     saved_controller = actual.get("controller_configuration")
     current_controller = expected["controller_configuration"]
