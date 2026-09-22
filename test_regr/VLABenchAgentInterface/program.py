@@ -1371,6 +1371,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         ppo_epochs: int = 4,
         ppo_max_log_ratio: float = 2.0,
         ppo_target_action_log_ratio: float = 0.03,
+        ppo_backtrack_factor: float = 0.5,
+        ppo_min_learning_rate: float = 1e-7,
         max_controller_loss: float = 50.0,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
@@ -1383,6 +1385,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         ik_max_steps: int = 200,
         max_consecutive_ik_rejections: int = 3,
         simulator_init_retries: int = 3,
+        execution_assistance: str = "train-only",
         progress_callback: Callable[[str], None] | None = None,
     ):
         poi = attach_planner_sensors(runtime, planner, device=device)
@@ -1416,6 +1419,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.ppo_epochs = int(ppo_epochs)
         self.ppo_max_log_ratio = float(ppo_max_log_ratio)
         self.ppo_target_action_log_ratio = float(ppo_target_action_log_ratio)
+        self.ppo_backtrack_factor = float(ppo_backtrack_factor)
+        self.ppo_min_learning_rate = float(ppo_min_learning_rate)
         self.max_controller_loss = float(max_controller_loss)
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
@@ -1437,6 +1442,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             or self.ppo_target_action_log_ratio <= 0
         ):
             raise ValueError("PPO target approximate KL must be finite and positive")
+        if not np.isfinite(self.ppo_backtrack_factor) or not 0.0 < self.ppo_backtrack_factor < 1.0:
+            raise ValueError("PPO backtrack factor must be finite and within (0, 1)")
+        if not np.isfinite(self.ppo_min_learning_rate) or self.ppo_min_learning_rate <= 0:
+            raise ValueError("PPO minimum learning rate must be finite and positive")
         if not np.isfinite(self.max_controller_loss) or self.max_controller_loss <= 0:
             raise ValueError("maximum controller loss must be finite and positive")
         if self.max_position_step <= 0 or self.max_rotation_step <= 0:
@@ -1449,6 +1458,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         if self.max_consecutive_ik_rejections <= 0:
             raise ValueError("maximum consecutive IK rejections must be positive")
         self.simulator_init_retries = max(1, int(simulator_init_retries))
+        if execution_assistance not in {"off", "train-only", "on"}:
+            raise ValueError("execution assistance must be 'off', 'train-only', or 'on'")
+        self.execution_assistance = execution_assistance
+        self._execution_assistance_override: bool | None = None
         self.progress_callback = progress_callback
         self._entity_dfa_cache: dict[int, Any] = {}
         self.last_controller_update: dict[str, Any] = {}
@@ -1488,6 +1501,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         return self._plan_rejection_reason(plan, entities, dfa=dfa) is None
 
     def collect_episode(self, descriptor: Mapping[str, Any]) -> JointEpisode:
+        assistance_enabled = (
+            self._execution_assistance_override
+            if self._execution_assistance_override is not None
+            else self.execution_assistance in {"train-only", "on"}
+        )
         kwargs = dict(descriptor.get("env_kwargs", {}))
         if descriptor.get("task") is not None:
             kwargs.setdefault("task", descriptor["task"])
@@ -1885,6 +1903,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             else ""
                         )
                         if (
+                            assistance_enabled
+                            and
                             task_type.__module__.startswith("VLABench.")
                             and active_skill == "press"
                             and operation_cursor == 0
@@ -1921,6 +1941,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 candidate_value[3:6] = current[3:6]
                                 press_assist_steps += 1
                         if (
+                            assistance_enabled
+                            and
                             task_type.__module__.startswith("VLABench.")
                             and descriptor.get("task") == "add_condiment"
                             and operation_cursor > 0
@@ -2017,6 +2039,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 candidate_value[3:6] = current[3:6]
                             pour_assist_steps += 1
                         if (
+                            assistance_enabled
+                            and
                             operation_cursor == 0
                             and active_skill == "pick"
                             and self.pick_approach_blend > 0.0
@@ -2174,6 +2198,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 )
                                 pick_assist_steps += 1
                         if (
+                            assistance_enabled
+                            and
                             task_type.__module__.startswith("VLABench.")
                             and operation_cursor > 0
                         ):
@@ -2849,7 +2875,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         valid = False
                         termination_reason = "invalid_action"
                         break
-                    if operation_cursor == 0 and active_skill == "pick" and not condiment_pick and pick_grasp_latched:
+                    if assistance_enabled and operation_cursor == 0 and active_skill == "pick" and not condiment_pick and pick_grasp_latched:
                         # Binary EE open state cannot represent a metre-valued
                         # aperture. Ramp the converted physical finger joints.
                         if pick_grasp_qpos is not None:
@@ -2857,7 +2883,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         command[-2:] = 0.04 * max(0.0, 1.0 - grasp_close_steps / 10.0)
                         grasp_close_steps += 1
                         grasp_assist_steps += 1
-                    if condiment_pick and condiment_grasp_pose is not None:
+                    if assistance_enabled and condiment_pick and condiment_grasp_pose is not None:
                         # EE gripper state is binary; apply the physical
                         # aperture ramp only after conversion to joint control.
                         if condiment_grasp_qpos is not None:
@@ -3531,10 +3557,20 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         parameter.copy_(previous)
             self.controller_optimizer.state.clear()
             self.controller_optimizer.zero_grad(set_to_none=True)
+            previous_lrs = [float(group["lr"]) for group in self.controller_optimizer.param_groups]
+            for group in self.controller_optimizer.param_groups:
+                group["lr"] = max(
+                    self.ppo_min_learning_rate,
+                    float(group["lr"]) * self.ppo_backtrack_factor,
+                )
+            current_lrs = [float(group["lr"]) for group in self.controller_optimizer.param_groups]
             rolled_back = True
             total = 0.0
             completed_epochs = 0
-            self._report_progress(message)
+            self._report_progress(
+                message
+                + f"; reduced controller RL learning rate {previous_lrs} -> {current_lrs}"
+            )
 
         def add_action_log_ratios(target, logprob, item, informative) -> None:
             executed = int(item.executed)
@@ -3778,6 +3814,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "parameters_changed": bool(parameter_delta_l2 > 0.0),
             "actor_parameter_delta_l2": parameter_delta_l2,
             "actor_parameters_changed": bool(parameter_delta_l2 > 0.0),
+            "learning_rates": [
+                float(group["lr"]) for group in self.controller_optimizer.param_groups
+            ],
         }
         return total / max(1, completed_epochs)
 
@@ -3903,8 +3942,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         cuda_state = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
         controller_training = self.controller.training
         planner_training = self.planner_head.training
+        prior_assistance_override = self._execution_assistance_override
         self.controller.eval()
         self.planner_head.eval()
+        # Evaluation measures the learned controller. Deterministic expert
+        # motion and object-attachment helpers are training scaffolding and
+        # must not contribute to held-out success.
+        self._execution_assistance_override = self.execution_assistance == "on"
         episodes: list[JointEpisode] = []
         names: list[str] = []
         try:
@@ -3928,6 +3972,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     torch.cuda.set_rng_state(state, device=device)
             self.controller.train(controller_training)
             self.planner_head.train(planner_training)
+            self._execution_assistance_override = prior_assistance_override
 
         task_totals: dict[str, dict[str, float]] = {}
         for task_name, episode in zip(names, episodes):

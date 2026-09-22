@@ -31,6 +31,10 @@ def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
         name for name, parameter in planner.named_parameters()
         if parameter.requires_grad
     }
+    # Stage 2 can freeze the learned shared Qwen/LoRA while keeping the two
+    # domain decoders trainable. Preserve those pre-freeze adapter weights in
+    # compact checkpoints without serializing immutable NF4 base weights.
+    trainable.update(getattr(planner, "_checkpoint_parameter_names", ()))
     state = planner.state_dict()
     return {name: value for name, value in state.items() if name in trainable}
 

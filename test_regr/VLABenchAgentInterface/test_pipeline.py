@@ -3002,6 +3002,7 @@ def test_controller_ppo_rolls_back_complete_update_when_policy_drift_exceeds_lim
     assert program.last_controller_update["rolled_back"] is True
     assert program.last_controller_update["ppo_epochs_completed"] == 0
     assert program.last_controller_update["parameters_changed"] is False
+    assert program.last_controller_update["learning_rates"] == pytest.approx([0.5])
     for name, value in controller.state_dict().items():
         torch.testing.assert_close(value, before[name])
 
@@ -3064,6 +3065,15 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     planner = TinyCompactPlanner(runtime.vocabulary)
     controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
     program = _joint_program(runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=True), num_samples=1)
+    program.execution_assistance = "train-only"
+    assistance_states = []
+    original_collect_episode = program.collect_episode
+
+    def collect_with_assistance_audit(descriptor):
+        assistance_states.append(program._execution_assistance_override)
+        return original_collect_episode(descriptor)
+
+    program.collect_episode = collect_with_assistance_audit
     planner_before = planner.preference.detach().clone()
     controller_before = {name: value.detach().clone() for name, value in controller.state_dict().items()}
     metrics = program.evaluate_rollouts(
@@ -3077,6 +3087,8 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     assert metrics["assist_steps"] == 0
     assert metrics["assisted_episode_rate"] == 0.0
     assert metrics["unassisted_success_rate"] == 1.0
+    assert assistance_states == [False, False]
+    assert program._execution_assistance_override is None
     assert metrics["per_task"]["select_book"]["progress"] == pytest.approx(1.0)
     assert metrics["per_task"]["select_fruit"]["progress"] == pytest.approx(1.0)
     assert len(metrics["episode_diagnostics"]) == 2

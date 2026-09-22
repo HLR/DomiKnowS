@@ -71,6 +71,18 @@ def _status(message: str) -> None:
     print(f"[joint-training] {message}", file=sys.stderr, flush=True)
 
 
+def _enter_controller_reinforcement(
+    optimizer: torch.optim.Optimizer,
+    *,
+    learning_rate: float,
+    reset_state: bool,
+) -> None:
+    if reset_state:
+        optimizer.state.clear()
+    for group in optimizer.param_groups:
+        group["lr"] = float(learning_rate)
+
+
 def _factory(value: str):
     module_name, separator, function_name = value.partition(":")
     if not separator:
@@ -331,6 +343,7 @@ def command_train_agent(args):
     resumed_stage2_metrics = None
     resumed_prior_best = None
     baseline_reference = None
+    eai_baseline_reference = None
     controller_rewarm_required = False
     cursor = 0
     if args.resume:
@@ -356,6 +369,9 @@ def command_train_agent(args):
             )
         resume_stage = payload["stage"]
         baseline_reference = payload.get("metrics", {}).get("baseline_reference")
+        eai_baseline_reference = payload.get("metrics", {}).get(
+            "eai_baseline_reference"
+        )
         resume_payload = payload
         cursor = int(payload["round_robin_cursor"])
         if resume_stage == "stage1":
@@ -504,6 +520,28 @@ def command_train_agent(args):
                     "metrics": warmup_metrics,
                 })
 
+    if resume_stage != "stage2":
+        _enter_controller_reinforcement(
+            controller_optimizer,
+            learning_rate=args.controller_rl_learning_rate,
+            reset_state=True,
+        )
+        _status(
+            "controller optimizer entered PPO regime "
+            f"lr={args.controller_rl_learning_rate:g}; BC moments reset"
+        )
+    if args.stage2_freeze_shared_backbone:
+        planner._checkpoint_parameter_names = tuple(
+            name
+            for name, parameter in planner.named_parameters()
+            if parameter.requires_grad
+        )
+        for parameter in planner.model.parameters():
+            parameter.requires_grad_(False)
+        _status(
+            "Stage 2 shared Qwen/LoRA backbone frozen; reinforcement updates "
+            "are confined to domain-specific graph-token decoders"
+        )
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     descriptors = [{"task": task, "env_kwargs": {}} for task in tasks]
     stage2 = JointReinforcementProgram(
@@ -529,9 +567,11 @@ def command_train_agent(args):
         gamma=0.99,
         gae_lambda=0.95,
         ppo_clip=0.2,
-        ppo_epochs=4,
+        ppo_epochs=args.ppo_epochs,
         ppo_max_log_ratio=args.ppo_max_log_ratio,
         ppo_target_action_log_ratio=args.ppo_target_kl,
+        ppo_backtrack_factor=args.ppo_backtrack_factor,
+        ppo_min_learning_rate=args.ppo_min_learning_rate,
         value_weight=0.5,
         entropy_weight=0.01,
         max_position_step=args.max_position_step,
@@ -539,6 +579,7 @@ def command_train_agent(args):
         ik_tolerance=args.ik_tolerance,
         ik_max_steps=args.ik_max_steps,
         max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
+        execution_assistance=args.execution_assistance,
     )
     stage2.round_robin_cursor = cursor
     if (
@@ -565,6 +606,10 @@ def command_train_agent(args):
             eai_valid,
             limit=args.validation_limit,
         )
+        eai_baseline_reference = {
+            "goal_success": float(eai_baseline["goal_success"]),
+            "goal_recall": float(eai_baseline["goal_recall"]),
+        }
         preflight_eligible = stage2_preflight_eligible(
             baseline,
             min_vlabench_success_rate=args.stage2_preflight_min_vlabench_success_rate,
@@ -643,6 +688,8 @@ def command_train_agent(args):
                 metrics={
                     "partial_training": dict(partial_metrics),
                     "prior_best": prior_best,
+                    "baseline_reference": baseline_reference,
+                    "eai_baseline_reference": eai_baseline_reference,
                     "fallback_path": (
                         str(best_stage1) if best_stage1 is not None else None
                     ),
@@ -696,9 +743,21 @@ def command_train_agent(args):
             baseline_reference,
             max_success_regression=args.stage2_max_baseline_success_regression,
         )
+        eai_baseline_ok = True
+        if eai_baseline_reference is not None:
+            eai_baseline_ok = (
+                float(metrics["eai"]["success"])
+                >= float(eai_baseline_reference["goal_success"])
+                - args.stage2_max_eai_success_regression
+                and float(metrics["eai"]["goal_recall"])
+                >= float(eai_baseline_reference["goal_recall"])
+                - args.stage2_max_eai_recall_regression
+            )
         metrics["baseline_reference"] = baseline_reference
+        metrics["eai_baseline_reference"] = eai_baseline_reference
         metrics["baseline_regression_eligible"] = baseline_ok
-        retention_eligible = retention_eligible and baseline_ok
+        metrics["eai_baseline_regression_eligible"] = eai_baseline_ok
+        retention_eligible = retention_eligible and baseline_ok and eai_baseline_ok
         metrics["retention_eligible"] = retention_eligible
         metrics["fallback_path"] = (
             str(best_stage1) if best_stage1 is not None else None
@@ -887,10 +946,29 @@ def build_parser():
     )
     agent.add_argument("--planner-learning-rate", type=float, default=2e-5)
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
+    agent.add_argument("--controller-rl-learning-rate", type=float, default=3e-5)
+    agent.add_argument(
+        "--stage2-freeze-shared-backbone",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="freeze shared Qwen/LoRA during Stage 2 to prevent cross-domain policy interference",
+    )
+    agent.add_argument(
+        "--stage2-max-eai-success-regression",
+        type=float,
+        default=0.0,
+        help="maximum absolute EAI success loss allowed relative to the Stage 1 baseline",
+    )
+    agent.add_argument(
+        "--stage2-max-eai-recall-regression",
+        type=float,
+        default=0.02,
+        help="maximum absolute EAI recall loss allowed relative to the Stage 1 baseline",
+    )
     agent.add_argument("--controller-warmup-steps", type=int, default=20000)
     agent.add_argument("--stage1-min-positive-reward-rate", type=float, default=0.05)
-    agent.add_argument("--stage1-min-goal-recall", type=float, default=0.05)
-    agent.add_argument("--stage1-min-goal-success", type=float, default=0.0)
+    agent.add_argument("--stage1-min-goal-recall", type=float, default=0.20)
+    agent.add_argument("--stage1-min-goal-success", type=float, default=0.10)
     agent.add_argument(
         "--validation-limit", type=int, default=None,
         help="Maximum validation examples; the default scores the complete canonical holdout.",
@@ -902,6 +980,15 @@ def build_parser():
     agent.add_argument("--max-rotation-step", type=float, default=0.10)
     agent.add_argument("--ik-tolerance", type=float, default=5e-3)
     agent.add_argument("--ik-max-steps", type=int, default=200)
+    agent.add_argument("--ppo-epochs", type=int, default=2)
+    agent.add_argument("--ppo-backtrack-factor", type=float, default=0.5)
+    agent.add_argument("--ppo-min-learning-rate", type=float, default=1e-7)
+    agent.add_argument(
+        "--execution-assistance",
+        choices=("off", "train-only", "on"),
+        default="train-only",
+        help="train-only excludes deterministic execution assistance from fixed-seed evaluation",
+    )
     agent.add_argument(
         "--max-consecutive-ik-rejections",
         type=int,

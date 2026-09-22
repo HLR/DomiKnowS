@@ -57,6 +57,20 @@ def _status(message: str) -> None:
     print(f"[vlabench-data] {message}", file=sys.stderr, flush=True)
 
 
+def _enter_controller_reinforcement(
+    optimizer: torch.optim.Optimizer,
+    *,
+    learning_rate: float,
+    reset_state: bool,
+) -> None:
+    """Move the controller optimizer from BC to the lower-rate PPO regime."""
+
+    if reset_state:
+        optimizer.state.clear()
+    for group in optimizer.param_groups:
+        group["lr"] = float(learning_rate)
+
+
 def _print_task_audit_table(metrics) -> None:
     """Print compact per-task success/progress/IK metrics for smoke audits."""
     per_task = metrics.get("per_task", {}) if isinstance(metrics, dict) else {}
@@ -547,6 +561,16 @@ def command_train_agent(args) -> None:
             "validation": validation,
         })
 
+    if resume_stage != "reinforcement":
+        _enter_controller_reinforcement(
+            controller_optimizer,
+            learning_rate=args.controller_rl_learning_rate,
+            reset_state=True,
+        )
+        _status(
+            "controller optimizer entered PPO regime "
+            f"lr={args.controller_rl_learning_rate:g}; BC moments reset"
+        )
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     descriptors = [{"task": task, "env_kwargs": {}} for task in tasks]
     stage2 = create_stage2_program(
@@ -572,6 +596,8 @@ def command_train_agent(args) -> None:
         ppo_epochs=args.ppo_epochs,
         ppo_max_log_ratio=args.ppo_max_log_ratio,
         ppo_target_action_log_ratio=args.ppo_target_kl,
+        ppo_backtrack_factor=args.ppo_backtrack_factor,
+        ppo_min_learning_rate=args.ppo_min_learning_rate,
         value_weight=args.value_weight,
         entropy_weight=args.entropy_weight,
         max_position_step=args.max_position_step,
@@ -581,6 +607,7 @@ def command_train_agent(args) -> None:
         ik_tolerance=args.ik_tolerance,
         ik_max_steps=args.ik_max_steps,
         max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
+        execution_assistance=args.execution_assistance,
         progress_callback=_status,
     )
     fallback_path = None
@@ -1123,6 +1150,10 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--learning-rate", type=float, default=2e-4)
     agent.add_argument("--rl-learning-rate", type=float, default=2e-5)
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
+    agent.add_argument(
+        "--controller-rl-learning-rate", type=float, default=3e-5,
+        help="controller learning rate after BC warm-up when PPO begins",
+    )
     agent.add_argument("--batch-size", type=int, default=8)
     agent.add_argument("--workers", type=int, default=0)
     agent.add_argument("--video-decoder-cache-size", type=int, default=8)
@@ -1145,9 +1176,11 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--gamma", type=float, default=0.99)
     agent.add_argument("--gae-lambda", type=float, default=0.95)
     agent.add_argument("--ppo-clip", type=float, default=0.2)
-    agent.add_argument("--ppo-epochs", type=int, default=4)
+    agent.add_argument("--ppo-epochs", type=int, default=2)
     agent.add_argument("--ppo-target-kl", type=float, default=0.03)
     agent.add_argument("--ppo-max-log-ratio", type=float, default=2.0)
+    agent.add_argument("--ppo-backtrack-factor", type=float, default=0.5)
+    agent.add_argument("--ppo-min-learning-rate", type=float, default=1e-7)
     agent.add_argument("--value-weight", type=float, default=0.5)
     agent.add_argument("--entropy-weight", type=float, default=0.01)
     agent.add_argument("--max-position-step", type=float, default=0.02)
@@ -1175,6 +1208,13 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument(
         "--eval-rollouts-per-task", type=int, default=3,
         help="Fixed-seed simulator rollouts per task used for retention and reporting.",
+    )
+    agent.add_argument(
+        "--execution-assistance",
+        choices=("off", "train-only", "on"),
+        default="train-only",
+        help=("deterministic execution scaffolding policy; train-only keeps it "
+              "out of fixed-seed evaluation"),
     )
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)

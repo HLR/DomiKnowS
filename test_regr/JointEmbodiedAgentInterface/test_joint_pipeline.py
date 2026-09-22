@@ -24,6 +24,7 @@ from .checkpoint import (
     _restore_cuda_rng_states,
     _dfa_configuration,
     _normalize_dfa_configuration,
+    _planner_trainable_state,
     load_joint_checkpoint,
     save_joint_checkpoint,
 )
@@ -491,6 +492,61 @@ def test_stage1_controller_updates_only_on_vlabench_turn(joint_fixture):
     }
     program._controller_step(batch)
     assert not torch.equal(before, controller.action)
+
+
+def test_stage1_balanced_pair_uses_one_planner_optimizer_step(joint_fixture):
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    optimizer = torch.optim.SGD(planner.parameters(), lr=0.05)
+    step_count = 0
+    original_step = optimizer.step
+
+    def counted_step(*args, **kwargs):
+        nonlocal step_count
+        step_count += 1
+        return original_step(*args, **kwargs)
+
+    optimizer.step = counted_step
+    program = JointSolverPOIProgram(
+        runtime,
+        planner,
+        planner_optimizer=optimizer,
+        controller=controller,
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.1),
+    )
+    vla_item = {
+        "instruction": "pick the numbered object",
+        "entities": ({"name": "book"},),
+        "target_plan_labels": torch.tensor(
+            [runtime.vlabench_vocabulary.eos_label], dtype=torch.long
+        ),
+    }
+
+    eai, vlabench = program.train_round(examples[0], vla_item)
+
+    assert step_count == 1
+    assert eai.domain == "eai"
+    assert vlabench.domain == "vlabench"
+    assert runtime.active_domain is None
+
+
+def test_frozen_stage2_backbone_remains_in_compact_checkpoint(joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    learned_names = tuple(
+        name
+        for name, parameter in planner.named_parameters()
+        if parameter.requires_grad
+    )
+    planner._checkpoint_parameter_names = learned_names
+    for parameter in planner.model.parameters():
+        parameter.requires_grad_(False)
+
+    state = _planner_trainable_state(planner)
+
+    assert learned_names
+    assert set(learned_names).issubset(state)
 
 
 def test_joint_controller_step_uses_scaled_delta_behavior_cloning(joint_fixture, monkeypatch):

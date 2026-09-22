@@ -67,9 +67,12 @@ update, giving the domains equal weight:
 2. VLABench teacher-forced compact graph-token plan learning with EOS-masked
    cross entropy, followed by one controller behavior-cloning update.
 
-Both planner turns update the same LoRA/backbone optimizer. Only the selected
-domain label head receives gradients. The controller is updated only during
-the VLABench turn. An epoch defaults to the smaller loader length; override it
+The two planner losses are differentiated together. Conflicting gradients on
+shared Qwen/LoRA parameters are projected with PCGrad and the pair produces
+one optimizer step, so update order cannot let one domain immediately
+overwrite the other. Domain-only decoders retain their own gradients. The
+controller is updated only during the VLABench turn. An epoch defaults to the
+smaller loader length; override it
 with `--stage1-rounds-per-epoch`. Stage 1 checkpoint selection first maximizes
 the minimum of EAI goal success and VLABench exact graph match, then their
 mean, EAI recall, VLABench validity, and validation loss. The EAI exploration
@@ -88,7 +91,11 @@ already-completed warm-up. Configure or disable it with
 
 Stage 2 constructs one
 `JointReinforcementProgram(ReinforcementProgram)` over the same root and the
-exact same `JointQwenVLPlanner`:
+exact same `JointQwenVLPlanner`. By default Stage 2 freezes the shared
+Qwen/LoRA and trains only the separate EAI and VLABench graph-token decoders;
+this prevents one domain's policy gradient from erasing the other domain's
+representation. Use `--no-stage2-freeze-shared-backbone` only as an explicit
+shared-adapter ablation:
 
 1. EAI samples eight prefix-conditioned, DFA-masked trajectories. Its
    SimpleTL/final-state/world-constraint reward trains the planner with
@@ -118,7 +125,9 @@ separate exploration-noise scales. It runs four-action receding-horizon chunks. 
 `[x,y,z,roll,pitch,yaw,gripper]` action is converted with
 `get_qpos_from_ee_pos`; the binary gripper becomes two `0.04` (open) or `0.0`
 (closed) finger commands. PPO uses `gamma=0.99`, GAE `lambda=0.95`, clip
-`0.2`, four epochs, value weight `0.5`, and entropy weight `0.01`.
+`0.2`, two epochs, value weight `0.5`, and entropy weight `0.01`. The
+controller switches from the `3e-4` BC rate to a fresh-moment `3e-5` RL rate
+before Stage 2. A trust-region rollback halves that rate for the next update.
 The critic is bounded to `[-1,1]`, uses clipped return targets and Smooth L1
 loss, and cannot backpropagate through the actor's shared features. A batch
 with zero total simulator return trains only the critic; PPO, entropy,
@@ -135,8 +144,10 @@ Every Stage 2 update records accepted PPO epochs, rollback status, approximate
 KL, actor parameter-delta L2, and whether actor parameters actually changed.
 Rollout summaries also report deterministic assist steps, assisted-episode
 rate, and success among episodes that used zero deterministic assist steps.
-The latter is observational evidence, not a separate intervention with the
-assist implementation disabled.
+The default `--execution-assistance train-only` permits those helpers only for
+training collection and forcibly disables them during fixed-seed evaluation,
+so reported evaluation success is controller-only. `on` is an assisted-system
+ablation and `off` disables assistance in both phases.
 An infeasible action is retried at smaller Cartesian scales. If all scales
 fail, the unchanged observation is resampled up to three consecutive chunks
 by default before the rollout is IK-truncated; each rejection remains negative
@@ -158,8 +169,12 @@ the exact fully rejected action rather than an executable chunk prefix.
 
 EAI reward and VLABench simulator reward are never added, averaged, or
 substituted for each other. Each reward creates a policy-gradient loss only
-inside its active domain scope. The alternating optimizer steps both update
-the shared LoRA, which is the only cross-domain coupling.
+inside its active domain scope. Dynamic activation controls graph execution;
+it does not isolate trainable tensors. Stage 1 therefore applies PCGrad to the
+shared Qwen/LoRA gradients, and Stage 2 freezes the shared Qwen/LoRA by default.
+If `--no-stage2-freeze-shared-backbone` is selected, alternating optimizer
+steps again create explicit cross-domain gradient coupling even though graph
+activation remains correct.
 
 For EAI, the reward is computed from the task `tl_goal`, predicted temporal
 state, and applicable EAI world constraints. Its `0.5` teacher-forced term is
@@ -266,7 +281,15 @@ least a `0.01` positive-return rate and no more than `0.50` IK truncation.
 Failure writes `stage2-skipped` before any multi-hour RL epoch. Success and
 task-coverage thresholds remain available but default to zero because the
 fixed-seed baseline remains too small for a definitive statistical claim.
-Joint Stage 2 also applies a baseline-relative regression gate: by default an RL checkpoint must match or exceed the fixed-seed Stage 1 VLABench success (`--stage2-max-baseline-success-regression 0.0`). The planner and controller retain stronger Stage 1 anchors by default (`--stage2-planner-anchor-weight 0.25`, `--stage2-controller-bc-weight 0.25`). Configure these values explicitly when running controlled ablations.
+Joint Stage 2 also applies baseline-relative regression gates. By default an RL
+checkpoint must match or exceed fixed-seed Stage 1 VLABench success
+(`--stage2-max-baseline-success-regression 0.0`) and EAI success
+(`--stage2-max-eai-success-regression 0.0`), while EAI recall may fall by at
+most `0.02` (`--stage2-max-eai-recall-regression`). A regression aborts the
+remaining epochs and restores the prior eligible checkpoint. The planner and
+controller retain stronger Stage 1 anchors by default
+(`--stage2-planner-anchor-weight 0.25`, `--stage2-controller-bc-weight 0.25`).
+Configure these values explicitly when running controlled ablations.
 
 Joint uses the same ordered 80/20 EAI split as the standalone EAI workflow and
 scores the complete 88-example holdout by default. `paired_eai_eval.py` can

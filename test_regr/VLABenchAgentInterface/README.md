@@ -75,18 +75,29 @@ python -u -m test_regr.VLABenchAgentInterface.main train-agent \
 
 Use a new output directory when camera selection, action frames, preprocessing, or reward logic changes. `execution_complete` means the controller remained executable; inspect `success_rate`, `positive_return_rate`, `return`, and `termination_reason` for task completion.
 
-Full training evaluates three fixed-seed rollouts per task by default. PPO uses
-an approximate-KL target of `0.03` (`--ppo-target-kl`) plus the independent
+Full training evaluates three fixed-seed rollouts per task by default. Under
+the default `--execution-assistance train-only`, deterministic expert-motion
+and object-attachment helpers remain available while collecting training data
+but are forcibly disabled during fixed-seed evaluation. Use `on` only for an
+explicit assisted-system ablation; `off` disables the helpers everywhere.
+
+The controller uses `3e-4` for supervised BC and switches to a fresh-moment
+`3e-5` PPO regime (`--controller-rl-learning-rate`) before Stage 2. PPO uses
+two epochs by default, an approximate-KL target of `0.03`
+(`--ppo-target-kl`), plus the independent
 absolute log-ratio safety bound (`--ppo-max-log-ratio`). Checkpoint metrics under
 `controller_update` report accepted PPO epochs, rollback state, approximate KL,
 actor parameter-delta L2, and `actor_parameters_changed`; these fields distinguish
 a high assisted rollout score from evidence that reinforcement actually updated
-the controller. Use `--eval-rollouts-per-task` to increase evaluation replication
-without changing the update-producing rollout count.
+the controller. A trust-region rollback restores the pre-update weights, clears
+stale optimizer moments, and halves the PPO learning rate down to
+`--ppo-min-learning-rate`; `learning_rates` records the effective value. Use
+`--eval-rollouts-per-task` to increase evaluation replication without changing
+the update-producing rollout count.
 Rollout metrics additionally report `assist_steps`, `assisted_episode_rate`,
 and `unassisted_success_rate` (successful episodes with zero deterministic
-assist steps). This last field measures observed assist independence; it is not
-a separate run with assist code forcibly disabled.
+assist steps). With the default fixed-seed evaluation policy these are a direct
+unassisted intervention, not merely observational assist accounting.
 
 ## Tests and diagnostics
 

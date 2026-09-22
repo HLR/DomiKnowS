@@ -267,9 +267,74 @@ class JointSolverPOIProgram(SolverPOIProgram):
         *,
         controller_batch: Mapping[str, torch.Tensor] | None = None,
     ) -> tuple[DomainUpdate, DomainUpdate]:
-        """Run exactly one EAI turn followed by one equally weighted VLA turn."""
-        eai_loss = self._planner_step("eai", eai_item)
-        vlabench_loss = self._planner_step("vlabench", vlabench_item)
+        """Apply one conflict-projected, equal-domain planner update.
+
+        The old implementation stepped the shared Qwen/LoRA once for EAI and
+        then again for VLABench.  That made update order a hidden domain
+        weight: the second step could immediately undo the first.  PCGrad
+        projects only genuinely conflicting shared gradients and performs one
+        optimizer step for the pair. Domain-only decoder parameters retain
+        their own gradients.
+        """
+
+        self.planner_head.train()
+        parameters = [
+            parameter for parameter in self.planner_head.parameters()
+            if parameter.requires_grad
+        ]
+        with self.runtime.domain_scope("eai"):
+            eai_tensor = self.planner_head.supervised_loss(
+                "eai",
+                context=_context(eai_item, "eai"),
+                target_labels=_labels(eai_item, "eai").to(self.planner_head.device),
+            )
+            eai_gradients = torch.autograd.grad(
+                eai_tensor, parameters, allow_unused=True
+            )
+        with self.runtime.domain_scope("vlabench"):
+            vlabench_tensor = self.planner_head.supervised_loss(
+                "vlabench",
+                context=_context(vlabench_item, "vlabench"),
+                target_labels=_labels(vlabench_item, "vlabench").to(self.planner_head.device),
+            )
+            vlabench_gradients = torch.autograd.grad(
+                vlabench_tensor, parameters, allow_unused=True
+            )
+        shared = [
+            (eai_gradient, vlabench_gradient)
+            for eai_gradient, vlabench_gradient in zip(
+                eai_gradients, vlabench_gradients
+            )
+            if eai_gradient is not None and vlabench_gradient is not None
+        ]
+        if shared:
+            dot = sum((left * right).sum() for left, right in shared)
+            eai_norm = sum((left * left).sum() for left, _right in shared).clamp_min(1e-12)
+            vlabench_norm = sum((right * right).sum() for _left, right in shared).clamp_min(1e-12)
+        else:
+            dot = torch.zeros((), device=self.planner_head.device)
+            eai_norm = vlabench_norm = torch.ones((), device=self.planner_head.device)
+        conflict = bool(dot.detach() < 0)
+        self.planner_optimizer.zero_grad(set_to_none=True)
+        for parameter, eai_gradient, vlabench_gradient in zip(
+            parameters, eai_gradients, vlabench_gradients
+        ):
+            if eai_gradient is None:
+                combined = vlabench_gradient
+            elif vlabench_gradient is None:
+                combined = eai_gradient
+            elif conflict:
+                combined = 0.5 * (
+                    eai_gradient - dot / vlabench_norm * vlabench_gradient
+                    + vlabench_gradient - dot / eai_norm * eai_gradient
+                )
+            else:
+                combined = 0.5 * (eai_gradient + vlabench_gradient)
+            parameter.grad = None if combined is None else combined.detach()
+        torch.nn.utils.clip_grad_norm_(parameters, 1.0)
+        self.planner_optimizer.step()
+        eai_loss = float(eai_tensor.detach())
+        vlabench_loss = float(vlabench_tensor.detach())
         bc_loss = self._controller_step(controller_batch)
         self.round_robin_cursor += 1
         return (
@@ -318,8 +383,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
     """Alternating EAI REINFORCE and VLABench planner/PPO optimization.
 
     EAI and VLABench rewards are intentionally stored and reported separately.
-    The only coupling is that their alternating gradients update the same LoRA
-    backbone; no reward scalar crosses the domain boundary.
+    No reward scalar crosses the domain boundary. The CLI freezes the shared
+    Qwen/LoRA by default during this stage; callers that leave it trainable
+    explicitly opt back into cross-domain gradient coupling.
     """
 
     def __init__(
