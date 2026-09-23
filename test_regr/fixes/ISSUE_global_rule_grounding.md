@@ -57,6 +57,10 @@ brute-force truth per grounding); tests: `test_global_rule_grounding.py`
 5. Head-level rules with a shared variable (`ifL(L(a,b), L(b,c))`) get the
    existential reading (one row per b); is that intended for graph rules,
    which usually mean "for all"?
-6. A second graph built in the same process (after `Graph.clear()`,
-   `Concept.clear()`, `Relation.clear()`) reuses the first graph's solver
-   rules; the repro runs one rule per process for this reason.
+6. (Low severity, usability.) A second graph built in the same process
+   reuses the first graph's solver: `ilpOntSolverFactory` caches solvers by
+   (solver class, ontology, config), not by graph, and `Graph.clear()` /
+   `Concept.clear()` / `Relation.clear()` do not reset it;
+   `ilpOntSolverFactory.clear()` does (test_regr/conftest.py calls it for
+   every test, so the suite is unaffected). Should `Graph.clear()` also clear
+   the solver cache?  The repro runs one rule per process for this reason.
