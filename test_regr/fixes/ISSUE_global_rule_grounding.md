@@ -57,10 +57,16 @@ brute-force truth per grounding); tests: `test_global_rule_grounding.py`
 5. Head-level rules with a shared variable (`ifL(L(a,b), L(b,c))`) get the
    existential reading (one row per b); is that intended for graph rules,
    which usually mean "for all"?
-6. (Low severity, usability.) A second graph built in the same process
-   reuses the first graph's solver: `ilpOntSolverFactory` caches solvers by
-   (solver class, ontology, config), not by graph, and `Graph.clear()` /
-   `Concept.clear()` / `Relation.clear()` do not reset it;
-   `ilpOntSolverFactory.clear()` does (test_regr/conftest.py calls it for
-   every test, so the suite is unaffected). Should `Graph.clear()` also clear
-   the solver cache?  The repro runs one rule per process for this reason.
+6. **A second graph in the same process silently reuses the first graph's
+   solver** (medium: no error or warning, the loss is computed with the old
+   rules). The reset people would reach for doesn't work: `Graph.clear()`
+   (with `Concept.clear()` / `Relation.clear()`) sounds like a full reset but
+   isn't; you also need `ilpOntSolverFactory.clear()`, and nothing tells you
+   that. The cache key (solver class, ontology, config) doesn't include the
+   graph, so any graph without an ontology shares one solver. Harmless when
+   the same rules are rebuilt; wrong as soon as they change, e.g. editing a
+   constraint and re-running a notebook cell, rule sweeps, or cross-validation
+   that rebuilds the graph. The test suite is unaffected
+   (test_regr/conftest.py clears the factory for every test). Suggested fix:
+   `Graph.clear()` also clears the solver cache, or the graph becomes part
+   of the key. The repro runs one rule per process for this reason.
