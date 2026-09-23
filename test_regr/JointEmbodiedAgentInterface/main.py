@@ -414,8 +414,12 @@ def command_train_agent(args):
             controller=controller,
             controller_optimizer=controller_optimizer,
             device=device,
+            eai_loss_weight=getattr(args, "stage1_eai_loss_weight", 3.0),
         )
         stage1.round_robin_cursor = cursor
+        if start_stage1 == 0 and getattr(args, "stage1_eai_warmup_steps", 0) > 0:
+            _status(f"Stage 1 EAI pre-training warmup steps={args.stage1_eai_warmup_steps}")
+            stage1.train_eai_warmup(eai_train, steps=args.stage1_eai_warmup_steps)
         best_key = (
             stage1_selection_key(resume_payload["metrics"])
             if resume_stage == "stage1" and resume_payload is not None else None
@@ -594,6 +598,9 @@ def command_train_agent(args):
         ik_max_steps=args.ik_max_steps,
         max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
         execution_assistance=args.execution_assistance,
+        assistance_curriculum=getattr(args, "assistance_curriculum", "linear"),
+        assistance_start=getattr(args, "assistance_start", 1.0),
+        assistance_end=getattr(args, "assistance_end", 0.0),
     )
     stage2.round_robin_cursor = cursor
     if (
@@ -720,6 +727,8 @@ def command_train_agent(args):
             rounds=args.stage2_rounds_per_epoch,
             vlabench_rollouts_per_update=args.vlabench_rollouts,
             start_round=first_round,
+            current_epoch=epoch,
+            total_epochs=args.stage2_epochs,
             initial_metrics=initial_metrics,
             round_callback=save_round_progress,
         )
@@ -986,6 +995,8 @@ def build_parser():
         help="maximum absolute EAI recall loss allowed relative to the Stage 1 baseline",
     )
     agent.add_argument("--controller-warmup-steps", type=int, default=20000)
+    agent.add_argument("--stage1-eai-loss-weight", type=float, default=3.0)
+    agent.add_argument("--stage1-eai-warmup-steps", type=int, default=350)
     agent.add_argument("--stage1-min-positive-reward-rate", type=float, default=0.05)
     agent.add_argument("--stage1-min-goal-recall", type=float, default=0.20)
     agent.add_argument("--stage1-min-goal-success", type=float, default=0.10)
@@ -1009,6 +1020,14 @@ def build_parser():
         default="train-only",
         help="train-only excludes deterministic execution assistance from fixed-seed evaluation",
     )
+    agent.add_argument(
+        "--assistance-curriculum",
+        choices=("none", "linear", "cosine"),
+        default="linear",
+        help="annealing schedule for execution assistance during Stage 2 reinforcement learning",
+    )
+    agent.add_argument("--assistance-start", type=float, default=1.0)
+    agent.add_argument("--assistance-end", type=float, default=0.0)
     agent.add_argument(
         "--max-consecutive-ik-rejections",
         type=int,

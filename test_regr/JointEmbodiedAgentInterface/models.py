@@ -165,7 +165,87 @@ class JointQwenVLPlanner(nn.Module):
                 planner.token_embeddings.load_state_dict(decoder_state["token_embeddings"])
                 planner.graph_decoders.load_state_dict(decoder_state["graph_decoders"])
                 planner.label_heads.load_state_dict(decoder_state["label_heads"])
+        else:
+            planner.initialize_semantic_embeddings("eai")
         return planner
+
+    def initialize_semantic_embeddings(self, domain: str) -> None:
+        """Semantically initialize token embeddings and label heads from backbone token representations."""
+        if domain not in DOMAINS:
+            raise ValueError(f"unknown planner domain {domain!r}")
+        vocabulary = self.vocabularies.get(domain)
+        if vocabulary is None:
+            return
+
+        tokenizer = getattr(self.processor, "tokenizer", None)
+        if tokenizer is None and callable(getattr(self.processor, "encode", None)):
+            tokenizer = self.processor
+
+        input_embeddings = None
+        if hasattr(self.model, "get_input_embeddings"):
+            input_embeddings = self.model.get_input_embeddings()
+        elif hasattr(self.model, "base_model") and hasattr(self.model.base_model, "get_input_embeddings"):
+            input_embeddings = self.model.base_model.get_input_embeddings()
+
+        if input_embeddings is None or tokenizer is None:
+            return
+
+        embed_weight = getattr(input_embeddings, "weight", None)
+        if embed_weight is None:
+            return
+
+        device = self.token_embeddings[domain].weight.device
+        dtype = self.token_embeddings[domain].weight.dtype
+        proj_weight = self.context_projections[domain].weight.data
+        proj_bias = self.context_projections[domain].bias.data if self.context_projections[domain].bias is not None else None
+
+        label_count = int(vocabulary.label_count)
+        with torch.no_grad():
+            new_embeddings = torch.zeros(label_count, self.decoder_hidden_size, device=device, dtype=dtype)
+            for label in range(label_count):
+                if hasattr(vocabulary, "token_for_label"):
+                    token_str = vocabulary.token_for_label(label)
+                elif hasattr(vocabulary, "tokens") and label < len(vocabulary.tokens):
+                    token_str = vocabulary.tokens[label]
+                else:
+                    token_str = str(label)
+
+                clean_str = token_str.replace("_", " ").strip()
+                if not clean_str:
+                    clean_str = token_str
+
+                try:
+                    token_ids = tokenizer.encode(clean_str, add_special_tokens=False)
+                except Exception:
+                    token_ids = []
+
+                if token_ids:
+                    token_ids_tensor = torch.tensor(token_ids, dtype=torch.long, device=embed_weight.device)
+                    if hasattr(input_embeddings, "forward"):
+                        tok_vecs = input_embeddings(token_ids_tensor).to(device=device, dtype=dtype)
+                    else:
+                        tok_vecs = embed_weight[token_ids_tensor].to(device=device, dtype=dtype)
+                    mean_vec = tok_vecs.mean(dim=0)
+                    if self.backbone_hidden_size != self.decoder_hidden_size:
+                        projected = F.linear(
+                            mean_vec,
+                            proj_weight.to(device=device, dtype=dtype),
+                            proj_bias.to(device=device, dtype=dtype) if proj_bias is not None else None,
+                        )
+                    else:
+                        projected = mean_vec
+                    new_embeddings[label] = projected
+                else:
+                    new_embeddings[label] = torch.randn(self.decoder_hidden_size, device=device, dtype=dtype) * 0.02
+
+            std = new_embeddings.std()
+            if std > 0:
+                new_embeddings = new_embeddings / (std * (self.decoder_hidden_size ** 0.5)) * 0.1
+
+            self.token_embeddings[domain].weight.data.copy_(new_embeddings)
+            self.label_heads[domain].weight.data.copy_(new_embeddings)
+            if self.label_heads[domain].bias is not None:
+                nn.init.zeros_(self.label_heads[domain].bias)
 
     @property
     def device(self) -> torch.device:

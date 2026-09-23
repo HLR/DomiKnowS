@@ -608,6 +608,9 @@ def command_train_agent(args) -> None:
         ik_max_steps=args.ik_max_steps,
         max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
         execution_assistance=args.execution_assistance,
+        assistance_curriculum=getattr(args, "assistance_curriculum", "linear"),
+        assistance_start=getattr(args, "assistance_start", 1.0),
+        assistance_end=getattr(args, "assistance_end", 0.0),
         progress_callback=_status,
     )
     fallback_path = None
@@ -710,7 +713,11 @@ def command_train_agent(args) -> None:
         continuing_partial_epoch = epoch == start_rl_epoch and start_rl_round > 0
         round_metrics = list(resumed_round_metrics) if continuing_partial_epoch else []
         first_round = start_rl_round if continuing_partial_epoch else 0
+        total_rl_rounds = max(1, args.rl_epochs * args.rl_rounds_per_epoch)
         for round_index in range(first_round, args.rl_rounds_per_epoch):
+            current_progress = (epoch * args.rl_rounds_per_epoch + round_index) / total_rl_rounds
+            if hasattr(stage2, "set_curriculum_progress"):
+                stage2.set_curriculum_progress(current_progress)
             descriptor = descriptors[
                 (epoch * args.rl_rounds_per_epoch + round_index) % len(descriptors)
             ]
@@ -1216,6 +1223,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=("deterministic execution scaffolding policy; train-only keeps it "
               "out of fixed-seed evaluation"),
     )
+    agent.add_argument(
+        "--assistance-curriculum",
+        choices=("none", "linear", "cosine"),
+        default="linear",
+        help="annealing schedule for execution assistance during Stage 2 reinforcement learning",
+    )
+    agent.add_argument("--assistance-start", type=float, default=1.0)
+    agent.add_argument("--assistance-end", type=float, default=0.0)
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)
 

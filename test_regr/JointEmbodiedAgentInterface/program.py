@@ -153,6 +153,7 @@ class JointSolverPOIProgram(SolverPOIProgram):
         controller: torch.nn.Module | None = None,
         controller_optimizer: torch.optim.Optimizer | None = None,
         device: str | torch.device = "cpu",
+        eai_loss_weight: float = 3.0,
     ):
         eai_view = planner.for_domain("eai")
         vlabench_view = planner.for_domain("vlabench")
@@ -178,6 +179,7 @@ class JointSolverPOIProgram(SolverPOIProgram):
         self.controller_optimizer = controller_optimizer
         self.gradient_manager = GradientConflictManager(self.planner_head, self.planner_optimizer)
         self.round_robin_cursor = 0
+        self.eai_loss_weight = float(eai_loss_weight)
 
     def _planner_step(self, domain: str, item: Mapping[str, Any]) -> float:
         # Validation routes through the same shared object and may leave it in
@@ -185,7 +187,7 @@ class JointSolverPOIProgram(SolverPOIProgram):
         # during training, so restore the lifecycle explicitly before every
         # optimizer-bearing planner turn.
         self.planner_head.train()
-        with self.runtime.domain_scope(domain):
+        with self.runtime.domain_scope(domain, parameter_policy="freeze_inactive"):
             loss = self.planner_head.supervised_loss(
                 domain,
                 context=_context(item, domain),
@@ -196,6 +198,28 @@ class JointSolverPOIProgram(SolverPOIProgram):
             torch.nn.utils.clip_grad_norm_(self.planner_head.parameters(), 1.0)
             self.planner_optimizer.step()
             return float(loss.detach())
+
+    def train_eai_warmup(
+        self,
+        eai_examples: Sequence[Mapping[str, Any]],
+        *,
+        steps: int = 350,
+    ) -> dict[str, float]:
+        """Run pure EAI supervised training steps before alternating multi-domain rounds."""
+        steps = int(steps)
+        if steps <= 0:
+            return {"loss": 0.0, "steps": 0}
+        if not eai_examples:
+            raise ValueError("eai_examples cannot be empty for warmup")
+        stream = _cycle(eai_examples)
+        total = 0.0
+        progress = _TrainingProgress("EAI warm-up", steps)
+        for index in range(steps):
+            item = next(stream)
+            loss = self._planner_step("eai", item)
+            total += loss
+            progress.update(index + 1, eai_warmup_loss=total / (index + 1))
+        return {"loss": total / steps, "steps": steps}
 
     def _controller_step(self, batch: Mapping[str, torch.Tensor] | None) -> float:
         if batch is None or self.controller is None or self.controller_optimizer is None:
@@ -288,7 +312,8 @@ class JointSolverPOIProgram(SolverPOIProgram):
                 context=_context(eai_item, "eai"),
                 target_labels=_labels(eai_item, "eai").to(self.planner_head.device),
             )
-            self.gradient_manager.capture("eai", eai_tensor)
+            scaled_eai = eai_tensor * self.eai_loss_weight if self.eai_loss_weight != 1.0 else eai_tensor
+            self.gradient_manager.capture("eai", scaled_eai)
 
         with self.runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
             vlabench_tensor = self.planner_head.supervised_loss(
@@ -508,6 +533,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         rounds: int = 10,
         vlabench_rollouts_per_update: int = 8,
         start_round: int = 0,
+        current_epoch: int = 0,
+        total_epochs: int = 1,
         initial_metrics: Mapping[str, Any] | None = None,
         round_callback: Callable[[int, Mapping[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
@@ -628,7 +655,10 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             }
 
         progress = _TrainingProgress("Stage 2 rounds", rounds, initial=start_round)
+        total_rl_steps = max(1, total_epochs * rounds)
         for round_index in range(start_round, rounds):
+            if hasattr(self, "set_curriculum_progress"):
+                self.set_curriculum_progress((current_epoch * rounds + round_index) / total_rl_steps)
             _emit_progress(f"Stage 2 round {round_index + 1}/{rounds}: EAI policy update")
             eai = self.train_eai_update(random.choice(eai_examples))
             descriptor = vlabench_descriptors[

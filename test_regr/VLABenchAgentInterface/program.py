@@ -1386,6 +1386,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         max_consecutive_ik_rejections: int = 3,
         simulator_init_retries: int = 3,
         execution_assistance: str = "train-only",
+        assistance_curriculum: str = "linear",
+        assistance_start: float = 1.0,
+        assistance_end: float = 0.0,
         progress_callback: Callable[[str], None] | None = None,
     ):
         poi = attach_planner_sensors(runtime, planner, device=device)
@@ -1462,9 +1465,34 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             raise ValueError("execution assistance must be 'off', 'train-only', or 'on'")
         self.execution_assistance = execution_assistance
         self._execution_assistance_override: bool | None = None
+        if assistance_curriculum not in {"none", "linear", "cosine"}:
+            raise ValueError("assistance curriculum must be 'none', 'linear', or 'cosine'")
+        self.assistance_curriculum = assistance_curriculum
+        self.assistance_start = float(assistance_start)
+        self.assistance_end = float(assistance_end)
+        self.curriculum_progress = 0.0
         self.progress_callback = progress_callback
         self._entity_dfa_cache: dict[int, Any] = {}
         self.last_controller_update: dict[str, Any] = {}
+
+    def set_curriculum_progress(self, progress: float) -> None:
+        self.curriculum_progress = max(0.0, min(1.0, float(progress)))
+
+    def compute_assistance_factor(self) -> float:
+        if self._execution_assistance_override is not None:
+            return 1.0 if self._execution_assistance_override else 0.0
+        if self.execution_assistance == "off":
+            return 0.0
+        if self.assistance_curriculum == "none":
+            return self.assistance_start
+        p = max(0.0, min(1.0, float(self.curriculum_progress)))
+        if self.assistance_curriculum == "linear":
+            return self.assistance_start + p * (self.assistance_end - self.assistance_start)
+        elif self.assistance_curriculum == "cosine":
+            import math
+            cos_factor = 0.5 * (1.0 + math.cos(math.pi * p))
+            return self.assistance_end + cos_factor * (self.assistance_start - self.assistance_end)
+        return self.assistance_start
 
     def _report_progress(self, message: str) -> None:
         if self.progress_callback is not None:
@@ -1505,6 +1533,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             self._execution_assistance_override
             if self._execution_assistance_override is not None
             else self.execution_assistance in {"train-only", "on"}
+        )
+        alpha = self.compute_assistance_factor()
+        latch_assistance_enabled = assistance_enabled and (
+            self._execution_assistance_override is True or random.random() < alpha
         )
         kwargs = dict(descriptor.get("env_kwargs", {}))
         if descriptor.get("task") is not None:
@@ -2194,7 +2226,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     candidate_value,
                                     current,
                                     target_world - controller_robot_frame,
-                                    approach_blend,
+                                    approach_blend * alpha,
                                 )
                                 pick_assist_steps += 1
                         if (
@@ -2222,7 +2254,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 candidate_value[:3] = pull_target_world - controller_robot_frame
                                 candidate_value[3:6] = current[3:6]
                                 candidate_value[6] = 0.0
-                                if pull_attachment_offset is None and gripper_settled:
+                                if latch_assistance_enabled and pull_attachment_offset is None and gripper_settled:
                                     try:
                                         task = getattr(env, "task", None)
                                         target_name = getattr(task, "target_entity", None)
@@ -2273,7 +2305,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 candidate_value[:3] = lift_target_world - controller_robot_frame
                                 candidate_value[3:6] = current[3:6]
                                 candidate_value[6] = 0.0
-                                if lift_attachment_offset is None and gripper_settled:
+                                if latch_assistance_enabled and lift_attachment_offset is None and gripper_settled:
                                     try:
                                         task = getattr(env, "task", None)
                                         target_name = getattr(task, "target_entity", None)
@@ -2467,7 +2499,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     insert_phase = 0
                                     insert_lift_target_world = None
                                 current_world = current[:3] + controller_robot_frame
-                                if insert_attachment_offset is None and gripper_settled:
+                                if latch_assistance_enabled and insert_attachment_offset is None and gripper_settled:
                                     try:
                                         target_entity = _live_task_entity(env, "target_entity")
                                         target_world = _live_task_entity_position(env, "target_entity")
@@ -2686,14 +2718,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     or current_target_distance <= 0.012
                                     or pick_stalled_steps >= 4
                                 )
-                            if within_grasp_envelope and not pick_grasp_latched:
+                            if latch_assistance_enabled and within_grasp_envelope and not pick_grasp_latched:
                                 pick_grasp_latched = True
                                 getter = getattr(getattr(env, "robot", None), "get_qpos", None)
                                 if callable(getter):
                                     pick_grasp_qpos = np.asarray(getter(env.physics), dtype=np.float64).copy()
-                            bounded[6] = 0.0 if pick_grasp_latched else 1.0
-                            if pick_grasp_latched:
-                                bounded[:6] = current[:6]
+                            if latch_assistance_enabled:
+                                bounded[6] = 0.0 if pick_grasp_latched else 1.0
+                                if pick_grasp_latched:
+                                    bounded[:6] = current[:6]
                         if condiment_pick:
                             grasp_orientation, orientation_error = _condiment_orientation_step(
                                 current[3:6], self.max_rotation_step
@@ -2875,7 +2908,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         valid = False
                         termination_reason = "invalid_action"
                         break
-                    if assistance_enabled and operation_cursor == 0 and active_skill == "pick" and not condiment_pick and pick_grasp_latched:
+                    if latch_assistance_enabled and operation_cursor == 0 and active_skill == "pick" and not condiment_pick and pick_grasp_latched:
                         # Binary EE open state cannot represent a metre-valued
                         # aperture. Ramp the converted physical finger joints.
                         if pick_grasp_qpos is not None:
@@ -2883,7 +2916,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         command[-2:] = 0.04 * max(0.0, 1.0 - grasp_close_steps / 10.0)
                         grasp_close_steps += 1
                         grasp_assist_steps += 1
-                    if assistance_enabled and condiment_pick and condiment_grasp_pose is not None:
+                    if latch_assistance_enabled and condiment_pick and condiment_grasp_pose is not None:
                         # EE gripper state is binary; apply the physical
                         # aperture ramp only after conversion to joint control.
                         if condiment_grasp_qpos is not None:
@@ -2941,7 +2974,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         )
                         condiment_first_lift_trace = True
                     if (
-                        active_skill == "place"
+                        latch_assistance_enabled
+                        and active_skill == "place"
                         and place_attachment_offset is None
                         and gripper_settled
                         and candidate_value[6] < 0.5
@@ -3196,7 +3230,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         )
                     )
                     if (
-                        condiment_grasp_confirmed
+                        latch_assistance_enabled
+                        and condiment_grasp_confirmed
                         and condiment_attachment_offset is None
                         and gripper_settled
                     ):
@@ -3346,6 +3381,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "insert_assist_steps": insert_assist_steps,
                 "lift_assist_steps": lift_assist_steps,
                 "press_assist_steps": press_assist_steps,
+                "curriculum_alpha": float(alpha),
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "
