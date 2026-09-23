@@ -694,7 +694,9 @@ class InferenceModel(LossModel):
                  pos_weight=1.0,
                  include_global_constraint_loss=False,
                  global_constraint_loss_weight=1.0,
-                 executable_constraint_loss_weight=1.0):
+                 executable_constraint_loss_weight=1.0,
+                 global_constraint_tnorm=None,
+                 global_constraint_reduction='sum'):
         """
         Initializes an instance of InferenceModel.
 
@@ -727,6 +729,16 @@ class InferenceModel(LossModel):
             executable constraint BCE loss.
         :param global_constraint_loss_weight: Weight for graph-global constraint loss.
         :param executable_constraint_loss_weight: Weight for executable BCE loss.
+        :param global_constraint_tnorm: t-norm of the graph-global constraint loss
+            (default: ``tnorm``).  Goedel implication is 1 when a <= b and b
+            otherwise, so an implication whose premise is almost surely false
+            (a = 1e-7, b = 1e-8) counts as fully violated; rules written with
+            ifL usually train better under 'P' or 'L' even when the executable
+            constraints use 'G'.
+        :param global_constraint_reduction: 'sum' (default) adds every
+            grounding's loss; 'mean' averages each constraint over its
+            groundings, so a rule over object triples does not scale with n^3
+            and outweigh the executable loss on large scenes.
         """
         self.graph = graph
 
@@ -741,6 +753,10 @@ class InferenceModel(LossModel):
         self.include_global_constraint_loss = bool(include_global_constraint_loss)
         self.global_constraint_loss_weight = float(global_constraint_loss_weight)
         self.executable_constraint_loss_weight = float(executable_constraint_loss_weight)
+        self.global_constraint_tnorm = global_constraint_tnorm
+        if global_constraint_reduction not in ('sum', 'mean'):
+            raise ValueError(f"global_constraint_reduction must be 'sum' or 'mean', got {global_constraint_reduction!r}")
+        self.global_constraint_reduction = global_constraint_reduction
         # pos_weight rebalances BCE against majority-class collapse on existsL
         # constraints. When the dataset's logic_label has a skewed Yes/No ratio
         # the unweighted BCE will drift toward the majority direction — setting
@@ -823,12 +839,16 @@ class InferenceModel(LossModel):
             weighted.append(loss_value)
         return sum(weighted)
 
+    def _separate_global_tnorm(self):
+        tnorm = getattr(self, 'global_constraint_tnorm', None)
+        return tnorm is not None and tnorm != self.tnorm
+
     def _calculate_global_constraint_loss(self, datanode, constraint_losses=None):
         """Return graph-level constraint loss from graph.logicalConstrains only."""
-        constr_loss = constraint_losses
+        constr_loss = None if self._separate_global_tnorm() else constraint_losses
         if constr_loss is None:
             constr_loss = datanode.calculateLcLoss(
-                tnorm=self.tnorm,
+                tnorm=getattr(self, 'global_constraint_tnorm', None) or self.tnorm,
                 counting_tnorm=self.counting_tnorm,
                 sample=self.sample,
                 sampleSize=self.sampleSize,
@@ -851,7 +871,11 @@ class InferenceModel(LossModel):
                 continue
 
             loss_value = loss_tensor.clamp(min=0)
-            loss_sum = loss_value[loss_value == loss_value].sum()
+            loss_value = loss_value[loss_value == loss_value]
+            if getattr(self, 'global_constraint_reduction', 'sum') == 'mean' and loss_value.numel() > 0:
+                loss_sum = loss_value.mean()
+            else:
+                loss_sum = loss_value.sum()
             self.loss[key](loss_sum)
             losses.append(loss_sum)
 
@@ -917,7 +941,8 @@ class InferenceModel(LossModel):
                 counting_tnorm=self.counting_tnorm,
                 compiled=True,
                 includeExecutable=True,
-                includeGlobal=self.include_global_constraint_loss,
+                includeGlobal=(self.include_global_constraint_loss
+                               and not self._separate_global_tnorm()),
                 sampleGlobalLoss=False,
             )
         elif read_labels:

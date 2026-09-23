@@ -1524,6 +1524,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                  include_global_constraint_loss=False,
                  global_constraint_loss_weight=1.0,
                  executable_constraint_loss_weight=1.0,
+                 global_constraint_tnorm=None,
+                 global_constraint_reduction='sum',
                  query_loss=None,
                  **kwargs):
         """
@@ -1546,6 +1548,10 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             evaluator for labeled executable constraints and the optional
             graph-global loss. Custom ``LogicalConstrain`` subclasses use the
             common compiled formula protocol without explicit registration.
+        :param global_constraint_tnorm: t-norm of the graph-global constraint
+            loss (default: the program's ``tnorm``); see ``InferenceModel``.
+        :param global_constraint_reduction: 'sum' (default) or 'mean' over each
+            graph-global constraint's groundings; see ``InferenceModel``.
         :param query_loss: Optional loss factory for multiclass ``queryL``
             outputs. It is forwarded only to the constraint model; scalar
             executable constraints continue to use that model's binary loss.
@@ -1560,6 +1566,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             'include_global_constraint_loss': bool(include_global_constraint_loss),
             'global_constraint_loss_weight': global_constraint_loss_weight,
             'executable_constraint_loss_weight': executable_constraint_loss_weight,
+            'global_constraint_tnorm': global_constraint_tnorm,
+            'global_constraint_reduction': global_constraint_reduction,
         }
         if query_loss is not None:
             cmodel_kwargs['query_loss'] = query_loss

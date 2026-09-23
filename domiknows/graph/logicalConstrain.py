@@ -597,7 +597,15 @@ class LogicalConstrain(LcElement):
                     import inspect
                     sig = inspect.signature(lcFun)
                     param_names = list(sig.parameters.keys())
-                    if 'onlyConstrains' in param_names and len(t) >= param_names.index('onlyConstrains') + 1:
+                    # After ``*var`` (andVar, orVar, nandVar, ...) onlyConstrains
+                    # is keyword-only and can never arrive by position: with
+                    # three or more operands the positional test below used to
+                    # drop it, so a head constraint returned its truth value
+                    # instead of its loss.
+                    varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL
+                                  for p in sig.parameters.values())
+                    if (not varargs and 'onlyConstrains' in param_names
+                            and len(t) >= param_names.index('onlyConstrains') + 1):
                         tVars.append(lcFun(model, *t))
                     else:
                         tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
