@@ -600,6 +600,7 @@ def command_train_agent(args) -> None:
         ppo_min_learning_rate=args.ppo_min_learning_rate,
         value_weight=args.value_weight,
         entropy_weight=args.entropy_weight,
+        feasibility_weight=getattr(args, "feasibility_weight", 0.15),
         max_position_step=args.max_position_step,
         max_rotation_step=args.max_rotation_step,
         pick_approach_blend=args.pick_approach_blend,
@@ -1190,6 +1191,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--ppo-min-learning-rate", type=float, default=1e-7)
     agent.add_argument("--value-weight", type=float, default=0.5)
     agent.add_argument("--entropy-weight", type=float, default=0.01)
+    agent.add_argument("--feasibility-weight", type=float, default=0.15)
     agent.add_argument("--max-position-step", type=float, default=0.02)
     agent.add_argument("--max-rotation-step", type=float, default=0.10)
     agent.add_argument(

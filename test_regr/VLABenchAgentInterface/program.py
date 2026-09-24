@@ -1376,7 +1376,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         max_controller_loss: float = 50.0,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
-        feasibility_weight: float = 0.05,
+        feasibility_weight: float = 0.15,
         max_position_step: float = 0.02,
         max_rotation_step: float = 0.10,
         pick_approach_blend: float = 0.5,
@@ -2859,13 +2859,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     np.cos(recovered[3:6] - current[3:6]),
                                 )
                                 recovered[3:6] = current[3:6] + recovery_scale * angle_delta
+                                ik_tol = (
+                                    self.ik_tolerance
+                                    if recovery_scale >= 0.5
+                                    else max(self.ik_tolerance, 3e-3)
+                                )
                                 try:
                                     command = ee_action_to_env_action(
                                         env,
                                         robot_to_world_ee_action(
                                             recovered, controller_robot_frame
                                         ),
-                                        ik_tolerance=self.ik_tolerance,
+                                        ik_tolerance=ik_tol,
                                         ik_max_steps=self.ik_max_steps,
                                     )
                                     if recovery_scale < 1.0:
@@ -3327,11 +3332,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             final_progress = previous_progress
             final_intention = previous_intention
             efficiency = max(0.0, 1.0 - steps / max(1, self.max_steps)) if success else 0.0
+            ik_penalty = 0.20 if (ik_truncated or termination_reason == "ik_failure") else 0.0
             target_total = float(np.clip(
                 0.60 * float(success)
                 + 0.25 * final_progress
                 + 0.10 * final_intention
-                + 0.05 * efficiency,
+                + 0.05 * efficiency
+                - ik_penalty,
                 0.0,
                 1.0,
             ))
@@ -3504,10 +3511,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
     def _controller_anchor(self):
         if self.controller_anchor_loader is None or not self.controller_bc_weight:
             return torch.zeros((), device=self.device_name)
+        if not hasattr(self, "_controller_anchor_iter") or self._controller_anchor_iter is None:
+            self._controller_anchor_iter = iter(self.controller_anchor_loader)
         try:
-            batch = next(iter(self.controller_anchor_loader))
+            batch = next(self._controller_anchor_iter)
         except StopIteration:
-            return torch.zeros((), device=self.device_name)
+            self._controller_anchor_iter = iter(self.controller_anchor_loader)
+            try:
+                batch = next(self._controller_anchor_iter)
+            except StopIteration:
+                return torch.zeros((), device=self.device_name)
         inputs = (
             batch["images"].to(self.device_name),
             batch["state"].to(self.device_name),
