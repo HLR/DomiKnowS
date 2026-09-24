@@ -1573,6 +1573,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         operation_cursor = 0
         consecutive_ik_rejections = 0
         ik_failures = ik_recoveries = 0
+        ik_truncated = False
         termination_reason = "max_steps"
         previous_progress = previous_intention = 0.0
         last_progress_report = time.monotonic()
