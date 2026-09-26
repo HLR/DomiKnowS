@@ -1,10 +1,12 @@
 """Standalone DomiKnowS check: graph-level (global) rules over relation pairs and triples.
 
 Synthetic scenes, hand-set 0/1 relation values, brute-force truth per grounding.
-Prints, for each rule and scene, the number of groundings the Goedel loss marks
-violated (loss > 0.5) next to the brute-force count.
+Prints, for each rule and scene, the number of groundings the loss (TNORM, default
+Goedel) marks violated (loss > 0.5) next to the brute-force count, and the
+head-level verify satisfaction next to the brute-force rate.
 
     python global_rules_repro.py [RULE,...]    # all rules by default, each in its own process
+    python global_rules_repro.py --same-process RULE,...   # one process, graph rebuilt per rule
 """
 import contextlib
 import io
@@ -56,6 +58,11 @@ RULES = {
     'trans_if': (lambda L, R, D: ifL(andL(L('a', 'b'), L('b', 'c')), L('a', 'c'), name='trans_if'),
                  ('a', 'b', 'c'), lambda r, a, b, c: not (r['left'][(a, b)] and r['left'][(b, c)])
                  or r['left'][(a, c)]),
+    # Head-level operands sharing b with no operand spanning (a, b, c): a graph
+    # rule holds for all a, b, c (it used to be read as
+    # (exists a. left(a,b)) -> (exists c. left(b,c)), one row per b).
+    'shared_if': (lambda L, R, D: ifL(L('a', 'b'), L('b', 'c'), name='shared_if'),
+                  ('a', 'b', 'c'), lambda r, a, b, c: not r['left'][(a, b)] or r['left'][(b, c)]),
 }
 
 
@@ -112,26 +119,42 @@ def check(rule, scene_id):
     n, rel = SCENES[scene_id]
     _, vars_, holds = RULES[rule]
     expected = sum(1 for t in itertools.product(range(n), repeat=len(vars_)) if not holds(rel, *t))
+    total = n ** len(vars_)
+    compiled = os.environ.get('COMPILED') == '1'
     with contextlib.redirect_stdout(io.StringIO()):
         program, graph = build(rule)
         dn = next(program.populate([row(scene_id)], device='cpu'))
         lc = next(lc for lc in graph.logicalConstrains.values() if lc.name == rule)
         try:
             out = dn.calculateLcLoss(tnorm=os.environ.get('TNORM', 'G'), includeGlobal=True,
-                                     compiled=os.environ.get('COMPILED') == '1')
+                                     compiled=compiled)
             t = out[lc.lcName]['lossTensor'].float().nan_to_num().reshape(-1)
             got, rows = int((t > 0.5).sum()), t.numel()
+            # Head-level verify on the argmax values: satisfied % of all groundings.
+            verify = dn.verifyResultsLC(key='/local/argmax', compiled=compiled)[lc.lcName]
+            vrows = sum(len(v) for v in verify['verifyList'])
+            vsat = verify['satisfied']
         except Exception as e:   # noqa: BLE001
             return f"{rule:13s} {scene_id:6s} ERR {type(e).__name__}: {str(e)[:90]}"
-    status = 'OK ' if (got == expected and rows == n ** len(vars_)) else 'BAD'
-    return f"{rule:13s} {scene_id:6s} {status} violated={got:3d} expected={expected:3d} rows={rows} (n^{len(vars_)}={n ** len(vars_)})"
+    vexp = 100.0 * (total - expected) / total
+    ok = got == expected and rows == total and vrows == total and abs(vsat - vexp) < 1e-6
+    status = 'OK ' if ok else 'BAD'
+    return (f"{rule:13s} {scene_id:6s} {status} violated={got:3d} expected={expected:3d} rows={rows} "
+            f"(n^{len(vars_)}={total}) verify={vsat:.2f}% of {vrows} (expected {vexp:.2f}%)")
 
 
 if __name__ == '__main__':
-    # One rule per process: the solver built for the first graph is cached
-    # and reused by later graphs of the same process.
-    rules = sys.argv[1].split(',') if len(sys.argv) > 1 else list(RULES)
-    if len(rules) > 1:
+    args = sys.argv[1:]
+    same_process = '--same-process' in args
+    args = [a for a in args if a != '--same-process']
+    rules = args[0].split(',') if args else list(RULES)
+    if same_process:
+        # Every rule rebuilds the graph in this process: each must be evaluated
+        # with its own rules, not those of the solver built for the first graph.
+        for rule in rules:
+            for scene_id in SCENES:
+                print(check(rule, scene_id), flush=True)
+    elif len(rules) > 1:
         import subprocess
         for rule in rules:
             subprocess.run([sys.executable, __file__, rule], check=False)

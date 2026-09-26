@@ -78,7 +78,12 @@ class ilpOntSolverFactory:
                     from .dummyILPOntSolver import dummyILPOntSolver
                 SolverClass = cls.getClass(dummyILPOntSolver, *SupplementalClasses)
 
-        key = (SolverClass, ontologiesTuple, frozenset(_ilpConfig), frozenset(kwargs))
+        # The solver reads its rules from the graphs it was built for, so the
+        # graphs (compared by identity) are part of the key: a rebuilt graph,
+        # e.g. with an edited constraint, gets its own solver instead of the
+        # first graph's.  kwargs are keyed by value, not only by name.
+        key = (SolverClass, ontologiesTuple, frozenset(_ilpConfig), cls._kwargsKey(kwargs),
+               frozenset(graph))
         if key not in cls.__instances:
             instance = SolverClass(graph, ontologiesTuple, _ilpConfig, **kwargs)
             cls.__instances[key] = instance
@@ -101,6 +106,17 @@ class ilpOntSolverFactory:
                 instance.myLogger.debug("Returning existing generic ilpOntSolver using %s"%(_ilpConfig['ilpSolver']))
 
             return instance
+
+    @staticmethod
+    def _kwargsKey(kwargs):
+        items = []
+        for name, value in kwargs.items():
+            try:
+                hash(value)
+            except TypeError:
+                value = repr(value)
+            items.append((name, value))
+        return frozenset(items)
 
     @classmethod
     def clear(cls):

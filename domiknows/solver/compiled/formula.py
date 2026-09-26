@@ -578,13 +578,20 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                             self._protected_variables = tuple(_prev_protected) + (lc.selection_variable,)
                         _prev_outer = getattr(self, '_outer_bindings', None)
                         self._outer_bindings = ChainMap(lcVariableBindings, _prev_outer or {})
-                        nested = self.constructCompiled(
-                            e, booleanProcessor, dn, key=key,
-                            lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
-                            headLC=False, vNo=vNo, label=label, plan=step.child,
-                            model=model, p=p, loss=loss, sample=sample,
-                            verify=verify, circuit=circuit,
-                            concept_bindings=bound_concepts)
+                        # Mirrors the interpreter: under a plain connective the
+                        # nested constraint keeps one row per variable tuple.
+                        _prev_keep_joint = getattr(self, '_keep_joint', False)
+                        self._keep_joint = not isinstance(lc, self.EXISTENTIAL_PARENTS)
+                        try:
+                            nested = self.constructCompiled(
+                                e, booleanProcessor, dn, key=key,
+                                lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
+                                headLC=False, vNo=vNo, label=label, plan=step.child,
+                                model=model, p=p, loss=loss, sample=sample,
+                                verify=verify, circuit=circuit,
+                                concept_bindings=bound_concepts)
+                        finally:
+                            self._keep_joint = _prev_keep_joint
                         self._protected_variables = _prev_protected
                         self._outer_bindings = _prev_outer
                         if getattr(self, '_pending_joint_binding', None) is not None:
@@ -657,7 +664,8 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
             useLcVariables, joined, joint_binding = self.expandToJointGrounding(
                 useLcVariables, lcVariableBindings, lcVariablesDns,
                 prune=(verify and not loss), logger=self.myLogger,
-                protect=getattr(self, '_protected_variables', ()))
+                protect=getattr(self, '_protected_variables', ()),
+                keep_joint=self.keepJointFor(lc, headLC))
             self._pending_joint_binding = (
                 joint_binding if joined
                 else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
@@ -691,6 +699,10 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
         if sample:
             lcVariablesSet[lc] = useLcVariables
             return output, sampleInfo, lcVariablesSet, lcVariables
+        if verify and headLC and not loss:
+            # As in the interpreter: the verifier reads the ifL premise on the
+            # rows the result was computed on.
+            return output, useLcVariables
         return output, lcVariables
 
 

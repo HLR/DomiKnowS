@@ -6,7 +6,8 @@ from domiknows.graph.concept import Concept, EnumConcept
 from domiknows.graph import LcElement, LogicalConstrain, V
 from domiknows.graph import CandidateSelection
 from domiknows.graph.candidates import getCandidates
-from domiknows.graph.logicalConstrain import iotaL, miotaL, sumL, queryL, _CountBaseL, _AccumulatedCountBaseL
+from domiknows.graph.logicalConstrain import (iotaL, miotaL, sumL, queryL, _CountBaseL,
+                                             _AccumulatedCountBaseL, _CompareCountsBaseL)
 
 
 class LogicalConstraintConstructor:
@@ -982,6 +983,20 @@ class LogicalConstraintConstructor:
 
         return reduced
 
+    # Constraints whose operands may be quantified down to their shared
+    # variables (``reduceToCommonGrounding``, the existential reading): counts,
+    # count comparisons, entity selectors, queries and sums.  Operands of any
+    # other constraint (ifL, andL, notL, ...), nested or at the head, keep one
+    # row per tuple of their variables, i.e. the rule holds for all of them.
+    EXISTENTIAL_PARENTS = (_CountBaseL, _AccumulatedCountBaseL, _CompareCountsBaseL,
+                           iotaL, miotaL, queryL, sumL)
+
+    def keepJointFor(self, lc, headLC):
+        """``keep_joint`` for ``expandToJointGrounding`` while grounding ``lc``."""
+        if headLC:
+            return not isinstance(lc, self.EXISTENTIAL_PARENTS)
+        return getattr(self, '_keep_joint', False)
+
     # Joint tables above this many rows are declined (the caller keeps the
     # previous behaviour) so a pathological formula cannot exhaust memory.
     JOINT_GROUNDING_MAX_ROWS = 3_000_000
@@ -1109,6 +1124,11 @@ class LogicalConstraintConstructor:
         # exact.  Loss mode above the row budget: keep the top-k candidates
         # per variable by evidence (soft values), never touching ``protect``.
         allowed = {v: torch.ones(domains[v], dtype=torch.bool, device=device) for v in joint}
+        # Dropping candidates a unary operand rejects is exact only when the
+        # rows are read existentially / conjunctively; under ``keep_joint``
+        # every tuple is a grounding (e.g. the rows where the premise of an
+        # ifL is false count as satisfied), so the table stays complete.
+        prune = prune and not keep_joint
         full_rows = 1
         for v in joint:
             full_rows *= domains[v]
@@ -1752,8 +1772,7 @@ class LogicalConstraintConstructor:
                             # its shared variables (exact only under an
                             # existential parent).
                             _prev_keep_joint = getattr(self, '_keep_joint', False)
-                            self._keep_joint = not isinstance(
-                                lc, (_CountBaseL, _AccumulatedCountBaseL, iotaL, miotaL, queryL, sumL))
+                            self._keep_joint = not isinstance(lc, self.EXISTENTIAL_PARENTS)
                             vDns, lcVariableUpdated = self.constructLogicalConstrains(
                                 e, booleanProcessor, m, dn, p, key=key, 
                                 lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
@@ -1823,8 +1842,6 @@ class LogicalConstraintConstructor:
         elif sample:
             lcVariablesSet[lc] = useLcVariables
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), sampleInfo, lcVariablesSet, lcVariables
-        elif verify and headLC:
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
         else:
             joined = False
             if (loss or verify or circuit) and not sample and not isEntitySelector:
@@ -1838,7 +1855,7 @@ class LogicalConstraintConstructor:
                     useLcVariables, lcVariableBindings, lcVariablesDns,
                     prune=(verify and not loss), logger=self.myLogger,
                     protect=getattr(self, '_protected_variables', ()),
-                    keep_joint=(not headLC and getattr(self, '_keep_joint', False)))
+                    keep_joint=self.keepJointFor(lc, headLC))
                 self._pending_joint_binding = (
                     joint_binding if joined
                     else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
@@ -1860,4 +1877,9 @@ class LogicalConstraintConstructor:
                          
                         useLcVariables[v] = self.splitLossColumns(useLcVariables[v])
 
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
+            result = lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {}))
+            if verify and headLC:
+                # The verifier reads the ifL premise row by row next to the
+                # result, so hand it the operands on the rows actually used.
+                return result, useLcVariables
+            return result, lcVariables

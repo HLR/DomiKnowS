@@ -677,7 +677,7 @@ def test_batched_unary_implications_match_interpreter_and_gradients(tnorm):
 
 @pytest.mark.parametrize('tnorm', TNORMS)
 def test_batched_implication_primitive_preserves_row_semantics(tnorm):
-    """Godel's row-level zero branch and Product zeros remain exact."""
+    """ifVarBatched matches ifVar row by row, zeros and equalities included."""
     from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
 
     processor = lcLossBooleanMethods()
@@ -712,6 +712,38 @@ def test_batched_implication_primitive_preserves_row_semantics(tnorm):
             assert expected_grad is None and actual_grad is None
         else:
             assert torch.allclose(expected_grad, actual_grad, atol=1e-7)
+
+
+@pytest.mark.parametrize('tnorm', TNORMS)
+def test_implication_loss_values(tnorm):
+    """ifVar returns the loss once inverted, also for rows holding a 0.
+
+    The Goedel / Product vector paths used to fall back to per-element calls
+    when a 0 was present and invert the result twice (loss == satisfaction),
+    and Goedel treated a == b as violated in the vector path.
+    """
+    from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
+
+    processor = lcLossBooleanMethods()
+    processor.current_device = 'cpu'
+    processor.current_dtype = torch.float32
+    processor.setTNorm(tnorm)
+    a = torch.tensor([0.0, 0.3, 0.7, 1.0, 0.5])
+    b = torch.tensor([0.0, 0.3, 0.2, 0.0, 0.9])
+    truth = {
+        'L': torch.clamp(1 - a + b, max=1.0),
+        'G': torch.where(b >= a, torch.ones_like(a), b),
+        'P': torch.where(b >= a, torch.ones_like(a), b / torch.where(a != 0, a, torch.ones_like(a))),
+    }[tnorm]
+    loss = processor.ifVar(None, a, b, onlyConstrains=True)
+    assert torch.allclose(loss, 1 - truth, atol=1e-6)
+    assert torch.allclose(processor.ifVar(None, a, b), truth, atol=1e-6)
+    batched = processor.ifVarBatched(None, a[None], b[None], onlyConstrains=True)
+    assert torch.allclose(batched[0], 1 - truth, atol=1e-6)
+    # 1 -> 0 is fully violated, 0 -> 0 and a -> a fully satisfied.
+    assert loss[3].item() == pytest.approx(1.0)
+    assert loss[0].item() == pytest.approx(0.0)
+    assert loss[1].item() == pytest.approx(0.0, abs=1e-6)
 
 
 def test_batched_unary_implications_respect_dynamic_concept_activation():

@@ -250,6 +250,9 @@ class Graph(BaseGraphTree):
     def clear(cls):
         super().clear()
         cls.varNameReversedMap.clear()
+        # Solvers are cached per graph; drop them with the graphs they serve.
+        from domiknows.solver.ilpOntSolverFactory import ilpOntSolverFactory
+        ilpOntSolverFactory.clear()
     
     def get_constraint_concept(self):
         if self.constraint is None:

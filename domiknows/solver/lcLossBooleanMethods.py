@@ -298,8 +298,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         else:            
             return nandSuccess
             
-    # Singleton tensors 
-    def ifVarS(self, _, var1, var2, *, onlyConstrains=False):
+    def ifVar(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "IF"
         if self.ifLog:
             self.myLogger.debug("%s called with: var1=%s, var2=%s",
@@ -308,7 +307,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         # convert None / plain numbers → 0-tensors
         var1, var2 = self._fixVar((var1, var2))
 
-        # ── element-wise implementation (works for scalars **and** vectors) ──
+        # Element-wise: scalars, vectors and [rules, groundings] matrices.
         if self.tnorm == 'L':                        # Łukasiewicz
             ifSuccess = torch.minimum(torch.ones_like(var1),
                                     1 - var1 + var2)
@@ -319,83 +318,24 @@ class lcLossBooleanMethods(constraintsProcessor):
                                     var2)
 
         else:                                        # Product ('P')
+            # Goguen: 1 if a <= b else b / a (so 0 -> 0 holds).
             # use torch.where in the denom rather than after the divide
             # see: https://github.com/pytorch/pytorch/issues/36923
             safe_ratio = var2 / torch.where(var1 != 0, var1, 1e-4)
-            ifSuccess  = torch.minimum(
-                torch.ones_like(safe_ratio),
-                safe_ratio
-            )
+            ifSuccess  = torch.where(var1 <= var2,
+                                     torch.ones_like(safe_ratio),
+                                     safe_ratio)
 
         return 1 - ifSuccess if onlyConstrains else ifSuccess
-
-    def ifVar(self, _, var1, var2, onlyConstrains = False):
-        logicMethodName = "IF"
-
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s", logicMethodName, var1, var2)
-                
-        # check if separate tensors used
-        if torch.is_tensor(var1) and (len(var1.shape) == 0 or len(var1.shape) == 1 and var1.shape[0] == 1):
-            return self.ifVarS(_, var1, var2, onlyConstrains = onlyConstrains)
-        
-        var1, var2 = self._fixVar((var1,var2))
-        tSize = var1.size(dim=0)
-        tOneSize = torch.ones(tSize, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
-
-        var1, var2 = self._fixVar((var1,var2))
-        zeroInVar1 = 0 in var1
-        zeroInVar2 = 0 in var2
-        
-        if self.tnorm =='L':
-            # min(1, 1 - var1 + var2)
-            oneMinusVar1 = torch.sub(tOneSize, var1)
-            sumOneMinusVar1AndVar2 = torch.add(oneMinusVar1, var2)
-            
-            ifSuccess = torch.minimum(tOneSize, sumOneMinusVar1AndVar2) 
-        elif self.tnorm =='G':
-            if not zeroInVar2:
-                var2Larger = torch.gt(var2, var1)
-                var1Larger = torch.ge(var1, var2)
-                
-                var2Inverse = torch.div(tOneSize, var2)
-                var2LargerSuccess = torch.mul(torch.mul(var2Larger.float(), var2), var2Inverse)
-                var1LargerSuccess = torch.mul(var1Larger.float(), var2)
-                
-                ifSuccess = var2LargerSuccess + var1LargerSuccess
-            else:
-                ifSuccessList = []
-                for v1, v2 in zip(var1,var2):
-                    ifSuccessList.append(self.ifVarS(_, v1, v2, onlyConstrains = onlyConstrains))
-                    
-                ifSuccess = torch.stack(ifSuccessList, dim=0)            
-        elif self.tnorm =='P':
-            if not zeroInVar1:
-                div1DivisionDiv2 = torch.div(var2, var1)
-                
-                ifSuccess = torch.minimum(tOneSize, div1DivisionDiv2)
-            else:
-                ifSuccessList = []
-                for v1, v2 in zip(var1,var2):
-                    ifSuccessList.append(self.ifVarS(_, v1, v2, onlyConstrains = onlyConstrains))
-                    
-                ifSuccess = torch.stack(ifSuccessList, dim=0)     
-                            
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
-        if onlyConstrains:
-            ifLoss = torch.sub(tOne, ifSuccess) # 1 - ifSuccess
-            
-            return ifLoss
-        else:            
-            return ifSuccess
 
     def ifVarBatched(self, _, var1, var2, onlyConstrains=False):
         """Evaluate independent implication rows in one tensor operation.
 
         ``var1`` and ``var2`` have shape ``[rules, groundings]``.  Each row is
-        numerically equivalent to one call to :meth:`ifVar`, including the
-        established Godel equality behaviour and its zero-containing fallback
-        branch.  Keeping this primitive beside ``ifVar`` prevents the compiled
-        graph fast path from maintaining a second set of t-norm equations.
+        numerically equivalent to one call to :meth:`ifVar`, which is
+        element-wise.  Keeping this primitive beside ``ifVar`` prevents the
+        compiled graph fast path from maintaining a second set of t-norm
+        equations.
         """
         var1, var2 = self._fixVar((var1, var2))
         if var1.shape != var2.shape or var1.dim() != 2:
@@ -404,34 +344,8 @@ class lcLossBooleanMethods(constraintsProcessor):
                 f"got {tuple(var1.shape)} and {tuple(var2.shape)}"
             )
 
-        if self.tnorm == 'L':
-            ifSuccess = torch.minimum(
-                torch.ones_like(var1), 1 - var1 + var2)
-            return 1 - ifSuccess if onlyConstrains else ifSuccess
-        elif self.tnorm == 'G':
-            # ``ifVar`` switches the entire constraint row to ``ifVarS`` when
-            # any consequent is zero.  Preserve that row-wise branch exactly:
-            # the regular vector path uses ``b > a`` whereas ``ifVarS`` uses
-            # ``b >= a`` for the equality case.
-            row_has_zero = (var2 == 0).any(dim=1, keepdim=True)
-            regular = torch.where(var2 > var1, torch.ones_like(var1), var2)
-            zero_branch = torch.where(var2 >= var1, torch.ones_like(var1), var2)
-            if onlyConstrains:
-                # The established ``ifVar`` zero branch calls ``ifVarS`` with
-                # ``onlyConstrains=True`` and then inverts that result again at
-                # method exit.  Thus a zero-containing row returns satisfaction
-                # rather than violation. Preserve that observable behaviour.
-                return torch.where(row_has_zero, zero_branch, 1 - regular)
-            return torch.where(row_has_zero, zero_branch, regular)
-        elif self.tnorm == 'P':
-            # Same safe denominator used by ``ifVarS`` for rows containing a
-            # zero antecedent, vectorized across all rules and groundings.
-            safe_ratio = var2 / torch.where(var1 != 0, var1, 1e-4)
-            ifSuccess = torch.minimum(torch.ones_like(safe_ratio), safe_ratio)
-            row_has_zero = (var1 == 0).any(dim=1, keepdim=True)
-            if onlyConstrains:
-                return torch.where(row_has_zero, ifSuccess, 1 - ifSuccess)
-            return ifSuccess
+        if self.tnorm in ('L', 'G', 'P'):
+            return self.ifVar(_, var1, var2, onlyConstrains=onlyConstrains)
         else:
             raise ValueError(
                 f"Batched implication does not support t-norm {self.tnorm!r}"

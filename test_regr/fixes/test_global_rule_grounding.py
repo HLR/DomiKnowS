@@ -1,7 +1,8 @@
 """Graph-level (global) rules over relation pairs and triples must be grounded exactly.
 
 Runs global_rules_repro.py (synthetic scenes, hand-set 0/1 relation values,
-brute-force truth per grounding).  Covered fixes:
+brute-force truth per grounding; checks both the loss and head-level verify).
+Covered fixes:
   inverse     equivalenceL(left('a','b'), right('b','a')): operands over the same
               variables in a different order were paired row by row, i.e.
               right(a, b) was evaluated (expandToJointGrounding compared sets)
@@ -10,9 +11,12 @@ brute-force truth per grounding).  Covered fixes:
               instead of its loss (createLogicalConstrains dropped onlyConstrains)
   trans_if    ifL(andL(left(a,b), left(b,c)), left(a,c)): the nested andL was
               quantified down to b and could not be aligned (size mismatch)
-  xor_distinct ifL(distinct, xorL(...)) is exact under 'P' and 'L'; Goedel
-              implication counts a near-0 premise with a smaller consequent as
-              violated, which is why InferenceModel has global_constraint_tnorm.
+  xor_distinct ifL(distinct, xorL(...)): Goedel implication counted a == b as
+              violated (strict >) and G / P rows holding a 0 returned
+              satisfaction as loss (inverted twice)
+  shared_if   ifL(left(a,b), left(b,c)) at the head was read existentially
+              (one row per b) instead of for all a, b, c
+  same process: a rebuilt graph reused the solver of the first graph
 """
 import os
 import subprocess
@@ -24,11 +28,13 @@ import pytest
 REPRO = Path(__file__).with_name("global_rules_repro.py")
 
 
-def _run(rule, tnorm, compiled):
+def _run(rule, tnorm, compiled, same_process=False):
     env = dict(os.environ, TNORM=tnorm, COMPILED="1" if compiled else "0")
-    out = subprocess.run([sys.executable, str(REPRO), rule], capture_output=True, text=True,
+    args = [sys.executable, str(REPRO)] + (["--same-process"] if same_process else []) + [rule]
+    out = subprocess.run(args, capture_output=True, text=True,
                          cwd=str(REPRO.parent), timeout=900, env=env)
-    lines = [l for l in out.stdout.splitlines() if l.startswith(rule)]
+    names = tuple(rule.split(","))
+    lines = [l for l in out.stdout.splitlines() if l.startswith(names)]
     assert lines, out.stdout[-2000:] + out.stderr[-2000:]
     return lines
 
@@ -42,14 +48,14 @@ def test_rule_counts_match_brute_force(rule, tnorm, compiled):
 
 
 @pytest.mark.parametrize("compiled", [False, True])
-@pytest.mark.parametrize("tnorm", ["P", "L"])
+@pytest.mark.parametrize("tnorm", ["G", "P", "L"])
 def test_implication_with_nested_consequent(tnorm, compiled):
     for line in _run("xor_distinct", tnorm, compiled):
         assert " OK " in line, line
 
 
 @pytest.mark.parametrize("compiled", [False, True])
-@pytest.mark.parametrize("tnorm", ["P", "L"])
+@pytest.mark.parametrize("tnorm", ["G", "P", "L"])
 def test_implication_over_nested_conjunction(tnorm, compiled):
     # ifL(andL(r(a,b), r(b,c)), r(a,c)): the nested andL used to be quantified
     # down to its shared variable b (existential reading), so it could not be
@@ -57,3 +63,34 @@ def test_implication_over_nested_conjunction(tnorm, compiled):
     # keeps the (a, b, c) table.
     for line in _run("trans_if", tnorm, compiled):
         assert " OK " in line, line
+
+
+@pytest.mark.parametrize("compiled", [False, True])
+@pytest.mark.parametrize("tnorm", ["G", "P", "L"])
+def test_head_rule_with_shared_variable_is_universal(tnorm, compiled):
+    # ifL(r(a,b), r(b,c)) at the head: one grounding per (a, b, c).
+    for line in _run("shared_if", tnorm, compiled):
+        assert " OK " in line, line
+
+
+@pytest.mark.parametrize("compiled", [False, True])
+def test_rebuilt_graphs_in_one_process_use_their_own_rules(compiled):
+    lines = _run("inverse,xor_flat,trans_nand", "P", compiled, same_process=True)
+    assert len(lines) == 9, lines
+    for line in lines:
+        assert " OK " in line, line
+
+
+def test_solver_cache_is_keyed_by_graph():
+    from domiknows.graph import Graph
+    from domiknows.solver import ilpOntSolverFactory
+
+    first, second = Graph('cache_a'), Graph('cache_b')
+    a = ilpOntSolverFactory.getOntSolverInstance(first)
+    assert ilpOntSolverFactory.getOntSolverInstance(first) is a
+    b = ilpOntSolverFactory.getOntSolverInstance(second)
+    assert b is not a and b.myGraph == {second}
+    assert ilpOntSolverFactory.getOntSolverInstance({first, second}) not in (a, b)
+
+    Graph.clear()
+    assert ilpOntSolverFactory.getOntSolverInstance(first) is not a
