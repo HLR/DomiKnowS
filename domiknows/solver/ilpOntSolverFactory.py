@@ -59,18 +59,6 @@ class ilpOntSolverFactory:
                 else:
                     from .gurobiILPOntSolver1 import gurobiILPOntSolver
                 SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
-            elif _ilpConfig['ilpSolver'] == "mini_prob_debug":
-                if __package__ is None or __package__ == '':
-                    from domiknows.solver.mini_solver_debug import MiniProbSolverDebug
-                else:
-                    from .mini_solver_debug import MiniProbSolverDebug
-                SolverClass = cls.getClass(MiniProbSolverDebug, *SupplementalClasses)
-            elif _ilpConfig['ilpSolver'] == "mini_debug":
-                if __package__ is None or __package__ == '':
-                    from domiknows.solver.mini_solver_debug import MiniSolverDebug
-                else:
-                    from .mini_solver_debug import MiniSolverDebug
-                SolverClass = cls.getClass(MiniSolverDebug, *SupplementalClasses)
             else:
                 if __package__ is None or __package__ == '':
                     from domiknows.solver.dummyILPOntSolver import dummyILPOntSolver

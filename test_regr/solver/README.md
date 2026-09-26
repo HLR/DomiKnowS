@@ -53,14 +53,6 @@ DataNode-based SpRL test using the graph structure for inference.
 - Tests `inferILPResults()` method on DataNode
 - Validates entity and relation predictions through graph traversal
 
-### `test_gurobi_solver_emr_compare.py`
-Comparative benchmarking of different solver implementations.
-
-**Tests:**
-- Compares `mini_wrap` (mini_prob_debug solver) vs `owl_wrap` (OWL-based solver)
-- Validates both solvers produce identical results
-- Performance benchmarking with parameterized input sizes (1-20 entities)
-
 ## Common Patterns
 
 All tests follow similar structure:
