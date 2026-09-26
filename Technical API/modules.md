@@ -59,7 +59,6 @@
       * [domiknows.solver.lcLossBooleanMethods module](domiknows.solver.md#module-domiknows.solver.lcLossBooleanMethods)
       * [domiknows.solver.lcLossSampleBooleanMethods module](domiknows.solver.md#module-domiknows.solver.lcLossSampleBooleanMethods)
       * [domiknows.solver.lossCalculator module](domiknows.solver.md#module-domiknows.solver.lossCalculator)
-      * [domiknows.solver.mini_solver_debug module](domiknows.solver.md#module-domiknows.solver.mini_solver_debug)
       * [domiknows.solver.solver module](domiknows.solver.md#module-domiknows.solver.solver)
       * [Module contents](domiknows.solver.md#module-domiknows.solver)
   * [Submodules](domiknows.md#submodules)

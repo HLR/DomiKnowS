@@ -2,25 +2,6 @@
 
 ## Subpackages
 
-* [domiknows.solver.constructor package](domiknows.solver.constructor.md)
-  * [Submodules](domiknows.solver.constructor.md#submodules)
-  * [domiknows.solver.constructor.constructor module](domiknows.solver.constructor.md#module-domiknows.solver.constructor.constructor)
-    * [`BatchMaskProbConstructor`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.BatchMaskProbConstructor)
-      * [`BatchMaskProbConstructor.get_predication()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.BatchMaskProbConstructor.get_predication)
-      * [`BatchMaskProbConstructor.isskip()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.BatchMaskProbConstructor.isskip)
-    * [`Constructor`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor)
-      * [`Constructor.candidates()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor.candidates)
-      * [`Constructor.constraints()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor.constraints)
-      * [`Constructor.get_predication()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor.get_predication)
-      * [`Constructor.isskip()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor.isskip)
-      * [`Constructor.logger`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor.logger)
-      * [`Constructor.objective()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor.objective)
-      * [`Constructor.variables()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.Constructor.variables)
-    * [`ProbConstructor`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.ProbConstructor)
-      * [`ProbConstructor.get_predication()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.ProbConstructor.get_predication)
-    * [`ScoreConstructor`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.ScoreConstructor)
-      * [`ScoreConstructor.get_predication()`](domiknows.solver.constructor.md#domiknows.solver.constructor.constructor.ScoreConstructor.get_predication)
-  * [Module contents](domiknows.solver.constructor.md#module-domiknows.solver.constructor)
 * [domiknows.solver.session package](domiknows.solver.session.md)
   * [Submodules](domiknows.solver.session.md#submodules)
   * [domiknows.solver.session.gurobi_session module](domiknows.solver.session.md#module-domiknows.solver.session.gurobi_session)
@@ -1065,26 +1046,6 @@ Constraint‑only: enforce `Σ v_i == 1` (one True, others False).
 Bases: `object`
 
 #### calculateLcLoss(dn, tnorm: str = 'L', counting_tnorm: str | None = None, sample: bool = False, sampleSize: int = 0, sampleGlobalLoss: bool = False, conceptsRelations=None) → Dict[str, Dict]
-
-## domiknows.solver.mini_solver_debug module
-
-### *class* domiknows.solver.mini_solver_debug.MiniProbSolverDebug(graph, ontologiesTuple, \_ilpConfig, SessionType=None, \*\*kwargs)
-
-Bases: [`MiniSolverDebug`](#domiknows.solver.mini_solver_debug.MiniSolverDebug)
-
-#### ilpSolver *= 'mini_prob_debug'*
-
-### *class* domiknows.solver.mini_solver_debug.MiniSolverDebug(graph, ontologiesTuple, \_ilpConfig, constructor=None, SessionType=None, \*\*kwargs)
-
-Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
-
-#### calculateILPSelection(data, \*predicates_list)
-
-#### ilpSolver *= 'mini_debug'*
-
-#### set_predication(predicate, idx, value)
-
-#### solve_legacy(data, \*predicates_list)
 
 ## domiknows.solver.solver module
 
