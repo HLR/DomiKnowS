@@ -6,7 +6,7 @@ from domiknows.graph.concept import Concept, EnumConcept
 from domiknows.graph import LcElement, LogicalConstrain, V
 from domiknows.graph import CandidateSelection
 from domiknows.graph.candidates import getCandidates
-from domiknows.graph.logicalConstrain import iotaL, miotaL, sumL
+from domiknows.graph.logicalConstrain import iotaL, miotaL, sumL, queryL, _CountBaseL, _AccumulatedCountBaseL
 
 
 class LogicalConstraintConstructor:
@@ -997,7 +997,7 @@ class LogicalConstraintConstructor:
 
     @staticmethod
     def expandToJointGrounding(useLcVariables, bindings, lcVariablesDns, prune=False,
-                               logger=None, protect=()):
+                               logger=None, protect=(), keep_joint=False):
         """Join operands enumerated over different variable tuples onto one table.
 
         ``reduceToCommonGrounding`` handles operands that share a variable by
@@ -1020,6 +1020,11 @@ class LogicalConstraintConstructor:
         table would exceed ``JOINT_GROUNDING_SOFT_PRUNE_ROWS``, and never to
         variables in ``protect`` (an enclosing entity selector's answer
         variable must keep one row group per object).
+        ``keep_joint``: operands sharing a variable are joined too instead of
+        being left to ``reduceToCommonGrounding``, whose existential reading
+        is exact only when an existential encloses the constraint; set for a
+        constraint nested in a plain connective, e.g. the ``andL`` of
+        ``ifL(andL(r('a','b'), r('b','c')), r('a','c'))``.
         Returns ``(operands, joined, binding)`` where ``binding`` is
         ``(joint_variable_names, LongTensor grid)`` describing the rows, so a
         parent entity selector can reduce the joined result to its answer
@@ -1029,7 +1034,10 @@ class LogicalConstraintConstructor:
         if len(bound) < 2:
             return useLcVariables, False, None
         varSets = {n: set(b[0]) for n, b in bound.items()}
-        if len({frozenset(v) for v in varSets.values()}) < 2:
+        # Compare the ordered variable tuples: ``left('a','b')`` next to
+        # ``right('b','a')`` spans the same set but its rows run over (b, a),
+        # and pairing the two row-wise evaluated right(a, b) instead.
+        if len({tuple(b[0]) for b in bound.values()}) < 2:
             return useLcVariables, False, None
         # An operand spanning every variable (``left('b','c')`` next to
         # ``C('c')``) fixes the rows: align the others onto its grounding.
@@ -1039,7 +1047,7 @@ class LogicalConstraintConstructor:
         # row-wise at different lengths and the formula silently failed.
         union = set().union(*varSets.values())
         spanning = next((n for n in bound if varSets[n] == union), None)
-        if set.intersection(*varSets.values()) and spanning is None:
+        if set.intersection(*varSets.values()) and spanning is None and not keep_joint:
             return useLcVariables, False, None  # reduceToCommonGrounding's case
         if all(len(v) < 2 for v in varSets.values()):
             # Only plain per-entity variables (e.g. ``sameL(color, 'x', 'y')``
@@ -1738,11 +1746,20 @@ class LogicalConstraintConstructor:
                             _prev_protected = getattr(self, '_protected_variables', ())
                             if isinstance(lc, (iotaL, miotaL)) and getattr(lc, 'selection_variable', None):
                                 self._protected_variables = tuple(_prev_protected) + (lc.selection_variable,)
+                            # Under a plain connective (ifL, notL, andL, ...) the
+                            # nested constraint's variables stay free: it must
+                            # keep one row per tuple, not be quantified down to
+                            # its shared variables (exact only under an
+                            # existential parent).
+                            _prev_keep_joint = getattr(self, '_keep_joint', False)
+                            self._keep_joint = not isinstance(
+                                lc, (_CountBaseL, _AccumulatedCountBaseL, iotaL, miotaL, queryL, sumL))
                             vDns, lcVariableUpdated = self.constructLogicalConstrains(
                                 e, booleanProcessor, m, dn, p, key=key, 
                                 lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
                                 headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify,
                                 circuit=circuit)
+                            self._keep_joint = _prev_keep_joint
                             self._protected_variables = _prev_protected
                             self._outer_bindings = _prev_outer
                             if getattr(self, '_pending_joint_binding', None) is not None:
@@ -1820,7 +1837,8 @@ class LogicalConstraintConstructor:
                 useLcVariables, joined, joint_binding = self.expandToJointGrounding(
                     useLcVariables, lcVariableBindings, lcVariablesDns,
                     prune=(verify and not loss), logger=self.myLogger,
-                    protect=getattr(self, '_protected_variables', ()))
+                    protect=getattr(self, '_protected_variables', ()),
+                    keep_joint=(not headLC and getattr(self, '_keep_joint', False)))
                 self._pending_joint_binding = (
                     joint_binding if joined
                     else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
