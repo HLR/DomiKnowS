@@ -3322,7 +3322,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if milestone_grasped and not milestone_lifted and current_entity_pos is not None and initial_entity_pos is not None:
                         if float(current_entity_pos[2] - initial_entity_pos[2]) >= 0.05:
                             milestone_lifted = True
-                            chunk_reward += 0.20
+                            chunk_reward += 0.15
 
                     # Milestone 3: Approach to target container
                     if milestone_lifted and not milestone_container_approach and current_entity_pos is not None:
@@ -3331,7 +3331,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             c_pos = _live_task_entity_place_point(env, "target_container")
                         if c_pos is not None and float(np.linalg.norm(current_entity_pos - c_pos)) <= 0.15:
                             milestone_container_approach = True
-                            chunk_reward += 0.15
+                            chunk_reward += 0.05
 
                     condiment_grasp_confirmed = (
                         task_type.__module__.startswith("VLABench.")
@@ -3453,12 +3453,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             final_intention = previous_intention
             efficiency = max(0.0, 1.0 - steps / max(1, self.max_steps)) if success else 0.0
             ik_penalty = 0.20 if (ik_truncated or termination_reason == "ik_failure") else 0.0
+            milestone_credit = (
+                (0.15 * float(milestone_grasped) + 0.15 * float(milestone_lifted) + 0.05 * float(milestone_container_approach))
+                if not success else 0.0
+            )
             target_total = float(np.clip(
-                0.35 * float(success)
-                + 0.15 * float(milestone_grasped)
-                + 0.20 * float(milestone_lifted)
-                + 0.15 * float(milestone_container_approach)
-                + 0.10 * final_progress
+                0.60 * float(success)
+                + milestone_credit
+                + 0.25 * final_progress
+                + 0.10 * final_intention
                 + 0.05 * efficiency
                 - ik_penalty,
                 0.0,
