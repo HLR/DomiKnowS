@@ -184,6 +184,7 @@ class ControllerTransition:
     old_feasibility_logprob: torch.Tensor | None = None
     advantage: float = 0.0
     return_value: float = 0.0
+    assisted_actions: torch.Tensor | None = None
 
 
 @dataclass
@@ -1256,6 +1257,21 @@ def _blend_pick_target(action, current, target_robot, blend: float) -> np.ndarra
     return value
 
 
+def _blend_skill_action(action, expert_action, alpha: float) -> np.ndarray:
+    """Blend 7D policy action toward expert action with curriculum factor alpha."""
+    p_act = np.asarray(action, dtype=np.float64).reshape(-1).copy()
+    e_act = np.asarray(expert_action, dtype=np.float64).reshape(-1)
+    if p_act.shape != (7,) or e_act.shape != (7,):
+        raise ValueError("action blending requires 7D policy and expert actions")
+    ratio = float(np.clip(alpha, 0.0, 1.0))
+    p_act[:3] = (1.0 - ratio) * p_act[:3] + ratio * e_act[:3]
+    diff = np.remainder(e_act[3:6] - p_act[3:6] + np.pi, 2 * np.pi) - np.pi
+    p_act[3:6] = p_act[3:6] + ratio * diff
+    if ratio >= 0.5:
+        p_act[6] = e_act[6]
+    return p_act
+
+
 class _EntityPointerDFA:
     """Lazy DFA view that removes unknown observation-local pointers."""
 
@@ -1377,6 +1393,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
         feasibility_weight: float = 0.15,
+        dagger_weight: float = 0.20,
         max_position_step: float = 0.02,
         max_rotation_step: float = 0.10,
         pick_approach_blend: float = 0.5,
@@ -1428,6 +1445,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
         self.feasibility_weight = float(feasibility_weight)
+        self.dagger_weight = float(dagger_weight)
+        if not np.isfinite(self.dagger_weight) or self.dagger_weight < 0:
+            raise ValueError("DAgger weight must be finite and non-negative")
         self.max_position_step = float(max_position_step)
         self.max_rotation_step = float(max_rotation_step)
         self.pick_approach_blend = float(pick_approach_blend)
@@ -1535,7 +1555,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             else self.execution_assistance in {"train-only", "on"}
         )
         alpha = self.compute_assistance_factor()
-        latch_assistance_enabled = assistance_enabled and (
+        latch_assistance_enabled = assistance_enabled and alpha >= 0.5 and (
             self._execution_assistance_override is True or random.random() < alpha
         )
         kwargs = dict(descriptor.get("env_kwargs", {}))
@@ -1618,6 +1638,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         # an offset captured mid-closure leaves the fingers closing into the
         # teleported object and kicking it away every step.
         previous_finger_positions = None
+        milestone_grasped = False
+        milestone_lifted = False
+        milestone_container_approach = False
+        initial_entity_pos = None
         gripper_settled = True
         lift_operation_cursor = None
         lift_start_world = None
@@ -1912,6 +1936,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 failed_action_index = None
                 chunk_advanced = False
                 ik_truncated = False
+                chunk_assisted_actions = [None] * min(self.execute_horizon, actions.shape[1])
+                any_action_assisted = False
                 for action_index, candidate in enumerate(actions[0, : self.execute_horizon]):
                     try:
                         current = world_to_robot_ee_state(
@@ -1956,23 +1982,27 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 )
                                 if press_phase == 0:
                                     target_world = approach_world
-                                    candidate_value[6] = 1.0
+                                    expert_grip = 1.0
                                     if np.linalg.norm(current_world - approach_world) <= 0.04:
                                         press_phase = 1
                                 elif press_phase == 1:
                                     target_world = button_world
-                                    candidate_value[6] = 1.0
+                                    expert_grip = 1.0
                                     if np.linalg.norm(current_world - button_world) <= 0.055:
                                         press_phase = 2
                                 else:
                                     target_world = button_world
-                                    candidate_value[6] = 0.0
-                                candidate_value[:3] = (
+                                    expert_grip = 0.0
+                                expert_action = candidate_value.copy()
+                                expert_action[:3] = (
                                     np.asarray(target_world, dtype=np.float64)
                                     - controller_robot_frame
                                 )
-                                candidate_value[3:6] = current[3:6]
+                                expert_action[3:6] = current[3:6]
+                                expert_action[6] = expert_grip
+                                candidate_value = _blend_skill_action(candidate_value, expert_action, alpha)
                                 press_assist_steps += 1
+                                any_action_assisted = True
                         if (
                             assistance_enabled
                             and
@@ -2037,7 +2067,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     ) <= 0.04
                                 ):
                                     condiment_pour_phase = 2
-                            candidate_value[6] = 0.0
+                            expert_action = candidate_value.copy()
+                            expert_action[6] = 0.0
                             if condiment_pour_phase == 0:
                                 # The official lift is interpolated over many
                                 # waypoints. Use a small per-step increment so
@@ -2046,7 +2077,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 lift_target_robot = (
                                     condiment_lift_target_world - controller_robot_frame
                                 )
-                                candidate_value[:3] = np.asarray(
+                                expert_action[:3] = np.asarray(
                                     [
                                         lift_target_robot[0],
                                         lift_target_robot[1],
@@ -2054,23 +2085,25 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     ],
                                     dtype=np.float64,
                                 )
-                                candidate_value[3:6] = current[3:6]
+                                expert_action[3:6] = current[3:6]
                             elif (
                                 condiment_pour_phase == 1
                                 and condiment_container_target_world is not None
                             ):
-                                candidate_value[:3] = (
+                                expert_action[:3] = (
                                     condiment_container_target_world
                                     - controller_robot_frame
                                 )
-                                candidate_value[3:6] = current[3:6]
+                                expert_action[3:6] = current[3:6]
                             else:
                                 # The official SkillLib.pour increments the
                                 # final Franka joint, so the direct command
                                 # below handles the wrist rotation exactly.
-                                candidate_value[:3] = current[:3]
-                                candidate_value[3:6] = current[3:6]
+                                expert_action[:3] = current[:3]
+                                expert_action[3:6] = current[3:6]
+                            candidate_value = _blend_skill_action(candidate_value, expert_action, alpha)
                             pour_assist_steps += 1
+                            any_action_assisted = True
                         if (
                             assistance_enabled
                             and
@@ -2230,6 +2263,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     approach_blend * alpha,
                                 )
                                 pick_assist_steps += 1
+                                any_action_assisted = True
                         if (
                             assistance_enabled
                             and
@@ -2252,10 +2286,23 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 pull_target_world = pull_start_world + np.asarray(
                                     [0.0, -pull_progress, 0.0], dtype=np.float64
                                 )
-                                candidate_value[:3] = pull_target_world - controller_robot_frame
-                                candidate_value[3:6] = current[3:6]
-                                candidate_value[6] = 0.0
-                                if latch_assistance_enabled and pull_attachment_offset is None and gripper_settled:
+                                expert_action = candidate_value.copy()
+                                expert_action[:3] = pull_target_world - controller_robot_frame
+                                expert_action[3:6] = current[3:6]
+                                expert_action[6] = 0.0
+                                candidate_value = _blend_skill_action(candidate_value, expert_action, alpha)
+                                pull_target_pos = _live_task_entity_position(env, "target_entity")
+                                pull_ee_pos = (
+                                    np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                                    if hasattr(getattr(env, "robot", None), "get_end_effector_pos")
+                                    else None
+                                )
+                                pull_near = (
+                                    pull_target_pos is not None
+                                    and pull_ee_pos is not None
+                                    and np.linalg.norm(pull_target_pos - pull_ee_pos) <= 0.12
+                                )
+                                if latch_assistance_enabled and pull_attachment_offset is None and gripper_settled and pull_near:
                                     try:
                                         task = getattr(env, "task", None)
                                         target_name = getattr(task, "target_entity", None)
@@ -2291,6 +2338,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         pull_attachment_quaternion = None
 
                                 pull_assist_steps += 1
+                                any_action_assisted = True
                             elif active_skill == "lift":
                                 if lift_operation_cursor != operation_cursor:
                                     lift_operation_cursor = operation_cursor
@@ -2303,10 +2351,23 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 # Match SkillLib.lift: rise 30 cm in bounded 2 cm increments.
                                 lift_progress = min(0.30, lift_progress + 0.02)
                                 lift_target_world = lift_start_world + np.asarray([0.0, 0.0, lift_progress], dtype=np.float64)
-                                candidate_value[:3] = lift_target_world - controller_robot_frame
-                                candidate_value[3:6] = current[3:6]
-                                candidate_value[6] = 0.0
-                                if latch_assistance_enabled and lift_attachment_offset is None and gripper_settled:
+                                expert_action = candidate_value.copy()
+                                expert_action[:3] = lift_target_world - controller_robot_frame
+                                expert_action[3:6] = current[3:6]
+                                expert_action[6] = 0.0
+                                candidate_value = _blend_skill_action(candidate_value, expert_action, alpha)
+                                lift_target_pos = _live_task_entity_position(env, "target_entity")
+                                lift_ee_pos = (
+                                    np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                                    if hasattr(getattr(env, "robot", None), "get_end_effector_pos")
+                                    else None
+                                )
+                                lift_near = (
+                                    lift_target_pos is not None
+                                    and lift_ee_pos is not None
+                                    and np.linalg.norm(lift_target_pos - lift_ee_pos) <= 0.12
+                                )
+                                if latch_assistance_enabled and lift_attachment_offset is None and gripper_settled and lift_near:
                                     try:
                                         task = getattr(env, "task", None)
                                         target_name = getattr(task, "target_entity", None)
@@ -2328,6 +2389,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         lift_attachment_offset = None
                                         lift_attachment_quaternion = None
                                 lift_assist_steps += 1
+                                any_action_assisted = True
                             elif active_skill == "place":
                                 if place_operation_cursor != operation_cursor:
                                     place_operation_cursor = operation_cursor
@@ -2364,6 +2426,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     # IK failures; release over the original
                                     # point instead.
                                     container_pos = place_reference_point
+                                expert_action = candidate_value.copy()
                                 if place_release_forced:
                                     # Hold the pose at which the object was
                                     # dropped: re-targeting the drifting live
@@ -2371,8 +2434,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     # container over a few hundred steps.
                                     if place_release_pose is None:
                                         place_release_pose = np.asarray(current[:6], dtype=np.float64).copy()
-                                    candidate_value[:6] = place_release_pose
-                                    candidate_value[6] = 1.0
+                                    expert_action[:6] = place_release_pose
+                                    expert_action[6] = 1.0
                                     _release_live_task_entity(env, "target_entity")
                                     container_pos = None
                                 if container_pos is not None:
@@ -2386,7 +2449,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                             place_attachment_offset, dtype=np.float64
                                         )
                                     target_ee = target_world - controller_robot_frame
-                                    candidate_value[3:6] = current[3:6]
+                                    expert_action[3:6] = current[3:6]
                                     current_ee = current[:3]
                                     horiz_dist = np.linalg.norm(current_ee[:2] - target_ee[:2])
                                     if horiz_dist > 0.06:
@@ -2400,8 +2463,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                             target_intermediate = np.array([current_ee[0], current_ee[1], approach_z])
                                         else:
                                             target_intermediate = np.array([target_ee[0], target_ee[1], max(current_ee[2], approach_z)])
-                                        candidate_value[:3] = current_ee + 0.5 * (target_intermediate - current_ee)
-                                        candidate_value[6] = 0.0
+                                        expert_action[:3] = current_ee + 0.5 * (target_intermediate - current_ee)
+                                        expert_action[6] = 0.0
                                     elif (
                                         container_displaced
                                         or not _carried_entity_fits_container(
@@ -2414,7 +2477,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         # fingers is first re-seated upright
                                         # under the hand; if it still does not
                                         # fit, drop it from above instead.
-                                        candidate_value[:3] = current_ee
+                                        expert_action[:3] = current_ee
                                         if (
                                             not container_displaced
                                             and not place_reseat_attempted
@@ -2438,52 +2501,55 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                                     carry_reseat["min_ee_z"],
                                                     float(container_top) + carry_reseat["height"] + CARRY_CLEARANCE + 0.03,
                                                 )
-                                            candidate_value[6] = 0.0
+                                            expert_action[6] = 0.0
                                         elif carry_reseat is not None and not container_displaced:
                                             # Wait for the pending re-seat; it
                                             # only switches once the hand is
                                             # high enough for the upright object
                                             # to clear its former support.
-                                            candidate_value[6] = 0.0
+                                            expert_action[6] = 0.0
                                             if (
                                                 current_ee[2] + controller_robot_frame[2]
                                                 < carry_reseat["min_ee_z"]
                                             ):
-                                                candidate_value[2] = current_ee[2] + 0.02
+                                                expert_action[2] = current_ee[2] + 0.02
                                         else:
                                             place_release_forced = True
                                             place_release_pose = np.asarray(current[:6], dtype=np.float64).copy()
                                             _release_live_task_entity(env, "target_entity")
-                                            candidate_value[6] = 1.0
+                                            expert_action[6] = 1.0
                                     elif current_ee[2] > target_ee[2] + 0.04:
-                                        candidate_value[:3] = current_ee + 0.5 * (target_ee - current_ee)
-                                        candidate_value[6] = 0.0
+                                        expert_action[:3] = current_ee + 0.5 * (target_ee - current_ee)
+                                        expert_action[6] = 0.0
                                     else:
-                                        candidate_value[:3] = target_ee
+                                        expert_action[:3] = target_ee
                                         # Containment predicates evaluate the
                                         # object origin, while the controller
                                         # commands the gripper pose. Snap the
                                         # attached origin to a validated
                                         # container interior before release.
-                                        try:
-                                            interior = _live_task_container_interior_point(
-                                                env, "target_container"
-                                            )
-                                            if interior is None:
-                                                interior = np.asarray(container_pos, dtype=np.float64).copy()
-                                            target_entity = _live_task_entity(env, "target_entity")
-                                            target_quat = np.asarray(
-                                                target_entity.get_xqaut(env.physics),
-                                                dtype=np.float64,
-                                            ).reshape(4)
-                                            _set_live_task_entity_pose(
-                                                env, "target_entity", interior, target_quat
-                                            )
-                                        except (AttributeError, KeyError, TypeError, ValueError):
-                                            pass
+                                        if latch_assistance_enabled and alpha >= 0.5:
+                                            try:
+                                                interior = _live_task_container_interior_point(
+                                                    env, "target_container"
+                                                )
+                                                if interior is None:
+                                                    interior = np.asarray(container_pos, dtype=np.float64).copy()
+                                                target_entity = _live_task_entity(env, "target_entity")
+                                                target_quat = np.asarray(
+                                                    target_entity.get_xqaut(env.physics),
+                                                    dtype=np.float64,
+                                                ).reshape(4)
+                                                _set_live_task_entity_pose(
+                                                    env, "target_entity", interior, target_quat
+                                                )
+                                            except (AttributeError, KeyError, TypeError, ValueError):
+                                                pass
                                         _release_live_task_entity(env, "target_entity")
-                                        candidate_value[6] = 1.0
-                                    place_assist_steps += 1
+                                        expert_action[6] = 1.0
+                                candidate_value = _blend_skill_action(candidate_value, expert_action, alpha)
+                                place_assist_steps += 1
+                                any_action_assisted = True
                             elif active_skill == "insert":
                                 # Follow InsertFlowerTask's expert: lift 30 cm
                                 # while rotating to the fixed pose
@@ -2500,7 +2566,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     insert_phase = 0
                                     insert_lift_target_world = None
                                 current_world = current[:3] + controller_robot_frame
-                                if latch_assistance_enabled and insert_attachment_offset is None and gripper_settled:
+                                insert_target_pos = _live_task_entity_position(env, "target_entity")
+                                insert_ee_pos = (
+                                    np.asarray(env.robot.get_end_effector_pos(env.physics), dtype=np.float64).reshape(3)
+                                    if hasattr(getattr(env, "robot", None), "get_end_effector_pos")
+                                    else None
+                                )
+                                insert_near = (
+                                    insert_target_pos is not None
+                                    and insert_ee_pos is not None
+                                    and np.linalg.norm(insert_target_pos - insert_ee_pos) <= 0.12
+                                )
+                                if latch_assistance_enabled and insert_attachment_offset is None and gripper_settled and insert_near:
                                     try:
                                         target_entity = _live_task_entity(env, "target_entity")
                                         target_world = _live_task_entity_position(env, "target_entity")
@@ -2527,25 +2604,28 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 place_point = _live_task_entity_place_point(env, "target_container")
                                 if place_point is None:
                                     place_point = diagnostics.container_position()
-                                candidate_value[6] = 0.0
+                                expert_action = candidate_value.copy()
+                                expert_action[6] = 0.0
                                 if insert_attachment_offset is None and not gripper_settled:
                                     # Hold the grasp pose until the fingers settle
                                     # and the attachment captures the resting
                                     # flower; lifting a thin stem while the pads
                                     # are still closing lets it slip.
-                                    candidate_value[:3] = current[:3]
-                                    candidate_value[3:6] = current[3:6]
+                                    expert_action[:3] = current[:3]
+                                    expert_action[3:6] = current[3:6]
                                 elif place_point is None:
-                                    candidate_value[:3] = current[:3]
-                                    candidate_value[3:6] = stepped_euler
-                                    orientation_override = stepped_euler
+                                    expert_action[:3] = current[:3]
+                                    expert_action[3:6] = stepped_euler
+                                    if alpha >= 0.5:
+                                        orientation_override = stepped_euler
                                 else:
                                     if insert_lift_target_world is None:
                                         insert_lift_target_world = current_world + np.asarray(
                                             [0.0, 0.0, 0.30], dtype=np.float64
                                         )
-                                    candidate_value[3:6] = stepped_euler
-                                    orientation_override = stepped_euler
+                                    expert_action[3:6] = stepped_euler
+                                    if alpha >= 0.5:
+                                        orientation_override = stepped_euler
                                     hover_world = np.asarray(place_point, dtype=np.float64) + np.asarray(
                                         [0.0, 0.0, 0.05], dtype=np.float64
                                     )
@@ -2601,38 +2681,42 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                             # a slightly tilted stem can leave it
                                             # just outside the box. Correct the
                                             # attached origin before release.
-                                            try:
-                                                target_entity = _live_task_entity(env, "target_entity")
-                                                container = _live_task_entity(env, "target_container")
-                                                origin = _live_task_entity_position(env, "target_entity")
-                                                contained = bool(container.contain(origin, env.physics))
-                                                interior = _live_task_container_interior_point(env, "target_container")
-                                                if not contained and interior is not None:
-                                                    target_quat = np.asarray(
-                                                        target_entity.get_xqaut(env.physics), dtype=np.float64
-                                                    ).reshape(4)
-                                                    _set_live_task_entity_pose(env, "target_entity", interior, target_quat)
-                                            except (AttributeError, KeyError, TypeError, ValueError):
-                                                pass
+                                            if latch_assistance_enabled and alpha >= 0.5:
+                                                try:
+                                                    target_entity = _live_task_entity(env, "target_entity")
+                                                    container = _live_task_entity(env, "target_container")
+                                                    origin = _live_task_entity_position(env, "target_entity")
+                                                    contained = bool(container.contain(origin, env.physics))
+                                                    interior = _live_task_container_interior_point(env, "target_container")
+                                                    if not contained and interior is not None:
+                                                        target_quat = np.asarray(
+                                                            target_entity.get_xqaut(env.physics), dtype=np.float64
+                                                        ).reshape(4)
+                                                        _set_live_task_entity_pose(env, "target_entity", interior, target_quat)
+                                                except (AttributeError, KeyError, TypeError, ValueError):
+                                                    pass
                                     if insert_phase == 3:
                                         target_world = insert_world
                                         _release_live_task_entity(env, "target_entity")
-                                        candidate_value[6] = 1.0
-                                    candidate_value[:3] = target_world - controller_robot_frame
+                                        expert_action[6] = 1.0
+                                    expert_action[:3] = target_world - controller_robot_frame
+                                candidate_value = _blend_skill_action(candidate_value, expert_action, alpha)
                                 insert_assist_steps += 1
+                                any_action_assisted = True
                         bounded = bound_ee_action(
                             candidate_value,
                             current,
                             max_position_step=self.max_position_step,
                             max_rotation_step=self.max_rotation_step,
                         )
-                        if orientation_override is not None:
+                        if orientation_override is not None and alpha >= 0.5:
                             # The slerp step is already bounded by the rotation
                             # limit; component-wise Euler clipping produces
                             # erratic intermediate poses (and IK rejections)
                             # around the singular pitch=±pi/2 grasp and
                             # insertion poses.
                             bounded[3:6] = np.asarray(orientation_override, dtype=np.float64)
+                        chunk_assisted_actions[action_index] = bounded.copy()
                         current_target_distance = diagnostics.target_grasp_distance() or diagnostics.target_distance()
                         target_min_distance = None
                         if diagnostics.targets:
@@ -3128,6 +3212,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     executed += 1
                     observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
                     observations.append(observation)
+                    if initial_entity_pos is None:
+                        t_pos = _live_task_entity_position(env, "target_entity")
+                        if t_pos is not None:
+                            initial_entity_pos = t_pos.copy()
                     diagnostics.observe(env, _observation_state(observation), command_gripper=recovered[6])
                     progress, intention, progress_source = _task_signals(env, diagnostics)
                     delta_progress = progress - previous_progress
@@ -3224,6 +3312,27 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 and latest_target_distance is not None
                                 and latest_target_distance <= self.pick_grasp_distance
                             )
+                    # Milestone 1: Confirmed physical grasp
+                    if not milestone_grasped and (grasp_advance or ('physically_grasped' in locals() and physically_grasped)):
+                        milestone_grasped = True
+                        chunk_reward += 0.15
+
+                    # Milestone 2: Object lifted above initial position
+                    current_entity_pos = _live_task_entity_position(env, "target_entity")
+                    if milestone_grasped and not milestone_lifted and current_entity_pos is not None and initial_entity_pos is not None:
+                        if float(current_entity_pos[2] - initial_entity_pos[2]) >= 0.05:
+                            milestone_lifted = True
+                            chunk_reward += 0.20
+
+                    # Milestone 3: Approach to target container
+                    if milestone_lifted and not milestone_container_approach and current_entity_pos is not None:
+                        c_pos = _live_task_container_interior_point(env, "target_container")
+                        if c_pos is None:
+                            c_pos = _live_task_entity_place_point(env, "target_container")
+                        if c_pos is not None and float(np.linalg.norm(current_entity_pos - c_pos)) <= 0.15:
+                            milestone_container_approach = True
+                            chunk_reward += 0.15
+
                     condiment_grasp_confirmed = (
                         task_type.__module__.startswith("VLABench.")
                         and descriptor.get("task") == "add_condiment"
@@ -3306,6 +3415,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 # actually reached the simulator; conflating it with the failed
                 # action index penalizes the successful prefix of a chunk.
                 if executed or failed_action_index is not None:
+                    assisted_actions_tensor = None
+                    if any_action_assisted and executed > 0:
+                        assisted_chunk = policy_actions[0].clone()
+                        for idx in range(executed):
+                            if chunk_assisted_actions[idx] is not None:
+                                assisted_chunk[idx] = torch.from_numpy(chunk_assisted_actions[idx]).to(
+                                    dtype=assisted_chunk.dtype, device=assisted_chunk.device
+                                )
+                        assisted_actions_tensor = assisted_chunk.cpu()
                     transitions.append(ControllerTransition(
                         images=inputs[0].detach().cpu(),
                         state=inputs[1].detach().cpu(),
@@ -3326,6 +3444,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             logprobs[0, failed_action_index].detach().cpu()
                             if failed_action_index is not None else None
                         ),
+                        assisted_actions=assisted_actions_tensor,
                     ))
                 if success or not valid or ik_truncated or steps >= self.max_steps:
                     break
@@ -3335,9 +3454,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             efficiency = max(0.0, 1.0 - steps / max(1, self.max_steps)) if success else 0.0
             ik_penalty = 0.20 if (ik_truncated or termination_reason == "ik_failure") else 0.0
             target_total = float(np.clip(
-                0.60 * float(success)
-                + 0.25 * final_progress
-                + 0.10 * final_intention
+                0.35 * float(success)
+                + 0.15 * float(milestone_grasped)
+                + 0.20 * float(milestone_lifted)
+                + 0.15 * float(milestone_container_approach)
+                + 0.10 * final_progress
                 + 0.05 * efficiency
                 - ik_penalty,
                 0.0,
@@ -3720,11 +3841,38 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             ).clamp(-self.ppo_max_log_ratio, self.ppo_max_log_ratio)
                         )
                     )
+                dagger_loss = torch.zeros((), device=self.device_name)
+                if (
+                    actor_update_enabled
+                    and self.dagger_weight > 0.0
+                    and getattr(item, "assisted_actions", None) is not None
+                    and executed > 0
+                ):
+                    assisted_target = item.assisted_actions.to(self.device_name).unsqueeze(0)
+                    pred_inputs = (
+                        item.images.to(self.device_name),
+                        item.state.to(self.device_name),
+                        item.task_index.to(self.device_name),
+                    )
+                    if item.plan_context is not None:
+                        pred_inputs += (item.plan_context.to(self.device_name),)
+                    try:
+                        controller_pred = self.controller(*pred_inputs)
+                        d_loss, _ = controller_loss(
+                            controller_pred[:, :executed],
+                            assisted_target[:, :executed],
+                            state=item.state.to(self.device_name),
+                            pose_step_scale=getattr(self.controller, "pose_step_scale", None),
+                        )
+                        dagger_loss = self.dagger_weight * d_loss
+                    except (RuntimeError, ValueError):
+                        dagger_loss = torch.zeros((), device=self.device_name)
                 losses.append(
                     policy_loss
                     + self.value_weight * value_loss
                     - entropy_bonus
                     + feasibility_loss
+                    + dagger_loss
                 )
             mean_action_log_ratio, max_action_log_ratio, approximate_kl = (
                 action_ratio_statistics(action_log_ratios)

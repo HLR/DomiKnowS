@@ -602,6 +602,7 @@ def command_train_agent(args):
         assistance_start=getattr(args, "assistance_start", 1.0),
         assistance_end=getattr(args, "assistance_end", 0.0),
         feasibility_weight=getattr(args, "feasibility_weight", 0.15),
+        dagger_weight=getattr(args, "dagger_weight", 0.20),
     )
     stage2.round_robin_cursor = cursor
     if (
@@ -1034,6 +1035,12 @@ def build_parser():
         type=float,
         default=0.15,
         help="Stage 2 controller kinematic feasibility regularizer weight",
+    )
+    agent.add_argument(
+        "--dagger-weight",
+        type=float,
+        default=0.20,
+        help="Stage 2 controller auxiliary imitation loss weight on assisted transitions",
     )
     agent.add_argument(
         "--max-consecutive-ik-rejections",
