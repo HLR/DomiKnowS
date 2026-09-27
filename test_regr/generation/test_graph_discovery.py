@@ -1,4 +1,5 @@
 import pytest
+from itertools import product
 
 from domiknows.generation import (
     GenerationEncoder,
@@ -8,15 +9,26 @@ from domiknows.generation import (
 from domiknows.graph.logicalConstrain import (
     andL,
     atLeastAL,
+    atLeastL,
     atMostAL,
+    atMostL,
+    equalCountsL,
     exactAL,
+    exactL,
     existsAL,
+    existsL,
+    forAllL,
+    greaterL,
+    greaterEqL,
     ifL,
     iffL,
     nandL,
     norL,
     notL,
+    notEqualCountsL,
     orL,
+    lessL,
+    lessEqL,
     eqL,
     sumL,
     xorL,
@@ -217,6 +229,156 @@ def test_discovers_exact_and_token_set_count_constraints():
     assert dfa.accepts(labels(bundle, ["A", "B", "A"]))
     assert not dfa.accepts(labels(bundle, ["A", "B", "B"]))
     assert not dfa.accepts(labels(bundle, ["A", "A"]))
+
+
+@pytest.mark.parametrize("form", ["keyword", "default", "positional"])
+def test_accumulated_count_limit_forms(form):
+    graph, bundle = build_bundle()
+    with graph:
+        if form == "keyword":
+            atMostAL(bundle.context.token_value("A", "x"), limit=2)
+        elif form == "default":
+            atMostAL(bundle.context.token_value("A", "x"))
+        else:
+            atMostAL(bundle.context.token_value("A", "x"), 2)
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+    cap = 1 if form == "default" else 2
+    for size in range(4):
+        for sequence in product(bundle.vocabulary.labels, repeat=size):
+            assert dfa.accepts(labels(bundle, sequence)) == (sequence.count("A") <= cap)
+
+
+@pytest.mark.parametrize("constraint,expected", [
+    (atMostL, lambda count: count <= 2),
+    (atLeastL, lambda count: count >= 2),
+    (exactL, lambda count: count == 2),
+    (existsL, lambda count: count >= 1),
+])
+def test_head_element_counts_use_global_head_semantics(constraint, expected):
+    graph, bundle = build_bundle()
+    with graph:
+        if constraint is existsL:
+            constraint(bundle.context.token_value("A", "x"))
+        else:
+            constraint(bundle.context.token_value("A", "x"), limit=2)
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+    for size in range(4):
+        for sequence in product(bundle.vocabulary.labels, repeat=size):
+            assert dfa.accepts(labels(bundle, sequence)) == expected(sequence.count("A"))
+
+
+def test_distinct_token_set_counts_survive_normalization():
+    graph, bundle = build_bundle()
+    with graph:
+        andL(
+            atMostAL(
+                orL(
+                    bundle.context.token_value("A", "x"),
+                    bundle.context.token_value("B", "x"),
+                ),
+                limit=0,
+            ),
+            atMostAL(bundle.context.non_eos("y"), limit=0),
+        )
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+    assert dfa.accepts(labels(bundle, []))
+    assert dfa.accepts(labels(bundle, ["<eos>"]))
+    assert not dfa.accepts(labels(bundle, ["A"]))
+    assert not dfa.accepts(labels(bundle, ["B"]))
+    assert not dfa.accepts(labels(bundle, [bundle.vocabulary.other_token]))
+
+
+def test_unary_for_all_compiles_implication_per_token():
+    graph, bundle = build_bundle()
+    with graph:
+        forAllL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "x"))
+    assert "forAllL" in supported_lc_types(graph, bundle)
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+    for size in range(4):
+        for sequence in product(bundle.vocabulary.labels, repeat=size):
+            assert dfa.accepts(labels(bundle, sequence)) == ("A" not in sequence)
+
+
+def test_for_all_accepts_pathless_token_sets():
+    graph, bundle = build_bundle()
+    with graph:
+        forAllL(
+            orL(
+                bundle.context.token_value("A", "x"),
+                bundle.context.token_value("B", "x"),
+            ),
+            bundle.context.token_value("A", "x"),
+        )
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+    assert dfa.accepts(labels(bundle, ["A", "<eos>"]))
+    assert not dfa.accepts(labels(bundle, ["B"]))
+
+
+@pytest.mark.parametrize("constraint,expected", [
+    (equalCountsL, lambda a, b: a == b),
+    (greaterL, lambda a, b: a > b),
+    (greaterEqL, lambda a, b: a >= b),
+    (lessL, lambda a, b: a < b),
+    (lessEqL, lambda a, b: a <= b),
+    (notEqualCountsL, lambda a, b: a != b),
+])
+def test_bounded_comparative_counts(constraint, expected):
+    graph, bundle = build_bundle()
+    with graph:
+        constraint(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "y"))
+    analyses = analyze_generation_constraints(graph, bundle, on_unsupported="ignore")
+    assert any(a.lc_type == constraint.__name__ and not a.supported for a in analyses)
+    dfa = constraints_to_dfa_from_graph(
+        graph, bundle, max_sequence_length=3, on_unsupported="error",
+    )
+    for size in range(5):
+        for sequence in product(bundle.vocabulary.labels, repeat=size):
+            assert dfa.accepts(labels(bundle, sequence)) == (
+                size <= 3 and expected(sequence.count("A"), sequence.count("B"))
+            )
+
+
+def test_bounded_comparative_count_offset():
+    graph, bundle = build_bundle()
+    with graph:
+        equalCountsL(
+            bundle.context.token_value("A", "x"),
+            bundle.context.token_value("B", "y"), 1,
+        )
+    dfa = constraints_to_dfa_from_graph(
+        graph, bundle, max_sequence_length=3, on_unsupported="error",
+    )
+    for size in range(5):
+        for sequence in product(bundle.vocabulary.labels, repeat=size):
+            assert dfa.accepts(labels(bundle, sequence)) == (
+                size <= 3 and sequence.count("A") - sequence.count("B") == 1
+            )
+
+
+def test_bounded_comparison_inside_negation_remains_unsupported():
+    graph, bundle = build_bundle()
+    with graph:
+        notL(equalCountsL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "y")))
+    with pytest.raises(ValueError, match="not supported by generation DFA discovery"):
+        constraints_to_dfa_from_graph(
+            graph, bundle, max_sequence_length=3, on_unsupported="error",
+        )
+
+
+def test_nested_element_count_remains_unsupported():
+    graph, bundle = build_bundle()
+    with graph:
+        notL(atMostL(bundle.context.token_value("A", "x"), limit=1))
+    with pytest.raises(ValueError, match="not supported by generation DFA discovery"):
+        constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+
+
+def test_for_all_with_different_variables_remains_unsupported():
+    graph, bundle = build_bundle()
+    with graph:
+        forAllL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "y"))
+    with pytest.raises(ValueError, match="not supported by generation DFA discovery"):
+        constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
 
 
 def test_discovers_regular_if_nand_nor_xor_and_iff_constraints():

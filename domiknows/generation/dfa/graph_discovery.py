@@ -26,11 +26,24 @@ The pipeline (see the five steps in ``LogicalConstraintsToDFAPipeline.png``):
 
 Recognised DomiKnowS constraint shapes
 ----------------------------------------
+These are the shapes compiled into a request-independent DFA by this module,
+not a list of every DomiKnowS LC class.  Request-bound ``eqL``, ``fixedL``,
+``sumL``, ``iotaL``, ``miotaL``, ``queryL``, ``sameL``, and ``differentL`` are
+handled by :func:`~.semantic.compile_generation_constraint_plan` using a
+bounded DFA-like decoder after :class:`~.semantic.GenerationSemanticContext`
+is supplied.  Value expressions and filters are not standalone Boolean LCs.
+
 - ``ifL(is_before_rel, ifL(eos, eos))``           → EOS-closure DFA
 - ``atMostAL(notL(eos), N)``                      → max non-EOS DFA
 - ``atLeastAL(token_value, N)`` / ``existsAL``    → required-token / count DFAs
 - ``atMostAL(token_value, 0)``                    → forbidden-token DFA
 - ``exactAL`` / ``atLeastAL`` / ``atMostAL`` over token sets or negated tokens
+- head ``atMostL`` / ``atLeastL`` / ``exactL`` / ``existsL`` with a pathless
+  token predicate (head count constraints accumulate globally)
+- ``forAllL(A(x), B(x))`` for two pathless unary token predicates on the same
+  variable, compiled as a forbidden-token set
+- head comparative counts over two pathless unary token predicates with an
+  explicit ``max_sequence_length`` bound
 - ``ifL(existsAL(token), atMostAL(notL(eos), N))``→ conditional max-non-EOS DFA
 - regular boolean forms: ``andL``, ``orL``, ``notL``, ``nandL``, ``norL``,
   ``xorL``, ``iffL``/``equivalenceL``, and ``ifL(A, B)`` when both sides are regular
@@ -65,11 +78,13 @@ from ._constraints import (
     after_token_allowed_dfa,
     after_token_allowed_map_dfa,
     conditional_max_non_eos_dfa,
+    compare_token_counts_dfa,
     empty_dfa,
     eos_closure_dfa,
     forbidden_token_dfa,
     first_token_allowed_dfa,
     max_non_eos_dfa,
+    max_sequence_length_dfa,
     ordered_tokens_dfa,
     required_token_dfa,
     token_set_count_dfa,
@@ -103,11 +118,19 @@ def _discover_generation_dfas(
     bundle,
     *,
     on_unsupported: str = "warn",
+    max_sequence_length: int | None = None,
 ) -> tuple[DFA, ...]:
     """Compile supported generation-relevant graph constraints into DFA fragments."""
     dfas: list[DFA] = []
-    for analysis in analyze_generation_constraints(graph, bundle, on_unsupported=on_unsupported):
+    has_comparison = False
+    for analysis in analyze_generation_constraints(
+        graph, bundle, on_unsupported=on_unsupported,
+        max_sequence_length=max_sequence_length,
+    ):
         dfas.extend(analysis.dfas)
+        has_comparison |= analysis.supported and analysis.lc_type in _COMPARATIVE_TYPES
+    if has_comparison:
+        dfas.append(max_sequence_length_dfa(bundle.vocabulary, max_sequence_length))
     return tuple(dfas)
 
 
@@ -116,6 +139,7 @@ def analyze_generation_constraints(
     bundle,
     *,
     on_unsupported: str = "warn",
+    max_sequence_length: int | None = None,
 ) -> tuple[GenerationConstraintAnalysis, ...]:
     """Analyze head graph constraints for DFA-enforceable generation fragments.
 
@@ -127,6 +151,8 @@ def analyze_generation_constraints(
         on_unsupported = "error"
     if on_unsupported not in {"ignore", "warn", "error"}:
         raise ValueError("on_unsupported must be 'ignore', 'warn', 'error', or 'raise'")
+    if max_sequence_length is not None and max_sequence_length < 0:
+        raise ValueError("max_sequence_length must be non-negative")
 
     analyses: list[GenerationConstraintAnalysis] = []
     for lc_name, lc in graph.logicalConstrains.items():
@@ -170,9 +196,9 @@ def analyze_generation_constraints(
                 on_unsupported,
                 reason=_unsupported_reason(irregular, bundle),
             )
-        discovered = _marked_dfas(lc, normal.tree, bundle)
+        discovered = _marked_dfas(lc, normal.tree, bundle, max_sequence_length)
         if discovered is False:
-            discovered = _match_lc_many(normal.tree, bundle)
+            discovered = _match_lc_many(normal.tree, bundle, max_sequence_length)
         if discovered:
             analyses.append(
                 GenerationConstraintAnalysis(
@@ -186,6 +212,8 @@ def analyze_generation_constraints(
             continue
         if relevant:
             reason = _unsupported_reason(lc, bundle)
+            if kind(lc) in _COMPARATIVE_TYPES and max_sequence_length is None:
+                reason = "comparative counts require max_sequence_length for finite DFA compilation"
             _handle_unsupported(lc_name, lc, on_unsupported, reason=reason)
             analyses.append(
                 GenerationConstraintAnalysis(
@@ -214,10 +242,14 @@ def discover_generation_constraints(
     bundle,
     *,
     on_unsupported: str = "warn",
+    max_sequence_length: int | None = None,
 ) -> tuple[DiscoveredGenerationConstraint, ...]:
     """Return readable summaries for graph constraints compiled into the DFA."""
 
-    analyses = analyze_generation_constraints(graph, bundle, on_unsupported=on_unsupported)
+    analyses = analyze_generation_constraints(
+        graph, bundle, on_unsupported=on_unsupported,
+        max_sequence_length=max_sequence_length,
+    )
     logical_constraints = getattr(graph, "logicalConstrains", getattr(graph, "_logicalConstrains", {}))
     discovered: list[DiscoveredGenerationConstraint] = []
     for analysis in analyses:
@@ -240,6 +272,7 @@ def constraints_to_dfa_from_graph(
     *,
     on_unsupported: str = "warn",
     minimize: bool = True,
+    max_sequence_length: int | None = None,
 ):
     """Compile supported DomiKnowS graph constraints into a single DFA.
 
@@ -252,13 +285,19 @@ def constraints_to_dfa_from_graph(
             minimization to the final product DFA so the returned automaton has
             the minimum number of states for its language.  Pass ``False`` when
             you need the raw product-state IDs (e.g. for the debug visualizer).
+        max_sequence_length: Required to compile comparative token counts.
+            When one is compiled, the resulting DFA rejects sequences longer
+            than this bound.
 
     Returns:
         A :class:`~.dfa.DFA` accepting all sequences that satisfy every
         discovered constraint.
     """
     return _combine_dfas(
-        _discover_generation_dfas(graph, bundle, on_unsupported=on_unsupported),
+        _discover_generation_dfas(
+            graph, bundle, on_unsupported=on_unsupported,
+            max_sequence_length=max_sequence_length,
+        ),
         bundle.vocabulary,
         minimize=minimize,
     )
@@ -281,7 +320,7 @@ def _constraint_display_name(lc, bundle, analysis: GenerationConstraintAnalysis)
         if max_count is not None:
             return f"at most {max_count} non-EOS tokens are generated"
         token = _direct_token(lc.e, bundle)
-        limit = _last_int(lc.e)
+        limit = _count_limit(lc)
         if token is not None and limit == 0:
             return f"no {token!r} token(s) are generated"
         predicate = _token_predicate_from_count_lc(lc, bundle)
@@ -289,7 +328,7 @@ def _constraint_display_name(lc, bundle, analysis: GenerationConstraintAnalysis)
             return _count_constraint_name(predicate, max_count=limit)
     if kind(lc) == "atLeastAL":
         token = _direct_token(lc.e, bundle)
-        min_count = _last_int(lc.e)
+        min_count = _count_limit(lc)
         if token is not None and min_count is not None and min_count >= 1:
             return f"at least {min_count} {token!r} token(s) are generated"
         predicate = _token_predicate_from_count_lc(lc, bundle)
@@ -306,7 +345,7 @@ def _constraint_display_name(lc, bundle, analysis: GenerationConstraintAnalysis)
         if predicate is not None:
             return _count_constraint_name(predicate, min_count=1)
     if kind(lc) == "exactAL":
-        limit = _last_int(lc.e)
+        limit = _count_limit(lc)
         predicate = _token_predicate_from_count_lc(lc, bundle)
         if predicate is not None and limit is not None:
             return _count_constraint_name(predicate, exact_count=limit)
@@ -360,7 +399,13 @@ def _combine_dfas(dfas: Iterable[DFA], vocabulary, *, minimize: bool = True) -> 
     return accept_all_dfa(vocabulary)
 
 
-def _match_lc_many(lc, bundle) -> tuple[DFA, ...] | None:
+_COMPARATIVE_TYPES = {
+    "greaterL": ">", "greaterEqL": ">=", "lessL": "<",
+    "lessEqL": "<=", "equalCountsL": "==", "notEqualCountsL": "!=",
+}
+
+
+def _match_lc_many(lc, bundle, max_sequence_length=None) -> tuple[DFA, ...] | None:
     """Attempt to match *lc* against the known generation constraint shapes.
 
     Dispatches on the LC class name (or the ``_kind`` attribute carried by
@@ -382,31 +427,35 @@ def _match_lc_many(lc, bundle) -> tuple[DFA, ...] | None:
     if cls_name == "_forbidden_token":
         return (forbidden_token_dfa(bundle.vocabulary, lc.token),)
     if cls_name == "andL":
-        return _match_and_lc(lc, bundle)
+        return _match_and_lc(lc, bundle, max_sequence_length)
     if cls_name == "orL":
-        return _match_or_lc(lc, bundle)
+        return _match_or_lc(lc, bundle, max_sequence_length)
     if cls_name == "notL":
-        return _match_not_lc(lc, bundle)
+        return _match_not_lc(lc, bundle, max_sequence_length)
     if cls_name == "nandL":
-        matched = _match_and_lc(lc, bundle)
+        matched = _match_and_lc(lc, bundle, max_sequence_length)
         return _negate_many(matched) if matched else None
     if cls_name == "norL":
-        matched = _match_or_lc(lc, bundle)
+        matched = _match_or_lc(lc, bundle, max_sequence_length)
         return _negate_many(matched) if matched else None
     if cls_name == "xorL":
-        return _match_xor_lc(lc, bundle)
+        return _match_xor_lc(lc, bundle, max_sequence_length)
     if cls_name in {"equivalenceL", "iffL"}:
-        return _match_equivalence_lc(lc, bundle)
+        return _match_equivalence_lc(lc, bundle, max_sequence_length)
     if cls_name == "ifL":
-        return _as_dfa_tuple(_match_if_lc(lc, bundle))
-    if cls_name == "atMostAL":
+        return _as_dfa_tuple(_match_if_lc(lc, bundle, max_sequence_length))
+    if cls_name in {"atMostAL", "atMostL"} and (cls_name.endswith("AL") or getattr(lc, "headLC", False)):
         return _as_dfa_tuple(_match_at_most_lc(lc, bundle))
-    if cls_name == "atLeastAL":
+    if cls_name in {"atLeastAL", "atLeastL"} and (cls_name.endswith("AL") or getattr(lc, "headLC", False)):
         return _as_dfa_tuple(_match_at_least_lc(lc, bundle))
-    if cls_name == "exactAL":
+    if cls_name in {"exactAL", "exactL"} and (cls_name.endswith("AL") or getattr(lc, "headLC", False)):
         return _as_dfa_tuple(_match_exact_lc(lc, bundle))
-    if cls_name == "existsAL":
+    if cls_name in {"existsAL", "existsL"} and (cls_name.endswith("AL") or getattr(lc, "headLC", False)):
         return _as_dfa_tuple(_match_exists_lc(lc, bundle))
+    if cls_name == "forAllL":
+        return _as_dfa_tuple(_match_for_all_lc(lc, bundle))
+    if cls_name in _COMPARATIVE_TYPES and max_sequence_length is not None and getattr(lc, "headLC", False):
+        return _as_dfa_tuple(_match_compare_lc(lc, bundle, max_sequence_length))
     return None
 
 
@@ -417,7 +466,7 @@ def _as_dfa_tuple(dfa: DFA | None) -> tuple[DFA, ...] | None:
     return (dfa,)
 
 
-def _marked_dfas(lc, normalized_tree, bundle) -> tuple[DFA, ...] | None | bool:
+def _marked_dfas(lc, normalized_tree, bundle, max_sequence_length=None) -> tuple[DFA, ...] | None | bool:
     """Resolve the ``_generation_dfa_constraint`` marker on *lc*.
 
     The marker is checked on the original LC (mirror nodes do not carry it);
@@ -431,7 +480,7 @@ def _marked_dfas(lc, normalized_tree, bundle) -> tuple[DFA, ...] | None | bool:
     if marker is False:
         return False
     if marker is True:
-        return _match_lc_many(normalized_tree, bundle)
+        return _match_lc_many(normalized_tree, bundle, max_sequence_length)
     return None
 
 
@@ -440,7 +489,7 @@ def _is_latent_marked(lc) -> bool:
     return bool(getattr(lc, "_generation_latent_specs", ()))
 
 
-def _match_and_lc(lc, bundle) -> tuple[DFA, ...] | None:
+def _match_and_lc(lc, bundle, max_sequence_length=None) -> tuple[DFA, ...] | None:
     """Match an ``andL`` as a conjunction of supported generation children.
 
     Generation-relevant unsupported children make the whole ``andL``
@@ -464,7 +513,7 @@ def _match_and_lc(lc, bundle) -> tuple[DFA, ...] | None:
                 else:
                     transition_rules[trigger] = set(allowed)
             continue
-        child_match = _match_lc_many(child, bundle) if hasattr(child, "e") else None
+        child_match = _match_lc_many(child, bundle, max_sequence_length) if hasattr(child, "e") else None
         if child_match is None:
             if _is_generation_relevant(child, bundle):
                 return None
@@ -481,13 +530,13 @@ def _match_and_lc(lc, bundle) -> tuple[DFA, ...] | None:
     return (product_dfa(dfas),)
 
 
-def _match_or_lc(lc, bundle) -> tuple[DFA, ...] | None:
+def _match_or_lc(lc, bundle, max_sequence_length=None) -> tuple[DFA, ...] | None:
     """Match an ``orL`` as a union of fully supported generation branches."""
     branches: list[DFA] = []
     for child in getattr(lc, "e", ()):
         if not _is_generation_relevant(child, bundle):
             return None
-        child_match = _match_lc_many(child, bundle) if hasattr(child, "e") else None
+        child_match = _match_lc_many(child, bundle, max_sequence_length) if hasattr(child, "e") else None
         if not child_match:
             return None
         branches.append(product_dfa(child_match) if len(child_match) > 1 else child_match[0])
@@ -496,12 +545,12 @@ def _match_or_lc(lc, bundle) -> tuple[DFA, ...] | None:
     return (union_dfa(branches),)
 
 
-def _match_not_lc(lc, bundle) -> tuple[DFA, ...] | None:
+def _match_not_lc(lc, bundle, max_sequence_length=None) -> tuple[DFA, ...] | None:
     """Match a regular negation by complementing the child DFA."""
     children = [child for child in getattr(lc, "e", ()) if hasattr(child, "e")]
     if len(children) != 1:
         return None
-    matched = _match_lc_many(children[0], bundle)
+    matched = _match_lc_many(children[0], bundle, max_sequence_length)
     return _negate_many(matched) if matched else None
 
 
@@ -512,10 +561,10 @@ def _negate_many(matched: tuple[DFA, ...] | None) -> tuple[DFA, ...] | None:
     return (complement_dfa(child),)
 
 
-def _match_xor_lc(lc, bundle) -> tuple[DFA, ...] | None:
+def _match_xor_lc(lc, bundle, max_sequence_length=None) -> tuple[DFA, ...] | None:
     branches: list[DFA] = []
     for child in getattr(lc, "e", ()):
-        child_match = _match_lc_many(child, bundle) if hasattr(child, "e") else None
+        child_match = _match_lc_many(child, bundle, max_sequence_length) if hasattr(child, "e") else None
         if not child_match:
             return None
         branches.append(product_dfa(child_match) if len(child_match) > 1 else child_match[0])
@@ -532,10 +581,10 @@ def _match_xor_lc(lc, bundle) -> tuple[DFA, ...] | None:
     )
 
 
-def _match_equivalence_lc(lc, bundle) -> tuple[DFA, ...] | None:
+def _match_equivalence_lc(lc, bundle, max_sequence_length=None) -> tuple[DFA, ...] | None:
     branches: list[DFA] = []
     for child in getattr(lc, "e", ()):
-        child_match = _match_lc_many(child, bundle) if hasattr(child, "e") else None
+        child_match = _match_lc_many(child, bundle, max_sequence_length) if hasattr(child, "e") else None
         if not child_match:
             return None
         branches.append(product_dfa(child_match) if len(child_match) > 1 else child_match[0])
@@ -552,7 +601,7 @@ def _match_equivalence_lc(lc, bundle) -> tuple[DFA, ...] | None:
     )
 
 
-def _match_if_lc(lc, bundle) -> DFA | None:
+def _match_if_lc(lc, bundle, max_sequence_length=None) -> DFA | None:
     """Try to match an ``ifL`` constraint to a known generation shape.
 
     Recognised patterns:
@@ -573,8 +622,8 @@ def _match_if_lc(lc, bundle) -> DFA | None:
         if token is not None and max_count is not None:
             return conditional_max_non_eos_dfa(bundle.vocabulary, token, max_count)
     if len(lc.e) == 2:
-        antecedent = _match_lc_many(lc.e[0], bundle) if hasattr(lc.e[0], "e") else None
-        consequent = _match_lc_many(lc.e[1], bundle) if hasattr(lc.e[1], "e") else None
+        antecedent = _match_lc_many(lc.e[0], bundle, max_sequence_length) if hasattr(lc.e[0], "e") else None
+        consequent = _match_lc_many(lc.e[1], bundle, max_sequence_length) if hasattr(lc.e[1], "e") else None
         if antecedent and consequent:
             a = antecedent[0] if len(antecedent) == 1 else product_dfa(antecedent)
             b = consequent[0] if len(consequent) == 1 else product_dfa(consequent)
@@ -594,7 +643,7 @@ def _match_at_most_lc(lc, bundle) -> DFA | None:
     if max_count is not None:
         return max_non_eos_dfa(bundle.vocabulary, max_count)
     token = _direct_token(lc.e, bundle)
-    limit = _last_int(lc.e)
+    limit = _count_limit(lc)
     if token is not None and limit == 0:
         return forbidden_token_dfa(bundle.vocabulary, token)
     predicate = _token_predicate_from_count_lc(lc, bundle)
@@ -612,7 +661,7 @@ def _match_at_least_lc(lc, bundle) -> DFA | None:
     - Generic token-set count floor.
     """
     token = _direct_token(lc.e, bundle)
-    min_count = _last_int(lc.e)
+    min_count = _count_limit(lc)
     if token is not None and min_count is not None and min_count >= 1:
         return required_token_dfa(bundle.vocabulary, token, min_count=min_count)
     predicate = _token_predicate_from_count_lc(lc, bundle)
@@ -624,7 +673,7 @@ def _match_at_least_lc(lc, bundle) -> DFA | None:
 
 def _match_exact_lc(lc, bundle) -> DFA | None:
     """Match ``exactAL(predicate, N)`` for regular token predicates."""
-    limit = _last_int(lc.e)
+    limit = _count_limit(lc)
     if limit is None:
         return None
     predicate = _token_predicate_from_count_lc(lc, bundle)
@@ -654,6 +703,74 @@ def _match_exists_lc(lc, bundle) -> DFA | None:
     return None
 
 
+def _two_unary_token_predicates(lc, bundle):
+    """Read two pathless token predicates with explicit variable bindings."""
+    elements = [item for item in lc.e if not isinstance(item, int)]
+    if len(elements) == 4:
+        groups = (elements[:2], elements[2:])
+    elif len(elements) == 3 and hasattr(elements[0], "e"):
+        groups = ((elements[0],), elements[1:])
+    elif len(elements) == 3 and hasattr(elements[2], "e"):
+        groups = (elements[:2], (elements[2],))
+    elif len(elements) == 2 and all(hasattr(item, "e") for item in elements):
+        groups = ((elements[0],), (elements[1],))
+    else:
+        return None
+    parsed = []
+    for group in groups:
+        if len(group) == 2:
+            atom, variable = group
+            if not _concept_tuple(atom) or not _is_v(variable):
+                return None
+            predicate = _token_predicate_from_elements(group, bundle)
+            variables = [variable]
+        else:
+            predicate = _token_predicate_from_expr(group[0], bundle)
+            variables = [item for item in _walk_lc(group[0]) if _is_v(item)]
+        if predicate is None or not variables or any(v.v is not None for v in variables):
+            return None
+        names = {v.name for v in variables}
+        if len(names) != 1:
+            return None
+        parsed.extend((predicate, names.pop()))
+    return tuple(parsed)
+
+
+def _match_for_all_lc(lc, bundle) -> DFA | None:
+    """Compile unary ``forAllL(A(x), B(x))`` as forbidding A outside B."""
+    parsed = _two_unary_token_predicates(lc, bundle)
+    if parsed is None:
+        return None
+    left, left_var, right, right_var = parsed
+    if left_var != right_var:
+        return None
+    violations = _predicate_token_set(left, bundle) - _predicate_token_set(right, bundle)
+    return token_set_count_dfa(bundle.vocabulary, violations, max_count=0)
+
+
+def _match_compare_lc(lc, bundle, max_sequence_length: int) -> DFA | None:
+    """Compile two global unary token counts under an explicit length cap."""
+    parsed = _two_unary_token_predicates(lc, bundle)
+    if parsed is None:
+        return None
+    left, left_var, right, right_var = parsed
+    if left_var == right_var:
+        return None
+    left_tokens = _predicate_token_set(left, bundle)
+    right_tokens = _predicate_token_set(right, bundle)
+    try:
+        return compare_token_counts_dfa(
+            bundle.vocabulary, left_tokens, right_tokens,
+            operator=_COMPARATIVE_TYPES[kind(lc)],
+            difference=_last_int(lc.e) or 0,
+            max_length=max_sequence_length,
+        )
+    except ValueError as exc:
+        if "_budget" not in str(exc):
+            raise
+        return None
+
+
 def _is_eos_closure(lc, bundle) -> bool:
     """Return ``True`` if *lc* matches the EOS-closure ``ifL`` pattern."""
     if len(lc.e) < 3:
@@ -672,9 +789,11 @@ def _is_eos_closure(lc, bundle) -> bool:
 
 def _non_eos_at_most_count(lc, bundle) -> int | None:
     """Extract the count from an ``atMostAL(notL(eos), N)`` sub-expression."""
-    if kind(lc) != "atMostAL":
+    if kind(lc) not in {"atMostAL", "atMostL"}:
         return None
-    limit = _last_int(lc.e)
+    if kind(lc) == "atMostL" and not getattr(lc, "headLC", False):
+        return None
+    limit = _count_limit(lc)
     if limit is None:
         return None
     if not lc.e or kind(lc.e[0]) != "notL":
@@ -687,7 +806,9 @@ def _non_eos_at_most_count(lc, bundle) -> int | None:
 
 def _exists_token(lc, bundle) -> str | None:
     """Extract the token from an ``existsAL(token_value)`` sub-expression."""
-    if kind(lc) != "existsAL":
+    if kind(lc) not in {"existsAL", "existsL"}:
+        return None
+    if kind(lc) == "existsL" and not getattr(lc, "headLC", False):
         return None
     return _direct_token(lc.e, bundle)
 
@@ -747,7 +868,10 @@ def _token_predicate_from_expr(expr, bundle) -> tuple[tuple[str, ...], bool] | N
         for token_set in sets[1:]:
             current &= set(token_set)
         return tuple(sorted(current)), False
-    if cls_name in {"atLeastAL", "atMostAL", "exactAL", "existsAL"}:
+    if cls_name in {
+        "atLeastAL", "atMostAL", "exactAL", "existsAL",
+        "atLeastL", "atMostL", "exactL", "existsL",
+    }:
         return None
     return _token_predicate_from_elements(getattr(expr, "e", ()), bundle)
 
@@ -966,6 +1090,18 @@ def _last_int(elements: Iterable) -> int | None:
     """Return the last integer found in *elements*, or ``None``."""
     ints = [item for item in elements if isinstance(item, int)]
     return int(ints[-1]) if ints else None
+
+
+def _count_limit(lc) -> int:
+    """Use the same precedence as the graph count classes' ``__call__``."""
+    fixed = getattr(lc, "fixedLimit", None)
+    if fixed is not None:
+        return int(fixed)
+    explicit = getattr(lc, "_explicitLimit", None)
+    if explicit is not None:
+        return int(explicit)
+    trailing = _last_int(getattr(lc, "e", ()))
+    return trailing if trailing is not None else 1
 
 
 def _is_generation_relevant(lc, bundle) -> bool:

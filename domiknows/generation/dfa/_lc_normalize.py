@@ -437,9 +437,16 @@ def _kind_is_mirror(node) -> bool:
 
 def _looks_supported(lc) -> bool:
     """Cheap precheck: is this LC class one the matcher can try to compile?"""
+    if kind(lc) in {
+        "atMostL", "atLeastL", "exactL", "existsL",
+        "greaterL", "greaterEqL", "lessL", "lessEqL",
+        "equalCountsL", "notEqualCountsL",
+    }:
+        return getattr(lc, "headLC", False)
     return kind(lc) in {
         "andL", "orL", "notL", "ifL", "nandL", "norL", "xorL", "equivalenceL", "iffL",
         "atMostAL", "atLeastAL", "exactAL", "existsAL",
+        "forAllL",
     }
 
 
@@ -478,24 +485,23 @@ def _canonical_key(node, bundle):
         return ("ifL", children)
     # Original LC leaves.  Late import keeps the module dependency one-way.
     from .graph_discovery import (
-        _direct_token,
-        _exists_token,
-        _last_int,
+        _count_limit,
         _non_eos_at_most_count,
+        _token_predicate_from_count_lc,
     )
-    if op == "atMostAL":
+    if op in {"atMostAL", "atMostL"}:
+        predicate = _token_predicate_from_count_lc(node, bundle)
+        if predicate is None:
+            return None
         return (
-            "atMostAL",
-            _direct_token(node.e, bundle),
-            _last_int(node.e),
+            op,
+            predicate,
+            _count_limit(node),
             _non_eos_at_most_count(node, bundle),
         )
-    if op == "atLeastAL":
-        return ("atLeastAL", _direct_token(node.e, bundle), _last_int(node.e))
-    if op == "exactAL":
-        return ("exactAL", _direct_token(node.e, bundle), _last_int(node.e))
-    if op == "existsAL":
-        return ("existsAL", _exists_token(node, bundle))
+    if op in {"atLeastAL", "atLeastL", "exactAL", "exactL", "existsAL", "existsL"}:
+        predicate = _token_predicate_from_count_lc(node, bundle)
+        return (op, predicate, _count_limit(node)) if predicate is not None else None
     # Raw items that flow through DomiKnowS LCs unchanged (concept 4-tuples,
     # ``V`` instances, plain ``int``\\ s) don't have an ``e`` attribute and
     # have no meaningful structural key.  Returning ``None`` disables

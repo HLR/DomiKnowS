@@ -27,6 +27,15 @@ Constrained Decoding
 
 The resulting automaton represents the regular language defined by the supported DomiKnowS logical constraints.
 
+`graph_discovery.py` lists the constraint shapes it can compile into a DFA
+without request data. For `eqL`, `fixedL`, `sumL`, `iotaL`, `miotaL`, `queryL`,
+`sameL`, and `differentL`, use `compile_generation_constraint_plan` and bind
+a `GenerationSemanticContext`. That path evaluates typed filter, number,
+selection, and answer results over a bounded sequence, and constrains decoding
+when a Boolean condition or an expected value is available. The request-bound
+path requires the relevant attributes, bindings, truth values, or scores from
+the caller; it does not infer arbitrary graph relationships automatically.
+
 ---
 
 # 1. Vocabulary Defines the DFA Alphabet
@@ -424,8 +433,77 @@ Compose child DFAs with DFA algebra
 Key implementation behaviors:
 
 ### Recursive Dispatch
-- The matcher dispatches on LC (logical constraint) type (`andL`, `orL`, `notL`, `ifL`, `xorL`, `iffL`, `nandL`, `norL`, `atMostAL`, `atLeastAL`, `existsAL`, `exactAL`).
+- The matcher dispatches on LC (logical constraint) type (`andL`, `orL`, `notL`, `ifL`, `xorL`, `iffL`, `nandL`, `norL`, `atMostAL`, `atLeastAL`, `existsAL`, `exactAL`) and the restricted forms below.
 - For nested expressions, child LC nodes are recursively compiled first, then composed.
+
+### Additional count and universal forms
+
+- Head `atMostL`, `atLeastL`, `exactL`, and `existsL` compile when their predicate is a pathless token or token set. Head count constraints accumulate over the full sequence; nested element-wise forms remain unsupported.
+- Count limits follow the LC definition: `limit=` takes precedence, followed by a trailing integer, then the default of 1. `existsL` and `existsAL` always use 1.
+- `forAllL(A(x), B(x))` compiles when both arguments are pathless unary token predicates bound to the same variable. The DFA forbids tokens in `A` but outside `B`.
+- Head `greaterL`, `greaterEqL`, `lessL`, `lessEqL`, `equalCountsL`, and `notEqualCountsL` compile for two pathless unary token predicates on distinct variables when `max_sequence_length` is supplied to `constraints_to_dfa_from_graph`. The bound includes EOS and other labels, and sequences exceeding it are rejected. Comparisons nested in Boolean LCs remain unsupported because their graph semantics are element-wise. A comparison exceeding the 4096-state or 250,000-transition construction budget remains unsupported.
+
+### Request-bound value and selection constraints
+
+`compile_generation_constraint_plan(graph, bundle)` retains LCs that cannot be
+compiled into the static DFA. Its `evaluate(labels, context)` method returns
+typed `SemanticValue` results; `bind(context, max_sequence_length=N)` returns a
+DFA-like object accepted by the existing greedy, sampling, and beam decoders.
+The bound is required because request-dependent values are checked against the
+generated prefix. Reachability search has an explicit `search_budget` and raises
+if it cannot prove a token can still lead to an accepted sequence.
+
+```python
+from domiknows.generation import (
+    GenerationSemanticContext, compile_generation_constraint_plan,
+)
+
+plan = compile_generation_constraint_plan(graph, bundle)
+facts = GenerationSemanticContext(
+    attributes={0: {"instanceID": "chosen"}},
+    bindings={"x": 0},
+    fixed_truth={0: True},
+    membership_scores={"selector_name": {0: 0.9}},
+    expected={"answer_name": "A"},
+)
+bound = plan.bind(facts, max_sequence_length=8)
+```
+
+For ordered candidate DataNodes, the plan can build those facts itself:
+
+```python
+bound = plan.bind_data_nodes(
+    token_nodes, max_sequence_length=len(token_nodes),
+    expected={answer.lcName: "A"},
+)
+```
+
+The builder copies each node's attributes and `instanceID`/`instanceValue`.
+For `fixedL`, it reads observed compact labels from
+`<generated_token>/label` and derives truth separately for each pathless token
+predicate. For soft `miotaL`, it reads `<selector-name>/score` (one probability
+per candidate), or `<generated_token>/local/softmax` for a single-token
+selector. A node's `generation_variables` attribute names the `sameL` or
+`differentL` variables bound to that position; subclass values come from a
+direct concept-name attribute or the standard `<concept>/label` attribute.
+Missing or duplicate bindings, missing scores, and invalid labels fail before
+decoding. The bound decoder accepts sequences with exactly as many positions
+as the DataNode snapshot.
+
+The request snapshot supports `eqL` attribute filters, `fixedL` observed truth,
+numeric `sumL`, `iotaL` uniqueness and selection, thresholded `miotaL`,
+`queryL` answers, and `sameL`/`differentL` category comparisons. `from_data_nodes`
+copies `instanceID`, `instanceValue`, and attributes from ordered token-position
+DataNodes. An LC that returns a number, selection set, or answer restricts
+generation only when an `expected` value or a Boolean parent consumes it.
+`iotaL` always requires exactly one selected candidate. For relation paths,
+provide `path_resolver(path, labels)` returning eligible position indexes.
+Request values used by existing contextual DFA markers go in `request_values`.
+Missing facts and unhandled predicate shapes raise explicit errors.
+`analyze_generation_constraints` and `constraints_to_dfa_from_graph` still
+describe and build only the static DFA fragment; use the typed plan for these
+request-dependent expressions. `from_data_nodes` snapshots attributes but does
+not infer arbitrary graph relation paths; supply `path_resolver` for those.
 
 ### `andL` (Conjunction)
 - Every child that is generation-relevant must compile successfully.

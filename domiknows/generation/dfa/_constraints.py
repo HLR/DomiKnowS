@@ -19,6 +19,7 @@ Available builders
 """
 from __future__ import annotations
 
+from collections import deque
 from typing import Iterable
 
 from .core import DFA
@@ -274,6 +275,79 @@ def token_set_count_dfa(
         start_state=0,
         accepting_states=frozenset(accepting),
         dead_states=frozenset({dead}) if dead is not None else frozenset(),
+    )
+
+
+def max_sequence_length_dfa(vocabulary: TokenVocabulary, max_length: int) -> DFA:
+    """Accept at most ``max_length`` labels, including EOS labels."""
+    if max_length < 0:
+        raise ValueError("max_length must be non-negative")
+    alphabet = frozenset(vocabulary.alphabet)
+    dead = max_length + 1
+    states = frozenset(range(dead + 1))
+    return DFA(
+        states=states,
+        alphabet=alphabet,
+        transitions=_complete_transitions(states, alphabet, lambda state, _: min(state + 1, dead)),
+        start_state=0,
+        accepting_states=frozenset(range(dead)),
+        dead_states=frozenset({dead}),
+    )
+
+
+def compare_token_counts_dfa(
+    vocabulary: TokenVocabulary,
+    left_tokens: Iterable[str],
+    right_tokens: Iterable[str],
+    *,
+    operator: str,
+    difference: int = 0,
+    max_length: int,
+    state_budget: int = 4096,
+    transition_budget: int = 250_000,
+) -> DFA:
+    """Compare two token counts using a finite signed difference and length."""
+    if max_length < 0:
+        raise ValueError("max_length must be non-negative")
+    comparisons = {
+        ">": lambda value: value > difference,
+        ">=": lambda value: value >= difference,
+        "<": lambda value: value < difference,
+        "<=": lambda value: value <= difference,
+        "==": lambda value: value == difference,
+        "!=": lambda value: value != difference,
+    }
+    if operator not in comparisons:
+        raise ValueError(f"unsupported comparison operator: {operator}")
+    left = {vocabulary.label_for_token(token) for token in left_tokens}
+    right = {vocabulary.label_for_token(token) for token in right_tokens}
+    alphabet = frozenset(vocabulary.alphabet)
+    start = (0, 0)
+    dead = ("dead",)
+    states = {start, dead}
+    queue = deque([start])
+    transitions = {(dead, symbol): dead for symbol in alphabet}
+    while queue:
+        length, delta = queue.popleft()
+        for symbol in alphabet:
+            next_state = dead if length == max_length else (
+                length + 1, delta + (symbol in left) - (symbol in right)
+            )
+            transitions[((length, delta), symbol)] = next_state
+            if len(transitions) > transition_budget:
+                raise ValueError("comparative count DFA exceeds transition_budget")
+            if next_state not in states:
+                states.add(next_state)
+                if len(states) > state_budget:
+                    raise ValueError("comparative count DFA exceeds state_budget")
+                queue.append(next_state)
+    accepting = {
+        state for state in states if state != dead and comparisons[operator](state[1])
+    }
+    return DFA(
+        states=frozenset(states), alphabet=alphabet, transitions=transitions,
+        start_state=start, accepting_states=frozenset(accepting),
+        dead_states=frozenset({dead}),
     )
 
 
