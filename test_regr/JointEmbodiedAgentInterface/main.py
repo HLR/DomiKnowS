@@ -598,9 +598,10 @@ def command_train_agent(args):
         ik_max_steps=args.ik_max_steps,
         max_consecutive_ik_rejections=args.max_consecutive_ik_rejections,
         execution_assistance=args.execution_assistance,
-        assistance_curriculum=getattr(args, "assistance_curriculum", "linear"),
+        assistance_curriculum=getattr(args, "assistance_curriculum", "cosine"),
         assistance_start=getattr(args, "assistance_start", 1.0),
         assistance_end=getattr(args, "assistance_end", 0.0),
+        feasibility_weight=getattr(args, "feasibility_weight", 0.15),
     )
     stage2.round_robin_cursor = cursor
     if (
@@ -1023,11 +1024,17 @@ def build_parser():
     agent.add_argument(
         "--assistance-curriculum",
         choices=("none", "linear", "cosine"),
-        default="linear",
+        default="cosine",
         help="annealing schedule for execution assistance during Stage 2 reinforcement learning",
     )
     agent.add_argument("--assistance-start", type=float, default=1.0)
     agent.add_argument("--assistance-end", type=float, default=0.0)
+    agent.add_argument(
+        "--feasibility-weight",
+        type=float,
+        default=0.15,
+        help="Stage 2 controller kinematic feasibility regularizer weight",
+    )
     agent.add_argument(
         "--max-consecutive-ik-rejections",
         type=int,
