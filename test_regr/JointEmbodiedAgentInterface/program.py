@@ -470,40 +470,61 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         pairs = []
         with self.joint_runtime.domain_scope("eai", parameter_policy=self.parameter_policy):
             encoded_context = self.eai_planner.encode_context(context)
-            for _ in range(self.eai_num_samples):
-                policy_dfa = self.joint_runtime.dfa_for("eai", item)
-                labels, logprob = self.eai_planner.sample_labels_from_context(
-                    encoded_context,
-                    policy_dfa,
-                    max_steps=self.joint_runtime.max_eai_steps,
-                )
-                reward = reward_fn(labels, data_item=item)
-                from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
-                goal = evaluate_goal_satisfaction(
-                    labels, item, self.joint_runtime.eai_vocabulary,
-                    world_bundle=self.joint_runtime.world.eai,
-                )
-                pairs.append((
-                    logprob,
-                    float(torch.as_tensor(reward).float().mean()),
-                    float(goal["recall"]),
-                    float(goal["is_success"]),
-                ))
-            logprobs = torch.stack([pair[0] for pair in pairs])
-            rewards = torch.tensor([pair[1] for pair in pairs], device=logprobs.device, dtype=logprobs.dtype)
+            prepared_context = self.eai_planner.prepare_replay_context(context)
+            samples = []
+            with torch.no_grad():
+                for _ in range(self.eai_num_samples):
+                    policy_dfa = self.joint_runtime.dfa_for("eai", item)
+                    labels, _ = self.eai_planner.sample_labels_from_context(
+                        encoded_context,
+                        policy_dfa,
+                        max_steps=self.joint_runtime.max_eai_steps,
+                    )
+                    reward = reward_fn(labels, data_item=item)
+                    from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
+                    goal = evaluate_goal_satisfaction(
+                        labels, item, self.joint_runtime.eai_vocabulary,
+                        world_bundle=self.joint_runtime.world.eai,
+                    )
+                    samples.append((
+                        labels,
+                        float(torch.as_tensor(reward).float().mean()),
+                        float(goal["recall"]),
+                        float(goal["is_success"]),
+                    ))
+            rewards = torch.tensor([s[1] for s in samples], device=self.joint_planner.device, dtype=torch.float32)
             advantages = rewards - rewards.mean()
-            loss = -(logprobs * advantages.detach()).mean()
-            loss = loss + self.eai_supervised_weight * self._eai_anchor()
             self.planner_optimizer.zero_grad(set_to_none=True)
-            loss.backward()
+            total_loss = 0.0
+            count = max(1, len(samples))
+            for i, (labels, _, _, _) in enumerate(samples):
+                adv = advantages[i].detach()
+                if adv.abs() > 1e-6:
+                    policy_dfa = self.joint_runtime.dfa_for("eai", item)
+                    logprob = self.eai_planner.replay_labels_logprob(
+                        prepared_context,
+                        labels,
+                        policy_dfa,
+                        max_steps=self.joint_runtime.max_eai_steps,
+                    )
+                    sample_loss = -(logprob * adv) / count
+                    sample_loss.backward()
+                    total_loss += float(sample_loss.detach())
+
+            anchor_loss = self.eai_supervised_weight * self._eai_anchor()
+            if anchor_loss.requires_grad:
+                anchor_loss.backward()
+                total_loss += float(anchor_loss.detach())
             torch.nn.utils.clip_grad_norm_(self.joint_planner.parameters(), 1.0)
             self.planner_optimizer.step()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         return {
-            "loss": float(loss.detach()),
+            "loss": float(total_loss),
             "reward": float(rewards.mean()),
-            "goal_recall": sum(pair[2] for pair in pairs) / len(pairs),
-            "success": sum(pair[3] for pair in pairs) / len(pairs),
-            "samples": len(pairs),
+            "goal_recall": sum(s[2] for s in samples) / len(samples),
+            "success": sum(s[3] for s in samples) / len(samples),
+            "samples": len(samples),
         }
 
     def train_vlabench_update(
