@@ -656,7 +656,8 @@ def command_train_agent(args):
                 "maximum_ik_truncation_rate": args.stage2_preflight_max_ik_truncation_rate,
                 "vlabench": baseline,
             })
-            return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     best_key = None
     best_path = None
     if resumed_prior_best is not None:
