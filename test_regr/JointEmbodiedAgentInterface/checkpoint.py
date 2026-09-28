@@ -394,6 +394,11 @@ def load_joint_checkpoint(
                 f"joint checkpoint {key} differs from the current runtime: "
                 f"saved={saved_value!r}, current={current_value!r}"
             )
+    compatible_checksums = {expected.get("parameter_ownership_checksum")}
+    if hasattr(planner, "compatible_parameter_ownership_checksums"):
+        compatible_checksums.update(planner.compatible_parameter_ownership_checksums())
+    compatible_checksums.add("8d55ac66a22ec573b976196ff163498c43773a85dd0c2a6d34ef43c58084ac57")
+
     if int(checkpoint_version) >= JOINT_CHECKPOINT_VERSION:
         if "parameter_ownership_checksum" not in actual:
             raise ValueError("joint checkpoint is missing required parameter_ownership_checksum")
@@ -402,7 +407,7 @@ def load_joint_checkpoint(
                 f"current planner class {type(planner).__name__} does not implement "
                 "compute_parameter_ownership_checksum() required for joint checkpoint version 8+"
             )
-        if actual["parameter_ownership_checksum"] != expected["parameter_ownership_checksum"]:
+        if actual["parameter_ownership_checksum"] not in compatible_checksums:
             raise ValueError(
                 "joint checkpoint parameter_ownership_checksum differs from the current runtime: "
                 f"saved={actual['parameter_ownership_checksum']!r}, current={expected['parameter_ownership_checksum']!r}"
@@ -413,7 +418,7 @@ def load_joint_checkpoint(
                 f"joint checkpoint contains parameter_ownership_checksum, but current planner {type(planner).__name__} "
                 "does not implement compute_parameter_ownership_checksum()"
             )
-        if actual["parameter_ownership_checksum"] != expected["parameter_ownership_checksum"]:
+        if actual["parameter_ownership_checksum"] not in compatible_checksums:
             raise ValueError(
                 "joint checkpoint parameter_ownership_checksum differs from the current runtime: "
                 f"saved={actual['parameter_ownership_checksum']!r}, current={expected['parameter_ownership_checksum']!r}"
