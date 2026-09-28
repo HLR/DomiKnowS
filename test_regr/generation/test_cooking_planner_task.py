@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import torch
+import pytest
 
 from domiknows.generation.applications.planning import (
     planning_bundle_from_graph,
     planning_dfa_from_graph,
     planning_hmm_masks_from_graph,
+    validate_plan_from_graph,
 )
 
 from Tasks.cooking_planner.graph import build_graph
@@ -103,6 +105,36 @@ def test_planning_dfa_accepts_valid_plans_and_rejects_invalid_ones():
         )
     )
     assert not dfa.accepts(("open_fridge", "take_eggs", "close_fridge", "mix_dough", "done"))
+
+
+def test_planning_candidate_binds_ordered_data_nodes_after_static_dfa():
+    from domiknows.generation import GenerationEncoder, compile_generation_constraint_plan
+    from domiknows.graph.dataNode import DataNode
+    from domiknows.graph.logicalConstrain import fixedL
+
+    bundle = _bundle("cookie")
+    class Tokenizer:
+        def encode(self, token):
+            return [bundle.action_names.index(token)]
+
+    graph, item = GenerationEncoder(bundle.action_names, eos_token="done",
+                                    tokenizer=Tokenizer()).build_graph()
+    with graph:
+        fixedL(item.context.token_value("take_eggs", "x"))
+    plan = compile_generation_constraint_plan(graph, item)
+    key = f"<{item.generated_token.name}>/label"
+    actions = bundle.selected_reference_plan
+    nodes = [DataNode(instanceID=index, attributes={key: item.vocabulary.label_for_token(action)})
+             for index, action in enumerate(actions)]
+    assert validate_plan_from_graph(bundle, actions, constraint_plan=plan,
+                                    data_nodes=nodes)["LC0"].value is True
+    with pytest.raises(ValueError, match="violate"):
+        changed = list(nodes)
+        changed[0] = DataNode(instanceID=0, attributes={
+            key: item.vocabulary.label_for_token("take_eggs")})
+        validate_plan_from_graph(bundle, actions, constraint_plan=plan, data_nodes=changed)
+    with pytest.raises(ValueError, match="ordered DataNodes"):
+        validate_plan_from_graph(bundle, actions, constraint_plan=plan)
 
 
 def test_mock_planner_proposes_valid_and_rejected_candidates():

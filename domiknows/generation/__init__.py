@@ -242,6 +242,7 @@ from .applications import (
     planning_dfa_from_graph,
     planning_hmm_masks_from_graph,
     reference_plans_from_graph,
+    validate_plan_from_graph,
 )
 from .dfa.vocabulary import TokenVocabulary
 from .dfa.visualization import create_generation_debug_app, run_generation_debug_server
@@ -448,6 +449,7 @@ __all__ = [
     "projection_summary",
     "reachable_product_graph",
     "reference_plans_from_graph",
+    "validate_plan_from_graph",
     "required_token_dfa",
     "run_generation_debug_server",
     "sample_label_inference",

@@ -42,6 +42,7 @@ setup(
 
     extras_require={
         'semantic-loss': ['pysdd>=1.0.0'],
+        'planning-monitor': ['domiknows-planning-monitor==0.1.0'],
     },
     
     license='MIT',

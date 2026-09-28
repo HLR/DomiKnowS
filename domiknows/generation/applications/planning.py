@@ -16,6 +16,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import torch
 
 from ..dfa.core import DFA
+from .planning_monitor import validate_action_candidate
 
 
 @dataclass(frozen=True)
@@ -236,6 +237,29 @@ def planning_dfa_from_graph(bundle: PlanningBundle) -> DFA:
         accepting_states=frozenset(accepting),
         dead_states=frozenset({dead}),
     )
+
+
+def validate_plan_from_graph(bundle: PlanningBundle, actions: Sequence[str], *,
+                             constraint_plan=None, data_nodes=None, expected=None,
+                             request_values=None, path_resolver=None):
+    """Validate a proposed plan against static and request-bound constraints.
+
+    ``constraint_plan`` is a ``GenerationConstraintPlan``. Its ordered DataNodes
+    are bound by ``plan.bind_data_nodes`` through ``validate_action_candidate``.
+    Missing request facts and unsupported hard constraints fail closed.
+    """
+    actions = tuple(actions)
+    if not planning_dfa_from_graph(bundle).accepts(actions):
+        raise ValueError("proposed actions violate the planning graph DFA")
+    if constraint_plan is None:
+        if data_nodes is not None or expected is not None or request_values is not None:
+            raise ValueError("request facts require a generation constraint plan")
+        return {}
+    if data_nodes is None:
+        raise ValueError("request-bound planning constraints require ordered DataNodes")
+    return validate_action_candidate(constraint_plan, actions, data_nodes,
+                                     expected=expected, request_values=request_values,
+                                     path_resolver=path_resolver)
 
 
 def planning_hmm_masks_from_graph(bundle: PlanningBundle, *, dtype=torch.float64):

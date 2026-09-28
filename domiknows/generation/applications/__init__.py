@@ -22,6 +22,7 @@ from .planning import (
     planning_dfa_from_graph,
     planning_hmm_masks_from_graph,
     reference_plans_from_graph,
+    validate_plan_from_graph,
 )
 from .inference import (
     beam_label_inference,
@@ -53,5 +54,6 @@ __all__ = [
     "planning_hmm_masks_from_graph",
     "preference_pair_ranking_loss",
     "reference_plans_from_graph",
+    "validate_plan_from_graph",
     "sample_label_inference",
 ]

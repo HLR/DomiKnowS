@@ -90,6 +90,9 @@ generation-guided = [
 semantic-loss = [
   "pysdd>=1.0.0",
 ]
+planning-monitor = [
+  "domiknows-planning-monitor==0.1.0",
+]
 
 [tool.uv]
 conflicts = [
@@ -141,6 +144,7 @@ url = "https://download.pytorch.org/whl/xpu"
 explicit = true
 
 [tool.uv.sources]
+domiknows-planning-monitor = { path = "packages/domiknows-planning-monitor" }
 torch = [
   { index = "pytorch-cpu", extra = "cpu" },
   { index = "pytorch-cu128", extra = "cu128" },
