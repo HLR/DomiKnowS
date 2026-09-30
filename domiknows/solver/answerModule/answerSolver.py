@@ -420,7 +420,10 @@ class AnswerSolver:
         if not tensors:
             return []
         probabilities = torch.cat(tensors)
-        return (probabilities >= lc.threshold).to(torch.int64).detach().cpu().tolist()
+        # The answer is the set of selected candidates (their positions among
+        # the grounded candidates); an empty list means nothing was selected.
+        selected = probabilities >= lc.threshold
+        return torch.nonzero(selected).reshape(-1).detach().cpu().tolist()
 
     def _decode_multi_query(self, lc, dn, key=("local", "softmax")):
         """Decode every candidate row without enumerating class products."""
