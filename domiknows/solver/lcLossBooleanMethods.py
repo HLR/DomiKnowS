@@ -1212,7 +1212,27 @@ class lcLossBooleanMethods(constraintsProcessor):
             return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(),
                             requires_grad=True) / num_subclasses
 
-        # Build a [num_entities, num_subclasses] matrix from subclass_data
+        # Build a [num_entities, num_subclasses] matrix from subclass_data.
+        # Batched loss layout: ONE row whose entries are per-entity vectors, one
+        # vector per subclass.  Reading a single value from each (the per-row
+        # path below) would keep only the first entity and truncate the
+        # selection weights to it.
+        batched_row = subclass_data[0] if len(subclass_data) == 1 else None
+        batched_cols = (
+            [v for v in batched_row[:num_subclasses]]
+            if batched_row is not None and len(batched_row) > 0 else []
+        )
+        batched = (
+            len(batched_cols) > 0
+            and all(torch.is_tensor(v) and v.dim() == 1 and v.numel() > 1 for v in batched_cols)
+            and len({v.numel() for v in batched_cols}) == 1
+        )
+        if batched:
+            columns = [v.to(self.current_device, self._get_dtype()) for v in batched_cols]
+            columns.extend([torch.zeros_like(columns[0])] * (num_subclasses - len(columns)))
+            c_matrix = torch.stack(columns, dim=1)  # [num_entities, num_subclasses]
+            subclass_data = ()  # consumed: skip the per-row construction below
+
         sub_rows = []
         for row in subclass_data:
             if row is None:
@@ -1229,7 +1249,8 @@ class lcLossBooleanMethods(constraintsProcessor):
             if len(vals) < num_subclasses:
                 vals.extend([torch.zeros(1, device=self.current_device, dtype=self._get_dtype())] * (num_subclasses - len(vals)))
             sub_rows.append(torch.cat(vals))
-        c_matrix = torch.stack(sub_rows)  # [num_entities, num_subclasses]
+        if not batched:
+            c_matrix = torch.stack(sub_rows)  # [num_entities, num_subclasses]
 
         # Align selection weights with subclass data rows
         sel_weights = t
