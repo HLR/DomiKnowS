@@ -1,12 +1,26 @@
+import importlib.util
 import pytest
-import sys
-import os
-
-# Add the current directory to Python path to find graph_multi module
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path
 
 from domiknows.graph import createDummyDataNode, satisfactionReportOfConstraints
-from graph_multi import graph_multi
+
+
+def _load_graph(module_file, module_name, attribute):
+    """Load a graph definition that sits beside this test, by file path.
+
+    Importing it as ``graph`` / ``graph_multi`` through ``sys.path`` depends on
+    the path order and on other tests having imported a different module with
+    the same name (Tasks/clevr_inference_vs_gumbel/graph.py), which made this
+    file fail to collect when run together with them.
+    """
+    path = Path(__file__).with_name(module_file)
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return getattr(module, attribute)
+
+
+graph_multi = _load_graph("graph_multi.py", "dummy_datanode_graph_multi", "graph_multi")
 
 
 class TestGraphMultiInference:
