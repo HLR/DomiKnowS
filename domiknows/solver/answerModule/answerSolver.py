@@ -720,27 +720,25 @@ class AnswerSolver:
 
         populated_winner = False
         temporary_ilp_snapshot = None
-        multi_query_names = [
-            name for name in direct_decode_names
-            if isinstance(dn.graph.executableLCs[name].innerLC, queryL)
-        ]
-        if multi_query_names:
+        if direct_decode_names:
+            # Direct decoders (miota and multi-answer query) read the ILP world,
+            # so the winning assignment must be in place before they run; when
+            # the caller did not ask to populate, the previous world is put
+            # back afterwards.
             if not populate:
                 temporary_ilp_snapshot = self._snapshot_ilp_attributes(dn)
-            self.solver.populateILPSelection(
-                dn,
-                concepts_relations,
-                best_result['values'],
-            )
-            populated_winner = populate
-
-        if direct_decode_names:
             decoded_direct = {}
             try:
+                self.solver.populateILPSelection(
+                    dn,
+                    concepts_relations,
+                    best_result['values'],
+                )
+                populated_winner = populate
                 for name in direct_decode_names:
                     inner = dn.graph.executableLCs[name].innerLC
                     if isinstance(inner, miotaL):
-                        decoded_direct[name] = self._decode_miota(inner, dn, key=key)
+                        decoded_direct[name] = self._decode_miota(inner, dn, key=("ILP",))
                     else:
                         decoded = self._decode_multi_query_ilp(inner, dn)
                         decoded_direct[name] = (
