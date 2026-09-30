@@ -1586,7 +1586,9 @@ class DataNode:
 
         rootConcept = self.findRootConceptOrRelation(concept[0])
 
-        if not rootConcept:
+        # ``is None``: a leaf Concept (no contained concepts) is falsy through
+        # ``__len__`` and must not be mistaken for a missing root.
+        if rootConcept is None:
             return torch.tensor(collectAttributeList)
 
         rootConceptDns = self.findDatanodes(select = rootConcept)
