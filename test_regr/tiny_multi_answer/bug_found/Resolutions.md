@@ -236,26 +236,47 @@ single-group-per-row-values operand as needing alignment
 
 ## Regression checks
 
-Compared with the stashed baseline:
+Run on the committed code (`5eeb56da`, all fixes in place) with the repo
+virtualenv (Python 3.12, `pysdd` installed). Baseline means the same tests on
+`cf3bd575` with the library changes stashed.
 
-- `test_regr/solver`: 31 failures, all `pysdd` tests. The `pysdd` module is not
-  installed, and the same tests fail on baseline.
-- `test_regr/fixes`:
-  - The clevr ad-hoc ILP test, the queryL, multivar-grounding and
-    answer-solver-ILP files, and nine other files (131 tests) pass.
-  - 3 `test_queryl_inference_multiclass` failures also fail on baseline.
-  - `test_stress_train_epoch_dispatch` fails on baseline
-    (`InferenceProgram has no attribute use_gumbel`). It was not re-run on the
-    final code.
-- An earlier full run of `solver`, `simple_regression`, `fixes` and
-  `graph_errors` on an intermediate state (before the query-grounding change)
-  gave 36 failed and 20611 passed. The 36 were the 31 `pysdd` tests plus the 5
-  `fixes` tests above, and the one new failure among them was the clevr test,
-  since fixed.
-- Not re-run on the final code: the rest of `fixes` (including the heavy stress
-  tests), `simple_regression` and `graph_errors`. `dummy_datanode` could not be
-  collected, because a module named `graph` in `Tasks/clevr_inference_vs_gumbel`
-  shadows the test's import. That is unrelated to these changes.
+| Suite | Result at HEAD |
+|---|---|
+| Reproducer suite, `DOMIKNOWS_REPRO_NATIVE=1` | 56 passed, 0 skipped |
+| `test_regr/solver` and `test_regr/graph_errors` | 338 passed, 7 skipped, 0 failed (2 m 27 s) |
+| `test_regr/simple_regression` | 4 passed |
+| `test_regr/fixes` | 20,302 passed, 4 skipped, 5 failed (1 h 12 m) |
+
+The 5 failures in `test_regr/fixes`, none caused by these changes:
+
+- `test_inference_program_stress.py::test_stress_train_epoch_dispatch` fails on
+  baseline too (`InferenceProgram has no attribute use_gumbel`).
+- Three `test_queryl_inference_multiclass.py` tests
+  (`test_query_l_executable_returns_query_distribution`,
+  `test_inference_model_backprops_direct_query_label`,
+  `test_godel_query_distribution_is_hard_with_gradient`) fail on baseline too.
+- `test_multivar_executable_grounding.py::test_two_variable_formulas_verify_exactly[s2/q2]`
+  hit `subprocess.TimeoutExpired`: the test has a shared time budget and was
+  already over it. That run shared the machine with a second heavy suite
+  (`simple_regression`). Alone, the whole file passes (39 passed, 7 min 27 s),
+  and the case's own runtime is unchanged by these commits: about 10.5 s at HEAD
+  against 10.7 to 12.5 s on baseline, with the same `True, True` result.
+
+What changed compared with baseline: the 31 `pysdd` failures in
+`test_regr/solver` are gone (the module is now a default dependency), and no
+test that passed on baseline fails at HEAD.
+
+`test_regr/dummy_datanode` could not be collected at HEAD: a module named
+`graph` in `Tasks/clevr_inference_vs_gumbel` shadows the test's import. It was
+not tried on baseline, but the error is an import-path clash, not library code.
+
+Not covered: the other `test_regr` directories (`Clever`, `ConllQA`,
+`EmbodiedAgentInterface`, `GraphQA`, `InferenceAPI`, `JointEmbodiedAgentInterface`,
+`Reinforcement`, `TemporalRelation`, `VLABenchAgentInterface`, `examples`,
+`generation`, `namedTree`, `sensor`, `tiny_dynamic_graph`, `vizual`, plus
+`test_common_backbone.py`) were not run, and whether they need data, models or
+a GPU was not checked. The intermediate commits were also not run in full; see
+"Commits" for what was checked there.
 
 ## Remaining and open
 
