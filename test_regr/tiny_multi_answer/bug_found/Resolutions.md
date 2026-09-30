@@ -259,18 +259,18 @@ Compared with the stashed baseline:
 
 ## Remaining and open
 
-1. **Untracked suite output.** `test_regr/tiny_multi_answer/bug_found/results/`
-   (JSON, XML and logs written by `run_suite.py`) is not committed. Add it to
-   `.gitignore` or delete it.
-2. **D07, same working directory.** Two workers running the same script from
+1. **D07, same working directory.** Two workers running the same script from
    the same working directory still share `GurobiSolution.sol` and the other
    solver output files. Set `DOMIKNOWS_LOG_DIR` per worker. The D07 test
    demonstrates path aliasing, not a live write race.
-3. **D10 performance, remaining.** Profile a full solve at production scale on
+2. **D10 performance, remaining.** Profile a full solve at production scale on
    a machine with an unrestricted Gurobi license before doing more. See the
    list above for what was left unchanged and why.
-4. **Miota consumers.** Audit other code that reads the decoded miota list,
+3. **Miota consumers.** Audit other code that reads the decoded miota list,
    given the format change above.
-5. **Line endings.** The repo stores LF. The editing tools wrote CRLF several
+4. **Line endings.** The repo stores LF. The editing tools wrote CRLF several
    times. Each touched file was converted back, and the working-tree diff shows
    no whole-file changes.
+
+The suite output folder `test_regr/tiny_multi_answer/bug_found/results/` (JSON,
+XML and logs written by `run_suite.py`) is listed in the root `.gitignore`.
