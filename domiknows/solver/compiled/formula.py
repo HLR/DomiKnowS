@@ -698,6 +698,9 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
             model, booleanProcessor, useLcVariables, headConstrain=headLC,
             integrate=integrate,
             **({"label": label} if isinstance(lc, sumL) else {}))
+        if isEntitySelector and not (loss or verify or circuit or sample):
+            self._pending_joint_binding = self.selectorResultBinding(
+                lc, useLcVariables, lcVariableBindings, output)
         if sample:
             lcVariablesSet[lc] = useLcVariables
             return output, sampleInfo, lcVariablesSet, lcVariables

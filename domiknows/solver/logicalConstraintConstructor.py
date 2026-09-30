@@ -914,6 +914,31 @@ class LogicalConstraintConstructor:
                 bindings[name] = (names, [tuple(row) for row in keys.tolist()])
         return bindings
 
+    def selectorResultBinding(self, lc, useLcVariables, bindings, output):
+        """Grounding binding of an ILP entity-selector result.
+
+        The selection holds one variable per candidate of the answer variable,
+        in first-seen candidate order.  Recording that lets a parent connective
+        join the selection with operands grounded on the same variable
+        (``andL(color('a'), iotaL(...))``) instead of failing on row counts.
+        """
+        primary = getattr(lc, 'selection_variable', None)
+        if primary is None or not output or len(output) != 1:
+            return None
+        self._materializeBindingKeys(bindings)
+        order = OrderedDict()
+        # The selector's own operands may be a folded condition without a
+        # binding of its own, so read the candidates from every binding that
+        # spans the answer variable.
+        for binding in bindings.values():
+            if primary in binding[0]:
+                index = binding[0].index(primary)
+                for key in binding[1]:
+                    order.setdefault(key[index], None)
+        if not order or not isinstance(output[0], (list, tuple)) or len(output[0]) != len(order):
+            return None
+        return ((primary,), [(candidate,) for candidate in order])
+
     @staticmethod
     def reduceToCommonGrounding(useLcVariables, bindings, booleanProcessor):
         """Existentially quantify each operand down to the shared variables.
@@ -1073,9 +1098,14 @@ class LogicalConstraintConstructor:
         # (ILP objects only) the same tuple over different row lists still has to
         # be joined, e.g. a class variable repeated over expanded rows next to a
         # per-candidate selection.
-        misaligned = objects and len({
+        def spreads(name):
+            rows = len(bound[name][1])
+            groups = useLcVariables[name]
+            return rows > 1 and len(groups) == 1 and len(groups[0]) == rows
+
+        misaligned = objects and (len({
             tuple(tuple(k) for k in (b[1].tolist() if torch.is_tensor(b[1]) else b[1]))
-            for b in bound.values()}) > 1
+            for b in bound.values()}) > 1 or any(spreads(n) for n in bound))
         if len({tuple(b[0]) for b in bound.values()}) < 2 and not misaligned:
             return useLcVariables, False, None
         # An operand spanning every variable (``left('b','c')`` next to
@@ -1110,6 +1140,9 @@ class LogicalConstraintConstructor:
             names, keys = bound[name]
             rows = len(keys)
             if objects:
+                if (rows > 1 and len(groups) == 1 and len(groups[0]) == rows):
+                    # One group holding a value per row (a selector's result).
+                    groups = [[value] for value in groups[0]]
                 if not (len(groups) == rows and all(g and len(g) == 1 for g in groups)):
                     return useLcVariables, False, None
                 normalised[name] = ("object", [[g[0] for g in groups]])
@@ -1916,6 +1949,9 @@ class LogicalConstraintConstructor:
                         useLcVariables[v] = self.splitLossColumns(useLcVariables[v])
 
             result = lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {}))
+            if isEntitySelector and not (loss or verify or circuit):
+                self._pending_joint_binding = self.selectorResultBinding(
+                    lc, useLcVariables, lcVariableBindings, result)
             if verify and headLC:
                 # The verifier reads the ifL premise row by row next to the
                 # result, so hand it the operands on the rows actually used.

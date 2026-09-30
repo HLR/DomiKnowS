@@ -329,9 +329,18 @@ class AnswerSolver:
                 subclass_binding = list(binding_concept(selector_variable))
                 subclass_binding[0] = subclass_tuple
 
-                return self._compile_hypothesis(
+                # "The selected entity has this class": the class variable and
+                # the selection are joined per candidate and at least one
+                # candidate (the selected one) must satisfy both.
+                selected_has_class = self._compile_hypothesis(
                     andL,
                     [subclass_binding] + iota_elements,
+                    graph,
+                )
+                selected_has_class.headLC = False
+                return self._compile_hypothesis(
+                    existsL,
+                    [selected_has_class],
                     graph,
                 )
 
