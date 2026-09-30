@@ -321,7 +321,11 @@ class lcLossBooleanMethods(constraintsProcessor):
             # Goguen: 1 if a <= b else b / a (so 0 -> 0 holds).
             # use torch.where in the denom rather than after the divide
             # see: https://github.com/pytorch/pytorch/issues/36923
-            safe_ratio = var2 / torch.where(var1 != 0, var1, 1e-4)
+            # The ratio is only selected when var1 > var2; elsewhere use a
+            # unit denominator so a tiny satisfied antecedent (1e-30) does not
+            # produce an overflowing (inf * 0 = NaN) gradient in the unused branch.
+            violated = (var1 > var2) & (var1 != 0)
+            safe_ratio = var2 / torch.where(violated, var1, torch.ones_like(var1))
             ifSuccess  = torch.where(var1 <= var2,
                                      torch.ones_like(safe_ratio),
                                      safe_ratio)
