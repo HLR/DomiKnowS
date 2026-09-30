@@ -20,7 +20,8 @@ thousands of randomized configurations to make sure:
    and matches the linear formula when annealing is active.
 
 4. TRAIN_EPOCH DISPATCH
-   ``'primal_dual'`` always routes to ``GumbelPrimalDualProgram.train_epoch``;
+   ``'primal_dual'`` routes to ``GumbelPrimalDualProgram.train_epoch`` when
+   ``use_gumbel`` is set and to ``PrimalDualProgram.train_epoch`` otherwise;
    ``'simple'`` always routes to ``_train_epoch_simple``. Tested across
    thousands of random configurations.
 
@@ -36,6 +37,7 @@ import pytest
 from domiknows.program.lossprogram import (
     GumbelPrimalDualProgram,
     InferenceProgram,
+    PrimalDualProgram,
 )
 
 
@@ -43,10 +45,15 @@ ITERS = int(os.environ.get("DOMIKNOWS_INFER_STRESS_ITERS", "10000"))
 SEED = int(os.environ.get("DOMIKNOWS_INFER_STRESS_SEED", "20260421"))
 
 
-def _bare_program(training_style, c_freq=None):
-    """Build an InferenceProgram shell without touching graph/Model."""
+def _bare_program(training_style, c_freq=None, use_gumbel=True):
+    """Build an InferenceProgram shell without touching graph/Model.
+
+    ``use_gumbel`` is normally set by ``__init__`` / ``_init_gumbel``; the shell
+    skips both, and ``train_epoch`` reads it to pick the Primal-Dual class.
+    """
     prog = object.__new__(InferenceProgram)
     prog.training_style = training_style
+    prog.use_gumbel = use_gumbel
     if c_freq is not None:
         prog._c_freq = c_freq
     return prog
@@ -178,39 +185,50 @@ def test_stress_train_epoch_dispatch(monkeypatch):
     rng = random.Random(SEED + 3)
 
     pd_calls = []
+    plain_pd_calls = []
     simple_calls = []
 
     def fake_pd_train_epoch(self, dataset, **kwargs):
         pd_calls.append(kwargs.get('_tag'))
         yield 'pd'
 
+    def fake_plain_pd_train_epoch(self, dataset, **kwargs):
+        plain_pd_calls.append(kwargs.get('_tag'))
+        yield 'plain_pd'
+
     def fake_simple(self, dataset, **kwargs):
         simple_calls.append(kwargs.get('_tag'))
         yield 'simple'
 
     monkeypatch.setattr(GumbelPrimalDualProgram, 'train_epoch', fake_pd_train_epoch)
+    monkeypatch.setattr(PrimalDualProgram, 'train_epoch', fake_plain_pd_train_epoch)
     monkeypatch.setattr(InferenceProgram, '_train_epoch_simple', fake_simple)
 
     failures = []
 
     for i in range(ITERS):
         style = 'simple' if rng.random() < 0.5 else 'primal_dual'
-        prog = _bare_program(style)
+        use_gumbel = rng.random() < 0.5
+        prog = _bare_program(style, use_gumbel=use_gumbel)
 
         tag = f"t{i}"
         out = list(prog.train_epoch(dataset=['x'], _tag=tag))
 
-        if style == 'primal_dual':
+        if style == 'primal_dual' and use_gumbel:
             if out != ['pd'] or tag not in pd_calls:
-                failures.append(f"iter={i} PD dispatch wrong: out={out}")
+                failures.append(f"iter={i} Gumbel PD dispatch wrong: out={out}")
+        elif style == 'primal_dual':
+            if out != ['plain_pd'] or tag not in plain_pd_calls:
+                failures.append(f"iter={i} plain PD dispatch wrong: out={out}")
         else:
             if out != ['simple'] or tag not in simple_calls:
                 failures.append(f"iter={i} simple dispatch wrong: out={out}")
 
     assert not failures, f"{len(failures)} failure(s). First 5: {failures[:5]}"
-    # Sanity: both branches were exercised.
-    assert pd_calls and simple_calls, (
-        f"one branch never tested: pd={len(pd_calls)} simple={len(simple_calls)}"
+    # Sanity: every branch was exercised.
+    assert pd_calls and plain_pd_calls and simple_calls, (
+        f"one branch never tested: gumbel_pd={len(pd_calls)} "
+        f"plain_pd={len(plain_pd_calls)} simple={len(simple_calls)}"
     )
 
 
