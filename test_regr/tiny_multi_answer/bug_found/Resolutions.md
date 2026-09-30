@@ -26,7 +26,14 @@ In order, on top of `cf3bd575`:
 | `dde976c1` | queryL hypothesis grounding in ILP mode |
 | `e94084bc` | D10 performance: quadratic membership tests in DataNode |
 | `1c378fa1` | `pysdd` as a default dependency |
-| (this file) | This document |
+| `0bd49bad` | This document |
+| `5eeb56da` | Ignore the suite's `results/` folder |
+| `95bcd023` | Regression checks section |
+| `a1115c7f` | Fixes for the `test_regr/fixes` failures: path variables of a selector condition bind to the enclosing answer variable |
+| `44f3f0a2` | ... batched loss variables are realigned by index after a relation expansion |
+| `dcbed231` | ... `queryVar` reads the batched subclass data (it only used the first entity) |
+| `9815f7b4` | ... dispatch stress test updated for `use_gumbel` |
+| `df280bfb` | ... multivar grounding subprocess retried once on timeout |
 
 Intermediate commits are not all green. D01's native test needs the miota
 commit after it, and the D10 IIS test needs the D10 commit. The suite passes
@@ -236,35 +243,41 @@ single-group-per-row-values operand as needing alignment
 
 ## Regression checks
 
-Run on the committed code (`5eeb56da`, all fixes in place) with the repo
+Run on the committed code (`df280bfb`, all fixes in place) with the repo
 virtualenv (Python 3.12, `pysdd` installed). Baseline means the same tests on
 `cf3bd575` with the library changes stashed.
 
 | Suite | Result at HEAD |
 |---|---|
 | Reproducer suite, `DOMIKNOWS_REPRO_NATIVE=1` | 56 passed, 0 skipped |
-| `test_regr/solver` and `test_regr/graph_errors` | 338 passed, 7 skipped, 0 failed (2 m 27 s) |
-| `test_regr/simple_regression` | 4 passed |
-| `test_regr/fixes` | 20,302 passed, 4 skipped, 5 failed (1 h 12 m) |
+| `test_regr/solver`, `graph_errors` and `simple_regression` | 342 passed, 7 skipped, 0 failed (1 m 40 s) |
+| `test_regr/fixes` (run alone) | **20,307 passed, 4 skipped, 0 failed** (39 m 31 s) |
 
-The 5 failures in `test_regr/fixes`, none caused by these changes:
+The `fixes` run and the working tree it ran on are identical to `df280bfb`:
+it started before the last fixes were split into commits, with the same file
+contents.
 
-- `test_inference_program_stress.py::test_stress_train_epoch_dispatch` fails on
-  baseline too (`InferenceProgram has no attribute use_gumbel`).
-- Three `test_queryl_inference_multiclass.py` tests
-  (`test_query_l_executable_returns_query_distribution`,
-  `test_inference_model_backprops_direct_query_label`,
-  `test_godel_query_distribution_is_hard_with_gradient`) fail on baseline too.
-- `test_multivar_executable_grounding.py::test_two_variable_formulas_verify_exactly[s2/q2]`
-  hit `subprocess.TimeoutExpired`: the test has a shared time budget and was
-  already over it. That run shared the machine with a second heavy suite
-  (`simple_regression`). Alone, the whole file passes (39 passed, 7 min 27 s),
-  and the case's own runtime is unchanged by these commits: about 10.5 s at HEAD
-  against 10.7 to 12.5 s on baseline, with the same `True, True` result.
+**No test that passed on baseline fails at HEAD, and every failure seen earlier
+is gone.** Two earlier rounds had failures; both are resolved.
 
-What changed compared with baseline: the 31 `pysdd` failures in
-`test_regr/solver` are gone (the module is now a default dependency), and no
-test that passed on baseline fails at HEAD.
+- `test_regr/solver`: 31 failures on baseline, all `pysdd` tests. Gone now that
+  the module is a default dependency.
+- `test_regr/fixes`: 5 failures in the first full run, all fixed (next
+  section). The 4 real ones also failed on baseline, so they were old defects.
+
+### The five `test_regr/fixes` failures
+
+| Test | Cause | Fix |
+|---|---|---|
+| `test_inference_program_stress.py::test_stress_train_epoch_dispatch` | Stale test, also failing on baseline. `train_epoch` picks `GumbelPrimalDualProgram` or `PrimalDualProgram` by `use_gumbel`, but the hand-built program had no `use_gumbel` and the test only knew the Gumbel route. | The test sets the attribute and covers both routes (`9815f7b4`). |
+| `test_queryl_inference_multiclass.py::test_query_l_executable_returns_query_distribution` and `::test_inference_model_backprops_direct_query_label` | Library bug, also failing on baseline: a path variable in a selector condition could not find its source variable (it belongs to the enclosing constraint), and the realignment after a relation expansion copied a whole batched tensor into every row, so operands of 36 and 6 rows were combined row by row. | `fillPathBindings` also looks at the outer bindings (`a1115c7f`); the new `expandBatchedGroup` realigns batched variables by index (`44f3f0a2`). |
+| `test_queryl_inference_multiclass.py::test_godel_query_distribution_is_hard_with_gradient` | Library bug, also failing on baseline: `queryVar` read one value from each per-entity class vector, so the class matrix covered only the first entity and the selection weights were cut to it. With a hard Godel selection on any other entity the gradient was exactly zero. | `queryVar` builds the [entities, subclasses] matrix from the batched columns (`dcbed231`). |
+| `test_multivar_executable_grounding.py::test_two_variable_formulas_verify_exactly[s2/q2]` | Not a defect. A `subprocess.TimeoutExpired` (900 s limit on a case that takes about 10 s) in a long run that shared the machine with another heavy suite. Alone the file passes, and the case's runtime is the same as on baseline (about 10.5 s against 10.7 to 12.5 s). | The helper retries once on timeout, so a real hang still fails (`df280bfb`). |
+
+The queryL fixes change loss-mode results for queries that run through
+relation-expanded selectors: `queryVar` now weighs all candidate entities, where
+it used to see only the first, so the query distribution can differ from what
+those paths produced before.
 
 `test_regr/dummy_datanode` could not be collected at HEAD: a module named
 `graph` in `Tasks/clevr_inference_vs_gumbel` shadows the test's import. It was
