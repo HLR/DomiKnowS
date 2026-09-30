@@ -317,7 +317,15 @@ class LogicalConstraintConstructor:
                 vDn = torch.tensor(0.0, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         else:
             try:
-                vDn = dn.getAttribute(xPkey)[e[1]]
+                xPvalue = dn.getAttribute(xPkey)
+                if (torch.is_tensor(xPvalue) and xPvalue.dim() == 1
+                        and xPvalue.numel() == 1 and e[2] == 0):
+                    # A binary ILP result holds a single element (the truth of
+                    # the concept), so the [e[1]] class index used for two-class
+                    # probability vectors would run past its end.
+                    vDn = xPvalue[0]
+                else:
+                    vDn = xPvalue[e[1]]
                 if torch.is_tensor(vDn):
                     self.current_dtype = vDn.dtype
             except IndexError: 
