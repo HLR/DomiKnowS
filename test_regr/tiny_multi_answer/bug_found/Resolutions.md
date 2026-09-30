@@ -1,0 +1,276 @@
+# Resolutions: status of fixes for the reported ILP issues
+
+Companion to `HANDOFF.txt` and `README.md` in this folder. Those documents
+describe the defects as found (13 failed, 14 passed, 11 skipped on develop
+`c3002b1a`). This one records what has been done about each.
+
+Status date: 2026-09-30. Branch: `develop-ILP-bug`. The fixes are committed,
+one commit per fix (see "Commits"), and are not pushed.
+
+## Commits
+
+In order, on top of `cf3bd575`:
+
+| Commit | Change |
+|---|---|
+| `53827cf5` | D09: `collectInferredResults` leaf-concept check |
+| `9b8cbd62` | T01: finite gradient for the product implication |
+| `669d1c74` | D02: binary ILP leaf in the loss-mode reader |
+| `9b50930e` | D07: per-worker default log directory |
+| `361718df` | D03, D04: join operands over different variable tuples for ILP |
+| `bf7e674d` | D05: raise on a grounding mismatch |
+| `779b9aa1` | D06: exact joint grounding for hard decoding |
+| `44e593e3` | D01: populate the winning world before direct decoding |
+| `36c63067` | miota decode returns the selected positions |
+| `15a1abe2` | D10: IIS only for proven-infeasible models, with a switch |
+| `dde976c1` | queryL hypothesis grounding in ILP mode |
+| `e94084bc` | D10 performance: quadratic membership tests in DataNode |
+| `1c378fa1` | `pysdd` as a default dependency |
+| (this file) | This document |
+
+Intermediate commits are not all green. D01's native test needs the miota
+commit after it, and the D10 IIS test needs the D10 commit. The suite passes
+from the IIS commit onward (47 of 47 there, 56 of 56 at the end).
+
+## Result
+
+| Run | Before | After |
+|---|---|---|
+| Reproducer suite, default | 13 failed, 14 passed, 11 skipped | 39 passed, 17 skipped (the 6 query tests are native, so they skip) |
+| Reproducer suite, `DOMIKNOWS_REPRO_NATIVE=1` | native tests not run | **56 passed, 0 skipped** (38 original, 6 in `test_query_hypothesis.py`, 12 new D10 and IIS tests) |
+
+The native tests were never blocked by the license on this machine. Gurobi
+13.0.3 solves a test model here; they skipped only because the opt-in variable
+was not set. Run them with:
+
+```sh
+cd test_regr/tiny_multi_answer/bug_found
+DOMIKNOWS_REPRO_NATIVE=1 ../../../.venv/Scripts/python.exe run_suite.py
+```
+
+No reproducer assertion was edited, no `xfail` added, and no grounding limit
+raised to force a pass.
+
+## Status per issue
+
+| ID | Status | Fix | Location |
+|---|---|---|---|
+| D01 | Fixed, native-verified | The winning world is populated before any direct decode (miota and multi-answer query), and the decoder reads the `ILP` key. With `populate=False` the previous world is snapshotted and restored in a `finally`. | `solver/answerModule/answerSolver.py` |
+| D02 | Fixed | The loss-mode leaf reader handles a one-element binary ILP tensor instead of indexing `[1]` past its end. The `except IndexError` was not widened. | `solver/logicalConstraintConstructor.py` (`getMLResult`) |
+| D03 | Fixed, native-verified | Joint-grounding alignment now also runs when building the ILP model, so `right(y,x)` is no longer paired row-wise with `left(x,y)`. | `logicalConstraintConstructor.py`, `compiled/formula.py` |
+| D04 | Fixed, native-verified | Same mechanism: operands over different variable tuples (two- and three-hop chains) are joined, so the known witness survives. The one-hop control still passes. | same as D03 |
+| D05 | Fixed | A row-count mismatch now raises `ValueError` naming the constraint and set sizes, instead of returning an empty constraint. | `graph/logicalConstrain.py` (`createLogicalConstrains`) |
+| D06 | Fixed | The top-k soft pruning is now opt-in (`allow_soft_prune`, default off). Training keeps it on, so training behavior is unchanged. `_decode_miota` sets `_exact_grounding`, so hard decoding is exact. | `logicalConstraintConstructor.py`, `compiled/formula.py`, `answerSolver.py` |
+| D07 | Fixed for different working directories | `DOMIKNOWS_LOG_DIR` overrides the log directory. A run whose working directory differs from the script's directory gets a `logs/<dirname>_<hash>` subfolder. A script inside `site-packages` (for example `python -m pytest`) no longer puts logs there. | `utils.py` (`_default_log_dir`) |
+| D08 | Not a defect | The cache-clearing helper passes its test, and the native repeat test passes. Nothing changed. | none |
+| D09 | Fixed | `if not rootConcept` treated a leaf `Concept` (no contained concepts) as missing, because `Concept` is falsy through `__len__`. Now `is None`. | `graph/dataNode.py` (`collectInferredResults`) |
+| D10 | Fixed (status) and two measured quadratic hotspots fixed (performance) | `computeIIS()` now runs only for `INFEASIBLE` and `INF_OR_UNBD`, not after `TIME_LIMIT`, and can be switched off with `domiknows.setComputeIIS(False)` or `DOMIKNOWS_COMPUTE_IIS=0`. `findDatanodes` and DataNode link construction no longer use list-membership tests (see "D10 performance work"). | `solver/gurobiILPOntSolver.py`, `utils.py`, `graph/dataNode.py` |
+| T01 | Fixed | The product implication uses a unit denominator on the branch `torch.where` discards, so a tiny satisfied antecedent (`1e-30`) no longer overflows to a NaN gradient. | `solver/lcLossBooleanMethods.py` (`ifVar`) |
+| T02 | Not a defect | The three-operand head truth tables already pass. Nothing changed. | none |
+
+## IIS diagnostic flag
+
+`computeIIS()` can be as expensive as the solve, and a hypothesis search
+(`solve_active_constraints`) only needs to know a model is infeasible. The
+diagnostic is now switchable:
+
+- `domiknows.setComputeIIS(False)` / `domiknows.getComputeIIS()`. `setComputeIIS`
+  takes a bool and raises `TypeError` otherwise.
+- `DOMIKNOWS_COMPUTE_IIS` (`0`, `false`, `no`, `off` disable it) sets the
+  initial value when the library is imported.
+- The default is on, so existing behavior is unchanged: a proven-infeasible
+  model still gets its IIS and `GurobiInfeasible.ilp`.
+- When off, a proven-infeasible model skips `computeIIS` and the file write, and
+  the solver logs that it skipped. A stale `GurobiInfeasible.ilp` from an
+  earlier run is still removed.
+- The flag never turns the diagnostic on for `TIME_LIMIT` or any other status;
+  only `INFEASIBLE` and `INF_OR_UNBD` are eligible.
+- It is a process-wide setting, not per solver.
+
+**Hypothesis search never computes an IIS.** While `solve_active_constraints`
+tries joint hypotheses, an infeasible one is an expected outcome that the
+search handles itself (`raiseOnInfeasible=False`), so an IIS for it is wasted
+work. `_calculateILPSelection` and `processILPModelForP` take an optional
+`computeIIS` argument: `None` follows the process-wide flag, and an explicit
+`True` or `False` wins for that call. The search passes `False`, so it skips
+the IIS even when the flag is on. Direct ILP use (`calculateILPSelection`,
+`inferILPResults`) still follows the flag. If every hypothesis is infeasible,
+`solve_active_constraints` still raises its `RuntimeError` as before, but no
+IIS file is written to explain which constraints conflict.
+
+Tests: `test_performance.py` (`test_D10_iis_*`, including the per-call
+override), `test_components.py` (the search passes `computeIIS=False`) and
+`test_query_hypothesis.py` (real Gurobi with a forbidden class, so one
+hypothesis is infeasible: no `GurobiInfeasible.ilp` is written with the flag
+on or off). The last two fail if the search stops passing `computeIIS=False`.
+
+## D10 performance work
+
+Approach: measure first, change only what a measurement supports, keep it apart
+from the semantic fixes.
+
+**What was measured.**
+
+- `_collectVariableSetups` (singleton-row assembly) is already linear: about
+  20 microseconds per row for 16 operands, up to 65,536 rows (1.3 s).
+  Unchanged.
+- A cProfile of a full `inferILPResults` on a synthetic graph (unary rules plus
+  a pair rule) showed that about 60% of the run was `findDatanodes`, almost all
+  of it 2.56 million calls to `DataNode.__eq__` for a 460-node graph.
+- Timing graph construction showed the same shape: 2.2x the nodes cost 5.4x the
+  time.
+
+**What changed (both in `graph/dataNode.py`).**
+
+1. `findDatanodes` tested `dn in returnDns` on a list, which calls the
+   Python-level `__eq__` against every element. `DataNode` equality is by `id`,
+   so it now tracks a set of ids beside the list. Results and order are
+   identical.
+2. `addRelationLink` and `addChildDataNode` tested `dn in <link list>` the
+   same way, so the root's `contains` list made construction quadratic. A new
+   `_hasLink` keeps a per-relation id set. It is trusted only while it still
+   describes the same list object at the same length, so code that replaces or
+   shortens the lists directly (`removeRelationLink`, `resetChildDataNode`, the
+   list swaps in `inferILPResults`, `executableInference`) triggers a rebuild
+   rather than a stale answer.
+
+**Measured effect** (this machine; absolute numbers will differ elsewhere):
+
+| Operation | Before | After |
+|---|---|---|
+| `findDatanodes` over 6,480 nodes | 2.20 s | 0.04 s |
+| Build a graph of 14,520 nodes | 12.5 s | 0.37 s |
+| Growth for 4x the nodes (construction) | 19x | 4-6x |
+| Growth for 4x the nodes (`findDatanodes`) | 16.5x | linear |
+
+**Probes** (`test_performance.py`): two shape checks compare 4x growth in node
+count and assert the ratio stays under 10 (linear is about 4, quadratic about
+16), with GC paused so its superlinear cost does not blur the result. A third
+test checks the link cache keeps exact list semantics across duplicates,
+removal, re-adding and a replaced list. On the baseline library the two shape
+checks fail (about 19x and 16x); with the changes they pass. They are shape
+checks, not speed limits. On the baseline the construction check passed once
+in a repeat run (a timing outlier), so a pass there is weaker evidence than a
+fail.
+
+**What was not done or not measurable.**
+
+- End-to-end ILP timings could not be measured at scale: this machine's Gurobi
+  license is size-limited (about 2,000 variables and constraints), so a model
+  with 30 pair rows on each axis is refused. The improvements above are
+  measured on the datanode operations the solver uses, not on a full solve.
+- Small end-to-end ILP runs are dominated by a fixed 0.3 s `time.sleep` in
+  `move_existing_logfile_with_timestamp`. It is a retry backoff when a locked
+  log file cannot be renamed (Windows). It is per solver instance, not
+  scaling, and log handling was left alone.
+- After the fix the remaining profile is flat (`createILPVariables`, repeated
+  `findDatanodes` calls for the same concept, `OrderedSet` visits). Caching
+  concept lookups across calls is a possible next step, but no measurement
+  shows it matters at the sizes that fit the license.
+- `candidates.py` (`dn not in relDns` in the `instanceID` path) has the same
+  pattern but was not shown to be hot, so it was left unchanged.
+
+## Behavior changes to be aware of
+
+- **Miota answer format.** `_decode_miota` now returns the positions of the
+  candidates at or above the threshold. An empty list means nothing was
+  selected. It used to return a 0/1 indicator per candidate. A forced-false
+  selector therefore gives `[]` where it used to give `[0]`. The only consumer
+  found in `test_regr/Clever` reads `selectionDistribution` from the loss
+  path, so it is unaffected. Other consumers were not audited.
+- **D05 can surface dropped constraints.** A grounding mismatch now raises. It
+  used to be logged and the constraint silently dropped. Any constraint that was
+  being dropped will now fail loudly. One such case is described next.
+- **ILP joint grounding.** `expandToJointGrounding` gained an `objects` mode
+  for ILP values (Gurobi variables, numbers or None). They are gathered in
+  Python, unpruned, and rows a relation does not ground read as constant 0. A
+  table over `JOINT_GROUNDING_MAX_ROWS` is declined, and the mismatch then
+  raises (D05).
+
+## Additional defect found and fixed along the way
+
+Making D05 strict exposed a masked bug. In ILP mode the `queryL` hypothesis
+`andL(class(a), iotaL(...))` was silently dropped: `a` had 36 expanded rows and
+the selector returned one group of 6 per-candidate variables. Every class
+hypothesis was therefore unconstrained, and the answer was chosen by the
+objective alone. Broadcasting the scalar was tried and rejected, because it
+enforced all 36 rows and made every class infeasible.
+
+The fix has three parts:
+
+1. `selectorResultBinding` records which candidate each selection variable
+   belongs to, so a parent connective can align it.
+2. ILP joint grounding also joins operands that share a variable tuple but not
+   identical row lists.
+3. The hypothesis is now `existsL(andL(class(a), iotaL(...)))`, meaning the
+   selected object has this class (`answerSolver.py`, `build_query`).
+
+The clevr ad-hoc ILP test
+(`test_regr/fixes/test_clevr_inference_vs_gumbel_task.py`) passes again. It
+only checks that hypotheses no longer error, so `test_query_hypothesis.py` was
+added to check the behavior (next section).
+
+### Verification that the hypothesis changes the answer
+
+`test_query_hypothesis.py` runs real Gurobi. Items have fixed colors (item 0
+red, item 1 blue) and the selector is made to pick item `s`. The answer must be
+the color of the selected item: `red` for `s=0`, `blue` for `s=1`. A dropped
+constraint leaves the class hypotheses tied, so the first one (`red`) always
+wins. Two selector shapes are covered, each with `s` in {0, 1}:
+
+- a plain entity selector `iotaL(target('x'))`;
+- a relational selector `iotaL(andL(target('a'), rel('a','b'), mark('b')))`,
+  where the class variable is expanded over 3x3 pair rows.
+
+| Library | `s=0` | `s=1` |
+|---|---|---|
+| Baseline (stashed) | pass | **fail**: answers `red`, expected `blue` (both selector shapes) |
+| With these fixes | pass | pass |
+
+The first version of these tests also failed after the fix. Even the plain
+selector raised the D05 mismatch: the selector result (one group of 3 values)
+and the class variable (3 groups of 1) share the same variable and row keys, so
+the join was skipped as co-grounded. The join gate now also treats a
+single-group-per-row-values operand as needing alignment
+(`expandToJointGrounding`, `spreads`).
+
+## Regression checks
+
+Compared with the stashed baseline:
+
+- `test_regr/solver`: 31 failures, all `pysdd` tests. The `pysdd` module is not
+  installed, and the same tests fail on baseline.
+- `test_regr/fixes`:
+  - The clevr ad-hoc ILP test, the queryL, multivar-grounding and
+    answer-solver-ILP files, and nine other files (131 tests) pass.
+  - 3 `test_queryl_inference_multiclass` failures also fail on baseline.
+  - `test_stress_train_epoch_dispatch` fails on baseline
+    (`InferenceProgram has no attribute use_gumbel`). It was not re-run on the
+    final code.
+- An earlier full run of `solver`, `simple_regression`, `fixes` and
+  `graph_errors` on an intermediate state (before the query-grounding change)
+  gave 36 failed and 20611 passed. The 36 were the 31 `pysdd` tests plus the 5
+  `fixes` tests above, and the one new failure among them was the clevr test,
+  since fixed.
+- Not re-run on the final code: the rest of `fixes` (including the heavy stress
+  tests), `simple_regression` and `graph_errors`. `dummy_datanode` could not be
+  collected, because a module named `graph` in `Tasks/clevr_inference_vs_gumbel`
+  shadows the test's import. That is unrelated to these changes.
+
+## Remaining and open
+
+1. **Untracked suite output.** `test_regr/tiny_multi_answer/bug_found/results/`
+   (JSON, XML and logs written by `run_suite.py`) is not committed. Add it to
+   `.gitignore` or delete it.
+2. **D07, same working directory.** Two workers running the same script from
+   the same working directory still share `GurobiSolution.sol` and the other
+   solver output files. Set `DOMIKNOWS_LOG_DIR` per worker. The D07 test
+   demonstrates path aliasing, not a live write race.
+3. **D10 performance, remaining.** Profile a full solve at production scale on
+   a machine with an unrestricted Gurobi license before doing more. See the
+   list above for what was left unchanged and why.
+4. **Miota consumers.** Audit other code that reads the decoded miota list,
+   given the format change above.
+5. **Line endings.** The repo stores LF. The editing tools wrote CRLF several
+   times. Each touched file was converted back, and the working-tree diff shows
+   no whole-file changes.
