@@ -644,7 +644,8 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
         isEntitySelector = isinstance(lc, (iotaL, miotaL))
         if isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
-                                  lcVariablesDns, lcVariableBindings)
+                                  lcVariablesDns, lcVariableBindings,
+                                  outer=getattr(self, '_outer_bindings', None))
             self.fillNestedPathBindings(useLcVariables, lcVariableVs,
                                         lcVariablesDns, lcVariableBindings)
             useLcVariables = self.reduceSelectorToPrimaryGrounding(
@@ -658,7 +659,8 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
         joined = False
         if not sample and not isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
-                                  lcVariablesDns, lcVariableBindings)
+                                  lcVariablesDns, lcVariableBindings,
+                                  outer=getattr(self, '_outer_bindings', None))
             self.fillNestedPathBindings(useLcVariables, lcVariableVs,
                                         lcVariablesDns, lcVariableBindings)
             useLcVariables, joined, joint_binding = self.expandToJointGrounding(

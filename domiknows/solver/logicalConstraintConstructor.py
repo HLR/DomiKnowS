@@ -585,7 +585,8 @@ class LogicalConstraintConstructor:
         return bindings
 
     @classmethod
-    def fillPathBindings(cls, useLcVariables, variableVs, lcVariablesDns, bindings):
+    def fillPathBindings(cls, useLcVariables, variableVs, lcVariablesDns, bindings,
+                         outer=None):
         """Give path-derived variables the grounding of the variable they walk from.
 
         ``big(path=('right_of_0', arg1))`` is enumerated row-for-row alongside
@@ -627,6 +628,11 @@ class LogicalConstraintConstructor:
                 if source_name is None:
                     continue
                 source = bindings.get(source_name)
+                if source is None and outer:
+                    # The walked variable may belong to an enclosing constraint
+                    # (a path in a selector's condition that starts at the
+                    # selector's answer variable).
+                    source = outer.get(source_name)
                 if source is None:
                     continue
                 target_count = len(lcVariablesDns[name])
@@ -1899,7 +1905,8 @@ class LogicalConstraintConstructor:
         isEntitySelector = isinstance(lc, (iotaL, miotaL))
         if isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
-                                  lcVariablesDns, lcVariableBindings)
+                                  lcVariablesDns, lcVariableBindings,
+                                  outer=getattr(self, '_outer_bindings', None))
             self.fillNestedPathBindings(useLcVariables, lcVariableVs,
                                         lcVariablesDns, lcVariableBindings)
             useLcVariables = self.reduceSelectorToPrimaryGrounding(
@@ -1917,7 +1924,8 @@ class LogicalConstraintConstructor:
                 # before combining them (no-op when they are co-grounded).
                 # ILP construction carries Gurobi variables, joined as objects.
                 self.fillPathBindings(useLcVariables, lcVariableVs,
-                                      lcVariablesDns, lcVariableBindings)
+                                      lcVariablesDns, lcVariableBindings,
+                                      outer=getattr(self, '_outer_bindings', None))
                 self.fillNestedPathBindings(useLcVariables, lcVariableVs,
                                             lcVariablesDns, lcVariableBindings)
                 useLcVariables, joined, joint_binding = self.expandToJointGrounding(
