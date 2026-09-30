@@ -460,6 +460,34 @@ def getProductionModeStatus():
 def getReuseModel():
     return reuseModel
 
+def _computeIISFromEnvironment():
+    value = os.environ.get('DOMIKNOWS_COMPUTE_IIS')
+    if value is None:
+        return True
+    return value.strip().lower() not in ('0', 'false', 'no', 'off')
+
+computeIIS = _computeIISFromEnvironment()
+
+def setComputeIIS(enabled):
+    """Choose whether a proven-infeasible ILP model gets an IIS diagnostic.
+
+    When enabled (the default) the solver calls ``computeIIS`` for a model
+    Gurobi proved infeasible and writes the conflicting subset to
+    ``GurobiInfeasible.ilp``.  Computing an IIS can cost as much as the solve
+    itself, so callers that only need to know the model is infeasible (for
+    example a search over hypotheses) can turn it off.  The initial value comes
+    from the ``DOMIKNOWS_COMPUTE_IIS`` environment variable (0/false/no/off
+    disable it).  A status other than INFEASIBLE or INF_OR_UNBD never gets an
+    IIS, whatever this flag says.
+    """
+    if not isinstance(enabled, bool):
+        raise TypeError("setComputeIIS expects a bool")
+    global computeIIS
+    computeIIS = enabled
+
+def getComputeIIS():
+    return computeIIS
+
 dnSkeletonMode = False
 dnSkeletonModeFull = False
 def setDnSkeletonMode(dnSkeleton, full=False):

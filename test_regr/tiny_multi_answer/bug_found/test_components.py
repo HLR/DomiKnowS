@@ -170,3 +170,27 @@ def test_T01_product_implication_has_finite_gradient_for_tiny_satisfied_antecede
     assert torch.isfinite(loss).all()
     assert torch.isfinite(a.grad).all(), f'Finite loss but antecedent gradient = {a.grad}'
     assert torch.isfinite(b.grad).all()
+
+
+def test_hypothesis_search_does_not_compute_iis_for_infeasible_hypotheses():
+    """An infeasible hypothesis is an expected outcome of the search."""
+    graph, root, child, flag = binary_scene(selector=False)
+    with graph:
+        from domiknows.graph.logicalConstrain import existsL
+        execute(existsL(flag('x')))
+    c = DataNode(instanceID=0, ontologyNode=graph.get_constraint_concept())
+    c.attributes['ELC0/label'] = torch.tensor(1.)
+    root.addChildDataNode(c)
+    seen = []
+
+    class Solver:
+        def _calculateILPSelection(self, *args, **kwargs):
+            seen.append(kwargs.get('computeIIS', 'missing'))
+            return None  # every hypothesis infeasible
+        def populateILPSelection(self, *args):
+            pass
+
+    solver = AnswerSolver(graph, solver=Solver())
+    solver.solve_active_constraints(root, ['ELC0'], ((flag, flag.name, None, 1),),
+                                    populate=False, raise_on_infeasible=False)
+    assert seen and all(value is False for value in seen), seen

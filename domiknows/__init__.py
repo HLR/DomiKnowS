@@ -1,4 +1,4 @@
-from .utils import setProductionLogMode, getRegrTimer_logger, getProductionModeStatus, getReuseModel, setDnSkeletonMode, getDnSkeletonMode, getDnSkeletonModeFull, setup_logger
+from .utils import setProductionLogMode, getRegrTimer_logger, getProductionModeStatus, getReuseModel, setComputeIIS, getComputeIIS, setDnSkeletonMode, getDnSkeletonMode, getDnSkeletonModeFull, setup_logger
 from .step_notebook import (
     StepNotebook, setup_step_notebook, set_active_notebook,
     extract_step_record, write_active_step,

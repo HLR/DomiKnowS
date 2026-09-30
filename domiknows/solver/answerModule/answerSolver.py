@@ -670,6 +670,9 @@ class AnswerSolver:
                         forceFreshModel=True,
                         raiseOnInfeasible=False,
                         compiled=self.compiled,
+                        # An infeasible hypothesis is an expected outcome of
+                        # the search, not a fault to diagnose.
+                        computeIIS=False,
                     )
                 except Exception as error:
                     if self._is_infeasible_error(error):

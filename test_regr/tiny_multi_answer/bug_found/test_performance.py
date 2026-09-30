@@ -1,6 +1,7 @@
 """Bounded performance probes; timings are evidence, not universal thresholds."""
 import importlib
 import logging
+import os
 import time
 from collections import OrderedDict
 from types import SimpleNamespace
@@ -72,3 +73,81 @@ def test_D10_IIS_dispatch_after_nonoptimal_status(status,tmp_path,monkeypatch,re
         assert 'IIS' not in calls, 'TIME_LIMIT is not proven infeasibility, but computeIIS was called'
     else:
         assert calls.count('IIS')==1  # Observed policy, not a speed certification.
+
+
+def run_status_dispatch(status, tmp_path, monkeypatch):
+    module=importlib.import_module('domiknows.solver.gurobiILPOntSolver')
+    monkeypatch.setattr(module,'_default_log_dir',lambda:str(tmp_path))
+    calls=[]
+    model=SimpleNamespace(status=status,NumVars=1,NumConstrs=1,
+        optimize=lambda:None,update=lambda:None,computeIIS=lambda:calls.append('IIS'),
+        write=lambda path:calls.append(('write',os.path.basename(path))))
+    solver=object.__new__(module.gurobiILPOntSolver)
+    solver.myLogger=solver.myLoggerTime=logging.getLogger('repro.status')
+    solver.reuse_model=False
+    solver.addLogicalConstrains=lambda *args,**kwargs:None
+    runs={}
+    solver.processILPModelForP(0,{0:[]},model,{},None,False,False,1,False,runs,cacheModel=False)
+    assert not runs[0]['solved']
+    return calls
+
+
+@pytest.mark.parametrize('status',[GRB.INFEASIBLE,GRB.INF_OR_UNBD])
+def test_D10_iis_can_be_disabled_for_proven_infeasible_models(status,tmp_path,monkeypatch):
+    from domiknows.utils import getComputeIIS, setComputeIIS
+    assert getComputeIIS() is True, 'default keeps the existing diagnostic'
+    enabled=run_status_dispatch(status,tmp_path,monkeypatch)
+    assert enabled.count('IIS')==1 and ('write','GurobiInfeasible.ilp') in enabled
+    setComputeIIS(False)
+    try:
+        disabled=run_status_dispatch(status,tmp_path,monkeypatch)
+    finally:
+        setComputeIIS(True)
+    assert 'IIS' not in disabled
+    assert ('write','GurobiInfeasible.ilp') not in disabled
+
+
+def test_D10_iis_flag_never_enables_iis_after_time_limit(tmp_path,monkeypatch):
+    from domiknows.utils import setComputeIIS
+    setComputeIIS(True)
+    assert 'IIS' not in run_status_dispatch(GRB.TIME_LIMIT,tmp_path,monkeypatch)
+
+
+def test_D10_iis_flag_validation_and_environment(monkeypatch):
+    import domiknows
+    from domiknows.utils import _computeIISFromEnvironment, setComputeIIS
+    with pytest.raises(TypeError):
+        setComputeIIS('no')
+    assert domiknows.getComputeIIS is not None and domiknows.setComputeIIS is setComputeIIS
+    monkeypatch.delenv('DOMIKNOWS_COMPUTE_IIS',raising=False)
+    assert _computeIISFromEnvironment() is True
+    for value in ('0','false','No','OFF'):
+        monkeypatch.setenv('DOMIKNOWS_COMPUTE_IIS',value)
+        assert _computeIISFromEnvironment() is False
+    monkeypatch.setenv('DOMIKNOWS_COMPUTE_IIS','1')
+    assert _computeIISFromEnvironment() is True
+
+
+@pytest.mark.parametrize('flag,per_call,expected',[
+    (True,None,1),(False,None,0),       # None follows the process-wide flag
+    (True,False,0),(False,True,1),      # an explicit per-call choice wins
+])
+def test_D10_iis_per_call_override(flag,per_call,expected,tmp_path,monkeypatch):
+    from domiknows.utils import setComputeIIS
+    module=importlib.import_module('domiknows.solver.gurobiILPOntSolver')
+    monkeypatch.setattr(module,'_default_log_dir',lambda:str(tmp_path))
+    calls=[]
+    model=SimpleNamespace(status=GRB.INFEASIBLE,NumVars=1,NumConstrs=1,
+        optimize=lambda:None,update=lambda:None,computeIIS=lambda:calls.append('IIS'),
+        write=lambda path:None)
+    solver=object.__new__(module.gurobiILPOntSolver)
+    solver.myLogger=solver.myLoggerTime=logging.getLogger('repro.status')
+    solver.reuse_model=False
+    solver.addLogicalConstrains=lambda *args,**kwargs:None
+    setComputeIIS(flag)
+    try:
+        solver.processILPModelForP(0,{0:[]},model,{},None,False,False,1,False,{},cacheModel=False,
+                                   computeIIS=per_call)
+    finally:
+        setComputeIIS(True)
+    assert calls.count('IIS')==expected
