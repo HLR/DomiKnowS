@@ -194,3 +194,21 @@ def test_hypothesis_search_does_not_compute_iis_for_infeasible_hypotheses():
     solver.solve_active_constraints(root, ['ELC0'], ((flag, flag.name, None, 1),),
                                     populate=False, raise_on_infeasible=False)
     assert seen and all(value is False for value in seen), seen
+
+
+def test_D05_operand_without_groundings_skips_the_constraint():
+    """No groundings at all is an empty constraint, not a grounding mismatch.
+
+    A nested constraint that found nothing to ground yields an empty operand
+    (satisfaction reports hit this); only operands that all have groundings but
+    in different numbers are a misalignment (see the D05 test above).
+    """
+    lc = object.__new__(LogicalConstrain)
+    calls = []
+    def builder(model, *args, onlyConstrains=False):
+        calls.append(args)
+        return 1
+    result = lc.createLogicalConstrains('IF', builder, object(),
+        OrderedDict(a=[[1]], b=[]), False)
+    assert result == [] and not calls
+
