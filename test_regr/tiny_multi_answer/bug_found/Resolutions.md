@@ -34,6 +34,10 @@ In order, on top of `cf3bd575`:
 | `dcbed231` | ... `queryVar` reads the batched subclass data (it only used the first entity) |
 | `9815f7b4` | ... dispatch stress test updated for `use_gumbel` |
 | `df280bfb` | ... multivar grounding subprocess retried once on timeout |
+| `1b81f1cb` | Regression checks after the `fixes` round |
+| `5ceb875e` | D05: an operand with no groundings skips the constraint instead of raising |
+| `61b4a485` | `_follow_once` returned three values for an empty node list |
+| `4a899b97` | `dummy_datanode` tests load their graphs by file path |
 
 Intermediate commits are not all green. D01's native test needs the miota
 commit after it, and the D10 IIS test needs the D10 commit. The suite passes
@@ -43,8 +47,8 @@ from the IIS commit onward (47 of 47 there, 56 of 56 at the end).
 
 | Run | Before | After |
 |---|---|---|
-| Reproducer suite, default | 13 failed, 14 passed, 11 skipped | 39 passed, 17 skipped (the 6 query tests are native, so they skip) |
-| Reproducer suite, `DOMIKNOWS_REPRO_NATIVE=1` | native tests not run | **56 passed, 0 skipped** (38 original, 6 in `test_query_hypothesis.py`, 12 new D10 and IIS tests) |
+| Reproducer suite, default | 13 failed, 14 passed, 11 skipped | 41 passed, 17 skipped (the 6 query tests are native, so they skip) |
+| Reproducer suite, `DOMIKNOWS_REPRO_NATIVE=1` | native tests not run | **58 passed, 0 skipped** (38 original, 6 in `test_query_hypothesis.py`, 12 new D10 and IIS tests, 2 for the `dummy_datanode` fixes) |
 
 The native tests were never blocked by the license on this machine. Gurobi
 13.0.3 solves a test model here; they skipped only because the opt-in variable
@@ -66,7 +70,7 @@ raised to force a pass.
 | D02 | Fixed | The loss-mode leaf reader handles a one-element binary ILP tensor instead of indexing `[1]` past its end. The `except IndexError` was not widened. | `solver/logicalConstraintConstructor.py` (`getMLResult`) |
 | D03 | Fixed, native-verified | Joint-grounding alignment now also runs when building the ILP model, so `right(y,x)` is no longer paired row-wise with `left(x,y)`. | `logicalConstraintConstructor.py`, `compiled/formula.py` |
 | D04 | Fixed, native-verified | Same mechanism: operands over different variable tuples (two- and three-hop chains) are joined, so the known witness survives. The one-hop control still passes. | same as D03 |
-| D05 | Fixed | A row-count mismatch now raises `ValueError` naming the constraint and set sizes, instead of returning an empty constraint. | `graph/logicalConstrain.py` (`createLogicalConstrains`) |
+| D05 | Fixed | A row-count mismatch now raises `ValueError` naming the constraint and set sizes, instead of returning an empty constraint. An operand with no groundings at all (a nested constraint that found nothing to ground) is skipped with a warning, because that is an empty constraint, not a misalignment. | `graph/logicalConstrain.py` (`createLogicalConstrains`) |
 | D06 | Fixed | The top-k soft pruning is now opt-in (`allow_soft_prune`, default off). Training keeps it on, so training behavior is unchanged. `_decode_miota` sets `_exact_grounding`, so hard decoding is exact. | `logicalConstraintConstructor.py`, `compiled/formula.py`, `answerSolver.py` |
 | D07 | Fixed for different working directories | `DOMIKNOWS_LOG_DIR` overrides the log directory. A run whose working directory differs from the script's directory gets a `logs/<dirname>_<hash>` subfolder. A script inside `site-packages` (for example `python -m pytest`) no longer puts logs there. | `utils.py` (`_default_log_dir`) |
 | D08 | Not a defect | The cache-clearing helper passes its test, and the native repeat test passes. Nothing changed. | none |
@@ -279,9 +283,28 @@ relation-expanded selectors: `queryVar` now weighs all candidate entities, where
 it used to see only the first, so the query distribution can differ from what
 those paths produced before.
 
-`test_regr/dummy_datanode` could not be collected at HEAD: a module named
-`graph` in `Tasks/clevr_inference_vs_gumbel` shadows the test's import. It was
-not tried on baseline, but the error is an import-path clash, not library code.
+### `test_regr/dummy_datanode`
+
+Run alone it collected but failed 4 of 11 tests on baseline; at `df280bfb` it
+failed 5 of 11 (one of them a regression from D05). Run in the same session as
+the `Tasks/clevr_inference_vs_gumbel` tests it could not be collected at all.
+All 11 pass now (`4a899b97` and the two commits before it), alone and together
+with those tests (18 passed with `test_queryl_inference_multiclass.py`).
+
+| Problem | Cause | Fix |
+|---|---|---|
+| `test_satisfaction_report_execution` failed (new at `df280bfb`, passed on baseline) | D05 also raised when an operand had no groundings at all (`_lc1 has 1 elements and _lc2 as 0 elements`), which used to be skipped. | An operand with no groundings skips the constraint with a warning; operands that all have groundings but in different numbers still raise (`5ceb875e`). |
+| 4 tests failed on baseline: `inferILPResults` raised `too many values to unpack (expected 2)` | `_follow_once` returned `[], [], []` for an empty node list while its caller unpacks two values. | Return `[], []` (`61b4a485`). |
+| Collection failure next to the clevr tests: `cannot import name 'graph' from 'graph'` | The tests imported `graph` and `graph_multi` through `sys.path`; another test puts `Tasks/clevr_inference_vs_gumbel` first, whose `graph.py` then wins. | Load the two modules beside the test by file path under unique names (`4a899b97`). |
+
+New tests in `test_components.py` cover the first two. They fail on the library
+without the fixes, and the native reproducer suite is 58 of 58.
+
+These changes came after the full `test_regr/fixes` run above. After them this
+was run again: `solver`, `graph_errors`, `simple_regression`, `dummy_datanode`
+and the `fixes` files for queryL, clevr, global rule grounding, LC error
+reporting, the stress tests and `existsL` scope (437 passed, 8 skipped, 0
+failed). The full `fixes` directory was not repeated.
 
 Not covered: the other `test_regr` directories (`Clever`, `ConllQA`,
 `EmbodiedAgentInterface`, `GraphQA`, `InferenceAPI`, `JointEmbodiedAgentInterface`,
