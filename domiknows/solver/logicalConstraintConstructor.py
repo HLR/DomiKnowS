@@ -1020,7 +1020,8 @@ class LogicalConstraintConstructor:
 
     @staticmethod
     def expandToJointGrounding(useLcVariables, bindings, lcVariablesDns, prune=False,
-                               logger=None, protect=(), keep_joint=False, objects=False):
+                               logger=None, protect=(), keep_joint=False, objects=False,
+                               allow_soft_prune=False):
         """Join operands enumerated over different variable tuples onto one table.
 
         ``reduceToCommonGrounding`` handles operands that share a variable by
@@ -1048,6 +1049,10 @@ class LogicalConstraintConstructor:
         is exact only when an existential encloses the constraint; set for a
         constraint nested in a plain connective, e.g. the ``andL`` of
         ``ifL(andL(r('a','b'), r('b','c')), r('a','c'))``.
+        ``allow_soft_prune``: opt in to the top-k approximation for tables over
+        ``JOINT_GROUNDING_SOFT_PRUNE_ROWS``.  Off by default so the join is
+        exact (a hard decode must not lose a witness the predictions rank low);
+        the loss interpreter turns it on for training only.
         ``objects`` (ILP construction): operands hold Gurobi variables, plain
         numbers or None rather than tensors, one single-value group per row.
         They are gathered onto the joint rows unchanged (rows a relation does
@@ -1158,7 +1163,7 @@ class LogicalConstraintConstructor:
         full_rows = 1
         for v in joint:
             full_rows *= domains[v]
-        soft_prune = ((not prune) and spanning is None and not objects
+        soft_prune = (allow_soft_prune and (not prune) and spanning is None and not objects
                       and full_rows > LogicalConstraintConstructor.JOINT_GROUNDING_SOFT_PRUNE_ROWS)
         protect = set(protect or ())
         if (prune and spanning is None) or soft_prune:
@@ -1887,7 +1892,8 @@ class LogicalConstraintConstructor:
                     prune=(verify and not loss), logger=self.myLogger,
                     protect=getattr(self, '_protected_variables', ()),
                     keep_joint=self.keepJointFor(lc, headLC),
-                    objects=not (loss or verify or circuit))
+                    objects=not (loss or verify or circuit),
+                    allow_soft_prune=not getattr(self, '_exact_grounding', False))
                 self._pending_joint_binding = (
                     joint_binding if joined
                     else self.commonGroundingBinding(useLcVariables, lcVariableBindings))

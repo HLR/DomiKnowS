@@ -395,10 +395,18 @@ class AnswerSolver:
         # on relation-backed miotaL this collapsed true paths to zero. The
         # interpreter rebuilds the candidate/path correlation from this
         # DataNode without changing the optimized ILP world.
-        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, processor, None, dn, 0, key=key_text,
-            headLC=False, loss=True, sample=False,
-        )
+        constructor = self.solver.constraintConstructor
+        previous_exact = getattr(constructor, '_exact_grounding', False)
+        # Decoding is hard inference: keep the joint grounding exact instead
+        # of the training-time top-k pruning.
+        constructor._exact_grounding = True
+        try:
+            output, _ = constructor.constructLogicalConstrains(
+                lc, processor, None, dn, 0, key=key_text,
+                headLC=False, loss=True, sample=False,
+            )
+        finally:
+            constructor._exact_grounding = previous_exact
         tensors = []
 
         def collect(value):

@@ -666,7 +666,8 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                 prune=(verify and not loss), logger=self.myLogger,
                 protect=getattr(self, '_protected_variables', ()),
                 keep_joint=self.keepJointFor(lc, headLC),
-                objects=not (loss or verify or circuit))
+                objects=not (loss or verify or circuit),
+                allow_soft_prune=not getattr(self, '_exact_grounding', False))
             self._pending_joint_binding = (
                 joint_binding if joined
                 else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
