@@ -911,6 +911,36 @@ class LogicalConstraintConstructor:
         return None
 
     @staticmethod
+    def expandBatchedGroup(old_structure, mapping, pre_expansion_len):
+        """Realign a batched loss variable onto the expanded grounding rows.
+
+        Loss mode keeps a variable as ONE group of 1-D tensors, one value per
+        grounded row.  The per-group realignment used for the row-per-group
+        layout would copy that whole tensor into every expanded row; index it
+        with the expansion mapping instead.  Returns None when the variable is
+        not in the batched layout (the caller then uses the per-group path), and the
+        variable unchanged when it already has one value per expanded row.
+        """
+        if len(old_structure) != 1 or not old_structure[0]:
+            return None
+        columns = old_structure[0]
+        if not all(torch.is_tensor(c) and c.dim() == 1 for c in columns):
+            return None
+        sizes = {c.numel() for c in columns}
+        if len(sizes) != 1:
+            return None
+        size = sizes.pop()
+        if size == len(mapping) and size != pre_expansion_len:
+            # Already one value per expanded row (a relation variable gathered
+            # over its own rows): nothing to realign.
+            return old_structure
+        if pre_expansion_len < 2 or size != pre_expansion_len:
+            return None
+        rows = torch.tensor([group for group, _ in mapping], dtype=torch.long,
+                            device=columns[0].device)
+        return [[c[rows] for c in columns]]
+
+    @staticmethod
     def _materializeBindingKeys(bindings):
         """Joint-grounding bindings keep their row keys as a LongTensor grid;
         the row-wise helpers below want lists of index tuples."""
@@ -1673,6 +1703,11 @@ class LogicalConstraintConstructor:
                             
                             old_structure = lcVariables[var_name]
                             if not old_structure:
+                                continue
+
+                            batched = self.expandBatchedGroup(old_structure, mapping, pre_expansion_len)
+                            if batched is not None:
+                                lcVariables[var_name] = batched
                                 continue
                             
                             new_structure = []

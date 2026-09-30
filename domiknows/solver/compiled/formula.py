@@ -494,6 +494,11 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                             if not old_structure:
                                 continue
 
+                            batched = self.expandBatchedGroup(old_structure, mapping, pre_expansion_len)
+                            if batched is not None:
+                                lcVariables[var_name] = batched
+                                continue
+
                             new_structure = []
                             for orig_group_idx, item_idx in mapping:
                                 if orig_group_idx < len(old_structure):
