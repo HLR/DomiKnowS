@@ -656,7 +656,7 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
         # Same per-element alignment the interpreter applies in loss mode
         # (joint grounding first; the common-variable reduction otherwise).
         joined = False
-        if (loss or verify or circuit) and not sample and not isEntitySelector:
+        if not sample and not isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
                                   lcVariablesDns, lcVariableBindings)
             self.fillNestedPathBindings(useLcVariables, lcVariableVs,
@@ -665,7 +665,8 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                 useLcVariables, lcVariableBindings, lcVariablesDns,
                 prune=(verify and not loss), logger=self.myLogger,
                 protect=getattr(self, '_protected_variables', ()),
-                keep_joint=self.keepJointFor(lc, headLC))
+                keep_joint=self.keepJointFor(lc, headLC),
+                objects=not (loss or verify or circuit))
             self._pending_joint_binding = (
                 joint_binding if joined
                 else self.commonGroundingBinding(useLcVariables, lcVariableBindings))

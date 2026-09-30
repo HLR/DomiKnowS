@@ -1020,7 +1020,7 @@ class LogicalConstraintConstructor:
 
     @staticmethod
     def expandToJointGrounding(useLcVariables, bindings, lcVariablesDns, prune=False,
-                               logger=None, protect=(), keep_joint=False):
+                               logger=None, protect=(), keep_joint=False, objects=False):
         """Join operands enumerated over different variable tuples onto one table.
 
         ``reduceToCommonGrounding`` handles operands that share a variable by
@@ -1048,6 +1048,11 @@ class LogicalConstraintConstructor:
         is exact only when an existential encloses the constraint; set for a
         constraint nested in a plain connective, e.g. the ``andL`` of
         ``ifL(andL(r('a','b'), r('b','c')), r('a','c'))``.
+        ``objects`` (ILP construction): operands hold Gurobi variables, plain
+        numbers or None rather than tensors, one single-value group per row.
+        They are gathered onto the joint rows unchanged (rows a relation does
+        not ground read as the constant 0) and no pruning is applied, so the
+        joined table is exact; a table over the row budget is declined.
         Returns ``(operands, joined, binding)`` where ``binding`` is
         ``(joint_variable_names, LongTensor grid)`` describing the rows, so a
         parent entity selector can reduce the joined result to its answer
@@ -1060,7 +1065,13 @@ class LogicalConstraintConstructor:
         # Compare the ordered variable tuples: ``left('a','b')`` next to
         # ``right('b','a')`` spans the same set but its rows run over (b, a),
         # and pairing the two row-wise evaluated right(a, b) instead.
-        if len({tuple(b[0]) for b in bound.values()}) < 2:
+        # (ILP objects only) the same tuple over different row lists still has to
+        # be joined, e.g. a class variable repeated over expanded rows next to a
+        # per-candidate selection.
+        misaligned = objects and len({
+            tuple(tuple(k) for k in (b[1].tolist() if torch.is_tensor(b[1]) else b[1]))
+            for b in bound.values()}) > 1
+        if len({tuple(b[0]) for b in bound.values()}) < 2 and not misaligned:
             return useLcVariables, False, None
         # An operand spanning every variable (``left('b','c')`` next to
         # ``C('c')``) fixes the rows: align the others onto its grounding.
@@ -1072,7 +1083,7 @@ class LogicalConstraintConstructor:
         spanning = next((n for n in bound if varSets[n] == union), None)
         if set.intersection(*varSets.values()) and spanning is None and not keep_joint:
             return useLcVariables, False, None  # reduceToCommonGrounding's case
-        if all(len(v) < 2 for v in varSets.values()):
+        if all(len(v) < 2 for v in varSets.values()) and not misaligned:
             # Only plain per-entity variables (e.g. ``sameL(color, 'x', 'y')``
             # comparing each entity with itself): the historical row-wise
             # pairing is the intended semantics, not a Cartesian product.
@@ -1093,6 +1104,11 @@ class LogicalConstraintConstructor:
                 continue
             names, keys = bound[name]
             rows = len(keys)
+            if objects:
+                if not (len(groups) == rows and all(g and len(g) == 1 for g in groups)):
+                    return useLcVariables, False, None
+                normalised[name] = ("object", [[g[0] for g in groups]])
+                continue
             if (len(groups) == 1 and groups[0]
                     and all(torch.is_tensor(c) and c.dim() == 1 and c.numel() == rows
                             for c in groups[0])):
@@ -1120,9 +1136,11 @@ class LogicalConstraintConstructor:
         # nested orL/andL are stacked on CPU while predicate columns are on the
         # model device): move every column to one device, preferring an
         # accelerator.
-        devices = [c.device for _, cols in normalised.values() for c in cols]
-        device = next((d for d in devices if d.type != "cpu"), devices[0])
-        normalised = {name: (fmt, [c.to(device) for c in cols])
+        devices = [c.device for fmt, cols in normalised.values() if fmt != "object"
+                   for c in cols]
+        device = next((d for d in devices if d.type != "cpu"),
+                      devices[0] if devices else torch.device("cpu"))
+        normalised = {name: (fmt, cols if fmt == "object" else [c.to(device) for c in cols])
                       for name, (fmt, cols) in normalised.items()}
 
         # --- optional pruning by unary evidence -----------------------------
@@ -1136,11 +1154,11 @@ class LogicalConstraintConstructor:
         # rows are read existentially / conjunctively; under ``keep_joint``
         # every tuple is a grounding (e.g. the rows where the premise of an
         # ifL is false count as satisfied), so the table stays complete.
-        prune = prune and not keep_joint
+        prune = prune and not keep_joint and not objects
         full_rows = 1
         for v in joint:
             full_rows *= domains[v]
-        soft_prune = ((not prune) and spanning is None
+        soft_prune = ((not prune) and spanning is None and not objects
                       and full_rows > LogicalConstraintConstructor.JOINT_GROUNDING_SOFT_PRUNE_ROWS)
         protect = set(protect or ())
         if (prune and spanning is None) or soft_prune:
@@ -1214,6 +1232,10 @@ class LogicalConstraintConstructor:
             rows_idx = lookup[tuple(grid[:, joint.index(v)] for v in names)]
             if empty:
                 rows_idx = torch.full_like(rows_idx, -1)
+            if fmt == "object":
+                values = cols[0]
+                expanded[name] = [[values[i] if i >= 0 else 0] for i in rows_idx.tolist()]
+                continue
             valid = rows_idx >= 0
             safe = rows_idx.clamp(min=0)
             new_cols = []
@@ -1852,9 +1874,10 @@ class LogicalConstraintConstructor:
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), sampleInfo, lcVariablesSet, lcVariables
         else:
             joined = False
-            if (loss or verify or circuit) and not sample and not isEntitySelector:
+            if not sample and not isEntitySelector:
                 # Align operands enumerated over different variable tuples
                 # before combining them (no-op when they are co-grounded).
+                # ILP construction carries Gurobi variables, joined as objects.
                 self.fillPathBindings(useLcVariables, lcVariableVs,
                                       lcVariablesDns, lcVariableBindings)
                 self.fillNestedPathBindings(useLcVariables, lcVariableVs,
@@ -1863,7 +1886,8 @@ class LogicalConstraintConstructor:
                     useLcVariables, lcVariableBindings, lcVariablesDns,
                     prune=(verify and not loss), logger=self.myLogger,
                     protect=getattr(self, '_protected_variables', ()),
-                    keep_joint=self.keepJointFor(lc, headLC))
+                    keep_joint=self.keepJointFor(lc, headLC),
+                    objects=not (loss or verify or circuit))
                 self._pending_joint_binding = (
                     joint_binding if joined
                     else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
