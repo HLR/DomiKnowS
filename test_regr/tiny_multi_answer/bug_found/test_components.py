@@ -212,3 +212,9 @@ def test_D05_operand_without_groundings_skips_the_constraint():
         OrderedDict(a=[[1]], b=[]), False)
     assert result == [] and not calls
 
+
+def test_compiled_path_following_with_no_nodes_returns_two_values():
+    """_follow_once is unpacked as (nodes, groups) by its caller."""
+    from domiknows.solver.compiled.plan import TensorizedCandidateResolver
+    follow = TensorizedCandidateResolver._follow_once
+    assert follow(object.__new__(TensorizedCandidateResolver), [], [], 'any_relation') == ([], [])
