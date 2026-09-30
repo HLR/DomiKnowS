@@ -577,10 +577,13 @@ class LogicalConstrain(LcElement):
             cLcVariableSet = v[cLcVariableName]
 
             if len(cLcVariableSet) != len(lcVariableSet0):
-                myLogger.error("%s Logical Constraint has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"
-                               %(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
-                
-                return rVars
+                message = ("%s Logical Constraint has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"
+                           %(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
+                myLogger.error(message)
+
+                # Returning an empty result here silently dropped the whole
+                # constraint; a grounding mismatch is a defect to surface.
+                raise ValueError(message)
             
         # Collect variables setups for ILP constraints
         sVar = self._collectVariableSetups(lcVariableName0, lcVariableNames[1:], v)
