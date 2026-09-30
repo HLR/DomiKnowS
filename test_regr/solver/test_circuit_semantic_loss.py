@@ -1,4 +1,3 @@
-import importlib.util
 import itertools
 import math
 import sys
@@ -234,12 +233,12 @@ def test_bdd_structure_is_reused_and_budget_is_guarded():
         limited.andVar(None, _binary("limited", torch.tensor(0.5)))
 
 
-def test_auto_backend_and_forced_bdd_fallback():
+def test_auto_backend_prefers_pysdd_and_bdd_can_be_forced():
+    # pysdd is a default dependency, so "auto" must select it.
     forced = circuitBooleanMethods(backend="bdd")
     assert forced.backend_name == "bdd"
     automatic = circuitBooleanMethods(backend="auto")
-    expected = "pysdd" if importlib.util.find_spec("pysdd") else "bdd"
-    assert automatic.backend_name == expected
+    assert automatic.backend_name == "pysdd"
 
 
 def test_auto_backend_falls_back_when_pysdd_is_forced_off(monkeypatch):
@@ -248,7 +247,6 @@ def test_auto_backend_falls_back_when_pysdd_is_forced_off(monkeypatch):
     assert automatic.backend_name == "bdd"
 
 
-@pytest.mark.skipif(importlib.util.find_spec("pysdd") is None, reason="optional pysdd not installed")
 def test_pysdd_and_bdd_have_matching_multiclass_values_and_logit_gradients():
     def evaluate(backend_name):
         logits = torch.tensor([0.4, -0.2, 0.8], requires_grad=True)
@@ -267,7 +265,6 @@ def test_pysdd_and_bdd_have_matching_multiclass_values_and_logit_gradients():
     assert torch.allclose(bdd_gradient, sdd_gradient, atol=1e-7)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("pysdd") is None, reason="optional pysdd not installed")
 def test_pysdd_does_not_reuse_stale_categorical_weights_between_batches():
     backend = circuitBooleanMethods(backend="pysdd")
     backend.begin_evaluation()

@@ -31,7 +31,8 @@ dependencies = [
     "pyyaml>=6.0.2",
     "requests>=2.32.5",
     "tensorboard>=2.19.0",
-    "matplotlib>=3.10.0"
+    "matplotlib>=3.10.0",
+    "pysdd>=1.0.0"
 ]
 
 [project.optional-dependencies]
@@ -87,9 +88,9 @@ generation-guided = [
   "openai>=1.0.0",
 ]
 
-semantic-loss = [
-  "pysdd>=1.0.0",
-]
+# pysdd is a default dependency now; the extra is kept empty so that
+# ``pip install domiknows[semantic-loss]`` keeps working.
+semantic-loss = []
 
 [tool.uv]
 conflicts = [
