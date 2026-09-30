@@ -515,7 +515,7 @@ class DataNode:
         if relationName not in self.relationLinks:
             self.relationLinks[relationName] = []
 
-        if dn in self.relationLinks[relationName]:
+        if self._hasLink('_relationIdCache', self.relationLinks, relationName, dn):
             return
 
         self.relationLinks[relationName].append(dn)
@@ -524,8 +524,32 @@ class DataNode:
         if relationName not in dn.impactLinks:
             dn.impactLinks[relationName] = []
 
-        if self not in dn.impactLinks[relationName]:
+        if not dn._hasLink('_impactIdCache', dn.impactLinks, relationName, self):
             dn.impactLinks[relationName].append(self)
+
+    def _hasLink(self, cacheName, links, relationName, dn):
+        """Whether ``dn`` is already in ``links[relationName]`` (by DataNode id).
+
+        Testing ``dn in list`` calls __eq__ on every element, so building a
+        node with N links cost O(N^2).  The id set is cached per relation and
+        only trusted while it still describes the same list object at the same
+        length; any other mutation (replaced list, removal) rebuilds it.
+        Appends made here are recorded again after the caller appends.
+        """
+        current = links[relationName]
+        cache = self.__dict__.setdefault(cacheName, {})
+        entry = cache.get(relationName)
+        if entry is None or entry[0] is not current or entry[1] != len(current):
+            entry = (current, len(current), {getattr(d, 'id', None) for d in current})
+            cache[relationName] = entry
+        ids = entry[2]
+        dnId = getattr(dn, 'id', None)
+        if dnId in ids:
+            return True
+        # Caller appends next: keep the entry valid for the longer list.
+        ids.add(dnId)
+        cache[relationName] = (current, len(current) + 1, ids)
+        return False
 
     def removeRelationLink(self, relationName, dn):
         """Remove a relation link between the current DataNode and another DataNode.
@@ -661,9 +685,7 @@ class DataNode:
         """
         relationName = 'contains'
 
-        if (relationName in self.relationLinks) and (dn in self.relationLinks[relationName]):
-            return
-
+        # addRelationLink ignores a node that is already linked.
         self.addRelationLink(relationName, dn)
 
     def removeChildDataNode(self, dn):
@@ -973,6 +995,9 @@ class DataNode:
             dns = [self]
 
         returnDns = []
+        # DataNode equality is by id, so track membership in a set: testing
+        # ``dn in returnDns`` walked the list calling __eq__ (quadratic).
+        returnIds = set()
 
         # If empty list of provided DataNodes then return - it is a recursive call with empty list
         if dns is None or len(dns) == 0:
@@ -989,7 +1014,8 @@ class DataNode:
         for dn in dns:
             # Test current DataNote against the query
             if self.__testDataNode(dn, select):
-                if dn not in returnDns:
+                if dn.id not in returnIds:
+                    returnIds.add(dn.id)
                     returnDns.append(dn)
 
             if not visitedDns:
@@ -1017,7 +1043,8 @@ class DataNode:
 
                 if currentRelationDns is not None:
                     for currentRDn in currentRelationDns:
-                        if currentRDn not in returnDns:
+                        if currentRDn.id not in returnIds:
+                            returnIds.add(currentRDn.id)
                             returnDns.append(currentRDn)
 
         if depth: # Finish recursion
@@ -1026,6 +1053,7 @@ class DataNode:
         # If index provided in query then filter the found results for the select part of query through the index part of query
         if (indexes != None):
             currentReturnDns = [] # Will contain results from returnDns satisfying the index
+            currentReturnIds = set()
 
             for dn in returnDns:
                 fit = True
@@ -1065,7 +1093,8 @@ class DataNode:
                         break
 
                 if fit:
-                    if dn not in currentReturnDns:
+                    if dn.id not in currentReturnIds:
+                        currentReturnIds.add(dn.id)
                         currentReturnDns.append(dn)
 
             returnDns = currentReturnDns

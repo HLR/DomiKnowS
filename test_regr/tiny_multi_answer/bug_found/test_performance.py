@@ -1,5 +1,7 @@
 """Bounded performance probes; timings are evidence, not universal thresholds."""
+import gc
 import importlib
+import itertools
 import logging
 import os
 import time
@@ -7,6 +9,8 @@ from collections import OrderedDict
 from types import SimpleNamespace
 import pytest
 from gurobipy import GRB
+from domiknows.graph import Graph, Concept
+from domiknows.graph.dataNode import DataNode
 from domiknows.graph.logicalConstrain import LogicalConstrain
 
 
@@ -73,6 +77,78 @@ def test_D10_IIS_dispatch_after_nonoptimal_status(status,tmp_path,monkeypatch,re
         assert 'IIS' not in calls, 'TIME_LIMIT is not proven infeasibility, but computeIIS was called'
     else:
         assert calls.count('IIS')==1  # Observed policy, not a speed certification.
+
+
+def pair_graph(n):
+    """Root -> n items and n*n pair nodes linked to their two items."""
+    with Graph('perf_graph') as graph:
+        scene=Concept(name='scene'); item=Concept(name='item'); scene.contains(item)
+        pair=Concept(name='pair'); arg1,arg2=pair.has_a(arg1=item,arg2=item)
+    root=DataNode(instanceID=0,ontologyNode=scene)
+    items=[]
+    for i in range(n):
+        node=DataNode(instanceID=i,ontologyNode=item); root.addChildDataNode(node); items.append(node)
+    for i,j in itertools.product(range(n),repeat=2):
+        node=DataNode(instanceID=i*n+j,ontologyNode=pair)
+        node.addRelationLink(arg1.name,items[i]); node.addRelationLink(arg2.name,items[j])
+        root.addChildDataNode(node)
+    return root,item,pair
+
+
+def best_of(repeats,fn):
+    """Minimum wall time; GC is paused because its cost grows with the object
+    count and would blur the algorithmic shape being checked."""
+    times=[]
+    gc.collect()
+    gc.disable()
+    try:
+        for _ in range(repeats):
+            start=time.perf_counter(); result=fn(); times.append(time.perf_counter()-start)
+    finally:
+        gc.enable()
+    return min(times),result
+
+
+def test_D10_datanode_construction_scales_roughly_linearly(record_property):
+    """Quadratic list-membership tests made 4x the nodes cost ~16x (12 s at 14.5k nodes).
+
+    Compares 4x growth in node count; the threshold is far above linear (4x)
+    and far below quadratic (16x), so it is a shape check, not a speed limit.
+    """
+    small,_=best_of(3,lambda:pair_graph(60))
+    large,_=best_of(3,lambda:pair_graph(120))
+    record_property('construction_seconds_small_large',(small,large))
+    assert large/small<10, f'4x nodes took {large/small:.1f}x (small={small:.3f}s, large={large:.3f}s)'
+
+
+def test_D10_find_datanodes_scales_roughly_linearly(record_property):
+    small_root,small_item,small_pair=pair_graph(40)
+    large_root,large_item,large_pair=pair_graph(80)
+    small,found_small=best_of(3,lambda:small_root.findDatanodes(select=small_pair))
+    large,found_large=best_of(3,lambda:large_root.findDatanodes(select=large_pair))
+    record_property('find_seconds_small_large',(small,large))
+    assert len(found_small)==40*40 and len(found_large)==80*80
+    assert [d.id for d in found_large]==sorted({d.id for d in found_large})  # no duplicates, graph order kept
+    assert large/small<10, f'4x nodes took {large/small:.1f}x (small={small:.4f}s, large={large:.4f}s)'
+
+
+def test_D10_relation_links_ignore_duplicates_and_survive_removal():
+    """The link-membership cache must keep exact list semantics."""
+    with Graph('links') as graph:
+        scene=Concept(name='scene'); item=Concept(name='item'); scene.contains(item)
+    root=DataNode(instanceID=0,ontologyNode=scene)
+    nodes=[DataNode(instanceID=i,ontologyNode=item) for i in range(4)]
+    for node in nodes: root.addChildDataNode(node)
+    for node in nodes: root.addChildDataNode(node)           # duplicates ignored
+    assert root.relationLinks['contains']==nodes
+    assert all(node.impactLinks['contains']==[root] for node in nodes)
+    root.removeChildDataNode(nodes[1])
+    assert root.relationLinks['contains']==[nodes[0],nodes[2],nodes[3]]
+    root.addChildDataNode(nodes[1])                           # removed node can be re-added
+    assert root.relationLinks['contains']==[nodes[0],nodes[2],nodes[3],nodes[1]]
+    root.resetChildDataNode()                                 # list replaced behind the cache
+    root.addChildDataNode(nodes[0])
+    assert root.relationLinks['contains']==[nodes[0]]
 
 
 def run_status_dispatch(status, tmp_path, monkeypatch):
