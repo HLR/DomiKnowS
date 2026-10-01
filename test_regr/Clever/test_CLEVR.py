@@ -284,8 +284,11 @@ def _parse_accuracy(output: str, pattern: str) -> float | None:
 
 
 def _parse_all_epoch_accuracies(output: str) -> list[float]:
-    """Return all per-epoch train accuracy values found in stdout."""
-    return [float(v) for v in re.findall(r"Epoch \d+ train accuracy:\s+([\d.]+)%", output)]
+    """Return all per-epoch train accuracy values found in stdout.
+
+    main.py labels the line "curriculum train" while a curriculum is active
+    (the default, ``--curriculum all``) and "train" otherwise."""
+    return [float(v) for v in re.findall(r"Epoch \d+ (?:curriculum )?train accuracy:\s+([\d.]+)%", output)]
 
 
 def _parse_baseline_accuracy(output: str) -> float | None:
@@ -294,7 +297,7 @@ def _parse_baseline_accuracy(output: str) -> float | None:
 
 
 def _parse_final_train_accuracy(output: str) -> float | None:
-    m = re.search(r"Train accuracy after training:\s+([\d.]+)%", output)
+    m = re.search(r"(?:Curriculum train|Train) accuracy after training:\s+([\d.]+)%", output)
     return float(m.group(1)) if m else None
 
 
