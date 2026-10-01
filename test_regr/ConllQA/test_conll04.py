@@ -5,8 +5,12 @@ import os
 from pathlib import Path
 
 
-# Marker to distinguish between subprocess and direct tests
-USE_SUBPROCESS = os.environ.get('USE_SUBPROCESS', 'false').lower() == 'true'
+# Each test builds and trains its own model, and DomiKnowS sensor assignments
+# stack up inside one process, so in-process runs after the first one score
+# 0.0 (a stale sensor from the previous test feeds the new graph).  Subprocess
+# mode (one process per test) is therefore the default, as the README says;
+# USE_SUBPROCESS=false runs a single test in-process for debugging.
+USE_SUBPROCESS = os.environ.get('USE_SUBPROCESS', 'true').lower() == 'true'
 
 def run_test(args_list):
     """
@@ -16,7 +20,7 @@ def run_test(args_list):
     main_script = test_dir / 'main.py'
     
     if USE_SUBPROCESS:
-        command = ['python', str(main_script)] + args_list
+        command = [sys.executable, str(main_script)] + args_list
         result = subprocess.run(command, capture_output=True, text=True, cwd=str(test_dir))
         print(result.stdout)
         print(result.stderr)
