@@ -141,33 +141,51 @@ def _run(
     child_env = os.environ.copy()
     if env:
         child_env.update(env)
+    # POSIX: a new session so the whole process group can be signalled.
+    # Windows has no process groups in that sense (os.getpgid / os.killpg do not
+    # exist): start a new group and kill the process tree with taskkill instead.
+    posix = hasattr(os, "killpg")
+    popen_group_args = (
+        {"start_new_session": True} if posix
+        else {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    )
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         cwd=str(_TEST_DIR),
-        start_new_session=True,  # new process group so we can kill grandchildren
         env=child_env,
+        **popen_group_args,
     )
-    pgid = os.getpgid(proc.pid)
+    pgid = os.getpgid(proc.pid) if posix else None
+
+    def kill_tree():
+        if posix:
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass  # already gone
+        else:
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                           capture_output=True)
+
     stdout, stderr = "", ""
+    timed_out = False
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        timed_out = True
+        kill_tree()
         stdout, stderr = proc.communicate()
     finally:
         # Kill the whole process group to reap any orphaned vLLM EngineCore
         # subprocesses spawned by main.py (they outlive main.py on crash).
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass  # already gone
-    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+        kill_tree()
+    returncode = proc.returncode
+    if timed_out and not posix:
+        returncode = -signal.SIGTERM  # what _skip_if_timed_out looks for
+    return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
 
 
 def _tail(text: str, n: int = 3000) -> str:
