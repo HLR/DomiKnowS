@@ -494,6 +494,11 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                             if not old_structure:
                                 continue
 
+                            batched = self.expandBatchedGroup(old_structure, mapping, pre_expansion_len)
+                            if batched is not None:
+                                lcVariables[var_name] = batched
+                                continue
+
                             new_structure = []
                             for orig_group_idx, item_idx in mapping:
                                 if orig_group_idx < len(old_structure):
@@ -644,7 +649,8 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
         isEntitySelector = isinstance(lc, (iotaL, miotaL))
         if isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
-                                  lcVariablesDns, lcVariableBindings)
+                                  lcVariablesDns, lcVariableBindings,
+                                  outer=getattr(self, '_outer_bindings', None))
             self.fillNestedPathBindings(useLcVariables, lcVariableVs,
                                         lcVariablesDns, lcVariableBindings)
             useLcVariables = self.reduceSelectorToPrimaryGrounding(
@@ -656,16 +662,19 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
         # Same per-element alignment the interpreter applies in loss mode
         # (joint grounding first; the common-variable reduction otherwise).
         joined = False
-        if (loss or verify or circuit) and not sample and not isEntitySelector:
+        if not sample and not isEntitySelector:
             self.fillPathBindings(useLcVariables, lcVariableVs,
-                                  lcVariablesDns, lcVariableBindings)
+                                  lcVariablesDns, lcVariableBindings,
+                                  outer=getattr(self, '_outer_bindings', None))
             self.fillNestedPathBindings(useLcVariables, lcVariableVs,
                                         lcVariablesDns, lcVariableBindings)
             useLcVariables, joined, joint_binding = self.expandToJointGrounding(
                 useLcVariables, lcVariableBindings, lcVariablesDns,
                 prune=(verify and not loss), logger=self.myLogger,
                 protect=getattr(self, '_protected_variables', ()),
-                keep_joint=self.keepJointFor(lc, headLC))
+                keep_joint=self.keepJointFor(lc, headLC),
+                objects=not (loss or verify or circuit),
+                allow_soft_prune=not getattr(self, '_exact_grounding', False))
             self._pending_joint_binding = (
                 joint_binding if joined
                 else self.commonGroundingBinding(useLcVariables, lcVariableBindings))
@@ -696,6 +705,9 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
             model, booleanProcessor, useLcVariables, headConstrain=headLC,
             integrate=integrate,
             **({"label": label} if isinstance(lc, sumL) else {}))
+        if isEntitySelector and not (loss or verify or circuit or sample):
+            self._pending_joint_binding = self.selectorResultBinding(
+                lc, useLcVariables, lcVariableBindings, output)
         if sample:
             lcVariablesSet[lc] = useLcVariables
             return output, sampleInfo, lcVariablesSet, lcVariables

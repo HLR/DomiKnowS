@@ -1,3 +1,4 @@
+import os
 import sys
 import torch
 from pathlib import Path
@@ -20,6 +21,7 @@ from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from reader import conll4_reader
 import numpy as np
 
+import json
 import spacy
 
 # from spacy.lang.en import English
@@ -27,7 +29,9 @@ nlp = spacy.load('en_core_web_sm')  # English()
 
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+# The per-tensor dtype/shape trace (debug_tensor) logs on every training step
+# and flooded pytest's log capture; it is opt-in: CONLLQA_LOG_LEVEL=DEBUG.
+logging.basicConfig(level=os.environ.get("CONLLQA_LOG_LEVEL", "WARNING").upper())
 
 from transformers import BertTokenizerFast, BertModel
 
@@ -36,8 +40,25 @@ TRANSFORMER_MODEL = 'bert-base-uncased'
 FEATURE_DIM = 768 + 96
 
 
+# Data files that ship beside this script.  Each holds a different set of
+# portions (conllQA.json: the *_YN / *_Counting families, conllQA2.json:
+# entities_with_relation), so without an explicit --data_path the file is chosen
+# by the portion that is asked for.
+DEFAULT_DATA_FILES = ("conllQA.json", "conllQA2.json")
+
+
+def portion_names(path):
+    """Names of the portions stored in a data file."""
+    with open(path, encoding="utf-8") as handle:
+        return set(json.load(handle))
+
+
 def find_data_file(filename, train_portion=None):
-    """Find data file by checking multiple possible locations"""
+    """Find data file by checking multiple possible locations.
+
+    ``filename`` may be None: the first default data file that contains
+    ``train_portion`` is used.
+    """
     current_dir = Path(__file__).parent
 
     # First, check if extracted portion file exists
@@ -54,6 +75,16 @@ def find_data_file(filename, train_portion=None):
             if path.exists():
                 print(f"Using extracted data file: {path}")
                 return str(path)
+
+    if filename is None:
+        for candidate in DEFAULT_DATA_FILES:
+            try:
+                path = find_data_file(candidate)
+            except FileNotFoundError:
+                continue
+            if train_portion is None or train_portion in portion_names(path):
+                return path
+        filename = DEFAULT_DATA_FILES[0]
 
     # List of possible locations to check for main file
     possible_paths = [
@@ -149,6 +180,14 @@ def debug_tensor(name, tensor):
         logging.debug(f"[DTYPE DEBUG] {name}: type={type(tensor)}")
     return tensor
 
+def resolve_device(name):
+    """'auto' picks CUDA when this torch build has it and the CPU otherwise;
+    any explicit device name is used as given."""
+    if name == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return name
+
+
 def program_declaration(train, args, device='auto'):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
@@ -177,12 +216,6 @@ def program_declaration(train, args, device='auto'):
         debug_tensor("merge_phrase ones", ones)
         return [' '.join(phrase_text)], ones
     
-    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(
-        phrase['text'], word['offset'],
-        relation=rel_phrase_contains_word.reversed,
-        forward=match_phrase
-    )
-
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
     # Create Tokenizer with device parameter
@@ -212,6 +245,13 @@ def program_declaration(train, args, device='auto'):
         result = torch.tensor(ph_word_overlap, device=device)
         debug_tensor("match_phrase output", result)
         return result
+
+    # Needs word['offset'] (the word JointSensor above) and match_phrase.
+    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(
+        phrase['text'], word['offset'],
+        relation=rel_phrase_contains_word.reversed,
+        forward=match_phrase
+    )
 
     def phrase_bert(bert):
         debug_tensor("phrase_bert input", bert)
@@ -304,8 +344,8 @@ def parse_arguments():
     parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
-    parser.add_argument("--data_path", type=str, default="C:\\Users\\auszok\\git\\RelationalGraph\\test_regr\\ConllQA\\conllQA2.json", help="Path to data file (can be relative or absolute)")
-    parser.add_argument("--device", type=str, default="cuda", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+    parser.add_argument("--data_path", type=str, default=None, help="Path to data file (can be relative or absolute). Default: the shipped data file that contains --train_portion")
+    parser.add_argument("--device", type=str, default="auto", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto': CUDA if available, else CPU)")
     args = parser.parse_args()
 
     return args
@@ -323,7 +363,8 @@ def main(args):
     if args.train_size != -1:
         train = train[:args.train_size]
 
-    program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
+    device = resolve_device(args.device)
+    program, dataset = program_declaration(train if not args.evaluate else test, args, device=device)
 
     suffix = "_curriculum_learning" if args.load_previous else ""
     if not args.evaluate:
@@ -336,11 +377,12 @@ def main(args):
         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
-    train_acc = program.evaluate_condition(dataset, threshold=0.5, device=args.device)
+    train_acc = program.evaluate_condition(dataset, threshold=0.5, device=device)
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)
     print("#" * 40, file=output_f)
+    output_f.close()  # flush before a failed accuracy check raises
 
     if args.checked_acc:
         print(f"<acc>{train_acc}</acc>")

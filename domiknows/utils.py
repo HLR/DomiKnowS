@@ -1,3 +1,4 @@
+import hashlib
 import shutil
 import sys
 import os
@@ -21,26 +22,40 @@ from domiknows.config import config
 
 
 def _default_log_dir():
-    """Return a ``logs`` directory relative to the currently running program.
+    """Return the ``logs`` directory for the currently running program.
 
     Resolution order:
-      1. Directory of the ``__main__`` module's file (the script that was
-         launched), if available.
-      2. Current working directory as fallback.
-
-    This ensures log files are co-located with the program that produces them
-    rather than depending on whichever directory happens to be the CWD.
+      1. ``DOMIKNOWS_LOG_DIR`` environment variable, used verbatim, so
+         concurrent workers can be given separate output directories.
+      2. Directory of the ``__main__`` module's file (the script that was
+         launched), if available and not inside ``site-packages`` (e.g. when
+         started as ``python -m pytest``).  When the working directory differs
+         from the script's directory the path is namespaced by the working
+         directory, so two workers running the same script from different
+         directories do not share solver output files.
+      3. Current working directory as fallback.
     """
+    override = os.environ.get('DOMIKNOWS_LOG_DIR')
+    if override:
+        return override
+
+    cwd = os.getcwd()
     try:
         import __main__
         main_file = getattr(__main__, '__file__', None)
         if main_file:
             script_dir = os.path.dirname(os.path.abspath(main_file))
-            if os.path.isdir(script_dir):
-                return os.path.join(script_dir, 'logs')
+            in_packages = 'site-packages' in pathlib.Path(script_dir).parts
+            if os.path.isdir(script_dir) and not in_packages:
+                log_dir = os.path.join(script_dir, 'logs')
+                if os.path.normcase(os.path.abspath(cwd)) != os.path.normcase(script_dir):
+                    digest = hashlib.sha1(
+                        os.path.normcase(os.path.abspath(cwd)).encode('utf-8')).hexdigest()[:8]
+                    log_dir = os.path.join(log_dir, '%s_%s' % (os.path.basename(cwd) or 'root', digest))
+                return log_dir
     except (ImportError, AttributeError):
         pass
-    return os.path.join(os.getcwd(), 'logs')
+    return os.path.join(cwd, 'logs')
 
 def extract_args(*args, **kwargs):
     if '_stack_back_level_' in kwargs and kwargs['_stack_back_level_']:
@@ -444,6 +459,34 @@ def getProductionModeStatus():
 
 def getReuseModel():
     return reuseModel
+
+def _computeIISFromEnvironment():
+    value = os.environ.get('DOMIKNOWS_COMPUTE_IIS')
+    if value is None:
+        return True
+    return value.strip().lower() not in ('0', 'false', 'no', 'off')
+
+computeIIS = _computeIISFromEnvironment()
+
+def setComputeIIS(enabled):
+    """Choose whether a proven-infeasible ILP model gets an IIS diagnostic.
+
+    When enabled (the default) the solver calls ``computeIIS`` for a model
+    Gurobi proved infeasible and writes the conflicting subset to
+    ``GurobiInfeasible.ilp``.  Computing an IIS can cost as much as the solve
+    itself, so callers that only need to know the model is infeasible (for
+    example a search over hypotheses) can turn it off.  The initial value comes
+    from the ``DOMIKNOWS_COMPUTE_IIS`` environment variable (0/false/no/off
+    disable it).  A status other than INFEASIBLE or INF_OR_UNBD never gets an
+    IIS, whatever this flag says.
+    """
+    if not isinstance(enabled, bool):
+        raise TypeError("setComputeIIS expects a bool")
+    global computeIIS
+    computeIIS = enabled
+
+def getComputeIIS():
+    return computeIIS
 
 dnSkeletonMode = False
 dnSkeletonModeFull = False

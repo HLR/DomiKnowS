@@ -329,9 +329,18 @@ class AnswerSolver:
                 subclass_binding = list(binding_concept(selector_variable))
                 subclass_binding[0] = subclass_tuple
 
-                return self._compile_hypothesis(
+                # "The selected entity has this class": the class variable and
+                # the selection are joined per candidate and at least one
+                # candidate (the selected one) must satisfy both.
+                selected_has_class = self._compile_hypothesis(
                     andL,
                     [subclass_binding] + iota_elements,
+                    graph,
+                )
+                selected_has_class.headLC = False
+                return self._compile_hypothesis(
+                    existsL,
+                    [selected_has_class],
                     graph,
                 )
 
@@ -395,10 +404,18 @@ class AnswerSolver:
         # on relation-backed miotaL this collapsed true paths to zero. The
         # interpreter rebuilds the candidate/path correlation from this
         # DataNode without changing the optimized ILP world.
-        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, processor, None, dn, 0, key=key_text,
-            headLC=False, loss=True, sample=False,
-        )
+        constructor = self.solver.constraintConstructor
+        previous_exact = getattr(constructor, '_exact_grounding', False)
+        # Decoding is hard inference: keep the joint grounding exact instead
+        # of the training-time top-k pruning.
+        constructor._exact_grounding = True
+        try:
+            output, _ = constructor.constructLogicalConstrains(
+                lc, processor, None, dn, 0, key=key_text,
+                headLC=False, loss=True, sample=False,
+            )
+        finally:
+            constructor._exact_grounding = previous_exact
         tensors = []
 
         def collect(value):
@@ -412,7 +429,10 @@ class AnswerSolver:
         if not tensors:
             return []
         probabilities = torch.cat(tensors)
-        return (probabilities >= lc.threshold).to(torch.int64).detach().cpu().tolist()
+        # The answer is the set of selected candidates (their positions among
+        # the grounded candidates); an empty list means nothing was selected.
+        selected = probabilities >= lc.threshold
+        return torch.nonzero(selected).reshape(-1).detach().cpu().tolist()
 
     def _decode_multi_query(self, lc, dn, key=("local", "softmax")):
         """Decode every candidate row without enumerating class products."""
@@ -659,6 +679,9 @@ class AnswerSolver:
                         forceFreshModel=True,
                         raiseOnInfeasible=False,
                         compiled=self.compiled,
+                        # An infeasible hypothesis is an expected outcome of
+                        # the search, not a fault to diagnose.
+                        computeIIS=False,
                     )
                 except Exception as error:
                     if self._is_infeasible_error(error):
@@ -712,27 +735,25 @@ class AnswerSolver:
 
         populated_winner = False
         temporary_ilp_snapshot = None
-        multi_query_names = [
-            name for name in direct_decode_names
-            if isinstance(dn.graph.executableLCs[name].innerLC, queryL)
-        ]
-        if multi_query_names:
+        if direct_decode_names:
+            # Direct decoders (miota and multi-answer query) read the ILP world,
+            # so the winning assignment must be in place before they run; when
+            # the caller did not ask to populate, the previous world is put
+            # back afterwards.
             if not populate:
                 temporary_ilp_snapshot = self._snapshot_ilp_attributes(dn)
-            self.solver.populateILPSelection(
-                dn,
-                concepts_relations,
-                best_result['values'],
-            )
-            populated_winner = populate
-
-        if direct_decode_names:
             decoded_direct = {}
             try:
+                self.solver.populateILPSelection(
+                    dn,
+                    concepts_relations,
+                    best_result['values'],
+                )
+                populated_winner = populate
                 for name in direct_decode_names:
                     inner = dn.graph.executableLCs[name].innerLC
                     if isinstance(inner, miotaL):
-                        decoded_direct[name] = self._decode_miota(inner, dn, key=key)
+                        decoded_direct[name] = self._decode_miota(inner, dn, key=("ILP",))
                     else:
                         decoded = self._decode_multi_query_ilp(inner, dn)
                         decoded_direct[name] = (

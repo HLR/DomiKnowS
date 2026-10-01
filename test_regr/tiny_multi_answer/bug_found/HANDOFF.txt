@@ -1,0 +1,54 @@
+DOMIKNOWS ILP REPRODUCTION HANDOFF — 2026-09-28
+
+Tested public develop commit c3002b1a97696846d59b254fb12bde5388ee62ab.
+No DomiKnowS library code was modified. A separate develop checkout was used
+because the original local checkout has staged deletions/untracked copies.
+
+Final run: 38 cases; 13 failed assertions, 14 passed, 11 license-blocked skips.
+Evidence: results/20260928T200637Z.{json,xml,log}. Failures assert the desired
+correct behavior; they are reproducers, not fixes. Repeated runs reproduced
+the same failures. Python 3.12.4, PyTorch 2.8.0, pytest 7.4.4, gurobipy 13.0.0.
+
+REPRODUCED IN CURRENT DEVELOP
+D01: Direct miota decoding receives local/softmax and the previous ILP world,
+     before the winning assignment is populated. Both populate modes fail.
+D02: The loss-form ILP leaf reader returns None for binary [0] or [1] because
+     it indexes the absent second element of the one-element ILP tensor.
+D03: Compiled ILP-mode binding pairs left(x,y) with right(x,y), despite the
+     formula specifying right(y,x). Same-order control passes.
+D04: Two/three-hop existential conjunctions lose a known witness at unequal
+     operand scopes (4 versus 2 rows). One-hop control passes.
+D05: Grounding mismatch logs an error and returns an empty constraint instead
+     of failing explicitly. This is the dangerous silent-failure behavior.
+D06: Default top-four pruning drops a known Boolean witness in an 11^6 joint
+     grounding. A small exact control passes. Hard decoding uses this path.
+D07: Same script plus different working directories resolves to the same
+     GurobiSolution.sol path. This establishes collision risk, not a race run.
+D09: collectInferredResults(flag, 'ILP') returns empty for a populated child.
+D10: Nonoptimal-status handling calls computeIIS even after TIME_LIMIT;
+     timeout is not proof of infeasibility. Model-status double used.
+T01: Product implication has finite loss but NaN antecedent gradient at
+     a=1e-30,b=0.2 in FP32. This is a training bug, not an ILP optimizer bug.
+
+NOT CURRENTLY REPRODUCED / NOT CERTIFIED
+D08: Supported cache-clearing helper passes. Automatic repeat-solve behavior
+     requires the native test; do not call cache management universally broken.
+T02: Three-operand AND/OR/NAND head-loss truth-table checks all pass; the older
+     violation-direction bug appears fixed for these covered cases.
+D10 performance: bounded singleton-row and name-construction probes run, but
+     do not establish production-scale speed. Native name construction and
+     repeated auxiliary/update benchmarks are included but license-blocked.
+
+PRIORITY
+Fix silent constraint dropping and variable-identity joins, then direct/hard
+decoding. Preserve exact hard inference; isolate solver output per run; guard
+IIS by actual infeasibility and make expensive diagnostics configurable.
+Keep performance changes separate from semantic changes.
+
+RUN FROM A DOMIKNOWS CHECKOUT WITH THIS FOLDER AT ITS ROOT
+  python ilp_repro_20260928/run_suite.py
+With a valid configured Gurobi license:
+  DOMIKNOWS_REPRO_NATIVE=1 python ilp_repro_20260928/run_suite.py
+Use the supplied script rather than python -m pytest: library logging can
+otherwise try to write inside the installed pytest package directory.
+See README.md for per-test locations, scope, and evidence limitations.

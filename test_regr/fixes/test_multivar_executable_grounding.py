@@ -21,8 +21,17 @@ REPRO = Path(__file__).with_name("multivar_executable_repro.py")
 
 
 def _run(mode, spec):
-    out = subprocess.run([sys.executable, str(REPRO), mode, spec], capture_output=True, text=True,
-                         cwd=str(REPRO.parent), timeout=900)
+    # Each case takes ~10 s.  The 900 s limit only exists to catch a hang, but a
+    # long full-suite run (or the machine suspending in the middle of it) can
+    # exhaust it once; retry a single time so a real hang still fails.
+    for attempt in range(2):
+        try:
+            out = subprocess.run([sys.executable, str(REPRO), mode, spec], capture_output=True,
+                                 text=True, cwd=str(REPRO.parent), timeout=900)
+            break
+        except subprocess.TimeoutExpired:
+            if attempt:
+                raise
     lines = [l for l in out.stdout.splitlines() if l.startswith(mode)]
     assert lines, out.stdout[-2000:] + out.stderr[-2000:]
     return lines[-1]

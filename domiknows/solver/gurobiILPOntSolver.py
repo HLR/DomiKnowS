@@ -28,6 +28,7 @@ from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
 from domiknows.utils import _default_log_dir
 from domiknows.utils import getReuseModel
+from domiknows.utils import getComputeIIS
 from domiknows.utils import getDnSkeletonMode
 
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
@@ -815,8 +816,14 @@ class gurobiILPOntSolver(ilpOntSolver):
         forceFreshModel=False,
         raiseOnInfeasible=True,
         compiled=True,
+        computeIIS=None,
     ):
         """Internal ILP run used by executable-constraint hypotheses.
+
+        ``computeIIS``: ``None`` follows the process-wide flag
+        (``domiknows.setComputeIIS``); ``False`` skips the infeasibility
+        diagnostic for this run, which a caller that expects some models to be
+        infeasible (a hypothesis search) should do.
 
         ``extraLogicalConstraints`` are hard constraints added to every
         priority run.  When ``populate`` is false the method returns a
@@ -950,6 +957,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcRun,
                     cacheModel=not forceFreshModel,
                     compiled=compiled,
+                    computeIIS=computeIIS,
                 )
 
             endOptimize = perf_counter()
@@ -1180,6 +1188,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         lcRun,
         cacheModel=True,
         compiled=True,
+        computeIIS=None,
     ):
         ps = []
         ps.append(p)
@@ -1311,10 +1320,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                 os.remove(sol_path)
             if os.path.exists(json_path):
                 os.remove(json_path)
-            mP.computeIIS()
             if os.path.exists(infeasible_path):
                 os.remove(infeasible_path)
-            mP.write(infeasible_path)
+            # An IIS is only defined for an infeasible model; after TIME_LIMIT
+            # (or another interruption) feasibility is unknown and computeIIS
+            # would spend more time to raise or report nothing.
+            if mP.status in (GRB.Status.INFEASIBLE, GRB.Status.INF_OR_UNBD):
+                if getComputeIIS() if computeIIS is None else computeIIS:
+                    mP.computeIIS()
+                    mP.write(infeasible_path)
+                else:
+                    self.myLogger.info('IIS diagnostic skipped (computeIIS disabled); no GurobiInfeasible.ilp written.')
         elif self.myLogger.level <= logging.INFO:
             # Remove infeasible file and solution files if they exist from previous runs
             if os.path.exists(infeasible_path):

@@ -572,15 +572,27 @@ class LogicalConstrain(LcElement):
 
         rVars = [] # Output variables
 
+        # An operand with no groundings at all (a nested constraint that found
+        # nothing to ground) leaves nothing to constrain: skip, as before.
+        # Only operands that both have groundings but in different numbers are
+        # a misalignment.
+        if any(len(v[name]) == 0 for name in lcVariableNames):
+            myLogger.warning("%s Logical Constraint skipped: no groundings for %s"
+                             % (lcName, [name for name in lcVariableNames if len(v[name]) == 0]))
+            return rVars
+
         # Check consistency of provided sets of ILP variables
         for cLcVariableName in lcVariableNames:
             cLcVariableSet = v[cLcVariableName]
 
             if len(cLcVariableSet) != len(lcVariableSet0):
-                myLogger.error("%s Logical Constraint has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"
-                               %(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
-                
-                return rVars
+                message = ("%s Logical Constraint has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"
+                           %(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
+                myLogger.error(message)
+
+                # Returning an empty result here silently dropped the whole
+                # constraint; a grounding mismatch is a defect to surface.
+                raise ValueError(message)
             
         # Collect variables setups for ILP constraints
         sVar = self._collectVariableSetups(lcVariableName0, lcVariableNames[1:], v)

@@ -321,7 +321,11 @@ class lcLossBooleanMethods(constraintsProcessor):
             # Goguen: 1 if a <= b else b / a (so 0 -> 0 holds).
             # use torch.where in the denom rather than after the divide
             # see: https://github.com/pytorch/pytorch/issues/36923
-            safe_ratio = var2 / torch.where(var1 != 0, var1, 1e-4)
+            # The ratio is only selected when var1 > var2; elsewhere use a
+            # unit denominator so a tiny satisfied antecedent (1e-30) does not
+            # produce an overflowing (inf * 0 = NaN) gradient in the unused branch.
+            violated = (var1 > var2) & (var1 != 0)
+            safe_ratio = var2 / torch.where(violated, var1, torch.ones_like(var1))
             ifSuccess  = torch.where(var1 <= var2,
                                      torch.ones_like(safe_ratio),
                                      safe_ratio)
@@ -1208,7 +1212,27 @@ class lcLossBooleanMethods(constraintsProcessor):
             return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(),
                             requires_grad=True) / num_subclasses
 
-        # Build a [num_entities, num_subclasses] matrix from subclass_data
+        # Build a [num_entities, num_subclasses] matrix from subclass_data.
+        # Batched loss layout: ONE row whose entries are per-entity vectors, one
+        # vector per subclass.  Reading a single value from each (the per-row
+        # path below) would keep only the first entity and truncate the
+        # selection weights to it.
+        batched_row = subclass_data[0] if len(subclass_data) == 1 else None
+        batched_cols = (
+            [v for v in batched_row[:num_subclasses]]
+            if batched_row is not None and len(batched_row) > 0 else []
+        )
+        batched = (
+            len(batched_cols) > 0
+            and all(torch.is_tensor(v) and v.dim() == 1 and v.numel() > 1 for v in batched_cols)
+            and len({v.numel() for v in batched_cols}) == 1
+        )
+        if batched:
+            columns = [v.to(self.current_device, self._get_dtype()) for v in batched_cols]
+            columns.extend([torch.zeros_like(columns[0])] * (num_subclasses - len(columns)))
+            c_matrix = torch.stack(columns, dim=1)  # [num_entities, num_subclasses]
+            subclass_data = ()  # consumed: skip the per-row construction below
+
         sub_rows = []
         for row in subclass_data:
             if row is None:
@@ -1225,7 +1249,8 @@ class lcLossBooleanMethods(constraintsProcessor):
             if len(vals) < num_subclasses:
                 vals.extend([torch.zeros(1, device=self.current_device, dtype=self._get_dtype())] * (num_subclasses - len(vals)))
             sub_rows.append(torch.cat(vals))
-        c_matrix = torch.stack(sub_rows)  # [num_entities, num_subclasses]
+        if not batched:
+            c_matrix = torch.stack(sub_rows)  # [num_entities, num_subclasses]
 
         # Align selection weights with subclass data rows
         sel_weights = t

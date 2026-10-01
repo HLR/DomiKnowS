@@ -367,7 +367,7 @@ class TensorizedCandidateResolver:
     def _follow_once(self, nodes, group_ids, relation_name):
         """Follow one relation using a padded tensor gather."""
         if not nodes:
-            return [], [], []
+            return [], []
 
         key = (relation_name, tuple(id(node) for node in nodes))
         cached = self._adjacency.get(key)
