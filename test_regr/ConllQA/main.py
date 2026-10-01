@@ -205,12 +205,6 @@ def program_declaration(train, args, device='auto'):
         debug_tensor("merge_phrase ones", ones)
         return [' '.join(phrase_text)], ones
     
-    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(
-        phrase['text'], word['offset'],
-        relation=rel_phrase_contains_word.reversed,
-        forward=match_phrase
-    )
-
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
     # Create Tokenizer with device parameter
@@ -240,6 +234,13 @@ def program_declaration(train, args, device='auto'):
         result = torch.tensor(ph_word_overlap, device=device)
         debug_tensor("match_phrase output", result)
         return result
+
+    # Needs word['offset'] (the word JointSensor above) and match_phrase.
+    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(
+        phrase['text'], word['offset'],
+        relation=rel_phrase_contains_word.reversed,
+        forward=match_phrase
+    )
 
     def phrase_bert(bert):
         debug_tensor("phrase_bert input", bert)
