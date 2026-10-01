@@ -177,6 +177,14 @@ def debug_tensor(name, tensor):
         logging.debug(f"[DTYPE DEBUG] {name}: type={type(tensor)}")
     return tensor
 
+def resolve_device(name):
+    """'auto' picks CUDA when this torch build has it and the CPU otherwise;
+    any explicit device name is used as given."""
+    if name == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return name
+
+
 def program_declaration(train, args, device='auto'):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
@@ -334,7 +342,7 @@ def parse_arguments():
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--data_path", type=str, default=None, help="Path to data file (can be relative or absolute). Default: the shipped data file that contains --train_portion")
-    parser.add_argument("--device", type=str, default="cuda", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+    parser.add_argument("--device", type=str, default="auto", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto': CUDA if available, else CPU)")
     args = parser.parse_args()
 
     return args
@@ -352,7 +360,8 @@ def main(args):
     if args.train_size != -1:
         train = train[:args.train_size]
 
-    program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
+    device = resolve_device(args.device)
+    program, dataset = program_declaration(train if not args.evaluate else test, args, device=device)
 
     suffix = "_curriculum_learning" if args.load_previous else ""
     if not args.evaluate:
@@ -365,7 +374,7 @@ def main(args):
         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
-    train_acc = program.evaluate_condition(dataset, threshold=0.5, device=args.device)
+    train_acc = program.evaluate_condition(dataset, threshold=0.5, device=device)
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)
