@@ -382,6 +382,7 @@ def main(args):
     print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)
     print("#" * 40, file=output_f)
+    output_f.close()  # flush before a failed accuracy check raises
 
     if args.checked_acc:
         print(f"<acc>{train_acc}</acc>")
