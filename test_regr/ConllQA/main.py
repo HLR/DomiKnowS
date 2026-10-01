@@ -1,3 +1,4 @@
+import os
 import sys
 import torch
 from pathlib import Path
@@ -28,7 +29,9 @@ nlp = spacy.load('en_core_web_sm')  # English()
 
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+# The per-tensor dtype/shape trace (debug_tensor) logs on every training step
+# and flooded pytest's log capture; it is opt-in: CONLLQA_LOG_LEVEL=DEBUG.
+logging.basicConfig(level=os.environ.get("CONLLQA_LOG_LEVEL", "WARNING").upper())
 
 from transformers import BertTokenizerFast, BertModel
 
