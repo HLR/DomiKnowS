@@ -20,6 +20,7 @@ from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from reader import conll4_reader
 import numpy as np
 
+import json
 import spacy
 
 # from spacy.lang.en import English
@@ -36,8 +37,25 @@ TRANSFORMER_MODEL = 'bert-base-uncased'
 FEATURE_DIM = 768 + 96
 
 
+# Data files that ship beside this script.  Each holds a different set of
+# portions (conllQA.json: the *_YN / *_Counting families, conllQA2.json:
+# entities_with_relation), so without an explicit --data_path the file is chosen
+# by the portion that is asked for.
+DEFAULT_DATA_FILES = ("conllQA.json", "conllQA2.json")
+
+
+def portion_names(path):
+    """Names of the portions stored in a data file."""
+    with open(path, encoding="utf-8") as handle:
+        return set(json.load(handle))
+
+
 def find_data_file(filename, train_portion=None):
-    """Find data file by checking multiple possible locations"""
+    """Find data file by checking multiple possible locations.
+
+    ``filename`` may be None: the first default data file that contains
+    ``train_portion`` is used.
+    """
     current_dir = Path(__file__).parent
 
     # First, check if extracted portion file exists
@@ -54,6 +72,16 @@ def find_data_file(filename, train_portion=None):
             if path.exists():
                 print(f"Using extracted data file: {path}")
                 return str(path)
+
+    if filename is None:
+        for candidate in DEFAULT_DATA_FILES:
+            try:
+                path = find_data_file(candidate)
+            except FileNotFoundError:
+                continue
+            if train_portion is None or train_portion in portion_names(path):
+                return path
+        filename = DEFAULT_DATA_FILES[0]
 
     # List of possible locations to check for main file
     possible_paths = [
@@ -304,7 +332,7 @@ def parse_arguments():
     parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
-    parser.add_argument("--data_path", type=str, default="C:\\Users\\auszok\\git\\RelationalGraph\\test_regr\\ConllQA\\conllQA2.json", help="Path to data file (can be relative or absolute)")
+    parser.add_argument("--data_path", type=str, default=None, help="Path to data file (can be relative or absolute). Default: the shipped data file that contains --train_portion")
     parser.add_argument("--device", type=str, default="cuda", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
     args = parser.parse_args()
 
