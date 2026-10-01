@@ -38,6 +38,12 @@ In order, on top of `cf3bd575`:
 | `5ceb875e` | D05: an operand with no groundings skips the constraint instead of raising |
 | `61b4a485` | `_follow_once` returned three values for an empty node list |
 | `4a899b97` | `dummy_datanode` tests load their graphs by file path |
+| `19f7da50` | ConllQA: default data file chosen by the requested portion |
+| `e754b004` | ConllQA: edge sensor declared after `word['offset']` and `match_phrase` |
+| `7620db78` | ConllQA: `--device auto` |
+| `fc995655` | ConllQA: per-tensor debug trace opt-in |
+| `410990a6` | ConllQA: `result.txt` closed before the accuracy assertion |
+| `8086c976` | ConllQA tests: one process per test |
 
 Intermediate commits are not all green. D01's native test needs the miota
 commit after it, and the D10 IIS test needs the D10 commit. The suite passes
@@ -306,13 +312,52 @@ and the `fixes` files for queryL, clevr, global rule grounding, LC error
 reporting, the stress tests and `existsL` scope (437 passed, 8 skipped, 0
 failed). The full `fixes` directory was not repeated.
 
-Not covered: the other `test_regr` directories (`Clever`, `ConllQA`,
+Not covered: the other `test_regr` directories (`Clever`,
 `EmbodiedAgentInterface`, `GraphQA`, `InferenceAPI`, `JointEmbodiedAgentInterface`,
 `Reinforcement`, `TemporalRelation`, `VLABenchAgentInterface`, `examples`,
 `generation`, `namedTree`, `sensor`, `tiny_dynamic_graph`, `vizual`, plus
 `test_common_backbone.py`) were not run, and whether they need data, models or
 a GPU was not checked. The intermediate commits were also not run in full; see
 "Commits" for what was checked there.
+
+## `test_regr/ConllQA`
+
+Not part of the original ILP issues; run because it exercises the loss path
+that several fixes above touch. It could not run at all at the start of this
+work (9 of 9 failed), for reasons unrelated to the library.
+
+| Problem | Cause | Fix |
+|---|---|---|
+| `OSError: Can't find model 'en_core_web_sm'` | The spaCy model the README asks for was not installed. | Installed `en_core_web_sm` 3.8.0 into `.venv` (environment, not repo). |
+| `ImportError: cannot import name 'BertModel'` | The venv had `torch 2.10.0+cpu` next to `torchvision 0.25.0+cu128`; that CUDA build cannot load against CPU torch, and `transformers` imports it. | Uninstalled `torchvision` from `.venv` (environment, not repo). Reinstall `torchvision 0.25.0+cpu` if vision code is needed. |
+| `FileNotFoundError` for the data file | `--data_path` defaulted to a hardcoded absolute path to a directory that does not exist, pointing at `conllQA2.json`, which holds only `entities_with_relation`; the tests need portions from `conllQA.json`. | Default `None`; use the shipped file that contains the requested portion (`19f7da50`). |
+| `KeyError: 'offset'` | The `phrase` EdgeSensor was declared before the word `JointSensor` that defines `'offset'` and before `match_phrase`. | Declared after both, as in `main_og.py` (`e754b004`). |
+| `Torch not compiled with CUDA enabled` | `--device` defaulted to a hard `cuda`. | Default `auto`: CUDA if available, else CPU (`7620db78`). |
+| One test stalled for over an hour | `logging.basicConfig(level=DEBUG)` at import logged every tensor on every step; pytest captured megabytes. | Default `WARNING`; `CONLLQA_LOG_LEVEL=DEBUG` re-enables it (`fc995655`). |
+| Results lost on a failed accuracy check | `result.txt` was never closed. | Closed before the assertion (`410990a6`). |
+| Accuracy 0.0 for every test after the first, and `test_general_run` failing | Each test builds its own model and DomiKnowS sensor assignments stack within one process, so later in-process tests see stale sensors. Run in its own process the same test scores normally. | Run each case in its own process by default, with `sys.executable` (`8086c976`). `USE_SUBPROCESS=false` keeps the in-process mode for debugging. |
+
+Evidence for the isolation diagnosis: Godel zero-counting gave 97% as the first
+test in a process and 0.0 for Lukasiewicz and product after it;
+`over_counting_lukas` run in its own process gave 99.02%; `entities_with_relation`
+run standalone gave 93.33% (60 samples), 100% (60 samples, 2 epochs), 93.75%
+(400 samples), 99.35% (all 922, 1 epoch) and 99.13% (all 922, 5 epochs, the exact
+`test_general_run` configuration).
+
+What was verified:
+
+- One full in-process run: 8 of 9 passed. Those tests only assert exit code 0,
+  and after the first test the accuracies in that run are the polluted 0.0 values,
+  so it shows the pipeline runs, not that the models learn.
+- In subprocess mode, the default now: `over_counting_lukas` (99.02%) and
+  `test_general_run` (passed, 36 min 40 s; 99.13% when run standalone).
+- Not repeated: the whole file in subprocess mode (about 4 hours on CPU).
+
+The failing `test_general_run` in the earlier subprocess-mode attempt was in fact
+executing in-process (its traceback goes through `result = main(args)`); why
+`USE_SUBPROCESS` was not `true` in that run was not found. It resolves to `true`
+now. On the baseline library the short `entities_with_relation` run scores 0.0
+and at HEAD 93.33%, so these library changes help this case.
 
 ## Remaining and open
 
