@@ -372,8 +372,12 @@ def test_multiple_active_constraints_evaluate_joint_cartesian_product(
     constraint_child = _add_constraint_child(root, 'ELC0', 'ELC1')
 
     answer_solver = AnswerSolver(graph)
-    real_calculate = answer_solver.solver._calculateILPSelection
     calls = []
+
+    # Count the hypotheses that get solved, whichever way the search does it:
+    # one fresh model per hypothesis (_calculateILPSelection) or one shared
+    # model with the hypothesis part added and removed (_iterHypothesisSelections).
+    real_calculate = answer_solver.solver._calculateILPSelection
 
     def counted_calculate(*args, **kwargs):
         calls.append(tuple(kwargs['extraLogicalConstraints']))
@@ -383,6 +387,21 @@ def test_multiple_active_constraints_evaluate_joint_cartesian_product(
         answer_solver.solver,
         '_calculateILPSelection',
         counted_calculate,
+    )
+
+    real_iter = answer_solver.solver._iterHypothesisSelections
+
+    def counted_iter(*args, hypotheses, **kwargs):
+        def recording():
+            for hypothesis in hypotheses:
+                calls.append(tuple(hypothesis))
+                yield hypothesis
+        return real_iter(*args, hypotheses=recording(), **kwargs)
+
+    monkeypatch.setattr(
+        answer_solver.solver,
+        '_iterHypothesisSelections',
+        counted_iter,
     )
 
     result = answer_solver.solve_active_constraints(

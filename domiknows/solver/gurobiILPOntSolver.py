@@ -148,8 +148,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         # If softmax process probability through function and apply epsilon
         if "softmax" in key and value is not None and not torch.isnan(value[0]).item() and epsilon is not None:
-            value[0] = max(epsilon, min(1-epsilon, value[0]))
-            value[1] = max(epsilon, min(1-epsilon, value[1]))
+            # In place on purpose (value can be a view of the stored softmax):
+            # clamp to [epsilon, 1-epsilon], and a NaN in the second entry
+            # becomes 1-epsilon, as the scalar max/min expressions did.  Vector
+            # ops are about 4x faster than eight scalar tensor operations.
+            value.nan_to_num_(nan=1-epsilon, posinf=float('inf'), neginf=float('-inf'))
+            value.clamp_(epsilon, 1-epsilon)
                     
             # Apply fun on probabilities if defined
             if fun is not None:
@@ -280,14 +284,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if self.conceptIsBinary(currentConceptRelation):
                         x[self.getConcept(currentConceptRelation), 'Not_' + currentLabel, dn.getInstanceID(), currentLabelIndex] = xNotNew
 
-                    # Add variable to objective
+                    # Add variable to objective.  Plain floats: multiplying a
+                    # torch scalar by a Gurobi variable goes through torch and is
+                    # about 10x slower per term, with the same coefficient.
                     if Q is None:
-                        Q = currentProbability[1].detach() * xNew
+                        Q = float(currentProbability[1].detach()) * xNew
                     else:
-                        Q += currentProbability[1].detach() * xNew       
+                        Q += float(currentProbability[1].detach()) * xNew
                             
                     if self.conceptIsBinary(currentConceptRelation): 
-                        Q += currentProbability[0].detach() * xNotNew    
+                        Q += float(currentProbability[0].detach()) * xNotNew
                 
             if self.conceptIsMultiClass(currentConceptRelation):
                 self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%(currentLabel))
@@ -802,7 +808,50 @@ class gurobiILPOntSolver(ilpOntSolver):
             compiled=compiled,
         )
 
-    def _calculateILPSelection(
+    def _collectHeadLogicalConstraints(self, dn, extraLogicalConstraints, ignorePinLCs):
+        """Active head logical constraints grouped by priority p (highest first).
+
+        ``extraLogicalConstraints`` join the default priority 100.  Returns
+        ``(lcP, pUsed)``; ``pUsed`` is true when some constraint has a priority
+        other than the default, which makes the run solve one model copy per p.
+        """
+        dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
+        _lcP = {}
+        _lcP[100] = list(extraLogicalConstraints)
+        pUsed = False
+        for graph in self.myGraph:
+            for _, lc in graph.logicalConstrains.items():
+                if lc.headLC and lc.active: # Process only active and head lcs
+                    if not ignorePinLCs:
+                        lcP = lc.p
+                    else:
+                        lcP = 100
+
+                    if lcP not in _lcP:
+                        _lcP[lcP] = []
+                        pUsed = True # Found p different then default 100
+
+                    _lcP[lcP].append(lc) # Keep constraint with the same p in the list
+
+        # Sort constraints according to their p
+        lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
+        for p in lcP:
+            self.myLogger.info('Found %i active logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
+            self.myLoggerTime.info('Starting ILP interference - Found %i active logical constraints'%(len(lcP[p])))
+
+        return lcP, pUsed
+
+    def _calculateILPSelection(self, *args, **kwargs):
+        """Run one ILP selection (see ``_calculateILPSelectionImpl``).
+
+        The build asks the datanode graph for the same few concepts dozens of
+        times; memoize those queries for the duration of the solve.
+        """
+        from domiknows.graph.dataNode import DataNode
+        with DataNode.findDatanodesCache():
+            return self._calculateILPSelectionImpl(*args, **kwargs)
+
+    def _calculateILPSelectionImpl(
         self,
         dn,
         *conceptsRelations,
@@ -914,29 +963,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             
             # Collect head logical constraints
-            dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
-            _lcP = {}
-            _lcP[100] = list(extraLogicalConstraints)
-            pUsed = False
-            for graph in self.myGraph:
-                for _, lc in graph.logicalConstrains.items():
-                    if lc.headLC and lc.active: # Process only active and head lcs
-                        if not ignorePinLCs:
-                            lcP = lc.p
-                        else:
-                            lcP = 100   
-                                            
-                        if lcP not in _lcP:
-                            _lcP[lcP] = []
-                            pUsed = True # Found p different then default 100
-                        
-                        _lcP[lcP].append(lc) # Keep constraint with the same p in the list 
-            
-            # Sort constraints according to their p
-            lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
-            for p in lcP:
-                self.myLogger.info('Found %i active logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
-                self.myLoggerTime.info('Starting ILP interference - Found %i active logical constraints'%(len(lcP[p])))
+            lcP, pUsed = self._collectHeadLogicalConstraints(dn, extraLogicalConstraints, ignorePinLCs)
 
             # Search through set of logical constraints for subset satisfying and the max/min calculated objective value
             lcRun = {} # Keeps information about subsequent model runs
@@ -1043,6 +1070,122 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # ----------- Return
         return selectionResult
+
+    def _hypothesisBatchSupported(self, dn, ignorePinLCs=False):
+        """Whether ``_iterHypothesisSelections`` can share one model.
+
+        It can unless some active constraint carries its own priority p: then
+        every p is solved on its own model copy and each hypothesis needs a
+        fresh build.
+        """
+        if self.ilpSolver == None:
+            return False
+        _, pUsed = self._collectHeadLogicalConstraints(dn, (), ignorePinLCs)
+        return not pUsed
+
+    def _iterHypothesisSelections(
+        self,
+        dn,
+        *conceptsRelations,
+        hypotheses,
+        key=("local", "softmax"),
+        fun=None,
+        epsilon=0.00001,
+        minimizeObjective=False,
+        ignorePinLCs=False,
+        compiled=True,
+    ):
+        """Solve the same ILP once per hypothesis, building the shared part once.
+
+        Hypotheses differ only in the extra hard constraints they add.  The
+        variables, objective, ontology/graph constraints and the graph's own
+        head constraints are built a single time; each hypothesis adds its
+        constraints, is solved, and is then removed again (its constraints, the
+        auxiliary variables and the general constraints it created), so the next
+        one starts from exactly the shared model.
+
+        ``hypotheses`` is an iterable of sequences of logical constraints; it is
+        consumed lazily.  Yields one outcome per hypothesis, in order: a detached
+        ``{'objective', 'values', 'priority'}`` dictionary (like
+        ``_calculateILPSelection(populate=False)``), ``None`` when the model is
+        infeasible, or the exception raised while building that hypothesis.
+        Check ``_hypothesisBatchSupported`` first.  Always exhaust or close the
+        generator: it holds the DataNode query cache open while suspended.
+        """
+        from domiknows.graph.dataNode import DataNode
+
+        self.current_device = dn.current_device
+        start = perf_counter()
+        gurobiEnv = Env("", empty=True)
+        gurobiEnv.setParam('OutputFlag', 0)
+        gurobiEnv.start()
+
+        with DataNode.findDatanodesCache():
+            m = Model("hypothesisClassificationResult" + str(start), gurobiEnv)
+            m.params.outputflag = 0
+            x = OrderedDict()
+
+            Q = self.createILPVariables(m, x, dn, *conceptsRelations, key=key, fun=fun, epsilon=epsilon)
+            self.addOntologyConstrains(m, dn, *conceptsRelations)
+            self.addGraphConstrains(m, dn, *conceptsRelations)
+            self.addMulticlassExclusivity(conceptsRelations, dn, m)
+
+            if Q is None:
+                Q = 0
+                self.myLogger.error("No data provided to create any ILP variable - not ILP result returned")
+                self.myLoggerTime.error("No data provided to create any ILP variable - not ILP result returned")
+            m.setObjective(Q, GRB.MINIMIZE if minimizeObjective else GRB.MAXIMIZE)
+            m.update()
+
+            lcP, pUsed = self._collectHeadLogicalConstraints(dn, (), ignorePinLCs)
+            if pUsed:
+                raise RuntimeError("_iterHypothesisSelections needs all constraints at the default priority")
+            sharedLCs = lcP.get(100, [])
+            if sharedLCs:
+                self.addLogicalConstrains(m, dn, sharedLCs, 100, key="/ILP/x", compiled=compiled)
+            m.update()
+
+            baseVars, baseConstrs, baseGenConstrs = m.NumVars, m.NumConstrs, m.NumGenConstrs
+            self.myLoggerTime.info('ILP shared model for hypotheses - %i variables, %i constraints - time: %ims'
+                                   % (baseVars, baseConstrs, (perf_counter() - start) * 1000))
+
+            for hypothesisLCs in hypotheses:
+                outcome = None
+                try:
+                    self.addLogicalConstrains(m, dn, list(hypothesisLCs), 100, key="/ILP/x", compiled=compiled)
+                    m.update()
+                    m.reset()  # no warm start: every hypothesis is solved from scratch
+                    m.optimize()
+                    m.update()
+                    if m.status == GRB.Status.OPTIMAL:
+                        outcome = {
+                            'objective': m.ObjVal,
+                            'values': self._snapshotILPVariables(x),
+                            'priority': 100,
+                        }
+                    else:
+                        self.myLogger.info('Hypothesis model not solved to optimality - status %i' % m.status)
+                except Exception as error:
+                    outcome = error
+                finally:
+                    # Undo this hypothesis completely, also after an error.
+                    m.update()
+                    extraGenConstrs = m.getGenConstrs()[baseGenConstrs:]
+                    extraConstrs = m.getConstrs()[baseConstrs:]
+                    extraVars = m.getVars()[baseVars:]
+                    if extraGenConstrs:
+                        m.remove(extraGenConstrs)
+                    if extraConstrs:
+                        m.remove(extraConstrs)
+                    if extraVars:
+                        m.remove(extraVars)
+                    m.update()
+                    if (m.NumVars, m.NumConstrs, m.NumGenConstrs) != (baseVars, baseConstrs, baseGenConstrs):
+                        raise RuntimeError(
+                            "Hypothesis model was not restored to the shared model: "
+                            "%s != %s" % ((m.NumVars, m.NumConstrs, m.NumGenConstrs),
+                                          (baseVars, baseConstrs, baseGenConstrs)))
+                yield outcome
 
     @staticmethod
     def _snapshotILPVariables(variables):

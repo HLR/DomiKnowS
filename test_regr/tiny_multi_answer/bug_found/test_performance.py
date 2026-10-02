@@ -1,6 +1,7 @@
 """Bounded performance probes; timings are evidence, not universal thresholds."""
 import gc
 import importlib
+import inspect
 import itertools
 import logging
 import os
@@ -8,6 +9,7 @@ import time
 from collections import OrderedDict
 from types import SimpleNamespace
 import pytest
+import torch
 from gurobipy import GRB
 from domiknows.graph import Graph, Concept
 from domiknows.graph.dataNode import DataNode
@@ -227,3 +229,83 @@ def test_D10_iis_per_call_override(flag,per_call,expected,tmp_path,monkeypatch):
     finally:
         setComputeIIS(True)
     assert calls.count('IIS')==expected
+
+
+# --- D10 performance: ILP build ------------------------------------------------
+
+def _scalar_epsilon_reference(stored, epsilon):
+    """The previous getProbability clamp: scalar max/min on a view of `stored`."""
+    value = stored.squeeze(0)
+    if not torch.isnan(value[0]).item() and epsilon is not None:
+        value[0] = max(epsilon, min(1 - epsilon, value[0]))
+        value[1] = max(epsilon, min(1 - epsilon, value[1]))
+    return value
+
+
+SPECIAL_PROBABILITIES = [0.0, 1.0, 0.5, 1e-9, 1 - 1e-9, 1e-5, 1 - 1e-5, 0.99999,
+                         float('nan'), float('inf'), -float('inf'), -0.3, 1.7]
+
+
+def test_D10_probability_clamp_matches_the_scalar_reference_including_side_effect():
+    """The vector clamp must return the same values, NaN handling included, and
+    clamp the stored softmax in place exactly as the scalar code did."""
+    module = importlib.import_module('domiknows.solver.gurobiILPOntSolver')
+    solver = object.__new__(module.gurobiILPOntSolver)
+    solver.constraintConstructor = SimpleNamespace(conceptIsMultiClass=lambda concept: False)
+    concept = ('flag', 'flag', 0, 1)
+    for first, second in itertools.product(SPECIAL_PROBABILITIES, repeat=2):
+        stored_new = torch.tensor([[first, second]], dtype=torch.float32)
+        stored_old = stored_new.clone()
+        got = solver.getProbability(SimpleNamespace(getAttribute=lambda *a: stored_new), concept,
+                                    key=('local', 'softmax'), fun=None, epsilon=1e-5)
+        want = _scalar_epsilon_reference(stored_old, 1e-5)
+        nan_to_marker = lambda t: torch.nan_to_num(t, nan=-7.0)
+        assert torch.equal(nan_to_marker(got), nan_to_marker(want)), (first, second, got, want)
+        assert torch.equal(nan_to_marker(stored_new), nan_to_marker(stored_old)),             f'stored tensor differs for {(first, second)}: {stored_new} vs {stored_old}'
+
+
+def test_D10_logical_constraint_signature_is_inspected_once_per_call(monkeypatch):
+    """createLogicalConstrains used to run inspect.signature for every grounded row."""
+    calls = []
+    real = inspect.signature
+    monkeypatch.setattr(inspect, 'signature', lambda fn, *a, **k: calls.append(fn) or real(fn, *a, **k))
+    lc = object.__new__(LogicalConstrain)
+    def builder(model, *args, onlyConstrains=False):
+        return 1
+    rows = 500
+    lc.createLogicalConstrains('AND', builder, object(),
+        OrderedDict(a=[[i] for i in range(rows)], b=[[i] for i in range(rows)]), True)
+    assert len(calls) == 1, f'inspect.signature called {len(calls)} times for {rows} rows'
+
+
+def test_D10_find_datanodes_cache_scope_semantics():
+    root, item, pair = pair_graph(6)
+    outside = root.findDatanodes(select=item)
+    with DataNode.findDatanodesCache():
+        first = root.findDatanodes(select=item)
+        second = root.findDatanodes(select=item)
+        assert [d.id for d in first] == [d.id for d in outside]
+        assert first is not second, 'every caller gets its own list'
+        second.clear()
+        assert [d.id for d in root.findDatanodes(select=item)] == [d.id for d in outside],             'mutating a returned list must not corrupt the cache'
+        # queries the cache does not cover are answered normally
+        assert len(root.findDatanodes(select=pair)) == 36
+        # a link change inside the scope invalidates it
+        extra = DataNode(instanceID=999, ontologyNode=item)
+        root.addChildDataNode(extra)
+        assert 999 in [d.getInstanceID() for d in root.findDatanodes(select=item)]
+    assert DataNode._findCache is None, 'the cache must be gone after the scope'
+    assert 999 in [d.getInstanceID() for d in root.findDatanodes(select=item)]
+
+
+def test_D10_find_datanodes_cache_is_not_stale_across_scopes():
+    root, item, pair = pair_graph(4)
+    with DataNode.findDatanodesCache():
+        assert len(root.findDatanodes(select=item)) == 4
+    root.addChildDataNode(DataNode(instanceID=500, ontologyNode=item))
+    with DataNode.findDatanodesCache():
+        assert len(root.findDatanodes(select=item)) == 5
+        with DataNode.findDatanodesCache():          # nested scopes share the outer cache
+            assert len(root.findDatanodes(select=item)) == 5
+        assert DataNode._findCache is not None, 'inner scope must not drop the outer cache'
+    assert DataNode._findCache is None
