@@ -1071,6 +1071,122 @@ class gurobiILPOntSolver(ilpOntSolver):
         # ----------- Return
         return selectionResult
 
+    def _hypothesisBatchSupported(self, dn, ignorePinLCs=False):
+        """Whether ``_iterHypothesisSelections`` can share one model.
+
+        It can unless some active constraint carries its own priority p: then
+        every p is solved on its own model copy and each hypothesis needs a
+        fresh build.
+        """
+        if self.ilpSolver == None:
+            return False
+        _, pUsed = self._collectHeadLogicalConstraints(dn, (), ignorePinLCs)
+        return not pUsed
+
+    def _iterHypothesisSelections(
+        self,
+        dn,
+        *conceptsRelations,
+        hypotheses,
+        key=("local", "softmax"),
+        fun=None,
+        epsilon=0.00001,
+        minimizeObjective=False,
+        ignorePinLCs=False,
+        compiled=True,
+    ):
+        """Solve the same ILP once per hypothesis, building the shared part once.
+
+        Hypotheses differ only in the extra hard constraints they add.  The
+        variables, objective, ontology/graph constraints and the graph's own
+        head constraints are built a single time; each hypothesis adds its
+        constraints, is solved, and is then removed again (its constraints, the
+        auxiliary variables and the general constraints it created), so the next
+        one starts from exactly the shared model.
+
+        ``hypotheses`` is an iterable of sequences of logical constraints; it is
+        consumed lazily.  Yields one outcome per hypothesis, in order: a detached
+        ``{'objective', 'values', 'priority'}`` dictionary (like
+        ``_calculateILPSelection(populate=False)``), ``None`` when the model is
+        infeasible, or the exception raised while building that hypothesis.
+        Check ``_hypothesisBatchSupported`` first.  Always exhaust or close the
+        generator: it holds the DataNode query cache open while suspended.
+        """
+        from domiknows.graph.dataNode import DataNode
+
+        self.current_device = dn.current_device
+        start = perf_counter()
+        gurobiEnv = Env("", empty=True)
+        gurobiEnv.setParam('OutputFlag', 0)
+        gurobiEnv.start()
+
+        with DataNode.findDatanodesCache():
+            m = Model("hypothesisClassificationResult" + str(start), gurobiEnv)
+            m.params.outputflag = 0
+            x = OrderedDict()
+
+            Q = self.createILPVariables(m, x, dn, *conceptsRelations, key=key, fun=fun, epsilon=epsilon)
+            self.addOntologyConstrains(m, dn, *conceptsRelations)
+            self.addGraphConstrains(m, dn, *conceptsRelations)
+            self.addMulticlassExclusivity(conceptsRelations, dn, m)
+
+            if Q is None:
+                Q = 0
+                self.myLogger.error("No data provided to create any ILP variable - not ILP result returned")
+                self.myLoggerTime.error("No data provided to create any ILP variable - not ILP result returned")
+            m.setObjective(Q, GRB.MINIMIZE if minimizeObjective else GRB.MAXIMIZE)
+            m.update()
+
+            lcP, pUsed = self._collectHeadLogicalConstraints(dn, (), ignorePinLCs)
+            if pUsed:
+                raise RuntimeError("_iterHypothesisSelections needs all constraints at the default priority")
+            sharedLCs = lcP.get(100, [])
+            if sharedLCs:
+                self.addLogicalConstrains(m, dn, sharedLCs, 100, key="/ILP/x", compiled=compiled)
+            m.update()
+
+            baseVars, baseConstrs, baseGenConstrs = m.NumVars, m.NumConstrs, m.NumGenConstrs
+            self.myLoggerTime.info('ILP shared model for hypotheses - %i variables, %i constraints - time: %ims'
+                                   % (baseVars, baseConstrs, (perf_counter() - start) * 1000))
+
+            for hypothesisLCs in hypotheses:
+                outcome = None
+                try:
+                    self.addLogicalConstrains(m, dn, list(hypothesisLCs), 100, key="/ILP/x", compiled=compiled)
+                    m.update()
+                    m.reset()  # no warm start: every hypothesis is solved from scratch
+                    m.optimize()
+                    m.update()
+                    if m.status == GRB.Status.OPTIMAL:
+                        outcome = {
+                            'objective': m.ObjVal,
+                            'values': self._snapshotILPVariables(x),
+                            'priority': 100,
+                        }
+                    else:
+                        self.myLogger.info('Hypothesis model not solved to optimality - status %i' % m.status)
+                except Exception as error:
+                    outcome = error
+                finally:
+                    # Undo this hypothesis completely, also after an error.
+                    m.update()
+                    extraGenConstrs = m.getGenConstrs()[baseGenConstrs:]
+                    extraConstrs = m.getConstrs()[baseConstrs:]
+                    extraVars = m.getVars()[baseVars:]
+                    if extraGenConstrs:
+                        m.remove(extraGenConstrs)
+                    if extraConstrs:
+                        m.remove(extraConstrs)
+                    if extraVars:
+                        m.remove(extraVars)
+                    m.update()
+                    if (m.NumVars, m.NumConstrs, m.NumGenConstrs) != (baseVars, baseConstrs, baseGenConstrs):
+                        raise RuntimeError(
+                            "Hypothesis model was not restored to the shared model: "
+                            "%s != %s" % ((m.NumVars, m.NumConstrs, m.NumGenConstrs),
+                                          (baseVars, baseConstrs, baseGenConstrs)))
+                yield outcome
+
     @staticmethod
     def _snapshotILPVariables(variables):
         """Detach a solved Gurobi variable mapping into plain numeric values."""

@@ -652,74 +652,123 @@ class AnswerSolver:
             self._log_probability_objective if fun is None else fun
         )
 
+        def consider(hypothesis_values, candidate):
+            """Keep ``candidate`` if it beats the best hypothesis so far."""
+            nonlocal best_result, best_hypotheses
+            if candidate is None:
+                return
+
+            if best_result is None:
+                is_better = True
+            elif minimize_objective:
+                is_better = (
+                    candidate['objective'] < best_result['objective']
+                )
+            else:
+                is_better = (
+                    candidate['objective'] > best_result['objective']
+                )
+
+            # Strict comparison intentionally preserves the first
+            # graph/hypothesis-order candidate on exact objective ties.
+            if is_better:
+                best_result = {
+                    'objective': candidate['objective'],
+                    'values': dict(candidate['values']),
+                }
+                best_hypotheses = OrderedDict(
+                    (name, value)
+                    for (name, _values, _builder), value in zip(
+                        specs, hypothesis_values
+                    )
+                )
+
+        def build_hypothesis_lcs(hypothesis_values):
+            return [
+                builder(value)
+                for (_, _, builder), value in zip(specs, hypothesis_values)
+            ]
+
+        def handle_error(hypothesis_values, error):
+            if self._is_infeasible_error(error):
+                logger.debug(
+                    "Joint hypothesis %r is structurally infeasible: %s",
+                    hypothesis_values,
+                    error,
+                )
+                return
+            raise error
+
         try:
-            for hypothesis_values in product(
+            hypothesis_combinations = product(
                 *(values for _, values, _ in specs)
-            ):
+            )
+
+            # The hypotheses share every variable and constraint except their
+            # own hard constraints, so build that shared model once and only add,
+            # solve and remove the hypothesis part for each of them.  Solvers
+            # without it (and runs with per-constraint priorities) rebuild the
+            # whole model per hypothesis below.
+            batch_supported = getattr(
+                self.solver, '_hypothesisBatchSupported', None
+            )
+            if batch_supported is not None and batch_supported(dn, ignore_pin_lcs):
                 self._clear_ilp_cache(dn)
-                hypothesis_lcs = [
-                    builder(value)
-                    for (_, _, builder), value in zip(
-                        specs,
-                        hypothesis_values,
-                    )
-                ]
+                combinations = []
 
+                def hypotheses():
+                    for hypothesis_values in hypothesis_combinations:
+                        combinations.append(hypothesis_values)
+                        yield build_hypothesis_lcs(hypothesis_values)
+
+                outcomes = self.solver._iterHypothesisSelections(
+                    dn,
+                    *concepts_relations,
+                    hypotheses=hypotheses(),
+                    key=key,
+                    fun=objective_fun,
+                    epsilon=epsilon,
+                    minimizeObjective=minimize_objective,
+                    ignorePinLCs=ignore_pin_lcs,
+                    compiled=self.compiled,
+                )
                 try:
-                    candidate = self.solver._calculateILPSelection(
-                        dn,
-                        *concepts_relations,
-                        key=key,
-                        fun=objective_fun,
-                        epsilon=epsilon,
-                        minimizeObjective=minimize_objective,
-                        ignorePinLCs=ignore_pin_lcs,
-                        extraLogicalConstraints=hypothesis_lcs,
-                        populate=False,
-                        forceFreshModel=True,
-                        raiseOnInfeasible=False,
-                        compiled=self.compiled,
-                        # An infeasible hypothesis is an expected outcome of
-                        # the search, not a fault to diagnose.
-                        computeIIS=False,
-                    )
-                except Exception as error:
-                    if self._is_infeasible_error(error):
-                        logger.debug(
-                            "Joint hypothesis %r is structurally infeasible: %s",
-                            hypothesis_values,
-                            error,
+                    for index, outcome in enumerate(outcomes):
+                        hypothesis_values = combinations[index]
+                        if isinstance(outcome, Exception):
+                            handle_error(hypothesis_values, outcome)
+                            continue
+                        consider(hypothesis_values, outcome)
+                finally:
+                    outcomes.close()
+            else:
+                for hypothesis_values in hypothesis_combinations:
+                    self._clear_ilp_cache(dn)
+                    hypothesis_lcs = build_hypothesis_lcs(hypothesis_values)
+
+                    try:
+                        candidate = self.solver._calculateILPSelection(
+                            dn,
+                            *concepts_relations,
+                            key=key,
+                            fun=objective_fun,
+                            epsilon=epsilon,
+                            minimizeObjective=minimize_objective,
+                            ignorePinLCs=ignore_pin_lcs,
+                            extraLogicalConstraints=hypothesis_lcs,
+                            populate=False,
+                            forceFreshModel=True,
+                            raiseOnInfeasible=False,
+                            compiled=self.compiled,
+                            # An infeasible hypothesis is an expected outcome of
+                            # the search, not a fault to diagnose.
+                            computeIIS=False,
                         )
+                    except Exception as error:
+                        handle_error(hypothesis_values, error)
                         continue
-                    raise
 
-                if candidate is None:
-                    continue
-
-                if best_result is None:
-                    is_better = True
-                elif minimize_objective:
-                    is_better = (
-                        candidate['objective'] < best_result['objective']
-                    )
-                else:
-                    is_better = (
-                        candidate['objective'] > best_result['objective']
-                    )
-
-                # Strict comparison intentionally preserves the first
-                # graph/hypothesis-order candidate on exact objective ties.
-                if is_better:
-                    best_result = {
-                        'objective': candidate['objective'],
-                        'values': dict(candidate['values']),
-                    }
-                    best_hypotheses = OrderedDict(
-                        (name, value)
-                        for (name, _values, _builder), value in zip(
-                            specs, hypothesis_values
-                        )
-                    )
+                    consider(hypothesis_values, candidate)
         finally:
             self._clear_ilp_cache(dn)
 
