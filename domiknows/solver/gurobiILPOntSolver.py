@@ -280,14 +280,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if self.conceptIsBinary(currentConceptRelation):
                         x[self.getConcept(currentConceptRelation), 'Not_' + currentLabel, dn.getInstanceID(), currentLabelIndex] = xNotNew
 
-                    # Add variable to objective
+                    # Add variable to objective.  Plain floats: multiplying a
+                    # torch scalar by a Gurobi variable goes through torch and is
+                    # about 10x slower per term, with the same coefficient.
                     if Q is None:
-                        Q = currentProbability[1].detach() * xNew
+                        Q = float(currentProbability[1].detach()) * xNew
                     else:
-                        Q += currentProbability[1].detach() * xNew       
+                        Q += float(currentProbability[1].detach()) * xNew
                             
                     if self.conceptIsBinary(currentConceptRelation): 
-                        Q += currentProbability[0].detach() * xNotNew    
+                        Q += float(currentProbability[0].detach()) * xNotNew
                 
             if self.conceptIsMultiClass(currentConceptRelation):
                 self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%(currentLabel))
