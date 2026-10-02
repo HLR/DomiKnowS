@@ -148,8 +148,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         # If softmax process probability through function and apply epsilon
         if "softmax" in key and value is not None and not torch.isnan(value[0]).item() and epsilon is not None:
-            value[0] = max(epsilon, min(1-epsilon, value[0]))
-            value[1] = max(epsilon, min(1-epsilon, value[1]))
+            # In place on purpose (value can be a view of the stored softmax):
+            # clamp to [epsilon, 1-epsilon], and a NaN in the second entry
+            # becomes 1-epsilon, as the scalar max/min expressions did.  Vector
+            # ops are about 4x faster than eight scalar tensor operations.
+            value.nan_to_num_(nan=1-epsilon, posinf=float('inf'), neginf=float('-inf'))
+            value.clamp_(epsilon, 1-epsilon)
                     
             # Apply fun on probabilities if defined
             if fun is not None:

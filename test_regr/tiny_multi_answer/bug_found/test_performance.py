@@ -8,6 +8,7 @@ import time
 from collections import OrderedDict
 from types import SimpleNamespace
 import pytest
+import torch
 from gurobipy import GRB
 from domiknows.graph import Graph, Concept
 from domiknows.graph.dataNode import DataNode
@@ -230,6 +231,37 @@ def test_D10_iis_per_call_override(flag,per_call,expected,tmp_path,monkeypatch):
 
 
 # --- D10 performance: ILP build ------------------------------------------------
+
+def _scalar_epsilon_reference(stored, epsilon):
+    """The previous getProbability clamp: scalar max/min on a view of `stored`."""
+    value = stored.squeeze(0)
+    if not torch.isnan(value[0]).item() and epsilon is not None:
+        value[0] = max(epsilon, min(1 - epsilon, value[0]))
+        value[1] = max(epsilon, min(1 - epsilon, value[1]))
+    return value
+
+
+SPECIAL_PROBABILITIES = [0.0, 1.0, 0.5, 1e-9, 1 - 1e-9, 1e-5, 1 - 1e-5, 0.99999,
+                         float('nan'), float('inf'), -float('inf'), -0.3, 1.7]
+
+
+def test_D10_probability_clamp_matches_the_scalar_reference_including_side_effect():
+    """The vector clamp must return the same values, NaN handling included, and
+    clamp the stored softmax in place exactly as the scalar code did."""
+    module = importlib.import_module('domiknows.solver.gurobiILPOntSolver')
+    solver = object.__new__(module.gurobiILPOntSolver)
+    solver.constraintConstructor = SimpleNamespace(conceptIsMultiClass=lambda concept: False)
+    concept = ('flag', 'flag', 0, 1)
+    for first, second in itertools.product(SPECIAL_PROBABILITIES, repeat=2):
+        stored_new = torch.tensor([[first, second]], dtype=torch.float32)
+        stored_old = stored_new.clone()
+        got = solver.getProbability(SimpleNamespace(getAttribute=lambda *a: stored_new), concept,
+                                    key=('local', 'softmax'), fun=None, epsilon=1e-5)
+        want = _scalar_epsilon_reference(stored_old, 1e-5)
+        nan_to_marker = lambda t: torch.nan_to_num(t, nan=-7.0)
+        assert torch.equal(nan_to_marker(got), nan_to_marker(want)), (first, second, got, want)
+        assert torch.equal(nan_to_marker(stored_new), nan_to_marker(stored_old)),             f'stored tensor differs for {(first, second)}: {stored_new} vs {stored_old}'
+
 
 def test_D10_find_datanodes_cache_scope_semantics():
     root, item, pair = pair_graph(6)
