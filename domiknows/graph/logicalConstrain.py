@@ -597,6 +597,12 @@ class LogicalConstrain(LcElement):
         # Collect variables setups for ILP constraints
         sVar = self._collectVariableSetups(lcVariableName0, lcVariableNames[1:], v)
         
+        # How lcFun takes onlyConstrains depends on its signature only, so work
+        # it out once per call (on first use, as before) instead of per grounded
+        # row: inspect.signature per row was a large share of the build time.
+        unresolved = object()
+        onlyConstrainsPosition = unresolved
+
         # Apply collected setups and create ILP constraint
         for z in sVar:
             tVars = [] # Collect ILP constraints results
@@ -605,19 +611,23 @@ class LogicalConstrain(LcElement):
                 if isinstance(t, dict) and 'onlyConstrains' in t:
                     tVars.append(lcFun(model, *t))
                 elif isinstance(t, (list, tuple)):
-                    # Try to detect if onlyConstrains is already present by argument name
-                    import inspect
-                    sig = inspect.signature(lcFun)
-                    param_names = list(sig.parameters.keys())
-                    # After ``*var`` (andVar, orVar, nandVar, ...) onlyConstrains
-                    # is keyword-only and can never arrive by position: with
-                    # three or more operands the positional test below used to
-                    # drop it, so a head constraint returned its truth value
-                    # instead of its loss.
-                    varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL
-                                  for p in sig.parameters.values())
-                    if (not varargs and 'onlyConstrains' in param_names
-                            and len(t) >= param_names.index('onlyConstrains') + 1):
+                    if onlyConstrainsPosition is unresolved:
+                        import inspect
+                        sig = inspect.signature(lcFun)
+                        param_names = list(sig.parameters.keys())
+                        # After ``*var`` (andVar, orVar, nandVar, ...) onlyConstrains
+                        # is keyword-only and can never arrive by position: with
+                        # three or more operands the positional test below used to
+                        # drop it, so a head constraint returned its truth value
+                        # instead of its loss.
+                        varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL
+                                      for p in sig.parameters.values())
+                        onlyConstrainsPosition = (
+                            param_names.index('onlyConstrains') + 1
+                            if (not varargs and 'onlyConstrains' in param_names) else None)
+                    # onlyConstrains already present by position?
+                    if (onlyConstrainsPosition is not None
+                            and len(t) >= onlyConstrainsPosition):
                         tVars.append(lcFun(model, *t))
                     else:
                         tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))

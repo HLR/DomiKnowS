@@ -1,6 +1,7 @@
 """Bounded performance probes; timings are evidence, not universal thresholds."""
 import gc
 import importlib
+import inspect
 import itertools
 import logging
 import os
@@ -261,6 +262,20 @@ def test_D10_probability_clamp_matches_the_scalar_reference_including_side_effec
         nan_to_marker = lambda t: torch.nan_to_num(t, nan=-7.0)
         assert torch.equal(nan_to_marker(got), nan_to_marker(want)), (first, second, got, want)
         assert torch.equal(nan_to_marker(stored_new), nan_to_marker(stored_old)),             f'stored tensor differs for {(first, second)}: {stored_new} vs {stored_old}'
+
+
+def test_D10_logical_constraint_signature_is_inspected_once_per_call(monkeypatch):
+    """createLogicalConstrains used to run inspect.signature for every grounded row."""
+    calls = []
+    real = inspect.signature
+    monkeypatch.setattr(inspect, 'signature', lambda fn, *a, **k: calls.append(fn) or real(fn, *a, **k))
+    lc = object.__new__(LogicalConstrain)
+    def builder(model, *args, onlyConstrains=False):
+        return 1
+    rows = 500
+    lc.createLogicalConstrains('AND', builder, object(),
+        OrderedDict(a=[[i] for i in range(rows)], b=[[i] for i in range(rows)]), True)
+    assert len(calls) == 1, f'inspect.signature called {len(calls)} times for {rows} rows'
 
 
 def test_D10_find_datanodes_cache_scope_semantics():
