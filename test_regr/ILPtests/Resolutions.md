@@ -7,6 +7,14 @@ describe the defects as found (13 failed, 14 passed, 11 skipped on develop
 Status date: 2026-09-30. Branch: `develop-ILP-bug`. The fixes are committed,
 one commit per fix (see "Commits"), and are not pushed.
 
+## Where this folder lives
+
+The folder was moved from `test_regr/tiny_multi_answer/bug_found` to
+`test_regr/ILPtests`. Commits made before the move, and the commit table below,
+refer to it by the old path; `git log --follow` follows the files across the
+rename. The runner and conftest now locate the checkout by searching upward for
+the `domiknows` package instead of assuming a fixed depth.
+
 ## Commits
 
 In order, on top of `cf3bd575`:
@@ -70,8 +78,8 @@ The native tests were never blocked by the license on this machine. Gurobi
 was not set. Run them with:
 
 ```sh
-cd test_regr/tiny_multi_answer/bug_found
-DOMIKNOWS_REPRO_NATIVE=1 ../../../.venv/Scripts/python.exe run_suite.py
+cd test_regr/ILPtests
+DOMIKNOWS_REPRO_NATIVE=1 ../../.venv/Scripts/python.exe run_suite.py
 ```
 
 No reproducer assertion was edited, no `xfail` added, and no grounding limit
@@ -437,5 +445,5 @@ and at HEAD 93.33%, so these library changes help this case.
    times. Each touched file was converted back, and the working-tree diff shows
    no whole-file changes.
 
-The suite output folder `test_regr/tiny_multi_answer/bug_found/results/` (JSON,
+The suite output folder `test_regr/ILPtests/results/` (JSON,
 XML and logs written by `run_suite.py`) is listed in the root `.gitignore`.

@@ -1,6 +1,6 @@
 """Run from a physical script so DomiKnowS logs stay beside this suite.
 
-python ilp_repro_20260928/run_suite.py [additional pytest arguments]
+python test_regr/ILPtests/run_suite.py [additional pytest arguments]
 Native opt-in: DOMIKNOWS_REPRO_NATIVE=1 (requires a valid license).
 """
 import contextlib
@@ -12,8 +12,17 @@ from pathlib import Path
 import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
+def _checkout_root(start):
+    """The DomiKnowS checkout this folder sits in: the nearest parent directory
+    that contains the ``domiknows`` package."""
+    for candidate in (start, *start.parents):
+        if (candidate / 'domiknows' / '__init__.py').exists():
+            return candidate
+    return start.parent
+
+
 HERE = Path(__file__).resolve().parent
+ROOT = _checkout_root(HERE)
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 import pytest

@@ -5,7 +5,16 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+def _checkout_root(start):
+    """The DomiKnowS checkout this folder sits in: the nearest parent directory
+    that contains the ``domiknows`` package."""
+    for candidate in (start, *start.parents):
+        if (candidate / 'domiknows' / '__init__.py').exists():
+            return candidate
+    return start.parent
+
+
+sys.path.insert(0, str(_checkout_root(Path(__file__).resolve().parent)))
 
 
 @pytest.fixture(autouse=True)

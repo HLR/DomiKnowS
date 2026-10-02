@@ -45,10 +45,10 @@ decoding. Preserve exact hard inference; isolate solver output per run; guard
 IIS by actual infeasibility and make expensive diagnostics configurable.
 Keep performance changes separate from semantic changes.
 
-RUN FROM A DOMIKNOWS CHECKOUT WITH THIS FOLDER AT ITS ROOT
-  python ilp_repro_20260928/run_suite.py
+RUN FROM THE ROOT OF A DOMIKNOWS CHECKOUT (this folder is test_regr/ILPtests)
+  python test_regr/ILPtests/run_suite.py
 With a valid configured Gurobi license:
-  DOMIKNOWS_REPRO_NATIVE=1 python ilp_repro_20260928/run_suite.py
+  DOMIKNOWS_REPRO_NATIVE=1 python test_regr/ILPtests/run_suite.py
 Use the supplied script rather than python -m pytest: library logging can
 otherwise try to write inside the installed pytest package directory.
 See README.md for per-test locations, scope, and evidence limitations.

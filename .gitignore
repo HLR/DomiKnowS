@@ -282,7 +282,7 @@ domiknows/generation/README_notes.md
 domiknows/research/
 test_regr/EmbodiedAgentInterface/results/
 test_regr/tiny_dynamic_graph/results/
-test_regr/tiny_multi_answer/bug_found/results/
+test_regr/ILPtests/results/
 test_regr/EmbodiedAgentInterface/data/
 Rethinkin constraints.md
 test_regr/EmbodiedAgentInterface/models/

@@ -1,6 +1,8 @@
 # DomiKnowS ILP reproducers
 
-This folder is portable: put it at the root of a DomiKnowS checkout. It contains
+This folder lives at `test_regr/ILPtests` of a DomiKnowS checkout (run the commands
+below from the checkout root; the runner finds the checkout by looking for the
+`domiknows` package in a parent directory). It contains
 tests and diagnostics, **not library repairs**. Tests assert desired behavior
 and deliberately remain red when a reported defect is present. There are no
 `xfail` markers that disguise failures as success.
@@ -31,10 +33,10 @@ experiment server is needed. Gurobi installation is needed for imports;
 only `test_native.py` needs a working optimizer license.
 
 ```sh
-python ilp_repro_20260928/run_suite.py
-DOMIKNOWS_REPRO_NATIVE=1 python ilp_repro_20260928/run_suite.py
+python test_regr/ILPtests/run_suite.py
+DOMIKNOWS_REPRO_NATIVE=1 python test_regr/ILPtests/run_suite.py
 # Focus on one report (including its matching native tests):
-python ilp_repro_20260928/run_suite.py -k D03
+python test_regr/ILPtests/run_suite.py -k D03
 ```
 
 Optional `REPRO_GIT=/path/to/git` selects a usable Git executable for provenance.
