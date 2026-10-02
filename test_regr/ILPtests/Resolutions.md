@@ -33,7 +33,7 @@ In order, on top of `cf3bd575`:
 | `bf7e674d` | D05: raise on a grounding mismatch |
 | `779b9aa1` | D06: exact joint grounding for hard decoding |
 | `44e593e3` | D01: populate the winning world before direct decoding |
-| `36c63067` | miota decode returns the selected positions |
+| `36c63067` | miota decode returns the selected positions (reverted, see "Miota answer format") |
 | `15a1abe2` | D10: IIS only for proven-infeasible models, with a switch |
 | `dde976c1` | queryL hypothesis grounding in ILP mode |
 | `e94084bc` | D10 performance: quadratic membership tests in DataNode |
@@ -65,6 +65,7 @@ In order, on top of `cf3bd575`:
 | `e7a87f92` | Extract the head-constraint collection from `_calculateILPSelectionImpl` |
 | `75c1b37a` | Hypothesis search: build the shared ILP model once, add/remove each hypothesis |
 | `e06a5443` | Test: incremental hypothesis search matches the rebuild per hypothesis |
+| `fdffd637` | Restore the documented 0/1 miota answer; decode from the ILP world only when it covers the candidates |
 
 Intermediate commits are not all green. D01's native test needs the miota
 commit after it, and the D10 IIS test needs the D10 commit. The suite passes
@@ -93,7 +94,7 @@ raised to force a pass.
 
 | ID | Status | Fix | Location |
 |---|---|---|---|
-| D01 | Fixed, native-verified | The winning world is populated before any direct decode (miota and multi-answer query), and the decoder reads the `ILP` key. With `populate=False` the previous world is snapshotted and restored in a `finally`. | `solver/answerModule/answerSolver.py` |
+| D01 | Fixed, native-verified | The winning world is populated before any direct decode (miota and multi-answer query), and a miota is decoded from the `ILP` world when that world holds a value for every candidate (otherwise from the scores, as before). With `populate=False` the previous world is snapshotted and restored in a `finally`. | `solver/answerModule/answerSolver.py` |
 | D02 | Fixed | The loss-mode leaf reader handles a one-element binary ILP tensor instead of indexing `[1]` past its end. The `except IndexError` was not widened. | `solver/logicalConstraintConstructor.py` (`getMLResult`) |
 | D03 | Fixed, native-verified | Joint-grounding alignment now also runs when building the ILP model, so `right(y,x)` is no longer paired row-wise with `left(x,y)`. | `logicalConstraintConstructor.py`, `compiled/formula.py` |
 | D04 | Fixed, native-verified | Same mechanism: operands over different variable tuples (two- and three-hop chains) are joined, so the known witness survives. The one-hop control still passes. | same as D03 |
@@ -263,12 +264,36 @@ query, clevr ILP, inference-mode and global-grounding tests pass as well.
 
 ## Behavior changes to be aware of
 
-- **Miota answer format.** `_decode_miota` now returns the positions of the
-  candidates at or above the threshold. An empty list means nothing was
-  selected. It used to return a 0/1 indicator per candidate. A forced-false
-  selector therefore gives `[]` where it used to give `[0]`. The only consumer
-  found in `test_regr/Clever` reads `selectionDistribution` from the loss
-  path, so it is unaffected. Other consumers were not audited.
+- **Miota answer format (audited, and one change reverted).** The answer of a
+  miotaL is the documented candidate-aligned list of `0`/`1`
+  (`domiknows/graph/README.md`, result type `selection`); the exact/t-norm path
+  (`ExecutableInference`), the example helpers and the tests all use it, and
+  `Tasks/clevr_inference_vs_gumbel` compares `result["answer"]` across the
+  t-norm, circuit and ILP modes, so the ILP path must match. An earlier commit
+  (`36c63067`) made the ILP decode return the selected *positions* instead, to
+  satisfy the reporter's `== []` expectation for D01. The audit showed that this
+  broke the documented contract: six tests in `test_regr/tiny_multi_answer`
+  (`test_example_multi_answers.py`, `test_example_relation_answers.py`), which had
+  not been re-run after that change, failed. All readers found:
+  `domiknows/graph/dataNode.py` (stores and returns `ELC*/answer`),
+  `AnswerSolver.solve_active_constraints`, `ExecutableInference._decode_miota`,
+  the `tiny_multi_answer` examples and tests, and the clevr task's cross-mode
+  comparison. `test_regr/Clever` (force3d) reads `selectionDistribution` from the
+  loss path and the `generation` DFA has its own semantics, so neither reads this
+  list. Code outside this repository was not audited.
+  The ILP answer is the 0/1 list again, and the D01 native test now expects
+  `[0]` (the single forced-false candidate is not selected) instead of `[]`.
+- **A miota is decoded from the ILP world only if the world covers it.** D01
+  decodes from the solved assignment so the answer follows the hard constraints.
+  The ILP only has variables for the datanodes it reaches from the root: in
+  `example_multiAnswers` the three objects are unlinked roots, only the first has
+  `/ILP` values, and the decode silently read the other two as "not selected"
+  (`[1, 0, 0]` instead of `[1, 1, 0]`). The decoder now watches for absent leaf
+  values and, if any is missing, decodes from the scores as before.
+- **A search with a single combination uses the plain solve.** The shared-model
+  hypothesis search only pays off with more than one hypothesis; with one (for
+  example only direct-decode constraints) the original single solve is kept,
+  which also keeps the tests that count solves meaningful.
 - **D05 can surface dropped constraints.** A grounding mismatch now raises. It
   used to be logged and the constraint silently dropped. Any constraint that was
   being dropped will now fail loudly. One such case is described next.
@@ -443,8 +468,9 @@ and at HEAD 93.33%, so these library changes help this case.
    synthetic graph (see the D10 section). Profile a real workload, for example
    the clevr tasks on a large scene, before going further: what is left in the
    build is spread out, and the hypothesis search now shares one model.
-3. **Miota consumers.** Audit other code that reads the decoded miota list,
-   given the format change above.
+3. **Miota consumers outside this repository.** The readers inside the
+   repository were audited (see "Miota answer format"); code elsewhere that
+   reads the decoded miota list was not.
 4. **Line endings.** The repo stores LF. The editing tools wrote CRLF several
    times. Each touched file was converted back, and the working-tree diff shows
    no whole-file changes.

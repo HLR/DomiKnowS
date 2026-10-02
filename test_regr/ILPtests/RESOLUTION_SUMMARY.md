@@ -13,7 +13,7 @@ does `test_regr/solver`. No reproducer assertion was weakened and none was marke
 
 | ID | Issue as reported | Resolution | Commit |
 |---|---|---|---|
-| D01 | Direct miota decoding read the local softmax and the previous ILP world before the winner was populated | Populate the winning world first, read the `ILP` key, restore the old world when `populate=False`. The miota answer is now the list of selected positions (a selector that selects nothing gives `[]`). | `44e593e3`, `36c63067` |
+| D01 | Direct miota decoding read the local softmax and the previous ILP world before the winner was populated | Populate the winning world first, decode a miota from it (when it covers every candidate, otherwise from the scores), restore the old world when `populate=False`. The miota answer stays the documented 0/1 list per candidate (a forced-false single candidate gives `[0]`). | `44e593e3`, `36c63067` |
 | D02 | Loss-form ILP leaf reader returned `None` for a binary `[0]`/`[1]` | Read the single element of the binary ILP tensor | `669d1c74` |
 | D03 | Compiled ILP binding paired `left(x,y)` with `right(x,y)` instead of `right(y,x)` | Joint-grounding alignment now also runs when building the ILP | `361718df` |
 | D04 | Two- and three-hop existential conjunctions lost a known witness | Same fix as D03 | `361718df` |
@@ -52,5 +52,6 @@ selected object.
   tasks on a large scene) has not been profiled.
 - The native tests need a valid Gurobi license; the one for the gpu2 server was
   expired when last checked.
-- The miota answer format changed (selected positions, not a 0/1 list); other
-  readers of that list were not audited.
+- Readers of the miota answer outside this repository were not audited; those
+  inside were (an earlier "selected positions" format was reverted after it broke
+  six `tiny_multi_answer` tests; see `Resolutions.md`).
