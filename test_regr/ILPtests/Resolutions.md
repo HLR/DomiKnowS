@@ -4,8 +4,12 @@ Companion to `HANDOFF.txt` and `README.md` in this folder. Those documents
 describe the defects as found (13 failed, 14 passed, 11 skipped on develop
 `c3002b1a`). This one records what has been done about each.
 
-Status date: 2026-09-30. Branch: `develop-ILP-bug`. The fixes are committed,
-one commit per fix (see "Commits"), and are not pushed.
+A one-page version organised by the original `HANDOFF.txt` issues is in
+`RESOLUTION_SUMMARY.md`.
+
+Status date: 2026-10-02. The fixes are committed, one commit per fix (see
+"Commits"), and merged into `develop` (`develop-ILP-bug`, `develop-D10-perf` and
+`develop-D10-hypothesis` are fully merged); nothing is pushed.
 
 ## Where this folder lives
 
