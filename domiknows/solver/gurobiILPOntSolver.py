@@ -802,7 +802,17 @@ class gurobiILPOntSolver(ilpOntSolver):
             compiled=compiled,
         )
 
-    def _calculateILPSelection(
+    def _calculateILPSelection(self, *args, **kwargs):
+        """Run one ILP selection (see ``_calculateILPSelectionImpl``).
+
+        The build asks the datanode graph for the same few concepts dozens of
+        times; memoize those queries for the duration of the solve.
+        """
+        from domiknows.graph.dataNode import DataNode
+        with DataNode.findDatanodesCache():
+            return self._calculateILPSelectionImpl(*args, **kwargs)
+
+    def _calculateILPSelectionImpl(
         self,
         dn,
         *conceptsRelations,

@@ -227,3 +227,38 @@ def test_D10_iis_per_call_override(flag,per_call,expected,tmp_path,monkeypatch):
     finally:
         setComputeIIS(True)
     assert calls.count('IIS')==expected
+
+
+# --- D10 performance: ILP build ------------------------------------------------
+
+def test_D10_find_datanodes_cache_scope_semantics():
+    root, item, pair = pair_graph(6)
+    outside = root.findDatanodes(select=item)
+    with DataNode.findDatanodesCache():
+        first = root.findDatanodes(select=item)
+        second = root.findDatanodes(select=item)
+        assert [d.id for d in first] == [d.id for d in outside]
+        assert first is not second, 'every caller gets its own list'
+        second.clear()
+        assert [d.id for d in root.findDatanodes(select=item)] == [d.id for d in outside],             'mutating a returned list must not corrupt the cache'
+        # queries the cache does not cover are answered normally
+        assert len(root.findDatanodes(select=pair)) == 36
+        # a link change inside the scope invalidates it
+        extra = DataNode(instanceID=999, ontologyNode=item)
+        root.addChildDataNode(extra)
+        assert 999 in [d.getInstanceID() for d in root.findDatanodes(select=item)]
+    assert DataNode._findCache is None, 'the cache must be gone after the scope'
+    assert 999 in [d.getInstanceID() for d in root.findDatanodes(select=item)]
+
+
+def test_D10_find_datanodes_cache_is_not_stale_across_scopes():
+    root, item, pair = pair_graph(4)
+    with DataNode.findDatanodesCache():
+        assert len(root.findDatanodes(select=item)) == 4
+    root.addChildDataNode(DataNode(instanceID=500, ontologyNode=item))
+    with DataNode.findDatanodesCache():
+        assert len(root.findDatanodes(select=item)) == 5
+        with DataNode.findDatanodesCache():          # nested scopes share the outer cache
+            assert len(root.findDatanodes(select=item)) == 5
+        assert DataNode._findCache is not None, 'inner scope must not drop the outer cache'
+    assert DataNode._findCache is None

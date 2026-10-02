@@ -2,6 +2,7 @@ import torch
 from collections import OrderedDict, namedtuple
 from time import perf_counter, perf_counter_ns
 import re
+from contextlib import contextmanager
 from itertools import count
 
 from domiknows.graph.logicalConstrain import sumL
@@ -518,6 +519,8 @@ class DataNode:
         if self._hasLink('_relationIdCache', self.relationLinks, relationName, dn):
             return
 
+        DataNode._invalidateFindCache()
+
         self.relationLinks[relationName].append(dn)
 
         # Impact
@@ -526,6 +529,35 @@ class DataNode:
 
         if not dn._hasLink('_impactIdCache', dn.impactLinks, relationName, self):
             dn.impactLinks[relationName].append(self)
+
+    # Results of findDatanodes(select=<Concept or name>) while a
+    # ``findDatanodesCache()`` scope is open, else None.  The ILP build asks for
+    # the same few concepts dozens of times and each ask walks the whole graph.
+    _findCache = None
+
+    @classmethod
+    @contextmanager
+    def findDatanodesCache(cls):
+        """Memoize ``findDatanodes`` for plain concept queries inside the block.
+
+        Only use it around code that does not change the graph's links (the ILP
+        solve): any ``addRelationLink`` / ``removeRelationLink`` /
+        ``resetChildDataNode`` also clears the cache, but direct edits of
+        ``relationLinks`` are not seen.  Nested scopes share the outer cache.
+        """
+        if cls._findCache is not None:
+            yield
+            return
+        cls._findCache = {}
+        try:
+            yield
+        finally:
+            cls._findCache = None
+
+    @classmethod
+    def _invalidateFindCache(cls):
+        if cls._findCache:
+            cls._findCache.clear()
 
     def _hasLink(self, cacheName, links, relationName, dn):
         """Whether ``dn`` is already in ``links[relationName]`` (by DataNode id).
@@ -571,6 +603,7 @@ class DataNode:
         if relationName not in self.relationLinks:
             return
 
+        DataNode._invalidateFindCache()
         self.relationLinks[relationName].remove(dn)
 
         # Impact
@@ -703,6 +736,7 @@ class DataNode:
         """
         relationName = 'contains'
 
+        DataNode._invalidateFindCache()
         self.relationLinks[relationName] = []
 
     # --- Equality methods
@@ -978,6 +1012,23 @@ class DataNode:
             return [None]
 
     def findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
+        """Find and return DataNodes based on the given query conditions.
+
+        Inside a ``findDatanodesCache()`` scope a top-level query by a plain
+        concept (or concept name) is answered from a cache; the caller always
+        gets its own list.  See ``_findDatanodes`` for the arguments.
+        """
+        cache = DataNode._findCache
+        if (cache is not None and not depth and dns is None and indexes is None
+                and isinstance(select, (Concept, str))):
+            key = (id(self), select if isinstance(select, str) else id(select))
+            found = cache.get(key)
+            if found is None:
+                found = cache[key] = self._findDatanodes(dns, select, indexes, visitedDns, depth)
+            return list(found)
+        return self._findDatanodes(dns, select, indexes, visitedDns, depth)
+
+    def _findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
         """Find and return DataNodes based on the given query conditions.
 
         Args:
