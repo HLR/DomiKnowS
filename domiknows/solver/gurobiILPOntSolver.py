@@ -808,6 +808,39 @@ class gurobiILPOntSolver(ilpOntSolver):
             compiled=compiled,
         )
 
+    def _collectHeadLogicalConstraints(self, dn, extraLogicalConstraints, ignorePinLCs):
+        """Active head logical constraints grouped by priority p (highest first).
+
+        ``extraLogicalConstraints`` join the default priority 100.  Returns
+        ``(lcP, pUsed)``; ``pUsed`` is true when some constraint has a priority
+        other than the default, which makes the run solve one model copy per p.
+        """
+        dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
+        _lcP = {}
+        _lcP[100] = list(extraLogicalConstraints)
+        pUsed = False
+        for graph in self.myGraph:
+            for _, lc in graph.logicalConstrains.items():
+                if lc.headLC and lc.active: # Process only active and head lcs
+                    if not ignorePinLCs:
+                        lcP = lc.p
+                    else:
+                        lcP = 100
+
+                    if lcP not in _lcP:
+                        _lcP[lcP] = []
+                        pUsed = True # Found p different then default 100
+
+                    _lcP[lcP].append(lc) # Keep constraint with the same p in the list
+
+        # Sort constraints according to their p
+        lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
+        for p in lcP:
+            self.myLogger.info('Found %i active logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
+            self.myLoggerTime.info('Starting ILP interference - Found %i active logical constraints'%(len(lcP[p])))
+
+        return lcP, pUsed
+
     def _calculateILPSelection(self, *args, **kwargs):
         """Run one ILP selection (see ``_calculateILPSelectionImpl``).
 
@@ -930,29 +963,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             
             # Collect head logical constraints
-            dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
-            _lcP = {}
-            _lcP[100] = list(extraLogicalConstraints)
-            pUsed = False
-            for graph in self.myGraph:
-                for _, lc in graph.logicalConstrains.items():
-                    if lc.headLC and lc.active: # Process only active and head lcs
-                        if not ignorePinLCs:
-                            lcP = lc.p
-                        else:
-                            lcP = 100   
-                                            
-                        if lcP not in _lcP:
-                            _lcP[lcP] = []
-                            pUsed = True # Found p different then default 100
-                        
-                        _lcP[lcP].append(lc) # Keep constraint with the same p in the list 
-            
-            # Sort constraints according to their p
-            lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
-            for p in lcP:
-                self.myLogger.info('Found %i active logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
-                self.myLoggerTime.info('Starting ILP interference - Found %i active logical constraints'%(len(lcP[p])))
+            lcP, pUsed = self._collectHeadLogicalConstraints(dn, extraLogicalConstraints, ignorePinLCs)
 
             # Search through set of logical constraints for subset satisfying and the max/min calculated objective value
             lcRun = {} # Keeps information about subsequent model runs
