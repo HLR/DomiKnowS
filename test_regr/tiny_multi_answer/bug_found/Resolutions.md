@@ -44,6 +44,15 @@ In order, on top of `cf3bd575`:
 | `fc995655` | ConllQA: per-tensor debug trace opt-in |
 | `410990a6` | ConllQA: `result.txt` closed before the accuracy assertion |
 | `8086c976` | ConllQA tests: one process per test |
+| `63d3496a` | Clever tests: portable `main.py` launching on Windows |
+| `47782e95` | Clever tests: accept the curriculum label in the accuracy parsers |
+| `38e9057c` | D10 performance: memoize concept queries during an ILP solve |
+| `c2a2a36f` | D10 performance: build the ILP objective with plain floats |
+| `5a81ee5f` | D10 performance: clamp ILP probabilities with in-place vector ops |
+| `9945fba0` | D10 performance: inspect the constraint function once per `createLogicalConstrains` |
+| `e7a87f92` | Extract the head-constraint collection from `_calculateILPSelectionImpl` |
+| `75c1b37a` | Hypothesis search: build the shared ILP model once, add/remove each hypothesis |
+| `e06a5443` | Test: incremental hypothesis search matches the rebuild per hypothesis |
 
 Intermediate commits are not all green. D01's native test needs the miota
 commit after it, and the D10 IIS test needs the D10 commit. The suite passes
@@ -170,22 +179,75 @@ checks, not speed limits. On the baseline the construction check passed once
 in a repeat run (a timing outlier), so a pass there is weaker evidence than a
 fail.
 
-**What was not done or not measurable.**
+### Full-license measurements: building the ILP and searching hypotheses
 
-- End-to-end ILP timings could not be measured at scale: this machine's Gurobi
-  license is size-limited (about 2,000 variables and constraints), so a model
-  with 30 pair rows on each axis is refused. The improvements above are
-  measured on the datanode operations the solver uses, not on a full solve.
-- Small end-to-end ILP runs are dominated by a fixed 0.3 s `time.sleep` in
-  `move_existing_logfile_with_timestamp`. It is a retry backoff when a locked
-  log file cannot be renamed (Windows). It is per solver instance, not
-  scaling, and log handling was left alone.
-- After the fix the remaining profile is flat (`createILPVariables`, repeated
-  `findDatanodes` calls for the same concept, `OrderedSet` visits). Caching
-  concept lookups across calls is a possible next step, but no measurement
-  shows it matters at the sizes that fit the license.
+With a full Gurobi license on this machine (the one on gpu2 is still expired) a
+whole solve can be profiled at production-like size. On a synthetic graph (unary
+rules plus pair rules, 80 x 80 pair rows, about 26,000 variables) Gurobi's
+`optimize()` took 1 to 30 ms while the Python around it took seconds, 300 to 500
+times more, so the remaining work is model construction. It grows about
+linearly (2 to 3 ms of Python per pair row).
+
+Four changes to the build, one commit each, with the effect measured on that
+graph (total solve, n = 80: 14.1 s before, 5.4 s after; n = 60: 9.8 s to 3.8 s):
+
+| Change | Why | Evidence it is the same model |
+|---|---|---|
+| Concept queries memoized during a solve (`DataNode.findDatanodesCache()`) | The build asked for the same two concepts 48 times, each a walk of the whole graph: 37% of the time. Opt-in scope, cleared on any link change, each caller gets its own list. | Same results and order; tests for scope, copies, invalidation, nesting. |
+| Objective built with `float(p) * var` | `torch_scalar * var` goes through torch: 48 us a term against 5 us. | Objective identical term for term (648 terms). |
+| Probability clamp as in-place vector ops | Eight scalar tensor operations per variable, now 3 vector ones: 4x per call. | 392 value pairs (NaN, infinities, boundaries) give identical results and the same in-place effect on the stored softmax; kept as a test. |
+| `inspect.signature` once per `createLogicalConstrains` | It ran for every grounded row. | Behaviour unchanged (still resolved on first use). |
+
+The whole model was also compared against the baseline's: 990 variables and 495
+constraints, with identical objective, constraints, variable types and sense,
+read back through Gurobi and compared order-insensitively. (The LP text order
+differs between runs even for the same code, because the concept order is not
+deterministic, so a text diff is not a valid comparison.)
+
+**Hypothesis search.** `solve_active_constraints` rebuilt the whole model for
+every joint hypothesis although the hypotheses differ only in their own hard
+constraints: about 80% of the search time was that rebuild (K = 6, N = 120),
+against under 2% for Gurobi. `_iterHypothesisSelections` builds the shared model
+once; each hypothesis adds its constraints, is solved from scratch, and is then
+removed again (constraints, auxiliary variables and general constraints, which
+the counting hypotheses use), with a check that the model is back to its shared
+state. Building errors are passed to the caller so infeasible-hypothesis
+handling is unchanged. It falls back to the old per-hypothesis rebuild if the
+solver lacks the method or any active constraint has its own priority.
+
+| Class hypotheses (K), 60 items | Before | After |
+|---|---|---|
+| 3 | 0.43 s | 0.09 s |
+| 12 | 3.44 s | 0.42 s |
+| 24 | 8.25 s | 1.20 s |
+
+The winning hypothesis and the objective are identical in every row. Beyond
+that, `test_hypothesis_incremental.py` runs counting (indicator constraints), a
+joint boolean pair, count x boolean and a class query through both paths, 3
+seeds each, and compares the hypotheses, the objective and every solved
+variable (12 of 12 pass).
+
+Verification: the full `test_regr/fixes` directory passes on both the four build
+changes and on the incremental search (20,307 passed, 4 skipped, 0 failed each
+time, about 37 minutes); the reproducer suite and the solver, answer-solver,
+query, clevr ILP, inference-mode and global-grounding tests pass as well.
+
+**What was not done.**
+
+- Small end-to-end ILP runs include a fixed 0.3 s `time.sleep` in
+  `move_existing_logfile_with_timestamp` (a retry backoff when Windows cannot
+  rename a locked log file), per solver instance and not scaling. Log handling
+  was left alone.
+- What is left in the build is spread out: `createILPVariables` (about a
+  third of the build at the last profile, before the probability and signature
+  changes), `getProbability`, `populateILPSelection` and the constraint
+  construction. The profile was not repeated after those last two changes, and
+  nothing dominant was left to take without a larger redesign.
 - `candidates.py` (`dn not in relDns` in the `instanceID` path) has the same
-  pattern but was not shown to be hot, so it was left unchanged.
+  list-membership pattern as the fixed ones but was not shown to be hot, so it
+  was left unchanged.
+- The search shares one model only when every active constraint has the default
+  priority; with per-constraint priorities it rebuilds per hypothesis as before.
 
 ## Behavior changes to be aware of
 
@@ -365,9 +427,10 @@ and at HEAD 93.33%, so these library changes help this case.
    the same working directory still share `GurobiSolution.sol` and the other
    solver output files. Set `DOMIKNOWS_LOG_DIR` per worker. The D07 test
    demonstrates path aliasing, not a live write race.
-2. **D10 performance, remaining.** Profile a full solve at production scale on
-   a machine with an unrestricted Gurobi license before doing more. See the
-   list above for what was left unchanged and why.
+2. **D10 performance, remaining.** Profiled with the full license on a
+   synthetic graph (see the D10 section). Profile a real workload, for example
+   the clevr tasks on a large scene, before going further: what is left in the
+   build is spread out, and the hypothesis search now shares one model.
 3. **Miota consumers.** Audit other code that reads the decoded miota list,
    given the format change above.
 4. **Line endings.** The repo stores LF. The editing tools wrote CRLF several
