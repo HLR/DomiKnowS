@@ -429,10 +429,47 @@ class AnswerSolver:
         if not tensors:
             return []
         probabilities = torch.cat(tensors)
-        # The answer is the set of selected candidates (their positions among
-        # the grounded candidates); an empty list means nothing was selected.
-        selected = probabilities >= lc.threshold
-        return torch.nonzero(selected).reshape(-1).detach().cpu().tolist()
+        # Candidate-aligned list of 0/1, the documented ``selection`` answer
+        # (domiknows/graph/README.md) that ExecutableInference also returns.
+        return (probabilities >= lc.threshold).to(torch.int64).detach().cpu().tolist()
+
+    def _decode_miota_in_world(self, lc, dn, key):
+        """Decode a miotaL in the winning ILP world when that world covers it.
+
+        The answer has to follow the hard constraints, so it is read from the
+        solved assignment.  The ILP only has variables for the datanodes it
+        reaches from ``dn``; when some candidate datanode has no value in the
+        world (for example candidates that are separate roots) a missing value
+        would silently read as "not selected".  In that case the answer is
+        decoded from ``key`` as before.
+        """
+        constructor = getattr(self.solver, 'constraintConstructor', None)
+        if constructor is None:
+            # No leaf reader to watch (a minimal solver): decode in the world.
+            return self._decode_miota(lc, dn, key=("ILP",))
+        read_leaf = constructor.getMLResult
+        missing = []
+
+        def counting_read(*args, **kwargs):
+            value = read_leaf(*args, **kwargs)
+            if value is None:
+                missing.append(args[1] if len(args) > 1 else None)
+            return value
+
+        constructor.getMLResult = counting_read
+        try:
+            in_world = self._decode_miota(lc, dn, key=("ILP",))
+        finally:
+            del constructor.getMLResult  # back to the class method
+
+        if not missing:
+            return in_world
+        logger.debug(
+            "miotaL %s: %d candidate value(s) are missing from the ILP world; "
+            "decoding from %r instead",
+            getattr(lc, 'lcName', lc), len(missing), key,
+        )
+        return self._decode_miota(lc, dn, key=key)
 
     def _decode_multi_query(self, lc, dn, key=("local", "softmax")):
         """Decode every candidate row without enumerating class products."""
@@ -712,7 +749,16 @@ class AnswerSolver:
             batch_supported = getattr(
                 self.solver, '_hypothesisBatchSupported', None
             )
-            if batch_supported is not None and batch_supported(dn, ignore_pin_lcs):
+            combination_count = 1
+            for _name, values, _builder in specs:
+                combination_count *= len(values)
+            # With a single combination (for example only direct-decode
+            # constraints) there is nothing to share: keep the one plain solve.
+            if (
+                combination_count > 1
+                and batch_supported is not None
+                and batch_supported(dn, ignore_pin_lcs)
+            ):
                 self._clear_ilp_cache(dn)
                 combinations = []
 
@@ -802,7 +848,7 @@ class AnswerSolver:
                 for name in direct_decode_names:
                     inner = dn.graph.executableLCs[name].innerLC
                     if isinstance(inner, miotaL):
-                        decoded_direct[name] = self._decode_miota(inner, dn, key=("ILP",))
+                        decoded_direct[name] = self._decode_miota_in_world(inner, dn, key)
                     else:
                         decoded = self._decode_multi_query_ilp(inner, dn)
                         decoded_direct[name] = (

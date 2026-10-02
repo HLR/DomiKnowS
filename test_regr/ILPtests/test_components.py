@@ -218,3 +218,49 @@ def test_compiled_path_following_with_no_nodes_returns_two_values():
     from domiknows.solver.compiled.plan import TensorizedCandidateResolver
     follow = TensorizedCandidateResolver._follow_once
     assert follow(object.__new__(TensorizedCandidateResolver), [], [], 'any_relation') == ([], [])
+
+
+class _ConstructorStub:
+    """Stands in for LogicalConstraintConstructor: reads a leaf, None when absent."""
+    absent = False
+
+    def getMLResult(self, *args, **kwargs):
+        return None if self.absent else 1.0
+
+
+def _miota_decoder(absent):
+    constructor = _ConstructorStub()
+    constructor.absent = absent
+    solver = AnswerSolver.__new__(AnswerSolver)
+    solver.solver = types.SimpleNamespace(constraintConstructor=constructor)
+
+    def decode(self, lc, dn, key=('local', 'softmax')):
+        if key == ('ILP',):
+            constructor.getMLResult(dn, 'flag')          # the decoder reads one leaf
+            return [1, 0, 0]
+        return [1, 1, 0]
+    solver._decode_miota = types.MethodType(decode, solver)
+    return solver, constructor
+
+
+def test_miota_in_world_decode_is_used_when_every_candidate_has_an_ilp_value():
+    solver, constructor = _miota_decoder(absent=False)
+    assert solver._decode_miota_in_world(object(), object(), ('local', 'softmax')) == [1, 0, 0]
+    assert 'getMLResult' not in vars(constructor), 'the leaf reader must be restored'
+
+
+def test_miota_in_world_decode_falls_back_when_a_candidate_has_no_ilp_value():
+    """Candidates the ILP never reached would silently read as 'not selected'."""
+    solver, constructor = _miota_decoder(absent=True)
+    assert solver._decode_miota_in_world(object(), object(), ('local', 'softmax')) == [1, 1, 0]
+    assert 'getMLResult' not in vars(constructor), 'the leaf reader must be restored'
+
+
+def test_miota_in_world_decode_restores_the_leaf_reader_after_an_error():
+    solver, constructor = _miota_decoder(absent=False)
+    def failing(self, lc, dn, key=('local', 'softmax')):
+        raise RuntimeError('boom')
+    solver._decode_miota = types.MethodType(failing, solver)
+    with pytest.raises(RuntimeError):
+        solver._decode_miota_in_world(object(), object(), ('local', 'softmax'))
+    assert 'getMLResult' not in vars(constructor)
