@@ -40,7 +40,9 @@ def test_D01_native_selector_obeys_forced_false(native_license):
     root.addChildDataNode(child); activate(root, graph)
     result = solve(root, graph)
     assert child.attributes['<flag>/ILP'].item() == 0
-    assert result['hypotheses']['ELC0'] == []
+    # miotaL answers are candidate-aligned 0/1 lists (README, ExecutableInference):
+    # the one candidate is forced false, so it is not selected.
+    assert result['hypotheses']['ELC0'] == [0]
 
 
 def test_D03_native_inverse_argument_order(native_license):
@@ -163,3 +165,29 @@ def test_D10_native_repeated_and_construction(native_license, record_property):
         record_property('auxiliary_variables',model.NumVars-2)
         record_property('constraints',model.NumConstrs)
         assert len(outputs)==25
+
+
+def test_miota_answer_is_a_zero_one_list_that_follows_the_solved_world(native_license):
+    """Three candidate datanodes: the answer is the documented candidate-aligned 0/1
+    list, and a hard constraint changes it (no constraint: thresholded scores;
+    notL(flag): nothing can be selected)."""
+    def answer(forbid):
+        from domiknows.graph import Graph as G, Concept as C, Relation as R
+        from domiknows.solver import ilpOntSolverFactory
+        G.clear(); C.clear(); R.clear(); ilpOntSolverFactory.clear()
+        DataNode.collectedConceptsAndRelations = None
+        with Graph('miota_format') as graph:
+            scene = Concept(name='scene'); item = Concept(name='item'); scene.contains(item)
+            flag = item(name='flag')
+            if forbid:
+                notL(flag('x'))
+            execute(miotaL(flag('x'), threshold=.5, hard=False))
+        root = DataNode(instanceID=0, ontologyNode=scene)
+        for index, probability in enumerate((.9, .2, .7)):
+            child = DataNode(instanceID=index, ontologyNode=item)
+            child.attributes['<flag>'] = torch.log(torch.tensor([1 - probability, probability]))
+            root.addChildDataNode(child)
+        activate(root, graph)
+        return solve(root, graph)['hypotheses']['ELC0']
+    assert answer(forbid=False) == [1, 0, 1]
+    assert answer(forbid=True) == [0, 0, 0]
