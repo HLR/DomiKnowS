@@ -92,7 +92,7 @@ cymem==2.0.11
     #   preshed
     #   spacy
     #   thinc
-datasets==5.0.0
+datasets==5.0.1
     # via domiknows
 decorator==5.2.1
     # via ipython
