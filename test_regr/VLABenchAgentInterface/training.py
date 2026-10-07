@@ -578,6 +578,28 @@ def save_checkpoint(
     return path
 
 
+def _load_controller_state_dict(controller: torch.nn.Module, state_dict: Mapping[str, Any], *, strict: bool = True):
+    current_state = controller.state_dict()
+    filtered_state = {}
+    mismatched = []
+    for k, v in state_dict.items():
+        if k in current_state and hasattr(v, "shape") and current_state[k].shape != v.shape:
+            if k.startswith("image_encoder."):
+                mismatched.append((k, tuple(v.shape), tuple(current_state[k].shape)))
+                continue
+        filtered_state[k] = v
+    if mismatched:
+        import sys
+        print(
+            f"[controller-checkpoint] skipped {len(mismatched)} image_encoder keys with shape mismatch: "
+            + ", ".join(f"{k} ({saved} -> {current})" for k, saved, current in mismatched[:3]),
+            file=sys.stderr,
+            flush=True,
+        )
+        return controller.load_state_dict(filtered_state, strict=False)
+    return controller.load_state_dict(filtered_state, strict=strict)
+
+
 def load_checkpoint(
     path: str | Path,
     *,
@@ -598,7 +620,7 @@ def load_checkpoint(
                 "checkpoint parameter_ownership_checksum differs from current model: "
                 f"saved={payload['parameter_ownership_checksum']!r}, current={current_checksum!r}"
             )
-    model.load_state_dict(payload["model"])
+    _load_controller_state_dict(model, payload["model"])
     if optimizer is not None and payload.get("optimizer") is not None:
         optimizer.load_state_dict(payload["optimizer"])
     random.setstate(payload["python_rng"])
@@ -787,14 +809,14 @@ def load_joint_checkpoint(
         )
     _load_planner_trainable_state(planner, payload["planner"])
     if migrate_legacy_controller:
-        result = controller.load_state_dict(payload["controller"], strict=False)
+        result = _load_controller_state_dict(controller, payload["controller"], strict=False)
         if result.unexpected_keys:
             raise RuntimeError(
                 "legacy controller checkpoint has unexpected state: "
                 + ", ".join(result.unexpected_keys[:5])
             )
     else:
-        controller.load_state_dict(payload["controller"])
+        _load_controller_state_dict(controller, payload["controller"], strict=True)
     if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])
     if (

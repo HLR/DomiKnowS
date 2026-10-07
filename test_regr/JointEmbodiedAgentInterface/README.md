@@ -148,6 +148,33 @@ The default `--execution-assistance train-only` permits those helpers only for
 training collection and forcibly disables them during fixed-seed evaluation,
 so reported evaluation success is controller-only. `on` is an assisted-system
 ablation and `off` disables assistance in both phases.
+
+`--assist-components` selects which scripted helper families run while
+assistance is enabled: `orientation` (the expert grasp orientation that
+replaces the policy's rotation during the pick), `approach` (the xyz blend
+toward the live grasp keypoint), `skills` (scripted press, pour, pull, lift,
+place, insert) and `latch` (grasp latch and kinematic attachment). The default
+`all` is the historical behaviour. Leaving out `orientation` executes the
+policy's own grasp orientation, so PPO credit applies to the action that
+produced the reward, and the expert orientation step is stored as a supervised
+DAgger label instead (`orientation_label_steps` in the rollout diagnostics).
+The `add_condiment` pick keeps its adapter-defined orientation in every mode.
+
+To measure how much each family contributes to success, evaluate a trained
+checkpoint on identical fixed-seed scenes under several modes (no training
+runs). Results include Wilson 95% intervals and an exact McNemar test of each
+mode against the first one:
+
+```powershell
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
+  --resume test_regr\JointEmbodiedAgentInterface\checkpoints\full_384_gpu4\joint_stage2_epoch_002.pt `
+  --assist-ablation-rollouts 10 `
+  --assist-ablation-modes unassisted,orientation_only,no_orientation,full
+```
+
+The report is written to `assist_ablation.json` in the output directory. Modes
+are `unassisted`, `orientation_only`, `approach_only`, `orientation_approach`,
+`no_orientation`, `no_latch`, `full`, or a custom `a+b` component list.
 An infeasible action is retried at smaller Cartesian scales. If all scales
 fail, the unchanged observation is resampled up to three consecutive chunks
 by default before the rollout is IK-truncated; each rejection remains negative

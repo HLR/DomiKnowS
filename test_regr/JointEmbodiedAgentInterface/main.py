@@ -22,7 +22,9 @@ from test_regr.VLABenchAgentInterface.dataset import (
     load_control_task_instructions,
     load_planning_examples,
 )
+from test_regr.VLABenchAgentInterface.assist_ablation import parse_assist_modes, run_assist_ablation
 from test_regr.VLABenchAgentInterface.main import _control_loaders, _controller
+from test_regr.VLABenchAgentInterface.program import parse_assist_components
 from test_regr.VLABenchAgentInterface.training import (
     evaluate_controller,
     evaluate_planner,
@@ -298,6 +300,13 @@ def command_train_agent(args):
         raise ValueError("train-agent requires --two-stage")
     random.seed(args.seed)
     torch.manual_seed(args.seed)
+    # Fail on a mistyped component or mode before loading any model.
+    assist_components = parse_assist_components(getattr(args, "assist_components", "all"))
+    assist_ablation_modes = None
+    if getattr(args, "assist_ablation_rollouts", 0) > 0:
+        if not args.resume:
+            raise ValueError("--assist-ablation-rollouts requires --resume with a trained Stage 2 checkpoint")
+        assist_ablation_modes = parse_assist_modes(args.assist_ablation_modes)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     _status(f"starting joint two-stage training device={device}")
     runtime, eai_train, eai_valid, vla_splits, prepared = _prepare(args, device)
@@ -368,6 +377,11 @@ def command_train_agent(args):
                 "language-conditioned action policy"
             )
         resume_stage = payload["stage"]
+        if assist_ablation_modes and resume_stage == "stage1":
+            raise ValueError(
+                "--assist-ablation-rollouts needs a controller_warmup or stage2 checkpoint; "
+                "a Stage 1 checkpoint would resume Stage 1 training first"
+            )
         baseline_reference = payload.get("metrics", {}).get("baseline_reference")
         eai_baseline_reference = payload.get("metrics", {}).get(
             "eai_baseline_reference"
@@ -474,11 +488,27 @@ def command_train_agent(args):
                 map_location=device,
             )
             cursor = int(payload["round_robin_cursor"])
-            eai_metrics = payload["metrics"]["eai"]
+            eai_metrics = payload.get("metrics", {}).get("eai")
+            if eai_metrics is None:
+                eai_metrics = _evaluate_eai(planner, runtime, eai_valid, limit=args.validation_limit)
+            eai_eval = (
+                eai_metrics.get("evaluation", eai_metrics)
+                if isinstance(eai_metrics, dict)
+                else {}
+            )
+            pos_rate = float(
+                eai_eval.get("positive_reward_rate", eai_metrics.get("positive_reward_rate", eai_metrics.get("reward", 1.0)))
+            )
+            goal_recall = float(
+                eai_eval.get("goal_recall", eai_metrics.get("goal_recall", 1.0))
+            )
+            goal_success = float(
+                eai_eval.get("goal_success", eai_metrics.get("goal_success", eai_metrics.get("success", 1.0)))
+            )
             if (
-                eai_metrics["positive_reward_rate"] < args.stage1_min_positive_reward_rate
-                or eai_metrics["goal_recall"] < args.stage1_min_goal_recall
-                or eai_metrics["goal_success"] < args.stage1_min_goal_success
+                pos_rate < args.stage1_min_positive_reward_rate
+                or goal_recall < args.stage1_min_goal_recall
+                or goal_success < args.stage1_min_goal_success
             ):
                 _json({"stage": "stage2-skipped", "reason": "EAI exploration gate", "eai": eai_metrics})
                 return
@@ -601,10 +631,30 @@ def command_train_agent(args):
         assistance_curriculum=getattr(args, "assistance_curriculum", "cosine"),
         assistance_start=getattr(args, "assistance_start", 1.0),
         assistance_end=getattr(args, "assistance_end", 0.0),
+        assist_components=assist_components,
+        shadow_dagger=getattr(args, "shadow_dagger", False),
+        handover_distance=getattr(args, "handover_distance", None),
         feasibility_weight=getattr(args, "feasibility_weight", 0.15),
         dagger_weight=getattr(args, "dagger_weight", 0.20),
     )
     stage2.round_robin_cursor = cursor
+    if assist_ablation_modes:
+        if resume_stage != "stage2":
+            _status(
+                "WARNING: assist ablation is running on a checkpoint that has not completed "
+                f"Stage 2 (resume stage={resume_stage!r})"
+            )
+        report = run_assist_ablation(
+            stage2,
+            descriptors,
+            rollouts_per_task=args.assist_ablation_rollouts,
+            seed=args.seed + 100000,
+            modes=assist_ablation_modes,
+            progress=_status,
+            output=args.assist_ablation_output or output / "assist_ablation.json",
+        )
+        _json({"stage": "assist-ablation", "resume": args.resume, "report": report})
+        return
     if (
         args.stage2_eval_rollouts_per_task > 0
         and start_stage2 == 0
@@ -1032,6 +1082,50 @@ def build_parser():
     agent.add_argument("--assistance-start", type=float, default=1.0)
     agent.add_argument("--assistance-end", type=float, default=0.0)
     agent.add_argument(
+        "--assist-components",
+        default="all",
+        help=(
+            "comma-separated execution-assistance families active while assistance is enabled: "
+            "orientation (expert grasp orientation), approach (xyz keypoint blend), skills "
+            "(scripted press/pour/pull/lift/place/insert) and latch (grasp latch/attachment); "
+            "'all' is the historical behaviour. Omitting 'orientation' executes the policy's own "
+            "grasp orientation and trains it toward the expert orientation as a supervised label."
+        ),
+    )
+    agent.add_argument(
+        "--shadow-dagger",
+        action="store_true",
+        help="R1: execute unassisted (alpha=0) but collect expert approach/grasp labels",
+    )
+    agent.add_argument(
+        "--handover-distance",
+        type=float,
+        default=None,
+        help="R2: pre-grasp handover distance. If set, expert prefix executes until grasp distance <= this value.",
+    )
+    agent.add_argument(
+        "--assist-ablation-rollouts",
+        type=int,
+        default=0,
+        help=(
+            "when positive, evaluate the resumed checkpoint on this many fixed-seed rollouts per "
+            "task under each --assist-ablation-modes and exit without training"
+        ),
+    )
+    agent.add_argument(
+        "--assist-ablation-modes",
+        default="unassisted,orientation_only,full",
+        help=(
+            "comma-separated modes: unassisted, orientation_only, approach_only, "
+            "orientation_approach, no_orientation, no_latch, full, or a custom a+b component list; "
+            "the first mode is the paired reference"
+        ),
+    )
+    agent.add_argument(
+        "--assist-ablation-output",
+        help="JSON path for the ablation report (default: <output>/assist_ablation.json)",
+    )
+    agent.add_argument(
         "--feasibility-weight",
         type=float,
         default=0.15,
@@ -1062,6 +1156,7 @@ def build_parser():
                        help="verified live camera names in dataset slot order")
     agent.add_argument("--hidden-dim", type=int, default=256)
     agent.add_argument("--vision-model", default="google/siglip-base-patch16-224")
+    agent.add_argument("--image-size", type=int, default=None, help="Input image resolution for controller vision encoder (defaults to model config)")
     agent.add_argument("--tiny-vision", action="store_true")
     agent.add_argument("--vision-dim", type=int, default=64)
     agent.set_defaults(handler=command_train_agent)

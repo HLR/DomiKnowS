@@ -308,7 +308,7 @@ class TinyImageEncoder(nn.Module):
 
 
 class FrozenSigLIPEncoder(nn.Module):
-    def __init__(self, model_id: str = VISION_MODEL_ID, *, local_files_only: bool = False):
+    def __init__(self, model_id: str = VISION_MODEL_ID, *, local_files_only: bool = False, image_size: int | tuple[int, int] | None = None):
         super().__init__()
         import transformers
 
@@ -335,6 +335,19 @@ class FrozenSigLIPEncoder(nn.Module):
             or getattr(getattr(config, "vision_config", None), "hidden_size", 0)
             or getattr(config, "hidden_size", 768)
         )
+        if image_size is not None:
+            if isinstance(image_size, (int, float)):
+                self.image_size = (int(image_size), int(image_size))
+            else:
+                self.image_size = (int(image_size[0]), int(image_size[1]))
+        else:
+            vision_config = getattr(config, "vision_config", None)
+            detected_size = (
+                getattr(vision_config, "image_size", None)
+                or getattr(config, "image_size", None)
+                or 224
+            )
+            self.image_size = (int(detected_size), int(detected_size))
         self.register_buffer("image_mean", torch.tensor([0.5, 0.5, 0.5]).view(1, 3, 1, 1), persistent=False)
         self.register_buffer("image_std", torch.tensor([0.5, 0.5, 0.5]).view(1, 3, 1, 1), persistent=False)
 
@@ -344,7 +357,7 @@ class FrozenSigLIPEncoder(nn.Module):
         return self
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        images = F.interpolate(images.float(), size=(224, 224), mode="bilinear", align_corners=False)
+        images = F.interpolate(images.float(), size=self.image_size, mode="bilinear", align_corners=False)
         images = (images - self.image_mean) / self.image_std
         with torch.no_grad():
             if hasattr(self.model, "get_image_features"):

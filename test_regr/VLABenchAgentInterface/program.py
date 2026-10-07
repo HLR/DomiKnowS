@@ -418,6 +418,40 @@ def _reported_episode_progress(episode: "JointEpisode") -> float:
     )
 
 
+ASSIST_COMPONENTS = ("orientation", "approach", "skills", "latch")
+
+
+def parse_assist_components(value: Any) -> frozenset[str]:
+    """Normalize an assist-component selection.
+
+    ``orientation`` is the expert grasp-orientation override, ``approach`` the
+    xyz blend toward the live grasp keypoint, ``skills`` the scripted
+    press/pour/pull/lift/place/insert motion, and ``latch`` the grasp latch and
+    kinematic object attachment. ``"all"`` (the default) is the historical
+    behaviour; ``"none"`` selects no component.
+    """
+
+    if value is None:
+        return frozenset(ASSIST_COMPONENTS)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"", "all"}:
+            return frozenset(ASSIST_COMPONENTS)
+        if text == "none":
+            return frozenset()
+        names = [part.strip() for part in text.replace("+", ",").split(",") if part.strip()]
+    else:
+        names = [str(part).strip().lower() for part in value]
+    if "all" in names:
+        return frozenset(ASSIST_COMPONENTS)
+    unknown = sorted(set(names) - set(ASSIST_COMPONENTS))
+    if unknown:
+        raise ValueError(
+            f"unknown assist component(s) {unknown}; choose from {list(ASSIST_COMPONENTS)}, 'all' or 'none'"
+        )
+    return frozenset(names)
+
+
 _ASSIST_DIAGNOSTIC_KEYS = (
     "pick_assist_steps", "grasp_assist_steps", "pull_assist_steps",
     "pour_assist_steps", "place_assist_steps", "insert_assist_steps",
@@ -1406,6 +1440,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         assistance_curriculum: str = "linear",
         assistance_start: float = 1.0,
         assistance_end: float = 0.0,
+        assist_components: Any = "all",
+        shadow_dagger: bool = False,
+        handover_distance: float | None = None,
         progress_callback: Callable[[str], None] | None = None,
     ):
         poi = attach_planner_sensors(runtime, planner, device=device)
@@ -1417,6 +1454,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             poi=poi,
             device=device,
         )
+        self.shadow_dagger = bool(shadow_dagger)
+        self.handover_distance = float(handover_distance) if handover_distance is not None else None
         self.runtime = runtime
         self.planner_head = planner
         self.controller = controller
@@ -1490,6 +1529,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.assistance_curriculum = assistance_curriculum
         self.assistance_start = float(assistance_start)
         self.assistance_end = float(assistance_end)
+        self.assist_components = parse_assist_components(assist_components)
+        self._assist_components_override: frozenset[str] | None = None
         self.curriculum_progress = 0.0
         self.progress_callback = progress_callback
         self._entity_dfa_cache: dict[int, Any] = {}
@@ -1549,15 +1590,36 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         return self._plan_rejection_reason(plan, entities, dfa=dfa) is None
 
     def collect_episode(self, descriptor: Mapping[str, Any]) -> JointEpisode:
-        assistance_enabled = (
+        base_assistance_enabled = (
             self._execution_assistance_override
             if self._execution_assistance_override is not None
             else self.execution_assistance in {"train-only", "on"}
         )
-        alpha = self.compute_assistance_factor()
-        latch_assistance_enabled = assistance_enabled and alpha >= 0.5 and (
-            self._execution_assistance_override is True or random.random() < alpha
+        base_alpha = self.compute_assistance_factor()
+        if self.shadow_dagger:
+            base_alpha = 0.0
+            base_assistance_enabled = True
+        
+        assist_components = (
+            self._assist_components_override
+            if self._assist_components_override is not None
+            else self.assist_components
         )
+        
+        handover_active = self.handover_distance is not None
+        
+        def _get_active_assistance():
+            curr_alpha = 1.0 if handover_active else base_alpha
+            curr_enabled = True if handover_active else base_assistance_enabled
+            return (
+                curr_alpha,
+                curr_enabled and "orientation" in assist_components,
+                curr_enabled and "approach" in assist_components,
+                curr_enabled and "skills" in assist_components,
+                curr_enabled and "latch" in assist_components and curr_alpha >= 0.5 and (self._execution_assistance_override is True or random.random() < curr_alpha)
+            )
+            
+        alpha, assist_orientation, assist_approach, assist_skills, latch_assistance_enabled = _get_active_assistance()
         kwargs = dict(descriptor.get("env_kwargs", {}))
         if descriptor.get("task") is not None:
             kwargs.setdefault("task", descriptor["task"])
@@ -1602,6 +1664,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         pick_assist_steps = grasp_assist_steps = pull_assist_steps = pour_assist_steps = 0
         place_assist_steps = insert_assist_steps = lift_assist_steps = 0
         press_assist_steps = 0
+        orientation_label_steps = 0
         pick_grasp_latched = False
         pick_grasp_qpos = None
         pick_best_distance = None
@@ -1938,13 +2001,21 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 ik_truncated = False
                 chunk_assisted_actions = [None] * min(self.execute_horizon, actions.shape[1])
                 any_action_assisted = False
+                chunk_handover = handover_active
                 for action_index, candidate in enumerate(actions[0, : self.execute_horizon]):
+                    current_target_distance = diagnostics.target_grasp_distance() or diagnostics.target_distance()
+                    if handover_active and current_target_distance is not None and current_target_distance <= self.handover_distance:
+                        handover_active = False
+                        alpha, assist_orientation, assist_approach, assist_skills, latch_assistance_enabled = _get_active_assistance()
+                        self._report_progress(f"VLABench handover triggered at distance {current_target_distance:.3f}")
                     try:
                         current = world_to_robot_ee_state(
                             _observation_state(observation), controller_robot_frame
                         )
                         candidate_value = candidate.detach().cpu().numpy()
                         orientation_override = None
+                        expert_orientation_label = None
+                        expert_approach_action = None
                         pick_orientation_error = None
                         condiment_grasp_world = None
                         finger_positions = _gripper_finger_positions(env)
@@ -1962,7 +2033,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             else ""
                         )
                         if (
-                            assistance_enabled
+                            assist_skills
                             and
                             task_type.__module__.startswith("VLABench.")
                             and active_skill == "press"
@@ -2004,7 +2075,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 press_assist_steps += 1
                                 any_action_assisted = True
                         if (
-                            assistance_enabled
+                            assist_skills
                             and
                             task_type.__module__.startswith("VLABench.")
                             and descriptor.get("task") == "add_condiment"
@@ -2156,27 +2227,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     and active_skill == "pick"
                                 ):
                                     task_name = str(descriptor.get("task", ""))
+                                    target_euler = None
+                                    slerp_orientation = False
                                     if task_name in {"select_book", "add_condiment", "select_drink"}:
                                         approach_blend = 1.0
-                                        candidate_value[3:6] = np.asarray(
+                                        target_euler = np.asarray(
                                             CONDIMENT_GRASP_EULER
                                             if task_name == "add_condiment"
                                             else (-np.pi / 2, -np.pi / 2, 0.0),
                                             dtype=np.float64,
                                         )
-                                        if task_name != "add_condiment":
-                                            # AddCondiment steps its own grasp
-                                            # rotation below; the other horizontal
-                                            # grasps need the same slerp because
-                                            # pitch=-pi/2 is an Euler singularity.
-                                            orientation_override, _ = _orientation_step(
-                                                current[3:6],
-                                                candidate_value[3:6],
-                                                self.max_rotation_step,
-                                            )
+                                        # AddCondiment steps its own grasp
+                                        # rotation below; the other horizontal
+                                        # grasps need the same slerp because
+                                        # pitch=-pi/2 is an Euler singularity.
+                                        slerp_orientation = task_name != "add_condiment"
                                     elif task_name in {"select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}:
                                         approach_blend = 1.0
-                                        candidate_value[3:6] = np.asarray([-np.pi, 0.0, 0.0], dtype=np.float64)
+                                        target_euler = np.asarray([-np.pi, 0.0, 0.0], dtype=np.float64)
                                     elif task_name == "insert_flower":
                                         # A free policy orientation drifts while the
                                         # fingers rest on the flower head, tilting the
@@ -2186,13 +2254,34 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                         # so the later fixed insertion pose hangs the
                                         # stem downward.
                                         approach_blend = 1.0
-                                        candidate_value[3:6] = _flower_grasp_euler(
-                                            _live_task_flower_stem_axis(env, "target_entity")
+                                        target_euler = np.asarray(
+                                            _flower_grasp_euler(
+                                                _live_task_flower_stem_axis(env, "target_entity")
+                                            ),
+                                            dtype=np.float64,
                                         )
+                                    if target_euler is not None:
+                                        if assist_orientation:
+                                            # Privileged: the expert orientation
+                                            # replaces the policy's own output.
+                                            candidate_value[3:6] = target_euler
+                                            if slerp_orientation:
+                                                orientation_override, _ = _orientation_step(
+                                                    current[3:6],
+                                                    candidate_value[3:6],
+                                                    self.max_rotation_step,
+                                                )
+                                        else:
+                                            # The policy's orientation executes
+                                            # and is trained toward the expert
+                                            # step as a supervised label.
+                                            expert_orientation_label, _ = _orientation_step(
+                                                current[3:6], target_euler, self.max_rotation_step
+                                            )
 
                                     if task_name in {"select_book", "add_condiment", "insert_flower", "select_drink", "select_fruit", "select_mahjong", "select_poker", "select_toy", "select_chemistry_tube"}:
                                         _, pick_orientation_error = _orientation_step(
-                                            current[3:6], candidate_value[3:6], self.max_rotation_step
+                                            current[3:6], target_euler, self.max_rotation_step
                                         )
                                         gripper_pcd = getattr(
                                             getattr(env, "robot", None),
@@ -2203,7 +2292,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                             try:
                                                 _, approach_vector = gripper_pcd(
                                                     target_world,
-                                                    euler_to_quaternion(*candidate_value[3:6]),
+                                                    euler_to_quaternion(*target_euler),
                                                 )
                                                 approach_vector = np.asarray(
                                                     approach_vector, dtype=np.float64
@@ -2256,16 +2345,25 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                                 ValueError,
                                             ):
                                                 pass
-                                candidate_value = _blend_pick_target(
-                                    candidate_value,
-                                    current,
-                                    target_world - controller_robot_frame,
-                                    approach_blend * alpha,
-                                )
-                                pick_assist_steps += 1
-                                any_action_assisted = True
+                                if assist_approach:
+                                    if self.shadow_dagger:
+                                        expert_approach_action = _blend_pick_target(
+                                            candidate_value,
+                                            current,
+                                            target_world - controller_robot_frame,
+                                            approach_blend * 1.0,
+                                        )
+                                    candidate_value = _blend_pick_target(
+                                        candidate_value,
+                                        current,
+                                        target_world - controller_robot_frame,
+                                        approach_blend * alpha,
+                                    )
+                                if assist_orientation or assist_approach:
+                                    pick_assist_steps += 1
+                                    any_action_assisted = True
                         if (
-                            assistance_enabled
+                            assist_skills
                             and
                             task_type.__module__.startswith("VLABench.")
                             and operation_cursor > 0
@@ -2716,7 +2814,23 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # around the singular pitch=±pi/2 grasp and
                             # insertion poses.
                             bounded[3:6] = np.asarray(orientation_override, dtype=np.float64)
-                        chunk_assisted_actions[action_index] = bounded.copy()
+                        assisted_label = bounded.copy()
+                        if self.shadow_dagger and active_skill == "pick":
+                            if expert_approach_action is not None:
+                                assisted_label = bound_ee_action(
+                                    expert_approach_action,
+                                    current,
+                                    max_position_step=self.max_position_step,
+                                    max_rotation_step=self.max_rotation_step,
+                                )
+                                any_action_assisted = True
+                        if expert_orientation_label is not None:
+                            # The policy's own orientation was executed; the
+                            # expert orientation step is the supervised label.
+                            assisted_label[3:6] = np.asarray(expert_orientation_label, dtype=np.float64)
+                            orientation_label_steps += 1
+                            any_action_assisted = True
+                        chunk_assisted_actions[action_index] = assisted_label
                         current_target_distance = diagnostics.target_grasp_distance() or diagnostics.target_distance()
                         target_min_distance = None
                         if diagnostics.targets:
@@ -3424,28 +3538,29 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                     dtype=assisted_chunk.dtype, device=assisted_chunk.device
                                 )
                         assisted_actions_tensor = assisted_chunk.cpu()
-                    transitions.append(ControllerTransition(
-                        images=inputs[0].detach().cpu(),
-                        state=inputs[1].detach().cpu(),
-                        task_index=inputs[2].detach().cpu(),
-                        plan_context=inputs[3].detach().cpu(),
-                        actions=policy_actions.cpu(),
-                        old_logprob=logprobs[0, :executed].sum().detach().cpu(),
-                        old_value=values[0].detach().cpu(),
-                        reward=chunk_reward,
-                        done=success or not valid or ik_truncated or steps >= self.max_steps,
-                        executed=executed,
-                        # Recovery is part of the environment's deterministic
-                        # safety transform. Penalize only the sampled target
-                        # that remained infeasible at every recovery scale.
-                        feasibility_cost=float(failed_action_index is not None),
-                        feasibility_index=failed_action_index,
-                        old_feasibility_logprob=(
-                            logprobs[0, failed_action_index].detach().cpu()
-                            if failed_action_index is not None else None
-                        ),
-                        assisted_actions=assisted_actions_tensor,
-                    ))
+                    if not chunk_handover:
+                        transitions.append(ControllerTransition(
+                            images=inputs[0].detach().cpu(),
+                            state=inputs[1].detach().cpu(),
+                            task_index=inputs[2].detach().cpu(),
+                            plan_context=inputs[3].detach().cpu(),
+                            actions=policy_actions.cpu(),
+                            old_logprob=logprobs[0, :executed].sum().detach().cpu(),
+                            old_value=values[0].detach().cpu(),
+                            reward=chunk_reward,
+                            done=success or not valid or ik_truncated or steps >= self.max_steps,
+                            executed=executed,
+                            # Recovery is part of the environment's deterministic
+                            # safety transform. Penalize only the sampled target
+                            # that remained infeasible at every recovery scale.
+                            feasibility_cost=float(failed_action_index is not None),
+                            feasibility_index=failed_action_index,
+                            old_feasibility_logprob=(
+                                logprobs[0, failed_action_index].detach().cpu()
+                                if failed_action_index is not None else None
+                            ),
+                            assisted_actions=assisted_actions_tensor,
+                        ))
                 if success or not valid or ik_truncated or steps >= self.max_steps:
                     break
 
@@ -3514,6 +3629,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "lift_assist_steps": lift_assist_steps,
                 "press_assist_steps": press_assist_steps,
                 "curriculum_alpha": float(alpha),
+                "assist_components": sorted(assist_components) if assistance_enabled else [],
+                "orientation_label_steps": orientation_label_steps,
             }
             self._report_progress(
                 f"VLABench controller diagnostics task={descriptor.get('task', 'unknown')} "
@@ -4132,8 +4249,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         *,
         rollouts_per_task: int = 1,
         seed: int = 1729,
+        assistance: bool | None = None,
+        assist_components: Any = None,
     ) -> dict[str, Any]:
-        """Run fixed-seed simulator evaluation without optimizer updates."""
+        """Run fixed-seed simulator evaluation without optimizer updates.
+
+        By default evaluation is controller-only unless ``execution_assistance``
+        is ``"on"``. ``assistance`` and ``assist_components`` override that for
+        ablations; scenes depend only on ``seed``, so different assistance modes
+        are paired on identical scenes.
+        """
 
         if not descriptors or rollouts_per_task <= 0:
             raise ValueError("evaluation requires descriptors and positive rollouts_per_task")
@@ -4144,12 +4269,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         controller_training = self.controller.training
         planner_training = self.planner_head.training
         prior_assistance_override = self._execution_assistance_override
+        prior_components_override = self._assist_components_override
         self.controller.eval()
         self.planner_head.eval()
         # Evaluation measures the learned controller. Deterministic expert
         # motion and object-attachment helpers are training scaffolding and
         # must not contribute to held-out success.
-        self._execution_assistance_override = self.execution_assistance == "on"
+        self._execution_assistance_override = (
+            self.execution_assistance == "on" if assistance is None else bool(assistance)
+        )
+        self._assist_components_override = (
+            None if assist_components is None else parse_assist_components(assist_components)
+        )
         episodes: list[JointEpisode] = []
         names: list[str] = []
         try:
@@ -4174,6 +4305,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             self.controller.train(controller_training)
             self.planner_head.train(planner_training)
             self._execution_assistance_override = prior_assistance_override
+            self._assist_components_override = prior_components_override
 
         task_totals: dict[str, dict[str, float]] = {}
         for task_name, episode in zip(names, episodes):
@@ -4253,6 +4385,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "evaluation_seed": int(seed),
             "episode_diagnostics": [
                 {"task": name, "termination_reason": episode.termination_reason,
+                 "success": bool(episode.success), "return": float(episode.total_return),
                  "steps": episode.steps, "diagnostics": episode.diagnostics}
                 for name, episode in zip(names, episodes)
             ],

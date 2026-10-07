@@ -337,7 +337,9 @@ def _control_loaders(args):
 
 
 def _controller(args, device):
-    encoder = TinyImageEncoder(args.vision_dim) if args.tiny_vision else FrozenSigLIPEncoder(args.vision_model)
+    encoder = TinyImageEncoder(args.vision_dim) if args.tiny_vision else FrozenSigLIPEncoder(
+        args.vision_model, image_size=getattr(args, "image_size", None)
+    )
     model = MultiViewController(
         encoder,
         action_horizon=args.action_horizon,
@@ -613,6 +615,9 @@ def command_train_agent(args) -> None:
         assistance_curriculum=getattr(args, "assistance_curriculum", "linear"),
         assistance_start=getattr(args, "assistance_start", 1.0),
         assistance_end=getattr(args, "assistance_end", 0.0),
+        assist_components=getattr(args, "assist_components", "all"),
+        shadow_dagger=getattr(args, "shadow_dagger", False),
+        handover_distance=getattr(args, "handover_distance", None),
         progress_callback=_status,
     )
     fallback_path = None
@@ -929,7 +934,8 @@ def command_diagnose_controller(args) -> None:
     weights = payload.get("controller", payload.get("model"))
     if weights is None:
         raise ValueError("checkpoint contains neither controller nor model weights")
-    controller.load_state_dict(weights)
+    from .training import _load_controller_state_dict
+    _load_controller_state_dict(controller, weights)
     loaders = _control_loaders(args)
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     parts = dict(zip(tasks, loaders[args.split].dataset.datasets))
@@ -1060,6 +1066,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--max-views", type=int, default=4)
         command.add_argument("--hidden-dim", type=int, default=256)
         command.add_argument("--vision-model", default="google/siglip-base-patch16-224")
+        command.add_argument("--image-size", type=int, default=None, help="Input image resolution for controller vision encoder (defaults to model config)")
         command.add_argument("--tiny-vision", action="store_true")
         command.add_argument("--vision-dim", type=int, default=64)
         command.add_argument("--resume")
@@ -1176,6 +1183,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="live camera names in dataset slot order; default resolves right/left/wrist aliases")
     agent.add_argument("--hidden-dim", type=int, default=256)
     agent.add_argument("--vision-model", default="google/siglip-base-patch16-224")
+    agent.add_argument("--image-size", type=int, default=None, help="Input image resolution for controller vision encoder (defaults to model config)")
     agent.add_argument("--tiny-vision", action="store_true")
     agent.add_argument("--vision-dim", type=int, default=64)
     agent.add_argument("--rl-num-samples", type=int, default=4)
@@ -1235,6 +1243,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent.add_argument("--assistance-start", type=float, default=1.0)
     agent.add_argument("--assistance-end", type=float, default=0.0)
+    agent.add_argument(
+        "--assist-components",
+        default="all",
+        help=(
+            "execution-assistance families active while assistance is enabled: any of "
+            "orientation, approach, skills, latch (comma-separated), 'all' or 'none'"
+        ),
+    )
+    agent.add_argument(
+        "--shadow-dagger",
+        action="store_true",
+        help="R1: execute unassisted (alpha=0) but collect expert approach/grasp labels",
+    )
+    agent.add_argument(
+        "--handover-distance",
+        type=float,
+        default=None,
+        help="R2: pre-grasp handover distance. If set, expert prefix executes until grasp distance <= this value.",
+    )
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)
 
@@ -1262,6 +1289,7 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.add_argument("--max-views", type=int, default=4)
     rollout.add_argument("--hidden-dim", type=int, default=256)
     rollout.add_argument("--vision-model", default="google/siglip-base-patch16-224")
+    rollout.add_argument("--image-size", type=int, default=None, help="Input image resolution for controller vision encoder (defaults to model config)")
     rollout.add_argument("--tiny-vision", action="store_true")
     rollout.add_argument("--vision-dim", type=int, default=64)
     rollout.set_defaults(handler=command_rollout)
@@ -1284,6 +1312,7 @@ def build_parser() -> argparse.ArgumentParser:
     diagnostic.add_argument("--max-views", type=int, default=4)
     diagnostic.add_argument("--hidden-dim", type=int, default=256)
     diagnostic.add_argument("--vision-model", default="google/siglip-base-patch16-224")
+    diagnostic.add_argument("--image-size", type=int, default=None, help="Input image resolution for controller vision encoder (defaults to model config)")
     diagnostic.add_argument("--tiny-vision", action="store_true")
     diagnostic.add_argument("--vision-dim", type=int, default=64)
     diagnostic.add_argument("--replay-manifest", help="JSON list of task, episode_index, offset and restoration metadata")

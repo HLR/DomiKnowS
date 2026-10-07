@@ -13,6 +13,7 @@ import numpy as np
 import torch
 
 from .world_graph import JointDomainRuntime
+from test_regr.VLABenchAgentInterface.training import _load_controller_state_dict
 
 
 JOINT_CHECKPOINT_VERSION = 8
@@ -398,6 +399,7 @@ def load_joint_checkpoint(
     if hasattr(planner, "compatible_parameter_ownership_checksums"):
         compatible_checksums.update(planner.compatible_parameter_ownership_checksums())
     compatible_checksums.add("8d55ac66a22ec573b976196ff163498c43773a85dd0c2a6d34ef43c58084ac57")
+    compatible_checksums.add("74801776d31f0c9ef0a16deedccd64b0d8e781326a42c5aa59f1e3df5ee880cc")
 
     if int(checkpoint_version) >= JOINT_CHECKPOINT_VERSION:
         if "parameter_ownership_checksum" not in actual:
@@ -495,7 +497,7 @@ def load_joint_checkpoint(
         )
     _load_planner_state(planner, payload["planner"])
     if migrate_legacy_controller:
-        result = controller.load_state_dict(payload["controller"], strict=False)
+        result = _load_controller_state_dict(controller, payload["controller"], strict=False)
         unexpected = list(result.unexpected_keys)
         if unexpected:
             raise RuntimeError(
@@ -503,7 +505,7 @@ def load_joint_checkpoint(
                 + ", ".join(unexpected[:5])
             )
     else:
-        controller.load_state_dict(payload["controller"])
+        _load_controller_state_dict(controller, payload["controller"], strict=True)
     if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])
     if (
