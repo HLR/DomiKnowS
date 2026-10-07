@@ -619,6 +619,7 @@ def command_train_agent(args) -> None:
         shadow_dagger=getattr(args, "shadow_dagger", False),
         handover_distance=getattr(args, "handover_distance", None),
         hindsight_relabel=getattr(args, "hindsight_relabel", False),
+        learning_progress=getattr(args, "learning_progress", False),
         progress_callback=_status,
     )
     fallback_path = None
@@ -1267,6 +1268,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--hindsight-relabel",
         action="store_true",
         help="R3: Graph-operation hindsight relabeling (HER on the plan graph)",
+    )
+    agent.add_argument(
+        "--learning-progress",
+        action="store_true",
+        help="R4: Learning-progress task scheduler and AWR replay buffer",
     )
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)

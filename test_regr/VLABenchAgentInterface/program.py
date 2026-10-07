@@ -1444,6 +1444,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         shadow_dagger: bool = False,
         handover_distance: float | None = None,
         hindsight_relabel: bool = False,
+        learning_progress: bool = False,
         progress_callback: Callable[[str], None] | None = None,
     ):
         poi = attach_planner_sensors(runtime, planner, device=device)
@@ -1458,6 +1459,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.shadow_dagger = bool(shadow_dagger)
         self.handover_distance = float(handover_distance) if handover_distance is not None else None
         self.hindsight_relabel = bool(hindsight_relabel)
+        self.learning_progress = bool(learning_progress)
+        self.awr_replay_buffer = []
         self.runtime = runtime
         self.planner_head = planner
         self.controller = controller
@@ -3832,6 +3835,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             for item in episode.controller
         ]
         transitions = [item for item, _informative in entries]
+        
+        if self.learning_progress:
+            for item, informative in entries:
+                if informative and item.advantage > 0.0:
+                    self.awr_replay_buffer.append(item)
+            # Sort by highest advantage and keep top 1000
+            self.awr_replay_buffer.sort(key=lambda x: x.advantage, reverse=True)
+            if len(self.awr_replay_buffer) > 1000:
+                self.awr_replay_buffer = self.awr_replay_buffer[:1000]
+
         if not transitions:
             self.last_controller_update = {
                 "task_signal_episodes": 0,
@@ -4154,6 +4167,52 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     )
                     add_action_log_ratios(final_ratios, logprob, item, informative)
         _mean_abs, _max_abs, final_approximate_kl = action_ratio_statistics(final_ratios)
+
+        # R4: Advantage-Weighted Regression
+        if getattr(self, "learning_progress", False) and self.awr_replay_buffer and actor_update_enabled:
+            import random
+            awr_epochs = 1
+            awr_batch_size = 32
+            for _ in range(awr_epochs):
+                awr_samples = random.sample(
+                    self.awr_replay_buffer,
+                    min(awr_batch_size, len(self.awr_replay_buffer))
+                )
+                self.controller_optimizer.zero_grad(set_to_none=True)
+                awr_losses = []
+                for item in awr_samples:
+                    executed = int(item.executed)
+                    if executed <= 0:
+                        continue
+                    pred_inputs = (
+                        item.images.to(self.device_name),
+                        item.state.to(self.device_name),
+                        item.task_index.to(self.device_name),
+                    )
+                    if item.plan_context is not None:
+                        pred_inputs += (item.plan_context.to(self.device_name),)
+                        
+                    controller_pred = self.controller(*pred_inputs)
+                    d_loss, _ = controller_loss(
+                        controller_pred[:, :executed],
+                        item.actions.to(self.device_name)[:, :executed],
+                        state=item.state.to(self.device_name),
+                        pose_step_scale=getattr(self.controller, "pose_step_scale", None),
+                    )
+                    
+                    weight = torch.exp(torch.tensor(item.advantage / 0.5, device=self.device_name)).clamp(0.0, 20.0)
+                    awr_losses.append(weight * d_loss)
+                    
+                if awr_losses:
+                    loss = torch.stack(awr_losses).mean()
+                    if bool(torch.isfinite(loss)):
+                        loss.backward()
+                        try:
+                            torch.nn.utils.clip_grad_norm_(trainable, 1.0, error_if_nonfinite=True)
+                            self.controller_optimizer.step()
+                        except RuntimeError:
+                            self.controller_optimizer.zero_grad(set_to_none=True)
+
 
         self.last_controller_update = {
             "task_signal_episodes": int(task_signal_episodes),

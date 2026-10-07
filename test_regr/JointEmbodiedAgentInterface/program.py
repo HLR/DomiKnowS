@@ -682,9 +682,36 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 self.set_curriculum_progress((current_epoch * rounds + round_index) / total_rl_steps)
             _emit_progress(f"Stage 2 round {round_index + 1}/{rounds}: EAI policy update")
             eai = self.train_eai_update(random.choice(eai_examples))
-            descriptor = vlabench_descriptors[
-                self.round_robin_cursor % len(vlabench_descriptors)
-            ]
+            if getattr(self, "learning_progress", False):
+                import math
+                scores = []
+                for idx, d in enumerate(vlabench_descriptors):
+                    task_name = str(d.get("task", "unknown"))
+                    totals = vla_task_totals.get(task_name)
+                    if not totals or totals["episodes"] < 1:
+                        score = 1000.0
+                    else:
+                        succ = totals["successes"]
+                        pos = totals["positive_returns"]
+                        n = max(1.0, totals["episodes"])
+                        def wilson(k, n, z=1.96):
+                            if n <= 0: return 0.0
+                            p = k / n
+                            denominator = 1.0 + z * z / n
+                            center = (p + z * z / (2 * n)) / denominator
+                            half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denominator
+                            return max(0.0, center - half)
+                        score = wilson(pos, n) - wilson(succ, n) + math.sqrt(2 * math.log(vla_episode_count + 1) / n)
+                    scores.append(score)
+                max_score = max(scores)
+                best_indices = [i for i, s in enumerate(scores) if s >= max_score - 1e-4]
+                chosen_index = random.choice(best_indices)
+                self.round_robin_cursor = chosen_index
+                descriptor = vlabench_descriptors[chosen_index]
+            else:
+                descriptor = vlabench_descriptors[
+                    self.round_robin_cursor % len(vlabench_descriptors)
+                ]
             _emit_progress(
                 f"Stage 2 round {round_index + 1}/{rounds}: "
                 f"VLABench task={descriptor.get('task', 'unknown')} "

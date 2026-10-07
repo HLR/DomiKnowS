@@ -635,6 +635,7 @@ def command_train_agent(args):
         shadow_dagger=getattr(args, "shadow_dagger", False),
         handover_distance=getattr(args, "handover_distance", None),
         hindsight_relabel=getattr(args, "hindsight_relabel", False),
+        learning_progress=getattr(args, "learning_progress", False),
         feasibility_weight=getattr(args, "feasibility_weight", 0.15),
         dagger_weight=getattr(args, "dagger_weight", 0.20),
     )
@@ -1108,6 +1109,11 @@ def build_parser():
         "--hindsight-relabel",
         action="store_true",
         help="R3: Graph-operation hindsight relabeling (HER on the plan graph)",
+    )
+    agent.add_argument(
+        "--learning-progress",
+        action="store_true",
+        help="R4: Learning-progress task scheduler and AWR replay buffer",
     )
     agent.add_argument(
         "--assist-ablation-rollouts",
