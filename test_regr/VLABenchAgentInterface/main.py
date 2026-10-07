@@ -618,6 +618,7 @@ def command_train_agent(args) -> None:
         assist_components=getattr(args, "assist_components", "all"),
         shadow_dagger=getattr(args, "shadow_dagger", False),
         handover_distance=getattr(args, "handover_distance", None),
+        hindsight_relabel=getattr(args, "hindsight_relabel", False),
         progress_callback=_status,
     )
     fallback_path = None
@@ -1261,6 +1262,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="R2: pre-grasp handover distance. If set, expert prefix executes until grasp distance <= this value.",
+    )
+    agent.add_argument(
+        "--hindsight-relabel",
+        action="store_true",
+        help="R3: Graph-operation hindsight relabeling (HER on the plan graph)",
     )
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)

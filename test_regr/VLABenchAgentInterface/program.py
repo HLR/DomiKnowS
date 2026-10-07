@@ -1443,6 +1443,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         assist_components: Any = "all",
         shadow_dagger: bool = False,
         handover_distance: float | None = None,
+        hindsight_relabel: bool = False,
         progress_callback: Callable[[str], None] | None = None,
     ):
         poi = attach_planner_sensors(runtime, planner, device=device)
@@ -1456,6 +1457,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         )
         self.shadow_dagger = bool(shadow_dagger)
         self.handover_distance = float(handover_distance) if handover_distance is not None else None
+        self.hindsight_relabel = bool(hindsight_relabel)
         self.runtime = runtime
         self.planner_head = planner
         self.controller = controller
@@ -1668,6 +1670,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         pick_grasp_latched = False
         pick_grasp_qpos = None
         pick_best_distance = None
+        operation_boundaries = []
         pick_stalled_steps = 0
         grasp_close_steps = 0
         condiment_prepare_reached = False
@@ -3506,6 +3509,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     ):
                         operation_cursor += 1
                         chunk_advanced = True
+                        operation_boundaries.append(len(transitions) + 1)
                         # Potential-based graph-subgoal shaping moves credit to
                         # the operation boundary. The terminal correction below
                         # preserves the authoritative final rollout formula.
@@ -3606,6 +3610,37 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 0.0 if start is None else sum(item.reward for item in transitions[start:])
                 for start in planner_transition_indices
             ]
+            
+            # R3: Graph-operation hindsight relabeling
+            if self.hindsight_relabel and not success and valid and operation_boundaries:
+                import copy
+                hindsight_transitions = []
+                for end_idx in operation_boundaries:
+                    if end_idx > len(transitions):
+                        continue
+                    segment = []
+                    for item in transitions[:end_idx]:
+                        segment.append(copy.copy(item))
+                    if not segment:
+                        continue
+                    
+                    target_total_op = 1.0
+                    terminal_op = target_total_op - sum(item.reward for item in segment[:-1])
+                    segment[-1].reward = terminal_op
+                    segment[-1].done = True
+                    
+                    op_values = [float(item.old_value) for item in segment]
+                    op_advantages, op_returns = generalized_advantage_estimate(
+                        [item.reward for item in segment], op_values, [item.done for item in segment],
+                        gamma=self.gamma, gae_lambda=self.gae_lambda,
+                    )
+                    for item, adv, ret in zip(segment, op_advantages, op_returns):
+                        item.advantage = adv
+                        item.return_value = ret
+                        
+                    hindsight_transitions.extend(segment)
+                transitions.extend(hindsight_transitions)
+                
             diagnostic_result = {
                 **diagnostics.result(),
                 "task_contract": (
