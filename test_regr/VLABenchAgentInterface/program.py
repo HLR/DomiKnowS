@@ -2182,7 +2182,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             pour_assist_steps += 1
                             any_action_assisted = True
                         if (
-                            assistance_enabled
+                            assist_approach
                             and
                             operation_cursor == 0
                             and active_skill == "pick"
@@ -3667,7 +3667,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 "lift_assist_steps": lift_assist_steps,
                 "press_assist_steps": press_assist_steps,
                 "curriculum_alpha": float(alpha),
-                "assist_components": sorted(assist_components) if assistance_enabled else [],
+                "assist_components": sorted(assist_components) if base_assistance_enabled else [],
                 "orientation_label_steps": orientation_label_steps,
             }
             self._report_progress(
