@@ -382,7 +382,7 @@ class TorchModel(torch.nn.Module):
         for p, s in base_states.items():
             p.requires_grad = s
 
-        if policy == "freeze_inactive":
+        if policy in ("freeze_inactive", "pcgrad_protected_eai"):
             for p in classification['inactive_private']:
                 p.requires_grad = False
                 p.grad = None

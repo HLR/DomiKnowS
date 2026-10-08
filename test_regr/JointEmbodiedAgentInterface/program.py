@@ -511,10 +511,31 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                     sample_loss.backward()
                     total_loss += float(sample_loss.detach())
 
+            if self.parameter_policy == "pcgrad_protected_eai":
+                rl_grads = []
+                for p in self.joint_planner.parameters():
+                    if p.grad is not None:
+                        rl_grads.append(p.grad.clone())
+                        p.grad.zero_()
+                    else:
+                        rl_grads.append(None)
+            
             anchor_loss = self.eai_supervised_weight * self._eai_anchor()
             if anchor_loss.requires_grad:
                 anchor_loss.backward()
                 total_loss += float(anchor_loss.detach())
+                
+            if self.parameter_policy == "pcgrad_protected_eai":
+                with torch.no_grad():
+                    for p, rl_g in zip(self.joint_planner.parameters(), rl_grads):
+                        if rl_g is not None and p.grad is not None:
+                            anchor_g = p.grad
+                            dot = torch.sum(rl_g * anchor_g)
+                            if dot < 0:
+                                rl_g = rl_g - (dot / (torch.sum(anchor_g * anchor_g) + 1e-8)) * anchor_g
+                            p.grad.add_(rl_g)
+                        elif rl_g is not None:
+                            p.grad = rl_g.clone()
             torch.nn.utils.clip_grad_norm_(self.joint_planner.parameters(), 1.0)
             self.planner_optimizer.step()
             if torch.cuda.is_available():

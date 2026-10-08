@@ -107,10 +107,11 @@ def stage1_selection_key(metrics):
 
 def stage2_selection_key(metrics):
     eai, vla = metrics["eai"], metrics["vlabench"]
-    minimum = min(float(eai["success"]), float(vla["success_rate"]))
-    mean = (float(eai["success"]) + float(vla["success_rate"])) / 2.0
+    vla_success = float(vla.get("success_rate_lower", vla.get("success_rate", 0.0)))
+    minimum = min(float(eai["success"]), vla_success)
+    mean = (float(eai["success"]) + vla_success) / 2.0
     efficiency = 1.0 / max(1.0, float(vla.get("steps", 1.0)))
-    return (minimum, mean, float(eai.get("goal_recall", eai["reward"])), float(vla["return"]), efficiency)
+    return (minimum, mean, float(eai.get("goal_recall", eai["reward"])), float(vla.get("return", 0.0)), efficiency)
 
 
 def stage2_checkpoint_eligible(
@@ -576,6 +577,11 @@ def command_train_agent(args):
             "Stage 2 parameter policy is 'freeze_shared'; domain scopes dynamically "
             "freeze shared Qwen/LoRA during execution to eliminate cross-domain policy interference"
         )
+    elif stage2_policy == "pcgrad_protected_eai":
+        _status(
+            "Stage 2 parameter policy is 'pcgrad_protected_eai'; shared backbone is trainable "
+            "with PCGrad projecting RL gradients orthogonal to EAI anchor gradients"
+        )
     else:
         _status(
             f"WARNING: Stage 2 parameter policy is set to {stage2_policy!r}. "
@@ -1019,7 +1025,7 @@ def build_parser():
     agent.add_argument(
         "--stage2-eval-rollouts-per-task",
         type=int,
-        default=3,
+        default=10,
         help="fixed-seed held-out simulator rollouts per task before RL and after each Stage 2 epoch; use 0 to disable",
     )
     agent.add_argument("--planner-learning-rate", type=float, default=2e-5)
@@ -1033,7 +1039,7 @@ def build_parser():
     )
     agent.add_argument(
         "--stage2-parameter-policy",
-        choices=("freeze_shared", "freeze_inactive", "none"),
+        choices=("freeze_shared", "freeze_inactive", "none", "pcgrad_protected_eai"),
         default="freeze_shared",
         help="parameter coordination policy for Stage 2 RL domain scoping (default: freeze_shared)",
     )

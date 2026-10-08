@@ -153,8 +153,9 @@ def reinforcement_selection_key(metrics):
 
     rollout = _rollout_metrics(metrics)
     efficiency = 1.0 / max(1.0, float(rollout.get("steps", 1.0)))
+    success_rate = float(rollout.get("success_rate_lower", rollout.get("success_rate", 0.0)))
     return (
-        float(rollout["success_rate"]),
+        success_rate,
         int(rollout.get("successful_task_count", 0)),
         float(rollout.get("return", 0.0)),
         float(rollout.get("execution_complete_rate", 0.0)),
@@ -1227,7 +1228,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="resample this many infeasible action chunks before truncating an episode",
     )
     agent.add_argument(
-        "--eval-rollouts-per-task", type=int, default=3,
+        "--eval-rollouts-per-task", type=int, default=10,
         help="Fixed-seed simulator rollouts per task used for retention and reporting.",
     )
     agent.add_argument(

@@ -4433,11 +4433,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             totals["assist_steps"] += assist_steps
             totals["assisted_episodes"] += float(assist_steps > 0)
             totals["unassisted_successes"] += float(episode.success and assist_steps == 0)
+            
+        def wilson_lower(k, n, z=1.96):
+            if n == 0: return 0.0
+            p = k / n
+            return (p + z*z/(2*n) - z * math.sqrt((p*(1-p) + z*z/(4*n))/n)) / (1 + z*z/n)
+            
+        def wilson_upper(k, n, z=1.96):
+            if n == 0: return 0.0
+            p = k / n
+            return (p + z*z/(2*n) + z * math.sqrt((p*(1-p) + z*z/(4*n))/n)) / (1 + z*z/n)
+            
         per_task = {
             name: {
                 "episodes": int(values["episodes"]),
                 "successes": int(values["successes"]),
                 "success_rate": values["successes"] / values["episodes"],
+                "success_rate_lower": wilson_lower(values["successes"], values["episodes"]),
+                "success_rate_upper": wilson_upper(values["successes"], values["episodes"]),
                 "valid_rate": values["valid"] / values["episodes"],
                 "return": values["return"] / values["episodes"],
                 "positive_return_rate": (
@@ -4463,6 +4476,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 item.total_return > POSITIVE_RETURN_EPSILON for item in episodes
             ) / count,
             "success_rate": sum(item.success for item in episodes) / count,
+            "success_rate_lower": wilson_lower(sum(item.success for item in episodes), count),
+            "success_rate_upper": wilson_upper(sum(item.success for item in episodes), count),
             "valid_rate": sum(item.valid for item in episodes) / count,
             "steps": sum(item.steps for item in episodes) / count,
             "episodes": count,
