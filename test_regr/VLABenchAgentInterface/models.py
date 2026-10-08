@@ -388,6 +388,7 @@ class ControllerPolicyOutput:
     gripper_logits: torch.Tensor
     value: torch.Tensor
     latent_pose_mean: torch.Tensor | None = None
+    std_penalty: torch.Tensor | None = None
 
 
 class MultiViewController(nn.Module):
@@ -442,6 +443,12 @@ class MultiViewController(nn.Module):
         # graph-independent Cartesian safety envelope.
         self.exploration_std = (0.35,) * 6
         self.log_std = nn.Parameter(torch.tensor(self.exploration_std).log())
+        # R5: state-conditioned std head
+        self.std_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.GELU(),
+            nn.Linear(hidden_dim // 2, 6)
+        )
 
     def reset_for_action_representation_migration(self) -> None:
         """Reset only the legacy absolute-pose actor parameters.
@@ -507,6 +514,7 @@ class MultiViewController(nn.Module):
         vision = self.image_encoder(flat).reshape(batch, history, views, -1)
         view_ids = torch.arange(views, device=images.device)
         vision = vision + self.view_embedding(view_ids).view(1, 1, views, -1)
+        wrist_features = vision[:, -1, min(2, views - 1), :].detach()
         vision = self.vision_projection(vision.mean(dim=2))
         state = state[..., : self.state_dim]
         if state.shape[-1] < self.state_dim:
@@ -525,13 +533,21 @@ class MultiViewController(nn.Module):
                 + self.entity_embedding(entity)
                 + self.operation_embedding(operation)
             )
-        return self.fusion(torch.cat((temporal[:, -1], task), dim=-1))
+        return self.fusion(torch.cat((temporal[:, -1], task), dim=-1)), wrist_features
 
     def policy(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor, plan_context=None) -> ControllerPolicyOutput:
-        features = self._features(images, state, task_index, plan_context)
+        features, wrist_features = self._features(images, state, task_index, plan_context)
         raw = self.policy_head(features).reshape(-1, self.action_horizon, self.action_dim)
         pose_mean = self._local_pose_chunk(raw[..., :6], state)
-        std = self.log_std.clamp(float(torch.tensor(0.05).log()), float(torch.tensor(0.75).log())).exp().view(1, 1, 6).expand_as(raw[..., :6])
+        
+        if hasattr(self, "std_head"):
+            log_std = self.std_head(features)
+            std = log_std.clamp(float(torch.tensor(0.05).log()), float(torch.tensor(0.75).log())).exp().view(-1, 1, 6).expand_as(raw[..., :6])
+            std_penalty = (wrist_features.norm(dim=-1).mean(dim=1) * std.mean(dim=(1, 2))).mean() * 0.01
+        else:
+            std = self.log_std.clamp(float(torch.tensor(0.05).log()), float(torch.tensor(0.75).log())).exp().view(1, 1, 6).expand_as(raw[..., :6])
+            std_penalty = torch.zeros((), device=raw.device)
+            
         output = ControllerPolicyOutput(
             pose_mean,
             std,
@@ -542,6 +558,7 @@ class MultiViewController(nn.Module):
             # silently changing the actor's shared visual/control features.
             torch.tanh(self.value_head(features.detach())).squeeze(-1),
             raw[..., :6],
+            std_penalty,
         )
         for name, value in (
             ("pose mean", output.pose_mean),
@@ -594,7 +611,7 @@ class MultiViewController(nn.Module):
         grip = actions[..., 6].clamp(0, 1)
         logprob = self._bounded_pose_logprob(pose_distribution, latent, delta).sum(-1) + grip_distribution.log_prob(grip)
         entropy = pose_distribution.entropy().sum(-1) + grip_distribution.entropy()
-        return logprob, entropy, output.value
+        return logprob, entropy, output.value, output.std_penalty
 
     @torch.no_grad()
     def predict_action_chunk(self, images, state, task_index, plan_context=None) -> torch.Tensor:

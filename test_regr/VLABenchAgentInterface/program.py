@@ -3954,7 +3954,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             losses = []
             action_log_ratios = []
             for index, item in enumerate(transitions):
-                logprob, entropy, value = self.controller.evaluate_action_chunk(
+                logprob, entropy, value, std_penalty = self.controller.evaluate_action_chunk(
                     item.images.to(self.device_name),
                     item.state.to(self.device_name),
                     item.task_index.to(self.device_name),
@@ -4041,6 +4041,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     - entropy_bonus
                     + feasibility_loss
                     + dagger_loss
+                    + std_penalty
                 )
             mean_action_log_ratio, max_action_log_ratio, approximate_kl = (
                 action_ratio_statistics(action_log_ratios)
@@ -4118,7 +4119,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             post_update_ratios = []
             with torch.no_grad():
                 for item, informative in entries:
-                    logprob, _entropy, _value = self.controller.evaluate_action_chunk(
+                    logprob, _entropy, _value, _std_penalty = self.controller.evaluate_action_chunk(
                         item.images.to(self.device_name),
                         item.state.to(self.device_name),
                         item.task_index.to(self.device_name),
@@ -4157,7 +4158,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         if actor_update_enabled and completed_epochs and not rolled_back:
             with torch.no_grad():
                 for item, informative in entries:
-                    logprob, _entropy, _value = self.controller.evaluate_action_chunk(
+                    logprob, _entropy, _value, _std_penalty = self.controller.evaluate_action_chunk(
                         item.images.to(self.device_name),
                         item.state.to(self.device_name),
                         item.task_index.to(self.device_name),
