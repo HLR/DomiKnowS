@@ -604,7 +604,7 @@ class MultiViewController(nn.Module):
         if hasattr(self, "std_head"):
             log_std = self.std_head(features)
             std = log_std.clamp(float(torch.tensor(0.05).log()), float(torch.tensor(0.75).log())).exp().view(-1, 1, 6).expand_as(raw[..., :6])
-            std_penalty = (wrist_features.norm(dim=-1).mean(dim=1) * std.mean(dim=(1, 2))).mean() * 0.01
+            std_penalty = (wrist_features.norm(dim=-1) * std.mean(dim=(1, 2))).mean() * 0.01
         else:
             std = self.log_std.clamp(float(torch.tensor(0.05).log()), float(torch.tensor(0.75).log())).exp().view(1, 1, 6).expand_as(raw[..., :6])
             std_penalty = torch.zeros((), device=raw.device)
