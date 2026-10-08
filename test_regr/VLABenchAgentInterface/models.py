@@ -308,8 +308,9 @@ class TinyImageEncoder(nn.Module):
 
 
 class FrozenSigLIPEncoder(nn.Module):
-    def __init__(self, model_id: str = VISION_MODEL_ID, *, local_files_only: bool = False, image_size: int | tuple[int, int] | None = None):
+    def __init__(self, model_id: str = VISION_MODEL_ID, *, local_files_only: bool = False, image_size: int | tuple[int, int] | None = None, return_patch_tokens: bool = False):
         super().__init__()
+        self.return_patch_tokens = return_patch_tokens
         import transformers
 
         model_kwargs = {"local_files_only": local_files_only}
@@ -360,24 +361,27 @@ class FrozenSigLIPEncoder(nn.Module):
         images = F.interpolate(images.float(), size=self.image_size, mode="bilinear", align_corners=False)
         images = (images - self.image_mean) / self.image_std
         with torch.no_grad():
-            if hasattr(self.model, "get_image_features"):
-                value = self.model.get_image_features(pixel_values=images)
+            if self.return_patch_tokens:
+                value = self.model.vision_model(pixel_values=images).last_hidden_state
             else:
-                value = self.model.vision_model(pixel_values=images)
-            if not torch.is_tensor(value):
-                image_embeds = getattr(value, "image_embeds", None)
-                pooler_output = getattr(value, "pooler_output", None)
-                last_hidden_state = getattr(value, "last_hidden_state", None)
-                if image_embeds is not None:
-                    value = image_embeds
-                elif pooler_output is not None:
-                    value = pooler_output
-                elif last_hidden_state is not None:
-                    value = last_hidden_state[:, 0]
+                if hasattr(self.model, "get_image_features"):
+                    value = self.model.get_image_features(pixel_values=images)
                 else:
-                    raise TypeError(
-                        "SigLIP image encoder returned neither a tensor nor pooled/hidden-state features"
-                    )
+                    value = self.model.vision_model(pixel_values=images)
+                if not torch.is_tensor(value):
+                    image_embeds = getattr(value, "image_embeds", None)
+                    pooler_output = getattr(value, "pooler_output", None)
+                    last_hidden_state = getattr(value, "last_hidden_state", None)
+                    if image_embeds is not None:
+                        value = image_embeds
+                    elif pooler_output is not None:
+                        value = pooler_output
+                    elif last_hidden_state is not None:
+                        value = last_hidden_state[:, 0]
+                    else:
+                        raise TypeError(
+                            "SigLIP image encoder returned neither a tensor nor pooled/hidden-state features"
+                        )
         return value.float()
 
 
@@ -389,6 +393,39 @@ class ControllerPolicyOutput:
     value: torch.Tensor
     latent_pose_mean: torch.Tensor | None = None
     std_penalty: torch.Tensor | None = None
+    
+    
+class PlanConditionedAttentionPooling(nn.Module):
+    def __init__(self, hidden_dim: int, max_views: int = 4):
+        super().__init__()
+        self.query_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.key_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.value_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.view_gate = nn.Parameter(torch.ones(max_views))
+        self.scale = hidden_dim ** -0.5
+        
+    def forward(self, x: torch.Tensor, query: torch.Tensor) -> torch.Tensor:
+        # x: [batch, history, views, seq_len, hidden_dim]
+        # query: [batch, hidden_dim]
+        b, h, v, s, d = x.shape
+        q = self.query_proj(query).view(b, 1, 1, 1, d)
+        k = self.key_proj(x)
+        val = self.value_proj(x)
+        
+        # [batch, history, views, seq_len]
+        attn = (q * k).sum(dim=-1) * self.scale
+        
+        # view gate
+        gate = torch.sigmoid(self.view_gate[:v]).view(1, 1, -1, 1)
+        attn = attn + torch.log(gate + 1e-6)
+        
+        # softmax over views and seq_len
+        attn = attn.view(b, h, v * s)
+        attn = F.softmax(attn, dim=-1).view(b, h, v, s, 1)
+        
+        # pool
+        pooled = (attn * val).sum(dim=(2, 3)) # [batch, history, hidden_dim]
+        return pooled
 
 
 class MultiViewController(nn.Module):
@@ -401,7 +438,7 @@ class MultiViewController(nn.Module):
     action_representation_version = 4
     # Version 3 trains on unit-range RGB for every decoding path.
     behavior_cloning_version = 3
-    critic_version = 2
+    critic_version = 3
     plan_conditioning_version = 1
 
     def __init__(
@@ -436,7 +473,19 @@ class MultiViewController(nn.Module):
         self.temporal = nn.GRU(hidden_dim * 2, hidden_dim, batch_first=True)
         self.fusion = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.GELU())
         self.policy_head = nn.Linear(hidden_dim, action_horizon * action_dim)
-        self.value_head = nn.Linear(hidden_dim, 1)
+        
+        # R6: MLP critic
+        self.value_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 1)
+        )
+        
+        # R6: Attention pooling
+        self.attention_pool = PlanConditionedAttentionPooling(hidden_dim, max_views)
+        if hasattr(self.image_encoder, "return_patch_tokens"):
+            self.image_encoder.return_patch_tokens = True
+            
         self.pose_step_scale = (0.02, 0.02, 0.02, 0.10, 0.10, 0.10)
         # Standard deviations are in the pre-tanh local-delta space.  A value
         # of 0.35 explores without allowing a sampled target to escape the
@@ -463,7 +512,9 @@ class MultiViewController(nn.Module):
         self.skill_embedding.reset_parameters()
         self.entity_embedding.reset_parameters()
         self.operation_embedding.reset_parameters()
-        self.value_head.reset_parameters()
+        for layer in self.value_head:
+            if hasattr(layer, "reset_parameters"):
+                layer.reset_parameters()
         with torch.no_grad():
             self.log_std.copy_(
                 torch.tensor(
@@ -475,8 +526,9 @@ class MultiViewController(nn.Module):
 
     def reset_critic_for_migration(self) -> None:
         """Reset the formerly unbounded critic while preserving the actor."""
-
-        self.value_head.reset_parameters()
+        for layer in self.value_head:
+            if hasattr(layer, "reset_parameters"):
+                layer.reset_parameters()
 
     def _local_pose_chunk(
         self,
@@ -510,29 +562,38 @@ class MultiViewController(nn.Module):
         batch, history, views, channels, height, width = images.shape
         if views > self.view_embedding.num_embeddings:
             raise ValueError(f"controller supports at most {self.view_embedding.num_embeddings} views")
-        flat = images.reshape(batch * history * views, channels, height, width)
-        vision = self.image_encoder(flat).reshape(batch, history, views, -1)
-        view_ids = torch.arange(views, device=images.device)
-        vision = vision + self.view_embedding(view_ids).view(1, 1, views, -1)
-        wrist_features = vision[:, -1, min(2, views - 1), :].detach()
-        vision = self.vision_projection(vision.mean(dim=2))
-        state = state[..., : self.state_dim]
-        if state.shape[-1] < self.state_dim:
-            state = F.pad(state, (0, self.state_dim - state.shape[-1]))
-        state_features = self.state_projection(state.float())
-        temporal, _ = self.temporal(torch.cat((vision, state_features), dim=-1))
         task = self.task_embedding(task_index.long().reshape(batch))
         if plan_context is not None:
             context = plan_context.long().reshape(batch, 3)
             skill = context[:, 0].clamp(0, self.skill_embedding.num_embeddings - 1)
             entity = context[:, 1].clamp(0, self.entity_embedding.num_embeddings - 1)
             operation = context[:, 2].clamp(0, self.operation_embedding.num_embeddings - 1)
-            task = (
-                task
-                + self.skill_embedding(skill)
-                + self.entity_embedding(entity)
-                + self.operation_embedding(operation)
-            )
+            task = task + self.skill_embedding(skill) + self.entity_embedding(entity) + self.operation_embedding(operation)
+
+        flat = images.reshape(batch * history * views, channels, height, width)
+        enc_out = self.image_encoder(flat)
+        if enc_out.ndim == 3: # [N, seq_len, dim]
+            _, seq_len, vision_dim = enc_out.shape
+            vision = enc_out.view(batch, history, views, seq_len, vision_dim)
+            view_ids = torch.arange(views, device=images.device)
+            vision = vision + self.view_embedding(view_ids).view(1, 1, views, 1, vision_dim)
+            wrist_features = vision[:, -1, min(2, views - 1), :, :].mean(dim=-2).detach()
+            vision = self.vision_projection(vision) # [batch, history, views, seq_len, hidden_dim]
+            # Pool over views and seq_len
+            vision = self.attention_pool(vision, task) # [b, h, d]
+        else: # [N, dim]
+            _, vision_dim = enc_out.shape
+            vision = enc_out.view(batch, history, views, vision_dim)
+            view_ids = torch.arange(views, device=images.device)
+            vision = vision + self.view_embedding(view_ids).view(1, 1, views, vision_dim)
+            wrist_features = vision[:, -1, min(2, views - 1), :].detach()
+            vision = self.vision_projection(vision.mean(dim=2))
+
+        state = state[..., : self.state_dim]
+        if state.shape[-1] < self.state_dim:
+            state = F.pad(state, (0, self.state_dim - state.shape[-1]))
+        state_features = self.state_projection(state.float())
+        temporal, _ = self.temporal(torch.cat((vision, state_features), dim=-1))
         return self.fusion(torch.cat((temporal[:, -1], task), dim=-1)), wrist_features
 
     def policy(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor, plan_context=None) -> ControllerPolicyOutput:

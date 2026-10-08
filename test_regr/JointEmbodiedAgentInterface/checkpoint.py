@@ -496,10 +496,10 @@ def load_joint_checkpoint(
             f"saved={saved_controller!r}, current={current_controller!r}"
         )
     _load_planner_state(planner, payload["planner"])
-    if migrate_legacy_controller:
+    if migrate_legacy_controller or migrate_legacy_critic:
         result = _load_controller_state_dict(controller, payload["controller"], strict=False)
         unexpected = list(result.unexpected_keys)
-        if unexpected:
+        if unexpected and migrate_legacy_controller:
             raise RuntimeError(
                 "legacy controller checkpoint has unexpected state: "
                 + ", ".join(unexpected[:5])
