@@ -19,9 +19,11 @@ from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
 
 try:
+    from .planning_metrics import default_dependency, planning_metadata
     from .observations import image_tensor
     from .world_graph import canonicalize_plan, controller_skill_index
 except ImportError:
+    from planning_metrics import default_dependency, planning_metadata
     from observations import image_tensor
     from world_graph import canonicalize_plan, controller_skill_index
 
@@ -321,6 +323,8 @@ class PlanningExample:
     env_config_path: Path | None
     dependency: Any = "Sequential"
     entities: tuple[str, ...] = ()
+    task: str | None = None
+    dimension: str | None = None
 
     def as_reward_item(self) -> dict[str, Any]:
         return {
@@ -329,6 +333,8 @@ class PlanningExample:
             "operation_sequence": list(self.operation_sequence),
             "dependency": self.dependency,
             "entities": self.entities,
+            "task": self.task,
+            "dimension": self.dimension,
         }
 
 
@@ -540,8 +546,9 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None) -> lis
         config_candidates = sorted((example_dir / "env_config").rglob("*.json")) if (example_dir / "env_config").exists() else []
         config_path = config_candidates[0] if config_candidates else None
         config = _read_json(config_path) if config_path is not None else {}
-        dependency = payload.get("dependency", config.get("dependency", "Sequential")) if isinstance(payload, Mapping) else config.get("dependency", "Sequential")
         episode_id = str(example_dir.relative_to(root)).replace("\\", "/")
+        task, dimension = planning_metadata(episode_id)
+        dependency = payload.get("dependency", config.get("dependency", default_dependency(task))) if isinstance(payload, Mapping) else config.get("dependency", default_dependency(task))
         entities = list(_extract_entities(config))
         for operation in canonicalize_plan(plan_payload):
             for key in ("target_entity_name", "target_container_name"):
@@ -557,6 +564,8 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None) -> lis
             env_config_path=config_path,
             dependency=dependency,
             entities=tuple(entities),
+            task=task,
+            dimension=dimension,
         ))
         if limit is not None and len(examples) >= limit:
             break

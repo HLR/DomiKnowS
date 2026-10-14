@@ -13,6 +13,7 @@ import torch
 from PIL import Image
 
 try:
+    from .planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics
     from .diagnostics import ControllerMetrics
     from .graph import PlanVocabulary, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
     from .models import controller_loss
@@ -20,6 +21,7 @@ try:
     from .reward import make_vlabench_reward_function, score_vlabench_plan
     from .world_graph import build_vlabench_world_graph
 except ImportError:
+    from planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics
     from diagnostics import ControllerMetrics
     from graph import PlanVocabulary, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
     from models import controller_loss
@@ -507,7 +509,7 @@ def train_planner_reinforcement_epoch(
 
 
 @torch.no_grad()
-def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime: PlannerConstraintRuntime) -> dict[str, float]:
+def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime: PlannerConstraintRuntime) -> dict[str, Any]:
     was_training = planner.training
     planner.eval()
     totals = {
@@ -519,6 +521,7 @@ def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime:
         "valid": 0.0,
     }
     count = 0
+    planning_metrics = PlanningMetrics()
     try:
         for count, example in enumerate(examples, start=1):
             images = _planner_images(example)
@@ -534,6 +537,17 @@ def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime:
             finally:
                 for image in images:
                     image.close()
+            scores = score_planning_metrics(
+                output,
+                _example_value(example, "operation_sequence"),
+                _example_value(example, "dependency", "Sequential"),
+            )
+            inferred_task, inferred_dimension = planning_metadata(_example_value(example, "episode_id", ""))
+            planning_metrics.update(
+                scores,
+                task=_example_value(example, "task") or inferred_task,
+                dimension=_example_value(example, "dimension") or inferred_dimension,
+            )
             result = score_vlabench_plan(
                 output,
                 _example_value(example, "operation_sequence"),
@@ -547,7 +561,9 @@ def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime:
                 totals[key] += getattr(result, key)
     finally:
         planner.train(was_training)
-    return {key: value / max(1, count) for key, value in totals.items()} | {"examples": count}
+    return {key: value / max(1, count) for key, value in totals.items()} | {
+        "examples": count, "planning_metrics": planning_metrics.result(),
+    }
 
 
 def save_checkpoint(

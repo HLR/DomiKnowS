@@ -908,7 +908,7 @@ def command_evaluate_planner(args) -> None:
     if runtime.vocabulary.checksum != vocabulary.checksum:
         raise ValueError("loaded vocabulary differs from the graph-derived runtime vocabulary")
     planner = _load_planner(args, runtime.vocabulary)
-    _json(evaluate_planner(planner, splits[args.split], runtime))
+    _json(evaluate_planner(planner, examples if args.split == "all" else splits[args.split], runtime))
 
 
 def _factory(value: str):
@@ -1281,7 +1281,8 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = sub.add_parser("evaluate-planner")
     planner_options(evaluate)
     evaluate.add_argument("--vocab")
-    evaluate.add_argument("--split", choices=["train", "validation", "test"], default="test")
+    evaluate.add_argument("--seed", type=int, default=42)
+    evaluate.add_argument("--split", choices=["train", "validation", "test", "all"], default="test")
     evaluate.set_defaults(handler=command_evaluate_planner)
 
     rollout = sub.add_parser("rollout")

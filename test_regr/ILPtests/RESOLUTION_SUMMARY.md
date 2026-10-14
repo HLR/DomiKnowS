@@ -1,16 +1,5 @@
 # Resolution summary for the HANDOFF.txt issues
 
-One page. The issues are those reported in `HANDOFF.txt` (found on develop
-`c3002b1a`, 2026-09-28); `Resolutions.md` has the details, evidence and every
-commit.
-
-**Result.** At the report, 13 of the 38 reproducer tests failed and 11 could not
-run (expired license). All 38 pass now with real Gurobi, as do 36 tests added
-since (74 in total, `DOMIKNOWS_REPRO_NATIVE=1 python test_regr/ILPtests/run_suite.py`).
-The full `test_regr/fixes` directory passes (20,307 passed, 0 failed), and so
-does `test_regr/solver`. No reproducer assertion was weakened and none was marked
-`xfail`.
-
 | ID | Issue as reported | Resolution | Commit |
 |---|---|---|---|
 | D01 | Direct miota decoding read the local softmax and the previous ILP world before the winner was populated | Populate the winning world first, decode a miota from it (when it covers every candidate, otherwise from the scores), restore the old world when `populate=False`. The miota answer stays the documented 0/1 list per candidate (a forced-false single candidate gives `[0]`). | `44e593e3`, `36c63067` |
