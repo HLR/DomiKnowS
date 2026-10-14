@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import RLock
+from time import perf_counter
 from typing import Any, Optional
 
 import torch
@@ -294,6 +295,7 @@ class CompiledPlanCache:
         self.hits = 0
         self.misses = 0
         self.invalidations = 0
+        self.compilation_ms = 0.
         self._lock = RLock()
 
     def get(self, lc):
@@ -305,7 +307,9 @@ class CompiledPlanCache:
                 return cached
             if cached is not None:
                 self.invalidations += 1
+            started = perf_counter()
             plan = _PlanCompiler().compile(lc)
+            self.compilation_ms += (perf_counter() - started) * 1000
             self._plans[key] = plan
             self.misses += 1
             return plan
@@ -329,6 +333,7 @@ class CompiledPlanCache:
                 "hits": self.hits,
                 "misses": self.misses,
                 "invalidations": self.invalidations,
+                "compilation_ms": self.compilation_ms,
             }
 
 
@@ -345,10 +350,19 @@ class TensorizedCandidateResolver:
         self._adjacency = {}
         self.tensorized_calls = 0
         self.fallback_calls = 0
+        self.adjacency_hits = 0
+        self.adjacency_misses = 0
 
     def rebind(self, probability_store):
         self.store = probability_store
-        self._adjacency.clear()
+        change = getattr(probability_store, 'incremental_changes', None)
+        if change is None or change.get('entities') or change.get('schema'):
+            self._adjacency.clear()
+        else:
+            relations = set(change.get('relations', ()))
+            for key in tuple(self._adjacency):
+                if key[0] in relations:
+                    del self._adjacency[key]
 
     @staticmethod
     def _flatten_groups(groups):
@@ -372,6 +386,7 @@ class TensorizedCandidateResolver:
         key = (relation_name, tuple(id(node) for node in nodes))
         cached = self._adjacency.get(key)
         if cached is None:
+            self.adjacency_misses += 1
             rows = []
             width = 1
             for node in nodes:
@@ -393,6 +408,8 @@ class TensorizedCandidateResolver:
                     encoded[row_index, column_index] = destination_index
             cached = (encoded, unique)
             self._adjacency[key] = cached
+        else:
+            self.adjacency_hits += 1
 
         encoded, destinations = cached
         valid = encoded >= 0

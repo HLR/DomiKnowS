@@ -744,6 +744,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             startLC = perf_counter_ns()
             m.update()
             startNumConstrs = m.NumConstrs
+            diagnostic = getattr(self, '_explanation_collector', None)
+            startGenConstrs = m.NumGenConstrs if diagnostic is not None else 0
             
             if lc.active:
                 self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
@@ -768,6 +770,27 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             endNumConstrs = m.NumConstrs
             newNumConstrs = endNumConstrs - startNumConstrs
+            if diagnostic is not None:
+                for row in m.getConstrs()[startNumConstrs:]:
+                    diagnostic.row_sources.setdefault((id(m), 'linear', row.index), {}).update({
+                        'rule': lc.lcName, 'expression': lc.strEs(),
+                        'rule_path': lc.graph.fullname + '/' + lc.lcName,
+                        'kind': 'logical_rule' if any(lc is registered for registered in lc.graph.logicalConstrains.values()) else 'executable_hypothesis',
+                        'priority': getattr(lc, 'p', None)})
+                    if hasattr(lc, '_explanation_executable_name'):
+                        diagnostic.row_sources[(id(m), 'linear', row.index)].update(
+                            executable=lc._explanation_executable_name,
+                            hypothesis=lc._explanation_hypothesis_value)
+                for index, row in enumerate(m.getGenConstrs()[startGenConstrs:], startGenConstrs):
+                    diagnostic.row_sources.setdefault((id(m), 'general', index), {}).update({
+                        'rule': lc.lcName, 'expression': lc.strEs(),
+                        'rule_path': lc.graph.fullname + '/' + lc.lcName,
+                        'kind': 'logical_rule' if any(lc is registered for registered in lc.graph.logicalConstrains.values()) else 'executable_hypothesis',
+                        'priority': getattr(lc, 'p', None)})
+                    if hasattr(lc, '_explanation_executable_name'):
+                        diagnostic.row_sources[(id(m), 'general', index)].update(
+                            executable=lc._explanation_executable_name,
+                            hypothesis=lc._explanation_hypothesis_value)
             endLC = perf_counter_ns()
             elapsedInNsLC = endLC - startLC
             elapsedInMsLC = elapsedInNsLC/1000000
@@ -900,7 +923,10 @@ class gurobiILPOntSolver(ilpOntSolver):
         # Check if existing ILP model can be reuse without recreating ILP constraints
         try:
             # Find count of instance in each concept 
-            ilpVarCount = self.countLCVariables(dn, *conceptsRelations)
+            dn.setActiveExecutableLCs()
+            from domiknows.solver.incremental.state import legacy_reuse_signature
+            ilpVarCount = legacy_reuse_signature(
+                dn, conceptsRelations, extraLogicalConstraints, ignorePinLCs, key)
 
             reusingModel = False
             if self.reuse_model and not forceFreshModel:
@@ -913,6 +939,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                         break
                     
             if not reusingModel:
+                if not forceFreshModel and getattr(dn, '_ilp_model_signature', None) != ilpVarCount:
+                    # A changed graph must not retain variable handles or
+                    # general constraints from its previous model generation.
+                    from domiknows.solver.answerModule import AnswerSolver
+                    AnswerSolver._clear_ilp_cache(dn)
+                    dn.gurobiModel = None
                 # If not reusing the model or if the right model was yet saved - create new Gurabi model
                 if forceFreshModel:
                     m = Model("hypothesisClassificationResult" + str(start), gurobiEnv)
@@ -928,6 +960,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 m.params.outputflag = 0
                 x = OrderedDict()
+            if not forceFreshModel:
+                dn._ilp_model_signature = ilpVarCount
+                dn.gurobiModel = m
                 
             # Handle ILP Variables for concepts and objective
             Q = self.createILPVariables(m, x, dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon)
@@ -1415,8 +1450,14 @@ class gurobiILPOntSolver(ilpOntSolver):
         startOptimize = perf_counter()
         
         # ----------- Run ILP model - Find solution
+        before = getattr(self, '_explanation_before_optimize', None)
+        if before is not None:
+            before(mP, xP)
         mP.optimize()
         mP.update()
+        after = getattr(self, '_explanation_after_optimize', None)
+        if after is not None:
+            after(mP, xP, lcs, p)
         
         endOptimize = perf_counter()
         elapsedOptimizeInMs = (endOptimize - startOptimize) * 1000
@@ -1443,6 +1484,14 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLoggerTime.error('Optimal solution not was found for p - %i - error code %i' % (p, mP.status))
         
          # ----------- Write model to file if logging level is INFO
+        if (getattr(self, '_explanation_collector', None) is not None or
+                getattr(self, '_session_solver', False)):
+            # Diagnostic sessions own their models and do not overwrite the
+            # ordinary solver's fixed-name model/solution files.
+            lcRun[p] = {'p': p, 'solved': solved, 'objValue': objValue,
+                        'lcs': lcs, 'mP': mP, 'xP': xP,
+                        'elapsedOptimize': elapsedOptimizeInMs}
+            return
         _log_dir = _default_log_dir()
         os.makedirs(_log_dir, exist_ok=True)
 

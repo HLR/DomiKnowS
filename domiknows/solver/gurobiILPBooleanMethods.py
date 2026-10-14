@@ -774,8 +774,12 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
         # --
                 
         # check if we have only on variable if more  throw exception
-        if len(var) > 1:
-            raise Exception("%s called with more than single variable"%(logicMethodName))
+        if isinstance(var, (list, tuple)):
+            if len(var) > 1:
+                raise Exception("%s called with more than single variable"%(logicMethodName))
+            if not var:
+                return None
+            var = var[0]
         
         varName = var
         if not self.__varIsNumber(var):

@@ -48,6 +48,8 @@ class ProbabilityStore:
 
     def rebind(self, rootDn, key=None, device=None, dtype=None, graphs=None):
         """Reuse this store for a new item without retaining stale tensors."""
+        change = getattr(self, 'incremental_changes', None)
+        preserve = change is not None and rootDn is self.rootDn and (key is None or key == self.key)
         self.rootDn = rootDn
         if key is not None:
             self.key = key
@@ -61,8 +63,14 @@ class ProbabilityStore:
                 self._fixed_index_token = None
                 self._fixed_candidates.clear()
                 self._graph_key = graph_key
-        self._concepts.clear()
-        self._domain_cache.clear()
+        if preserve and not any(change.get(k) for k in ('entities', 'schema', 'attributes', 'rules', 'hinted_rules', 'opaque')):
+            for name in change.get('concepts', ()):
+                self._concepts.pop(name, None)
+        else:
+            self._concepts.clear()
+            self._domain_cache.clear()
+        if change is not None and change.get('schema'):
+            self._root_cache.clear()
         self._fixed_spec_cache.clear()
         return self
 
@@ -388,6 +396,9 @@ class ProbabilityStore:
         r = torch.arange(n_rows, dtype=torch.long)
         return r // n_dest, r % n_dest
 
+    from domiknows.solver.explanation.evidence import trace_gather
+
+    @trace_gather
     def gather_variable(self, dnsList, e):
         """Build the ``lcVariables`` entry for one concept element.
 

@@ -45,6 +45,42 @@ and delegates the actual constrained solving to `DataNode.inferILPResults()`.
 See the [DataNode inference-method documentation](domiknows/graph/README.md#datanode-inference-methods)
 for signatures, return values, ad hoc queries, and examples.
 
+## Inference Explanations and Counterfactuals
+
+`DataNode.explainInference(..., mode="ilp" | "circuit" | "tnorm")` returns
+isolated, JSON-safe reports with grounded rule evidence. Use
+`report.counterfactual({prediction_id: label})` to force ILP labels, condition
+circuit queries, or replace t-norm inputs without changing existing predictions.
+See the [explanation workflow documentation](domiknows/solver/explanation/README.md)
+and [three-mode example](test_regr/examples/explanation_demo.py).
+
+## Incremental Inference
+
+`DataNode.incrementalInference(..., mode="ilp" | "circuit" | "tnorm")` creates
+a persistent session for changing predictions, entities, relations, and rules.
+Call `session.infer()` to detect changes automatically and publish normal outputs,
+or `session.infer(populate=False)` for detached results. See the
+[incremental workflow documentation](domiknows/solver/incremental/README.md)
+and [three-mode example](test_regr/examples/incremental_demo.py).
+
+## Constraint-Guided Active Learning
+
+`ConstraintActiveLearner` selects whole examples for annotation using uncertainty,
+grounded constraint conflict, and available constrained-label disagreement. It
+returns ranked entity/relation targets, label suggestions, and JSON-safe evidence,
+with optional diversity and persistent pool sessions. See the
+[active-learning documentation](domiknows/solver/active_learning/README.md)
+and [annotation-loop example](test_regr/examples/active_learning_demo.py).
+
+## Constraint Induction with Human Review
+
+`ConstraintInducer` proposes allowlisted logical rules from annotations, model
+predictions, and natural-language domain guidance. It separates discovery and
+held-out evidence, supports isolated impact previews, and requires an explicit
+review decision before activation. See the
+[induction documentation](domiknows/solver/constraint_induction/README.md)
+and [review workflow example](test_regr/examples/constraint_induction_demo.py).
+
 ## Publications
 
 - [DomiKnowS: A Library for Integration of Symbolic Domain Knowledge in Deep Learning](https://arxiv.org/abs/2108.12370)

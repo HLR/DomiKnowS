@@ -653,6 +653,8 @@ class ExecutableInference:
             else:
                 result, raw = self._decode_boolean(lc, dn, key)
         except CircuitSizeLimitExceeded as error:
+            if getattr(self.solver, '_explanation_collector', None) is not None:
+                raise
             warnings.warn(
                 f"{error} Falling back to Product t-norm for {name!r}.",
                 RuntimeWarning,
@@ -667,6 +669,7 @@ class ExecutableInference:
                 size_limit_action=old_processor.size_limit_action,
             )
             self.solver.circuitLossCalculator._compile_cache.clear()
+            self.solver.circuitLossCalculator.__dict__.pop('_incremental_construct_cache', None)
             fallback = ExecutableInference(
                 self.solver,
                 mode="tnorm",
@@ -675,9 +678,10 @@ class ExecutableInference:
                 threshold=self.threshold,
                 compiled=self.compiled,
             )
-            result = fallback.infer(
-                dn, [name], concepts_relations, key=key
-            )[name]
+            fallback._prepare_processor(dn)
+            # The caller can evaluate a head logical rule directly, without
+            # registering it as an executable constraint.
+            result = fallback._infer_one(name, lc, dn, key, concepts_relations)
             result["fallback"] = "circuit-size-limit"
             result["sizeLimitError"] = str(error)
             return result

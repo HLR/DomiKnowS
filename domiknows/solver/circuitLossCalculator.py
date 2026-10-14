@@ -121,14 +121,40 @@ class CircuitLossCalculator:
             label=self._label_index(label) if isinstance(lc, sumL) else None,
             circuit=True,
         )
-        if compiled:
+        incremental_cache = getattr(self, '_incremental_construct_cache', None)
+        cache_key = (id(lc), self._label_index(label) if isinstance(lc, sumL) else None, key, compiled)
+        cached_construction = incremental_cache.get(cache_key) if incremental_cache is not None else None
+        if cached_construction is not None:
+            output, leaf_specs = cached_construction
+            for leaf_dn, leaf_key, leaf_element, concept in leaf_specs:
+                processor._node(constructor._circuit_leaf(leaf_dn, leaf_key, leaf_element, concept))
+            self._incremental_stats['circuit_structures_reused'] += 1
+        elif compiled:
             self.compiled_executor.bind(dn, key)
             self.compiled_executor.reset_grounding_features()
-            output, _ = self.compiled_executor.construct(
-                lc, processor, dn, **construct_args)
+            if incremental_cache is not None:
+                constructor._incremental_circuit_capture = []
+                self.compiled_executor._evaluator._incremental_circuit_capture = constructor._incremental_circuit_capture
+            try:
+                output, _ = self.compiled_executor.construct(
+                    lc, processor, dn, **construct_args)
+                if incremental_cache is not None:
+                    incremental_cache[cache_key] = (output, tuple(constructor._incremental_circuit_capture))
+            finally:
+                constructor._incremental_circuit_capture = None
+                self.compiled_executor._evaluator._incremental_circuit_capture = None
         else:
-            output, _ = constructor.constructLogicalConstrains(
-                lc, processor, None, dn, 0, **construct_args)
+            if incremental_cache is not None:
+                constructor._incremental_circuit_capture = []
+            try:
+                output, _ = constructor.constructLogicalConstrains(
+                    lc, processor, None, dn, 0, **construct_args)
+                if incremental_cache is not None:
+                    incremental_cache[cache_key] = (output, tuple(constructor._incremental_circuit_capture))
+            finally:
+                constructor._incremental_circuit_capture = None
+        if incremental_cache is not None and cached_construction is None:
+            self._incremental_stats['circuit_structures_rebuilt'] += 1
 
         result = {
             "lc": lc,

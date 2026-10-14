@@ -117,6 +117,9 @@ class LogicalConstraintConstructor:
     def _circuit_leaf(self, dn, xPkey, e, concept):
         """Create a stable, categorical-aware circuit leaf handle."""
         from domiknows.solver.circuitBooleanMethods import CircuitLeaf
+        capture = getattr(self, '_incremental_circuit_capture', None)
+        if capture is not None:
+            capture.append((dn, xPkey, e, concept))
 
         concept_name, label_index, class_index = e
         instance_id = dn.getInstanceID()
@@ -203,6 +206,9 @@ class LogicalConstraintConstructor:
             fixed_value=fixed_value,
         )
 
+    from domiknows.solver.explanation.evidence import trace_leaf
+
+    @trace_leaf
     def getMLResult(self, dn, xPkey, e, p, loss=False, sample=False,
                     circuit=False, concept=None):
         """
@@ -438,10 +444,10 @@ class LogicalConstraintConstructor:
             if vDnLabel == -100:
                 return None
             elif vDnLabel == i:
-                ones = torch.ones(vDn.shape[0])
+                ones = torch.ones_like(vDn)
                 return ones
             else:
-                zeros = torch.zeros(vDn.shape[0])
+                zeros = torch.zeros_like(vDn)
                 return zeros
         else:
             if vDnLabel == -100:
@@ -1779,7 +1785,7 @@ class LogicalConstraintConstructor:
                                     else:
                                         vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                     
-                                    if lc.__str__() == "fixedL":
+                                    if type(lc).__name__ == "fixedL":
                                         vDn = self.fixedLSupport(_dn, conceptName, vDn, i, m)
                                         
                                     _vDns.append(vDn)
@@ -1792,7 +1798,7 @@ class LogicalConstraintConstructor:
                                 else:
                                     vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                 
-                                if lc.__str__() == "fixedL":
+                                if type(lc).__name__ == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, e[2], m)
                                     
                                 vDn = _vDns.append(vDn)
@@ -1804,7 +1810,7 @@ class LogicalConstraintConstructor:
                                 else:
                                     vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                 
-                                if lc.__str__() == "fixedL":
+                                if type(lc).__name__ == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, 1, m)
                                         
                                 vDn = _vDns.append(vDn)
@@ -1991,7 +1997,13 @@ class LogicalConstraintConstructor:
                          
                         useLcVariables[v] = self.splitLossColumns(useLcVariables[v])
 
+            from domiknows.solver.explanation.evidence import begin_operator
+            row_start = begin_operator(m)
             result = lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {}))
+            from domiknows.solver.explanation.evidence import record_evaluation
+            record_evaluation(lc, lcVariablesDns, useLcVariables, result,
+                              head=headLC, model=m, row_start=row_start,
+                              grounding=getattr(self, '_pending_joint_binding', None))
             if isEntitySelector and not (loss or verify or circuit):
                 self._pending_joint_binding = self.selectorResultBinding(
                     lc, useLcVariables, lcVariableBindings, result)

@@ -2239,6 +2239,25 @@ class DataNode:
         elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
         self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
 
+    def incrementalInference(self, *concepts, mode="ilp", **options):
+        """Create a persistent inference session for automatic graph updates.
+
+        Use session.infer(changes=None, populate=True), or populate=False for
+        detached results. Close the session or use it as a context manager.
+        """
+        from domiknows.solver.incremental import IncrementalInferenceSession
+        return IncrementalInferenceSession(self, concepts, mode=mode, **options)
+
+    def explainInference(self, *concepts, mode="ilp", queries=None, **options):
+        """Return isolated grounded diagnostics; existing predictions are untouched.
+
+        Batch roots return a list of ExplanationReports in sample order.
+        Counterfactual assignments map IDs from report predictions to binary
+        bool values or EnumConcept class names. See solver/explanation/README.md.
+        """
+        from domiknows.solver.explanation.session import explain
+        return explain(self, concepts, mode=mode, queries=queries, **options)
+
     def inferILPResults(self, *_conceptsRelations, key=("local", "softmax"),
                         fun=None, epsilon=0.00001, minimizeObjective=False,
                         ignorePinLCs=False, Acc=None, compiled=True):

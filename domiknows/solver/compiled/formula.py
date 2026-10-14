@@ -307,7 +307,7 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                     if sample:
                         leaf, leaf_sample_info = leaf
                         candidate_sample_info.append(leaf_sample_info)
-                    if str(lc) == 'fixedL':
+                    if isinstance(lc, fixedL):
                         leaf = self.fixedLSupport(
                             candidate, concept_name, leaf, fixed_index, model)
                     candidate_values.append(leaf)
@@ -701,10 +701,16 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
 
         # sumL is the one operator that needs the runtime label (its target
         # count); mirror the interpreter's conditional kwarg exactly.
+        from domiknows.solver.explanation.evidence import begin_operator
+        row_start = begin_operator(model)
         output = lc(
             model, booleanProcessor, useLcVariables, headConstrain=headLC,
             integrate=integrate,
             **({"label": label} if isinstance(lc, sumL) else {}))
+        from domiknows.solver.explanation.evidence import record_evaluation
+        record_evaluation(lc, lcVariablesDns, useLcVariables, output,
+                          head=headLC, compiled=True, model=model, row_start=row_start,
+                          grounding=getattr(self, '_pending_joint_binding', None))
         if isEntitySelector and not (loss or verify or circuit or sample):
             self._pending_joint_binding = self.selectorResultBinding(
                 lc, useLcVariables, lcVariableBindings, output)
