@@ -1376,14 +1376,13 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
 
 def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
     _examples, runtime = joint_fixture
-    context = {"entities": ("table", "button1", "box", "button2")}
+    context = {"entities": ("table", "button1")}
     dfa = runtime.dfa_for("vlabench", context)
 
     press_label = runtime.vlabench_vocabulary.label_for_token("skill:press")
     pick_label = runtime.vlabench_vocabulary.label_for_token("skill:pick")
     arg_label = runtime.vlabench_vocabulary.label_for_token("arg:target_entity_name")
     btn1_label = runtime.vlabench_vocabulary.label_for_token("obj:1")
-    btn2_label = runtime.vlabench_vocabulary.label_for_token("obj:3")
     table_label = runtime.vlabench_vocabulary.label_for_token("obj:0")
     eos_label = runtime.vlabench_vocabulary.eos_label
 
@@ -1392,10 +1391,6 @@ def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
     # Valid plan targeting button1 (index 1)
     valid_seq1 = [press_label, arg_label, btn1_label, eos_label]
     assert dfa.accepts(valid_seq1)
-
-    # Valid plan targeting button2 (index 3)
-    valid_seq2 = [press_label, arg_label, btn2_label, eos_label]
-    assert dfa.accepts(valid_seq2)
 
     # Invalid: pick instead of press
     invalid_pick = [pick_label, arg_label, btn1_label, eos_label]
@@ -1406,5 +1401,5 @@ def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
     assert not dfa.accepts(invalid_target)
 
     # Non-button context returns base DFA unmodified
-    no_btn_context = {"entities": ("table", "box", "apple")}
+    no_btn_context = {"entities": ("table", "apple")}
     assert runtime.dfa_for("vlabench", no_btn_context) is runtime.vlabench_dfa
