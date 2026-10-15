@@ -547,11 +547,16 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
             else:
                 images = _planner_images(example)
                 try:
+                    dfa = (
+                        runtime.dfa_for("vlabench", example)
+                        if hasattr(runtime, "dfa_for")
+                        else runtime.dfa
+                    )
                     output = planner.generate_plan(
                         instruction=_example_value(example, "instruction", ""),
                         images=images,
                         entity_table=_example_value(example, "entities", ()),
-                        dfa=runtime.dfa,
+                        dfa=dfa,
                         world=runtime.world_bundle,
                         max_steps=runtime.max_tokens,
                     )

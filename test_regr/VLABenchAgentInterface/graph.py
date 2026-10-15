@@ -230,6 +230,24 @@ def create_planner_generation_graph(
             ),
         ))
         mark_for_dfa(atMostAL(notL(ctx.token_value(vocabulary.eos_token, "x")), max_operations * 5))
+        from domiknows.generation import mark_for_contextual_dfa
+        button_press_lc = ifL(
+            ctx.is_before_rel("before"),
+            ifL(
+                ctx.token_value("skill:press", "first_tok", path=("before", ctx.first_token)),
+                ctx.token_value(vocabulary.eos_token, "second_tok", path=("before", ctx.second_token)),
+            ),
+            active=False,
+            name="contextual_qa_button_press",
+        )
+        mark_for_contextual_dfa(
+            button_press_lc,
+            context_key="button_entities",
+            token_to_value={"skill:press": "press"},
+            vocabulary=vocabulary,
+            name="contextual_qa_button_press",
+            allow_missing_context=True,
+        )
     return graph, bundle
 
 
@@ -324,3 +342,96 @@ def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> boo
     except (KeyError, ValueError):
         return False
     return bool(dfa.accepts(labels))
+
+
+class VLABenchContextualDFA:
+    """Specialized VLABench DFA conditioned on per-example scene entities and question context."""
+
+    def __init__(self, base_dfa: Any, vocabulary: PlanVocabulary, button_indices: Sequence[int]):
+        self.base_dfa = base_dfa
+        self.vocabulary = vocabulary
+        self.button_indices = tuple(int(i) for i in button_indices)
+        self.alphabet = base_dfa.alphabet
+        self.press_label = vocabulary.label_for_token("skill:press")
+        self.arg_label = vocabulary.label_for_token("arg:target_entity_name")
+        self.button_labels = frozenset(
+            vocabulary.label_for_token(f"obj:{i}")
+            for i in self.button_indices
+            if f"obj:{i}" in vocabulary.tokens
+        )
+        self.eos_label = vocabulary.eos_label
+        self.start_state = (base_dfa.start_state, 0)
+
+    def allowed_tokens(self, state, remaining_steps=None):
+        base_state, phase = state
+        try:
+            base_allowed = self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps)
+        except TypeError:
+            base_allowed = self.base_dfa.allowed_tokens(base_state)
+        base_allowed = set(int(lbl) for lbl in base_allowed)
+
+        if phase == 0:
+            allowed = {self.press_label}
+        elif phase == 1:
+            allowed = {self.arg_label}
+        elif phase == 2:
+            allowed = set(self.button_labels)
+        elif phase >= 3:
+            allowed = {self.eos_label}
+        else:
+            allowed = set()
+        return base_allowed.intersection(allowed)
+
+    def step(self, state, symbol):
+        base_state, phase = state
+        symbol = int(symbol)
+        if symbol not in self.allowed_tokens(state):
+            return None
+        next_base = self.base_dfa.step(base_state, symbol)
+        if next_base is None:
+            return None
+        return (next_base, min(phase + 1, 4))
+
+    def is_accepting(self, state):
+        base_state, phase = state
+        return phase >= 3 and self.base_dfa.is_accepting(base_state)
+
+    def accepts(self, sequence):
+        state = self.start_state
+        for symbol in sequence:
+            state = self.step(state, symbol)
+            if state is None:
+                return False
+        return self.is_accepting(state)
+
+    def __getattr__(self, name):
+        return getattr(self.base_dfa, name)
+
+
+def bind_vlabench_contextual_dfa(
+    base_dfa: Any,
+    vocabulary: PlanVocabulary,
+    context: Mapping[str, Any],
+) -> Any:
+    """Specialize the VLABench generation DFA using per-example scene entities."""
+    if isinstance(base_dfa, VLABenchContextualDFA):
+        return base_dfa
+    entities = (
+        context.get("entity_table")
+        or context.get("entities")
+        or getattr(context, "entities", ())
+    )
+    if isinstance(entities, Mapping):
+        button_indices = [
+            index for index, name in entities.items()
+            if "button" in str(name).lower()
+        ]
+    else:
+        button_indices = [
+            index for index, name in enumerate(entities)
+            if "button" in str(name).lower()
+        ]
+    if not button_indices:
+        return base_dfa
+    return VLABenchContextualDFA(base_dfa, vocabulary, button_indices)
+

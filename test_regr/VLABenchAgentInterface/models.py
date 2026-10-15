@@ -286,9 +286,13 @@ def vision_language_hidden_size(model: nn.Module) -> int | None:
 def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: PlanVocabulary) -> str:
     entities = "\n".join(f"{index}: {name}" for index, name in enumerate(entity_table)) or "No objects."
     skills = ", ".join(vocabulary.skills)
+    directive = ""
+    if any("button" in str(name).lower() for name in entity_table):
+        directive = " NOTE: This is a multiple-choice question with answer buttons. Indicate your choice by pressing the button associated with the target choice: press target_entity_name=<button_id>."
     return (
         "Predict a compact VLABench plan using only graph labels. "
-        "A skill label is followed by its graph-declared argument and object pointer labels.\n"
+        "A skill label is followed by its graph-declared argument and object pointer labels."
+        f"{directive}\n"
         f"Skills: {skills}\nObjects:\n{entities}\nInstruction: {instruction}\nPlan labels:"
     )
 

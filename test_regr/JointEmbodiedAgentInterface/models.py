@@ -804,17 +804,21 @@ class JointPlannerDomainView(nn.Module):
             "images": kwargs.get("images", ()),
             "entity_table": kwargs.get("entity_table", ()),
         }
+        dfa = kwargs.get("dfa")
+        if self.domain == "vlabench" and dfa is not None:
+            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+            dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         encoded_context = kwargs.get("encoded_context")
         if encoded_context is None:
             labels, logprob = self.sample_labels(
                 context,
-                kwargs["dfa"],
+                dfa,
                 max_steps=kwargs.get("max_steps", 60),
             )
         else:
             labels, logprob = self.sample_labels_from_context(
                 encoded_context,
-                kwargs["dfa"],
+                dfa,
                 max_steps=kwargs.get("max_steps", 60),
             )
         output = (
@@ -834,9 +838,13 @@ class JointPlannerDomainView(nn.Module):
             "images": kwargs.get("images", ()),
             "entity_table": kwargs.get("entity_table", ()),
         }
+        dfa = kwargs.get("dfa")
+        if self.domain == "vlabench" and dfa is not None:
+            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+            dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         labels, _ = self.sample_labels(
             context,
-            kwargs["dfa"],
+            dfa,
             max_steps=kwargs.get("max_steps", 60),
             deterministic=True,
         )

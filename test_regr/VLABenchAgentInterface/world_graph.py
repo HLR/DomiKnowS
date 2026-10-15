@@ -387,6 +387,7 @@ class VLABenchWorldGraphBundle:
     valid_pointer: Any
     valid_operation: Any
     allowed_transition: Any
+    is_button: Any = None
 
     @property
     def has_constraints(self) -> bool:
@@ -466,6 +467,7 @@ def build_vlabench_world_graph(
         valid_pointer = operation(name="operation__valid_pointer")
         valid_operation = operation(name="operation__valid_schema")
         allowed_transition = transition(name="transition__allowed_pattern")
+        is_button = entity(name="entity__is_button")
 
         bundle = VLABenchWorldGraphBundle(
             graph=graph,
@@ -496,6 +498,7 @@ def build_vlabench_world_graph(
             valid_pointer=valid_pointer,
             valid_operation=valid_operation,
             allowed_transition=allowed_transition,
+            is_button=is_button,
         )
 
         if include_default_constraints:
@@ -505,6 +508,11 @@ def build_vlabench_world_graph(
             ifL(operation("op"), valid_operation("op"), name="operation_schema_is_valid")
             ifL(operation("op"), valid_pointer("op"), name="operation_pointer_is_valid")
             ifL(transition("edge"), allowed_transition("edge"), name="transition_matches_subtask_pattern")
+            ifL(
+                is_button("ent"),
+                ifL(target_entity("op", "ent"), skills["press"]("op")),
+                name="button_entity_requires_press_skill",
+            )
 
             for name, required in SKILL_ARGUMENTS.items():
                 required = set(required)
@@ -580,8 +588,10 @@ def materialize_plan(
             name: _node(bundle.entity, f"entity:{index}", value=name)
             for index, name in enumerate(sorted(pointer_names))
         }
-        for node in entity_nodes.values():
+        for name, node in entity_nodes.items():
             _truth(node, bundle.entity, True)
+            if getattr(bundle, "is_button", None) is not None:
+                _truth(node, bundle.is_button, "button" in str(name).lower())
             root.addChildDataNode(node)
 
         full_validation = validate_plan(

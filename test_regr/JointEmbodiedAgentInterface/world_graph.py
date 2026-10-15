@@ -107,6 +107,7 @@ class JointDomainRuntime:
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _domain_stack: list[str | None] = field(default_factory=list, repr=False)
     _eai_policy_cache: dict[int, Any] = field(default_factory=dict, repr=False)
+    _vlabench_policy_cache: dict[int, Any] = field(default_factory=dict, repr=False)
     _selected_domain: str | None = field(default=None, repr=False)
 
     @property
@@ -139,9 +140,22 @@ class JointDomainRuntime:
         return active
 
     def dfa_for(self, domain: str, context: Mapping[str, Any] | None = None):
-        """Return the immutable domain DFA, binding EAI contextual facts."""
+        """Return the immutable domain DFA, binding EAI and VLABench contextual facts."""
         if domain == "vlabench":
-            return self.vlabench_dfa
+            if not context:
+                return self.vlabench_dfa
+            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+
+            key = id(context)
+            cached = self._vlabench_policy_cache.get(key)
+            if cached is None:
+                cached = bind_vlabench_contextual_dfa(
+                    self.vlabench_dfa,
+                    self.vlabench_vocabulary,
+                    context,
+                )
+                self._vlabench_policy_cache[key] = cached
+            return cached
         if domain != "eai":
             raise ValueError(f"unknown joint domain {domain!r}; expected one of {DOMAINS}")
         from domiknows.generation import bind_contextual_dfa
