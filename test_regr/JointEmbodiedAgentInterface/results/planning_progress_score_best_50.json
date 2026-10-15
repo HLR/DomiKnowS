@@ -1,11 +1,11 @@
 {
-  "checkpoint": "test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt",
+  "checkpoint": "/workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt",
   "detailed_metrics": {
-    "entity_match": 0.5378888888888889,
-    "exact_graph_match": 0.32,
+    "entity_match": 0.5578888888888889,
+    "exact_graph_match": 0.34,
     "examples": 50,
     "planning_metrics": {
-      "Macro": 56.343414301747636,
+      "Macro": 63.01008096841431,
       "dimensions": {
         "ComSense": {
           "PM": 54.54545454545455,
@@ -38,10 +38,10 @@
           "PM": 0.0,
           "PR": 0.0,
           "SPR": 0.0,
-          "SR": 0.0,
+          "SR": 100.0,
           "examples": 1,
-          "legacy_score": 0.0,
-          "score": 0.0
+          "legacy_score": 40.0,
+          "score": 40.0
         },
         "Semantic": {
           "PM": 25.0,
@@ -63,21 +63,21 @@
         }
       },
       "examples": 50,
-      "legacy_Macro": 48.57920474587141,
+      "legacy_Macro": 55.24587141253807,
       "overall": {
-        "PM": 32.0,
-        "PR": 53.788888888888884,
-        "SPR": 54.23333333333333,
-        "SR": 83.64444444444445,
-        "legacy_score": 54.97333333333333,
-        "score": 63.59666666666667
+        "PM": 34.0,
+        "PR": 55.788888888888884,
+        "SPR": 56.23333333333334,
+        "SR": 89.64444444444443,
+        "legacy_score": 58.17333333333333,
+        "score": 67.19666666666666
       },
       "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
       "unknown_task_count": 6
     },
-    "reward": 0.6359666666666662,
-    "skill_match": 0.8364444444444444,
-    "skill_with_entity_match": 0.5423333333333332,
+    "reward": 0.6719666666666662,
+    "skill_match": 0.8964444444444443,
+    "skill_with_entity_match": 0.5623333333333332,
     "valid": 1.0
   },
   "dimensions": {
@@ -112,10 +112,10 @@
       "PM": 0.0,
       "PR": 0.0,
       "SPR": 0.0,
-      "SR": 0.0,
+      "SR": 100.0,
       "examples": 1,
-      "legacy_score": 0.0,
-      "score": 0.0
+      "legacy_score": 40.0,
+      "score": 40.0
     },
     "Semantic": {
       "PM": 25.0,
@@ -138,15 +138,15 @@
   },
   "epoch": 4,
   "examples_evaluated": 50,
-  "legacy_macro_score": 48.57920474587141,
-  "macro_score": 56.343414301747636,
+  "legacy_macro_score": 55.24587141253807,
+  "macro_score": 63.01008096841431,
   "overall": {
-    "PM": 32.0,
-    "PR": 53.788888888888884,
-    "SPR": 54.23333333333333,
-    "SR": 83.64444444444445,
-    "legacy_score": 54.97333333333333,
-    "score": 63.59666666666667
+    "PM": 34.0,
+    "PR": 55.788888888888884,
+    "SPR": 56.23333333333334,
+    "SR": 89.64444444444443,
+    "legacy_score": 58.17333333333333,
+    "score": 67.19666666666666
   },
   "split": "validation",
   "stage": "stage2"
