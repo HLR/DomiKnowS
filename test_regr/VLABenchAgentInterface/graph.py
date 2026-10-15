@@ -416,11 +416,18 @@ def bind_vlabench_contextual_dfa(
     """Specialize the VLABench generation DFA using per-example scene entities."""
     if isinstance(base_dfa, VLABenchContextualDFA):
         return base_dfa
-    entities = (
-        context.get("entity_table")
-        or context.get("entities")
-        or getattr(context, "entities", ())
-    )
+    if isinstance(context, Mapping):
+        entities = (
+            context.get("entity_table")
+            or context.get("entities")
+            or ()
+        )
+    else:
+        entities = (
+            getattr(context, "entities", None)
+            or getattr(context, "entity_table", ())
+            or ()
+        )
     if isinstance(entities, Mapping):
         button_indices = [
             index for index, name in entities.items()
