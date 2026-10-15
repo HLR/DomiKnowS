@@ -53,8 +53,29 @@ Run commands from the repository root. Detailed design and diagnostics notes are
 
 ## Measuring a planning baseline
 
-For this package, use the supervised planner before RL as the baseline. Evaluate
-its saved adapter on the held-out test split. For example, in PowerShell:
+For an unconstrained frozen-VLM planning baseline, generate directly with the
+pretrained model's native language head. No LoRA adapter, graph decoder, DFA,
+HMM, or instruction-dependent logits mask is used. For example, in PowerShell:
+
+```powershell
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner `
+  --generation-mode frozen-vlm `
+  --planner-model "path/to/Qwen3-VL-8B-Instruct" `
+  --planning-dir test_regr/VLABenchAgentInterface/data/planning `
+  --split test --seed 42 --max-new-tokens 768
+```
+
+The model must be available locally. Generation is greedy, with thinking disabled
+and a 768-token default continuation cap. Weights are frozen; 4-bit loading is
+enabled by default (`--no-load-in-4bit` disables it). Inputs use the instruction,
+segmented images when available (otherwise ordinary images), and scene-only
+entity IDs. Reference plans and goal/condition fields do not augment the prompt's
+object table. Missing scene configurations raise an error. Malformed/empty
+generations receive zero planning metrics and remain in the denominator; GPU or
+model errors raise rather than becoming fabricated scores.
+
+For a trained graph-planner baseline before RL, evaluate its saved supervised
+adapter on the same held-out split:
 
 ```powershell
 $plannerAdapter = "path/to/checkpoint-directory/planner_stage1"
@@ -81,14 +102,18 @@ Read these fields in the JSON output:
 - `planning_metrics.overall`: pooled SR, PR, SPR, PM, full score, and legacy score.
 - `valid`: the separate constraint-validity diagnostic, on a 0–1 scale.
 
-This measures the supervised, DFA-constrained graph planner. The unconstrained
-frozen-VLM baseline in CLAMP Table 1 requires a different generation path:
-direct VLM plan generation without the DFA or graph decoder, followed by the
-same metrics evaluator on the same examples. The current CLI always generates
-through the DFA-constrained graph decoder. Omitting `--resume-adapter`
-initializes that decoder randomly and does not measure the pretrained VLM's
-planning ability. A direct, unconstrained VLM evaluation path is not currently
-implemented.
+`--generation-mode graph` is the compatibility default and requires
+`--resume-adapter`; evaluation rejects a randomly initialized graph decoder.
+`--generation-mode frozen-vlm` rejects `--resume-adapter` and `--vocab`.
+Both paths use `evaluate_planner()` and the same Table 1 metric accumulator.
+`planning_metrics` scores readable predictions independently of constraint
+validity. In native mode, `native_valid` reports benchmark JSON/schema validity;
+`valid` and `reward` retain the legacy graph-schema diagnostic (without graph
+materialization). Report Table 1 scores from `planning_metrics`, rather than
+interpreting reward or validity as simulator success. The native prompt and
+quantization settings must also be disclosed in comparisons with CLAMP's article.
+The separate `planning_experiment --mode raw` path below additionally supports
+manifest-based resumable per-example evidence.
 
 ## Setup
 
@@ -115,12 +140,43 @@ python -m test_regr.VLABenchAgentInterface.planning_experiment evaluate \
 ```
 
 Use `--mode dfa` for native constrained generation, or `--mode hmm --hmm
-/path/to/best.pt --weight 0.1` for the HMM variant. The native DFA projects
-canonical compact JSON through byte-level BPE tokens and enforces graph-defined
-skills, required argument roles, complete subtask patterns, an operation bound,
-scene ID bounds, and EOS after a complete plan. These are language constraints;
-they do not establish simulator goal reachability. Graph checkpoint decoding
-retains its existing constraints.
+/path/to/best.pt --weight 0.1` for the HMM variant. The default native
+`--grammar-profile benchmark` uses the pinned official subtask patterns and the
+benchmark argument protocol: notably `push` requires `target_container_name`.
+Its default bound is 16 operations, allowing the dataset's nine- and ten-operation
+reference plans. IDs cover the entire supplied scene table; native generation
+does not inherit the graph decoder's 64-pointer vocabulary limit. Graph
+checkpoint decoding retains its existing schema, vocabulary, and eight-operation
+bound. `--grammar-profile legacy --max-operations 8 --object-constraints none`
+selects the old compact language and prompt; new output directories are still
+required because the scene-only loader now excludes goal/condition fields.
+
+The native token DFA consumes actual byte-level BPE bytes, including tokens
+crossing JSON boundaries. It accepts compact or spaced/indented JSON, both
+`name`/`params` member orders, and ASCII Unicode escapes within string literals.
+Whitespace inside names, split integers, duplicate/extra keys, noninteger IDs,
+trailing commas, incomplete subtasks, and premature EOS remain invalid.
+
+`--object-constraints instruction` (default) restricts `pick` candidates using
+explicit scene object names in a supported source clause, or instruction nouns
+and scene classes. Explicit destination container names restrict `place`,
+`insert`, `pour`, and `push`. Multiple matching objects remain candidates.
+Unsupported wording, negation, spatial/ordinal descriptions, and source relations
+cause abstention; unstated semantic knowledge is not guessed. These rules use
+only the instruction and scene component identities/classes, never reference
+actions, environment conditions, target fields, or goal labels. Use
+`--object-constraints none` for the grammar-only ablation. Neither configuration
+enforces simulator reachability or solves arbitrary natural-language grounding.
+
+Each native record includes the candidate restrictions and their evidence.
+`native_valid` checks the benchmark language independently; `grounded_valid`
+also checks instruction candidates. Existing `valid`/`validation_errors` retain
+the graph schema diagnostic, which may reject benchmark-valid `push` arguments.
+Use the same new prompt/profile and manifest when comparing raw, DFA, and
+instruction-grounded DFA. Existing compact-grammar results and HMM validation
+weights are historical; the old HMM weight must be reselected on validation
+before claiming a new HMM result. DFA/HMM cache identities include profile,
+candidate sets, operation budget, tokenizer, model, and language implementation.
 
 Outputs include durable `episodes.jsonl`, settings, model/checkpoint provenance,
 and `summary.json`. Resume with the same command and output directory; changed

@@ -509,9 +509,19 @@ def train_planner_reinforcement_epoch(
 
 
 @torch.no_grad()
-def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime: PlannerConstraintRuntime) -> dict[str, Any]:
-    was_training = planner.training
-    planner.eval()
+def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstraintRuntime | None = None,
+                     *, generation_mode: str = "graph", max_new_tokens: int = 768) -> dict[str, Any]:
+    """Apply the same scoring to graph plans or unconstrained native VLM text."""
+    if generation_mode not in {"graph", "frozen-vlm"}:
+        raise ValueError(f"unknown planner generation mode {generation_mode!r}")
+    native = generation_mode == "frozen-vlm"
+    if not native and runtime is None:
+        raise ValueError("graph evaluation requires a constraint runtime")
+    if max_new_tokens <= 0:
+        raise ValueError("max_new_tokens must be positive")
+    module = planner.model if native else planner
+    was_training = module.training
+    module.eval()
     totals = {
         "reward": 0.0,
         "skill_match": 0.0,
@@ -521,22 +531,30 @@ def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime:
         "valid": 0.0,
     }
     count = 0
+    native_valid = 0
     planning_metrics = PlanningMetrics()
     try:
         for count, example in enumerate(examples, start=1):
-            images = _planner_images(example)
-            try:
-                output = planner.generate_plan(
-                    instruction=_example_value(example, "instruction", ""),
-                    images=images,
-                    entity_table=_example_value(example, "entities", ()),
-                    dfa=runtime.dfa,
-                    world=runtime.world_bundle,
-                    max_steps=runtime.max_tokens,
-                )
-            finally:
-                for image in images:
-                    image.close()
+            if native:
+                # No graph decoder, DFA, HMM, or instruction mask participates.
+                output, _tokens = planner.generate(example, mode="raw", sample=False,
+                                                   max_tokens=max_new_tokens)
+                from .native_planning import validate_native_plan
+                native_valid += int(validate_native_plan(output, _example_value(example, "entities", ()))[0])
+            else:
+                images = _planner_images(example)
+                try:
+                    output = planner.generate_plan(
+                        instruction=_example_value(example, "instruction", ""),
+                        images=images,
+                        entity_table=_example_value(example, "entities", ()),
+                        dfa=runtime.dfa,
+                        world=runtime.world_bundle,
+                        max_steps=runtime.max_tokens,
+                    )
+                finally:
+                    for image in images:
+                        image.close()
             scores = score_planning_metrics(
                 output,
                 _example_value(example, "operation_sequence"),
@@ -553,17 +571,17 @@ def evaluate_planner(planner: torch.nn.Module, examples: Iterable[Any], runtime:
                 _example_value(example, "operation_sequence"),
                 _example_value(example, "dependency", "Sequential"),
                 entity_table=_example_value(example, "entities", ()),
-                world_bundle=runtime.world_bundle,
+                world_bundle=None if native else runtime.world_bundle,
             )
             totals["reward"] += result.total
             totals["valid"] += float(result.valid)
             for key in ("skill_match", "entity_match", "skill_with_entity_match", "exact_graph_match"):
                 totals[key] += getattr(result, key)
     finally:
-        planner.train(was_training)
+        module.train(was_training)
     return {key: value / max(1, count) for key, value in totals.items()} | {
         "examples": count, "planning_metrics": planning_metrics.result(),
-    }
+    } | ({"native_valid": native_valid / max(1, count)} if native else {})
 
 
 def save_checkpoint(

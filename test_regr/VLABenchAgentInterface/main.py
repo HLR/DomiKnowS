@@ -900,6 +900,24 @@ def command_train_agent(args) -> None:
 
 
 def command_evaluate_planner(args) -> None:
+    if args.generation_mode == "frozen-vlm":
+        if args.resume_adapter or args.vocab:
+            raise ValueError("frozen-vlm evaluation loads only the base VLM; omit --resume-adapter and --vocab")
+        if args.max_new_tokens <= 0:
+            raise ValueError("--max-new-tokens must be positive")
+        from test_regr.VLABenchAgentInterface.dataset import load_scene_planning_examples
+        from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
+        examples = load_scene_planning_examples(args.planning_dir, limit=args.limit)
+        splits = deterministic_split(examples, seed=args.seed)
+        planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
+        result = evaluate_planner(planner, examples if args.split == "all" else splits[args.split],
+                                  generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens)
+        _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
+                        "dfa_constrained": False, "max_new_tokens": args.max_new_tokens})
+        return
+    if not args.resume_adapter:
+        raise ValueError("graph evaluation requires --resume-adapter with trained graph-decoder weights; "
+                         "use --generation-mode frozen-vlm for the unconstrained pretrained VLM baseline")
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
     splits = deterministic_split(examples, seed=args.seed)
     world = build_vlabench_world_graph("vlabench_eval_world")
@@ -908,7 +926,8 @@ def command_evaluate_planner(args) -> None:
     if runtime.vocabulary.checksum != vocabulary.checksum:
         raise ValueError("loaded vocabulary differs from the graph-derived runtime vocabulary")
     planner = _load_planner(args, runtime.vocabulary)
-    _json(evaluate_planner(planner, examples if args.split == "all" else splits[args.split], runtime))
+    _json(evaluate_planner(planner, examples if args.split == "all" else splits[args.split], runtime)
+          | {"generation_mode": "graph", "dfa_constrained": True})
 
 
 def _factory(value: str):
@@ -1280,6 +1299,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     evaluate = sub.add_parser("evaluate-planner")
     planner_options(evaluate)
+    evaluate.add_argument("--generation-mode", choices=["graph", "frozen-vlm"], default="graph",
+                          help="graph: trained adapter and DFA decoder; frozen-vlm: direct base VLM, no DFA")
+    evaluate.add_argument("--max-new-tokens", type=int, default=768,
+                          help="native frozen-VLM continuation cap (graph uses its existing operation budget)")
     evaluate.add_argument("--vocab")
     evaluate.add_argument("--seed", type=int, default=42)
     evaluate.add_argument("--split", choices=["train", "validation", "test", "all"], default="test")

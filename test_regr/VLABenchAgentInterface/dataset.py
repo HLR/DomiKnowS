@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -572,6 +572,20 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None) -> lis
     if not examples:
         raise ValueError(f"no VLABench planning episodes were found under {root}")
     return examples
+
+
+def load_scene_planning_examples(root: str | Path, *, limit: int | None = None) -> list[PlanningExample]:
+    """Load independent VLM inputs without reference-derived entity augmentation."""
+    result = []
+    for example in load_planning_examples(root, limit=limit):
+        if example.env_config_path is None:
+            raise ValueError(f"scene configuration required for independent evaluation: {example.episode_id}")
+        config = _read_json(example.env_config_path)
+        task = config.get("task", config)
+        # Conditions and goals are labels, rather than scene observations.
+        entities = _extract_entities({key: task[key] for key in ("components", "scene", "entities") if key in task})
+        result.append(replace(example, entities=entities))
+    return result
 
 
 def deterministic_split(
