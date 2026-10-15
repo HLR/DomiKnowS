@@ -121,6 +121,52 @@ def build_eval_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _prepare_eval(args, device):
+    from domiknows.generation.dfa.vocabulary import TokenVocabulary
+    from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset
+    from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
+    from .main import _action_object_constraints, _ordered_union
+    from .world_graph import build_joint_runtime, build_joint_world_graph
+
+    eai_examples = load_eai_dataset(
+        dataset_name=args.eai_dataset,
+        split=args.eai_split,
+        limit=args.eai_limit,
+        data_path=args.eai_data_path,
+        device="cpu",
+        max_steps=args.eai_max_steps,
+    )
+    if not eai_examples:
+        raise ValueError("EAI dataset is empty")
+    vocabulary = TokenVocabulary(eai_examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
+    world = build_joint_world_graph("joint_embodied_training")
+    for item in eai_examples:
+        item["reward_function"] = make_eai_reward_function(
+            item,
+            vocabulary=vocabulary,
+            mode=args.eai_reward_mode,
+            world_bundle=world.eai,
+        )
+
+    vlabench_examples = load_planning_examples(args.vlabench_planning_dir)
+    if not vlabench_examples:
+        raise ValueError("VLABench planning dataset is empty")
+    vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
+    runtime = build_joint_runtime(
+        world,
+        vocabulary,
+        max_eai_steps=args.eai_max_steps,
+        eai_object_tokens=_ordered_union(eai_examples, "object_tokens"),
+        eai_action_tokens=_ordered_union(eai_examples, "action_tokens"),
+        eai_action_sequence_tokens=_ordered_union(eai_examples, "action_tokens"),
+        eai_openable_object_tokens=_ordered_union(eai_examples, "openable_object_tokens"),
+        eai_action_object_constraint_tokens=_action_object_constraints(eai_examples),
+        max_vlabench_entities=args.max_entities,
+        max_vlabench_operations=args.max_operations,
+    )
+    return runtime, vlabench_splits
+
+
 def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     checkpoint_path = Path(args.checkpoint).resolve()
     if not checkpoint_path.is_file():
@@ -130,12 +176,11 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    # Set up arguments for _prepare
+    # Set up arguments for _prepare_eval
     args.vlabench_planning_dir = str(args.planning_dir)
-    args.vlabench_limit = None
 
     print(f"[eval-planning] Initializing joint runtime from {args.planning_dir} (device={device})...", flush=True)
-    runtime, _, _, vla_splits, _ = _prepare(args, device)
+    runtime, vla_splits = _prepare_eval(args, device)
 
     print(f"[eval-planning] Instantiating planner {args.planner_model}...", flush=True)
     planner = JointQwenVLPlanner.from_pretrained(
