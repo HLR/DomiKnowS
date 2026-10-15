@@ -108,8 +108,8 @@ def build_eval_parser() -> argparse.ArgumentParser:
     parser.add_argument("--eai-limit", type=int, default=None)
     parser.add_argument("--eai-max-steps", type=int, default=60)
     parser.add_argument("--eai-reward-mode", default="dense")
-    parser.add_argument("--max-entities", type=int, default=32)
-    parser.add_argument("--max-operations", type=int, default=16)
+    parser.add_argument("--max-entities", type=int, default=64)
+    parser.add_argument("--max-operations", type=int, default=8)
     # Controller arguments required to satisfy joint checkpoint deserialization
     parser.add_argument("--tiny-vision", action="store_true")
     parser.add_argument("--vision-dim", type=int, default=768)
@@ -128,6 +128,7 @@ def _prepare_eval(args, device):
     from .main import _action_object_constraints, _ordered_union
     from .world_graph import build_joint_runtime, build_joint_world_graph
 
+    print(f"[eval-planning] Loading EAI vocabulary (dataset={args.eai_dataset}, split={args.eai_split})...", flush=True)
     eai_examples = load_eai_dataset(
         dataset_name=args.eai_dataset,
         split=args.eai_split,
@@ -140,18 +141,14 @@ def _prepare_eval(args, device):
         raise ValueError("EAI dataset is empty")
     vocabulary = TokenVocabulary(eai_examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
     world = build_joint_world_graph("joint_embodied_training")
-    for item in eai_examples:
-        item["reward_function"] = make_eai_reward_function(
-            item,
-            vocabulary=vocabulary,
-            mode=args.eai_reward_mode,
-            world_bundle=world.eai,
-        )
 
+    print(f"[eval-planning] Loading VLABench planning data from {args.vlabench_planning_dir}...", flush=True)
     vlabench_examples = load_planning_examples(args.vlabench_planning_dir)
     if not vlabench_examples:
         raise ValueError("VLABench planning dataset is empty")
     vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
+
+    print(f"[eval-planning] Compiling joint runtime DFAs (entities={args.max_entities}, operations={args.max_operations})...", flush=True)
     runtime = build_joint_runtime(
         world,
         vocabulary,
@@ -164,6 +161,7 @@ def _prepare_eval(args, device):
         max_vlabench_entities=args.max_entities,
         max_vlabench_operations=args.max_operations,
     )
+    print("[eval-planning] Joint runtime and DFAs successfully initialized.", flush=True)
     return runtime, vlabench_splits
 
 
