@@ -533,8 +533,11 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
     count = 0
     native_valid = 0
     planning_metrics = PlanningMetrics()
+    total_examples = len(examples) if hasattr(examples, "__len__") else None
     try:
         for count, example in enumerate(examples, start=1):
+            if total_examples and (count == 1 or count % 25 == 0 or count == total_examples):
+                print(f"[eval-planner] Evaluating example {count}/{total_examples}...", flush=True)
             if native:
                 # No graph decoder, DFA, HMM, or instruction mask participates.
                 output, _tokens = planner.generate(example, mode="raw", sample=False,
