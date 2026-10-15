@@ -698,10 +698,27 @@ def command_train_agent(args):
             min_positive_return_rate=args.stage2_preflight_min_positive_return_rate,
             max_ik_truncation_rate=args.stage2_preflight_max_ik_truncation_rate,
         )
+        vla_planning_baseline = None
+        if getattr(args, "stage2_eval_planning", True):
+            _status("evaluating the Stage 1 baseline non-interactive VLABench planning progress score")
+            planning_limit = args.stage2_eval_planning_limit or args.validation_limit
+            eval_planning_examples = (
+                vla_splits.get(args.stage2_eval_planning_split, vla_splits["validation"])
+                if args.stage2_eval_planning_split != "all" else load_planning_examples(args.vlabench_planning_dir)
+            )
+            if planning_limit:
+                eval_planning_examples = eval_planning_examples[:planning_limit]
+            with runtime.domain_scope("vlabench"):
+                vla_planning_baseline = evaluate_planner(
+                    planner.for_domain("vlabench"),
+                    eval_planning_examples,
+                    _runtime_adapter(runtime, "vlabench"),
+                )
         _json({
             "stage": "stage2-baseline-evaluation",
             "eai": eai_baseline,
             "vlabench": baseline,
+            "vlabench_planning": vla_planning_baseline,
             "preflight_eligible": preflight_eligible,
         })
         if not preflight_eligible:
@@ -813,6 +830,21 @@ def command_train_agent(args):
                 rollouts_per_task=args.stage2_eval_rollouts_per_task,
                 seed=args.seed + 100000,
             )
+            if getattr(args, "stage2_eval_planning", True):
+                _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} non-interactive VLABench planning validation")
+                planning_limit = args.stage2_eval_planning_limit or args.validation_limit
+                eval_planning_examples = (
+                    vla_splits.get(args.stage2_eval_planning_split, vla_splits["validation"])
+                    if args.stage2_eval_planning_split != "all" else load_planning_examples(args.vlabench_planning_dir)
+                )
+                if planning_limit:
+                    eval_planning_examples = eval_planning_examples[:planning_limit]
+                with runtime.domain_scope("vlabench"):
+                    metrics["vlabench_planning"] = evaluate_planner(
+                        planner.for_domain("vlabench"),
+                        eval_planning_examples,
+                        _runtime_adapter(runtime, "vlabench"),
+                    )
         retention_eligible = True
         if args.stage2_eval_rollouts_per_task > 0:
             retention_eligible = stage2_preflight_eligible(
@@ -937,6 +969,11 @@ def command_train_agent(args):
         })
 
 
+def command_evaluate_planning(args):
+    from .eval_planning import run_planning_evaluation
+    run_planning_evaluation(args)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Unified EAI/VLABench dynamic-activation training")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1027,6 +1064,24 @@ def build_parser():
         type=int,
         default=10,
         help="fixed-seed held-out simulator rollouts per task before RL and after each Stage 2 epoch; use 0 to disable",
+    )
+    agent.add_argument(
+        "--stage2-eval-planning",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="evaluate non-interactive VLABench planning progress score during Stage 2 evaluation",
+    )
+    agent.add_argument(
+        "--stage2-eval-planning-limit",
+        type=int,
+        default=None,
+        help="maximum VLABench planning examples to evaluate during Stage 2 validation (defaults to --validation-limit)",
+    )
+    agent.add_argument(
+        "--stage2-eval-planning-split",
+        choices=("validation", "test", "train", "all"),
+        default="validation",
+        help="VLABench planning split to evaluate during Stage 2 validation (default: validation)",
     )
     agent.add_argument("--planner-learning-rate", type=float, default=2e-5)
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
@@ -1178,6 +1233,37 @@ def build_parser():
     agent.add_argument("--tiny-vision", action="store_true")
     agent.add_argument("--vision-dim", type=int, default=64)
     agent.set_defaults(handler=command_train_agent)
+
+    eval_planning = subparsers.add_parser(
+        "evaluate-planning",
+        help="evaluate non-interactive VLABench planning progress score for a joint checkpoint",
+    )
+    eval_planning.add_argument("--checkpoint", type=Path, required=True, help="path to joint checkpoint")
+    eval_planning.add_argument("--planning-dir", type=Path, default=DEFAULT_VLABENCH_PLANNING)
+    eval_planning.add_argument("--split", choices=("validation", "test", "train", "all"), default="validation")
+    eval_planning.add_argument("--limit", type=int, default=None)
+    eval_planning.add_argument("--output", type=Path, default=None)
+    eval_planning.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
+    eval_planning.add_argument("--planner-model", default=DEFAULT_MODEL_ID)
+    eval_planning.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
+    eval_planning.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
+    eval_planning.add_argument("--seed", type=int, default=42)
+    eval_planning.add_argument("--eai-dataset", default="all")
+    eval_planning.add_argument("--eai-split", default="train")
+    eval_planning.add_argument("--eai-data-path", default=None)
+    eval_planning.add_argument("--eai-limit", type=int, default=None)
+    eval_planning.add_argument("--eai-max-steps", type=int, default=60)
+    eval_planning.add_argument("--eai-reward-mode", default="dense")
+    eval_planning.add_argument("--max-entities", type=int, default=32)
+    eval_planning.add_argument("--max-operations", type=int, default=16)
+    eval_planning.add_argument("--tiny-vision", action="store_true")
+    eval_planning.add_argument("--vision-dim", type=int, default=768)
+    eval_planning.add_argument("--vision-model", default="google/siglip-base-patch16-224")
+    eval_planning.add_argument("--image-size", type=int, nargs=2, default=(224, 224))
+    eval_planning.add_argument("--action-horizon", type=int, default=16)
+    eval_planning.add_argument("--hidden-dim", type=int, default=256)
+    eval_planning.add_argument("--max-views", type=int, default=4)
+    eval_planning.set_defaults(handler=command_evaluate_planning)
     return parser
 
 

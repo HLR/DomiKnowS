@@ -1358,9 +1358,17 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.max_consecutive_ik_rejections == 3
     assert args.stage2_parameter_policy == "freeze_shared"
     assert args.stage2_freeze_shared_backbone is None
+    assert args.stage2_eval_planning is True
+    assert args.stage2_eval_planning_limit is None
+    assert args.stage2_eval_planning_split == "validation"
 
     args_inactive = build_parser().parse_args(["train-agent", "--two-stage", "--stage2-parameter-policy", "freeze_inactive"])
     assert args_inactive.stage2_parameter_policy == "freeze_inactive"
 
     args_legacy = build_parser().parse_args(["train-agent", "--two-stage", "--no-stage2-freeze-shared-backbone"])
     assert args_legacy.stage2_freeze_shared_backbone is False
+
+    args_eval = build_parser().parse_args(["evaluate-planning", "--checkpoint", "dummy.pt", "--split", "test", "--limit", "10"])
+    assert args_eval.split == "test"
+    assert args_eval.limit == 10
+    assert str(args_eval.checkpoint) == "dummy.pt"

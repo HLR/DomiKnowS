@@ -148,7 +148,26 @@ python -m test_regr.JointEmbodiedAgentInterface.paired_eai_eval \
 
 ---
 
-### Use Case D: Resuming or Continued Training (Stage 2 RL / Stage 3 Contact Shaping)
+### Use Case D: Evaluating Non-Interactive VLABench Planning Progress Score
+
+To evaluate the high-level vision-language planner on static scene inputs against ground-truth subtask DAGs according to official Table 1 planning metrics (Skill Recall `SR`, Parameter Recall `PR`, Skill-Parameter Recall `SPR`, and Dependency Graph Matching `PM` across all 6 cognitive dimensions):
+
+```bash
+# Using the standalone evaluation script:
+python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt \
+  --split test \
+  --output test_regr/JointEmbodiedAgentInterface/results/planning_progress_score.json
+
+# Or using the main CLI subparser:
+python -m test_regr.JointEmbodiedAgentInterface.main evaluate-planning \
+  --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt \
+  --split test
+```
+
+---
+
+### Use Case E: Resuming or Continued Training (Stage 2 RL / Stage 3 Contact Shaping)
 
 To continue reinforcement learning from `joint_stage2_best.pt` for additional epochs or new reward objectives:
 
@@ -166,7 +185,7 @@ python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage \
 
 ---
 
-### Use Case E: Programmatic Python Inference
+### Use Case F: Programmatic Python Inference
 
 To integrate `joint_stage2_best.pt` directly into Python scripts or deployment pipelines:
 
