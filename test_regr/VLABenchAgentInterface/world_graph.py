@@ -387,7 +387,7 @@ class VLABenchWorldGraphBundle:
     valid_pointer: Any
     valid_operation: Any
     allowed_transition: Any
-    is_button: Any = None
+    targets_button: Any = None
 
     @property
     def has_constraints(self) -> bool:
@@ -463,11 +463,11 @@ def build_vlabench_world_graph(
         }
         has_target_entity = operation(name="operation__has_target_entity")
         has_target_container = operation(name="operation__has_target_container")
+        targets_button = operation(name="operation__targets_button")
         valid_skill_type = operation(name="operation__valid_skill_type")
         valid_pointer = operation(name="operation__valid_pointer")
         valid_operation = operation(name="operation__valid_schema")
         allowed_transition = transition(name="transition__allowed_pattern")
-        is_button = entity(name="entity__is_button")
 
         bundle = VLABenchWorldGraphBundle(
             graph=graph,
@@ -498,7 +498,7 @@ def build_vlabench_world_graph(
             valid_pointer=valid_pointer,
             valid_operation=valid_operation,
             allowed_transition=allowed_transition,
-            is_button=is_button,
+            targets_button=targets_button,
         )
 
         if include_default_constraints:
@@ -508,11 +508,7 @@ def build_vlabench_world_graph(
             ifL(operation("op"), valid_operation("op"), name="operation_schema_is_valid")
             ifL(operation("op"), valid_pointer("op"), name="operation_pointer_is_valid")
             ifL(transition("edge"), allowed_transition("edge"), name="transition_matches_subtask_pattern")
-            ifL(
-                is_button("ent"),
-                ifL(target_entity("op", "ent"), skills["press"]("op")),
-                name="button_entity_requires_press_skill",
-            )
+            ifL(targets_button("op"), skills["press"]("op"), name="button_entity_requires_press_skill")
 
             for name, required in SKILL_ARGUMENTS.items():
                 required = set(required)
@@ -588,10 +584,8 @@ def materialize_plan(
             name: _node(bundle.entity, f"entity:{index}", value=name)
             for index, name in enumerate(sorted(pointer_names))
         }
-        for name, node in entity_nodes.items():
+        for node in entity_nodes.values():
             _truth(node, bundle.entity, True)
-            if getattr(bundle, "is_button", None) is not None:
-                _truth(node, bundle.is_button, "button" in str(name).lower())
             root.addChildDataNode(node)
 
         full_validation = validate_plan(
@@ -608,6 +602,7 @@ def materialize_plan(
             _link(operation_node, bundle.operation_roles["plan"], root)
 
             pointer_valid = True
+            is_button_target = False
             for key, role_name in (
                 ("target_entity_name", "target_entity"),
                 ("target_container_name", "target_container"),
@@ -615,6 +610,8 @@ def materialize_plan(
                 if key in params:
                     pointer_name, is_valid = _resolve_pointer(params[key], entities)
                     pointer_valid = pointer_valid and is_valid
+                    if "button" in str(pointer_name).lower():
+                        is_button_target = True
                 else:
                     pointer_name = ABSENT_ENTITY
                 _link(operation_node, bundle.operation_roles[role_name], entity_nodes[pointer_name])
@@ -630,6 +627,8 @@ def materialize_plan(
             _truth(operation_node, bundle.valid_skill_type, name in bundle.skills)
             _truth(operation_node, bundle.has_target_entity, "target_entity_name" in params)
             _truth(operation_node, bundle.has_target_container, "target_container_name" in params)
+            if getattr(bundle, "targets_button", None) is not None:
+                _truth(operation_node, bundle.targets_button, is_button_target)
             _truth(operation_node, bundle.valid_pointer, pointer_valid)
             _truth(operation_node, bundle.valid_operation, local_validation.valid)
             root.addChildDataNode(operation_node)
