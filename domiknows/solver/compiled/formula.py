@@ -701,13 +701,16 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
 
         # sumL is the one operator that needs the runtime label (its target
         # count); mirror the interpreter's conditional kwarg exactly.
-        from domiknows.solver.explanation.evidence import begin_operator
+        try:
+            from domiknows.solver.explanation.evidence import begin_operator, record_evaluation
+        except (ImportError, ModuleNotFoundError):
+            begin_operator = lambda m: None
+            record_evaluation = lambda *a, **kw: None
         row_start = begin_operator(model)
         output = lc(
             model, booleanProcessor, useLcVariables, headConstrain=headLC,
             integrate=integrate,
             **({"label": label} if isinstance(lc, sumL) else {}))
-        from domiknows.solver.explanation.evidence import record_evaluation
         record_evaluation(lc, lcVariablesDns, useLcVariables, output,
                           head=headLC, compiled=True, model=model, row_start=row_start,
                           grounding=getattr(self, '_pending_joint_binding', None))

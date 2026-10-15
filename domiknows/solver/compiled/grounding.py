@@ -396,7 +396,11 @@ class ProbabilityStore:
         r = torch.arange(n_rows, dtype=torch.long)
         return r // n_dest, r % n_dest
 
-    from domiknows.solver.explanation.evidence import trace_gather
+    try:
+        from domiknows.solver.explanation.evidence import trace_gather
+    except (ImportError, ModuleNotFoundError):
+        def trace_gather(fn):
+            return fn
 
     @trace_gather
     def gather_variable(self, dnsList, e):

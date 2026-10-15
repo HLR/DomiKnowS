@@ -206,7 +206,11 @@ class LogicalConstraintConstructor:
             fixed_value=fixed_value,
         )
 
-    from domiknows.solver.explanation.evidence import trace_leaf
+    try:
+        from domiknows.solver.explanation.evidence import trace_leaf
+    except (ImportError, ModuleNotFoundError):
+        def trace_leaf(fn):
+            return fn
 
     @trace_leaf
     def getMLResult(self, dn, xPkey, e, p, loss=False, sample=False,
@@ -1997,10 +2001,13 @@ class LogicalConstraintConstructor:
                          
                         useLcVariables[v] = self.splitLossColumns(useLcVariables[v])
 
-            from domiknows.solver.explanation.evidence import begin_operator
+            try:
+                from domiknows.solver.explanation.evidence import begin_operator, record_evaluation
+            except (ImportError, ModuleNotFoundError):
+                begin_operator = lambda m: None
+                record_evaluation = lambda *a, **kw: None
             row_start = begin_operator(m)
             result = lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {}))
-            from domiknows.solver.explanation.evidence import record_evaluation
             record_evaluation(lc, lcVariablesDns, useLcVariables, result,
                               head=headLC, model=m, row_start=row_start,
                               grounding=getattr(self, '_pending_joint_binding', None))
