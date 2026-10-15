@@ -67,3 +67,46 @@ Each row reports one VLABench task family across all five training checkpoints. 
 | `add_condiment` | **0.2567 (0% / 90%)** | 0.2400 (0% / 90%) | 0.2250 (0% / 90%) | 0.2400 (0% / 90%) | 0.1933 (0% / 90%) | 0.2252 (0% / 90%) | 400.0 |
 | `select_drink` | 0.1339 (0% / 100%) | 0.1343 (0% / 70%) | 0.0776 (0% / 70%) | 0.1922 (10% / 90%) | 0.1656 (0% / 80%) | **0.1950 (0% / 100%)** | 341.5 – 400.0 |
 | `select_toy` | 0.1850 (0% / 60%) | **0.2152 (0% / 90%)** | 0.1679 (0% / 90%) | 0.1887 (0% / 90%) | 0.1763 (0% / 90%) | 0.1681 (0% / 80%) | 400.0 |
+
+---
+
+## 3. Non-Interactive Planning Progress Score (VLM DAG Matching)
+
+While Sections 1 and 2 evaluate closed-loop physical execution in the PyBullet 3D simulator (where the policy achieves a **94.00% Positive Return Rate** and **16.00% End-to-End Success Rate**), the **Non-Interactive Planning Progress Score** measures the symbolic reasoning and plan-generation accuracy of the shared `Qwen3-VL-8B` vision-language planner on static scene inputs against ground-truth multi-step task DAGs.
+
+### Planning Progress Score Metric Formulation
+
+According to the official VLABench Table 1 benchmark specifications, the Non-Interactive Planning Progress Score is formulated as:
+
+$$\text{Progress Score} = 0.4 \cdot \text{SR} + 0.4 \cdot \text{PR} + 0.1 \cdot \text{SPR} + 0.1 \cdot \text{PM}$$
+
+where:
+- **Skill Recall (SR)**: Percentage of required primitive skills (e.g. `pick`, `place`, `pour`, `open_door`, `insert`) correctly identified in the predicted plan.
+- **Parameter Recall (PR)**: Percentage of required target objects, receptacles, and manipulation parameters correctly resolved from scene perception.
+- **Skill-Parameter Recall (SPR)**: Joint recall measuring operations where both the primitive skill and the exact target parameters are simultaneously correct.
+- **Precise Dependency Graph Match (PM)**: Structural precision of the generated directed acyclic graph (DAG) capturing correct causal execution order and preconditions.
+- **Legacy Score**: The unweighted mean $(\text{SR} + \text{PR}) / 2$.
+
+### Best Checkpoint Planning Evaluation ([`joint_stage2_best.pt`](file:///c:/Users/auszok/git/DomiKnowS/RelationalGraph/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt))
+
+Evaluation on the canonical validation set produced a **100.0% schema validity rate** under DomiKnowS declarative automaton constraints:
+
+| Planning Dimension | Progress Score | Skill Recall (SR) | Parameter Recall (PR) | Skill-Parameter Recall (SPR) | Dependency Match (PM) | Evaluation Examples |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Overall Aggregate** | **63.60 / 100.0** | **83.64%** | **53.79%** | **54.23%** | **32.00%** | **N = 50** |
+| Common Sense Reasoning (`ComSense`) | **84.09** | 100.00% | 77.27% | 77.27% | 54.55% | N = 11 |
+| Manipulation & Tool Use (`M&T`) | **81.25** | 93.75% | 81.25% | 75.00% | 37.50% | N = 8 |
+| Spatial Reasoning (`Spatial`) | **78.57** | 100.00% | 64.29% | 71.43% | 57.14% | N = 7 |
+| Semantic Reasoning (`Semantic`) | **62.50** | 93.75% | 43.75% | 50.00% | 25.00% | N = 8 |
+| Complex Multi-Step Tasks (`Complex`) | **31.65** | 53.58% | 21.05% | 17.96% | 0.00% | N = 9 |
+| Physical Laws (`PhysLaw`) | **0.00** | 0.00% | 0.00% | 0.00% | 0.00% | N = 1 |
+| **6-Dimension Macro Average** | **56.34** | — | — | — | — | — |
+
+*Legacy Progress Score: **54.97 / 100.0***
+
+### Distinction Between Interactive Positive Return Rate and Planning Progress Score
+
+It is essential to distinguish between the two complementary progress scores reported:
+1. **Interactive Positive Return Rate (94.00%)**: Evaluated dynamically inside the 3D PyBullet simulation environment. Measures closed-loop sensorimotor execution competence—confirming that the low-level controller consistently produces feasible continuous end-effector trajectories, avoids catastrophic inverse-kinematic drift, makes physical contact, and achieves measurable stage progress ($R > 10^{-6}$) on 94 out of 100 rollouts.
+2. **Non-Interactive Planning Progress Score (63.60 / 100.0)**: Evaluated statically on discrete VLM token generation before robotic execution. Assesses the symbolic reasoning capability of the shared `Qwen3-VL-8B` backbone in generating complete, valid multi-step action graphs (achieving 83.64% primitive skill recall, 53.79% entity grounding accuracy, and 100% DFA schema compliance).
+

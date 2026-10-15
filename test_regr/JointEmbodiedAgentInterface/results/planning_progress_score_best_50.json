@@ -1,0 +1,153 @@
+{
+  "checkpoint": "test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt",
+  "detailed_metrics": {
+    "entity_match": 0.5378888888888889,
+    "exact_graph_match": 0.32,
+    "examples": 50,
+    "planning_metrics": {
+      "Macro": 56.343414301747636,
+      "dimensions": {
+        "ComSense": {
+          "PM": 54.54545454545455,
+          "PR": 77.27272727272727,
+          "SPR": 77.27272727272727,
+          "SR": 100.0,
+          "examples": 11,
+          "legacy_score": 70.9090909090909,
+          "score": 84.0909090909091
+        },
+        "Complex": {
+          "PM": 0.0,
+          "PR": 21.04938271604938,
+          "SPR": 17.962962962962965,
+          "SR": 53.58024691358025,
+          "examples": 9,
+          "legacy_score": 29.851851851851855,
+          "score": 31.648148148148152
+        },
+        "M&T": {
+          "PM": 37.5,
+          "PR": 81.25,
+          "SPR": 75.0,
+          "SR": 93.75,
+          "examples": 8,
+          "legacy_score": 70.0,
+          "score": 81.25
+        },
+        "PhysLaw": {
+          "PM": 0.0,
+          "PR": 0.0,
+          "SPR": 0.0,
+          "SR": 0.0,
+          "examples": 1,
+          "legacy_score": 0.0,
+          "score": 0.0
+        },
+        "Semantic": {
+          "PM": 25.0,
+          "PR": 43.75,
+          "SPR": 50.0,
+          "SR": 93.75,
+          "examples": 8,
+          "legacy_score": 55.0,
+          "score": 62.5
+        },
+        "Spatial": {
+          "PM": 57.142857142857146,
+          "PR": 64.28571428571429,
+          "SPR": 71.42857142857143,
+          "SR": 100.0,
+          "examples": 7,
+          "legacy_score": 65.71428571428571,
+          "score": 78.57142857142857
+        }
+      },
+      "examples": 50,
+      "legacy_Macro": 48.57920474587141,
+      "overall": {
+        "PM": 32.0,
+        "PR": 53.788888888888884,
+        "SPR": 54.23333333333333,
+        "SR": 83.64444444444445,
+        "legacy_score": 54.97333333333333,
+        "score": 63.59666666666667
+      },
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "unknown_task_count": 6
+    },
+    "reward": 0.6359666666666662,
+    "skill_match": 0.8364444444444444,
+    "skill_with_entity_match": 0.5423333333333332,
+    "valid": 1.0
+  },
+  "dimensions": {
+    "ComSense": {
+      "PM": 54.54545454545455,
+      "PR": 77.27272727272727,
+      "SPR": 77.27272727272727,
+      "SR": 100.0,
+      "examples": 11,
+      "legacy_score": 70.9090909090909,
+      "score": 84.0909090909091
+    },
+    "Complex": {
+      "PM": 0.0,
+      "PR": 21.04938271604938,
+      "SPR": 17.962962962962965,
+      "SR": 53.58024691358025,
+      "examples": 9,
+      "legacy_score": 29.851851851851855,
+      "score": 31.648148148148152
+    },
+    "M&T": {
+      "PM": 37.5,
+      "PR": 81.25,
+      "SPR": 75.0,
+      "SR": 93.75,
+      "examples": 8,
+      "legacy_score": 70.0,
+      "score": 81.25
+    },
+    "PhysLaw": {
+      "PM": 0.0,
+      "PR": 0.0,
+      "SPR": 0.0,
+      "SR": 0.0,
+      "examples": 1,
+      "legacy_score": 0.0,
+      "score": 0.0
+    },
+    "Semantic": {
+      "PM": 25.0,
+      "PR": 43.75,
+      "SPR": 50.0,
+      "SR": 93.75,
+      "examples": 8,
+      "legacy_score": 55.0,
+      "score": 62.5
+    },
+    "Spatial": {
+      "PM": 57.142857142857146,
+      "PR": 64.28571428571429,
+      "SPR": 71.42857142857143,
+      "SR": 100.0,
+      "examples": 7,
+      "legacy_score": 65.71428571428571,
+      "score": 78.57142857142857
+    }
+  },
+  "epoch": 4,
+  "examples_evaluated": 50,
+  "legacy_macro_score": 48.57920474587141,
+  "macro_score": 56.343414301747636,
+  "overall": {
+    "PM": 32.0,
+    "PR": 53.788888888888884,
+    "SPR": 54.23333333333333,
+    "SR": 83.64444444444445,
+    "legacy_score": 54.97333333333333,
+    "score": 63.59666666666667
+  },
+  "split": "validation",
+  "stage": "stage2"
+}
