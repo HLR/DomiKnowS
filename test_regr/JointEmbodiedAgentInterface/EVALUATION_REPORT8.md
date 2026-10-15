@@ -67,10 +67,10 @@ Comparing the results of Report 7 (which tested high resolution $384\times 384$ 
 | **Statistical Bound** | Point estimate only | **Wilson 95% Confidence Interval** | Rigorous lower-bound verification |
 | **Baseline VLABench Return** | 0.1216 | **0.3083** | **+153.5% Return Increase** |
 | **Baseline Success Rate** | 3.33% (1/30) | **11.00% (11/100)** | **3.3× Baseline Success** |
-| **Peak Stage 2 Success Rate** | 6.67% (2/30) | **14.00% (14/100)** | **2.1× Peak Success** |
-| **Wilson CI Lower Bound** | N/A ($0.008$ post-hoc) | **8.53% (Peak in Epoch 2)** | Statistically validated success floor |
-| **Distinct Tasks Solved** | 2 tasks max (`painting`, `book`) | **5 tasks (`painting`, `tube`, `poker`, `drink`, `mahjong`)** | **2.5× Task Diversity** |
-| **Positive Return Rate** | 53.33% – 66.67% | **89.00% – 92.00%** | **+25.3% Percentage Points** |
+| **Peak Stage 2 Success Rate** | 6.67% (2/30) | **16.00% (16/100)** | **2.4× Peak Success** |
+| **Wilson CI Lower Bound** | N/A ($0.008$ post-hoc) | **10.10% (Peak in Epoch 4)** | Statistically validated success floor |
+| **Distinct Tasks Solved** | 2 tasks max (`painting`, `book`) | **5 tasks (`painting`, `tube`, `mahjong`, `poker`, `book`)** | **2.5× Task Diversity** |
+| **Positive Return Rate** | 53.33% – 66.67% | **89.00% – 94.00%** | **+27.3% Percentage Points** |
 | **EAI Goal Success Rate** | 56.82% – 59.09% | **62.50% – 63.64%** | **+4.55% Absolute Gain** |
 | **EAI Goal Recall** | 0.6354 – 0.6449 | **0.6722 – 0.6744** | **+0.030 Higher Recall** |
 | **Stage 2 Parameter Coordination** | Frozen Shared Backbone | **Trainable Backbone with PCGrad Projection** | True cross-domain representation learning |
@@ -96,16 +96,16 @@ The shadow DAgger handover triggered cleanly at `--handover-distance 0.10` meter
 
 ### Finding 4: Wilson Confidence Interval Protocol Exposes True Robustness
 By increasing evaluation rollouts from 3 to 10 per task family and applying Wilson 95% confidence intervals, the checkpoint retention mechanism filtered out ephemeral fluctuations:
-- In Epoch 2, the lower bound `success_rate_lower` reached **`8.53%`**, proving that the model's 14% success rate is statistically robust and well above the required retention threshold.
+- In Epoch 4, the lower bound `success_rate_lower` reached **`10.10%`**, proving that the model's 16% success rate is statistically robust and well above the required retention threshold.
 
 ---
 
-## 5. Status and Next Steps
+## 5. Status and Final Summary
 
-1. **Epoch 5 (Final Epoch) Completion**:
-   - The Stage 2 RL pipeline has completed all 40 rounds of Epochs 1 through 4 (~61 hours of dedicated compute).
-   - Epoch 5 will conclude the final 10 training rounds and execute the comprehensive terminal evaluation suite across all 10 manipulation tasks and 88 EAI validation goals.
-2. **Terminal Model Selection**:
-   - The primary candidate checkpoint for downstream deployment is [`joint_stage2_epoch_002.pt`](file:///workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_epoch_002.pt), which achieved the highest overall return (`0.3220`), highest positive return rate (`92.0%`), and greatest task diversity (5 tasks solved autonomously).
+1. **Full 5-Epoch RL Completion**:
+   - The Stage 2 RL pipeline has completed all 50 rounds of Epochs 1 through 5 (~76.4 hours of dedicated compute on GPU 6).
+   - Terminal evaluation suite successfully validated all 10 manipulation tasks and 88 EAI validation goals.
+2. **Definitive Model Selection**:
+   - The selected champion checkpoint for downstream deployment is [`joint_stage2_epoch_004.pt`](file:///workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_epoch_004.pt) (designated as [`joint_stage2_best.pt`](file:///workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt)), which achieved the project record mean return (`0.3521`), highest positive return rate (`94.0%`), and peak unassisted success rate (`16.00%` with Wilson CI `[10.10%, 24.42%]`).
 3. **Future Extension: Fine-Grained Contact Shaping**:
    - For tasks that achieved 100% approach consistency but stalled at release (`insert_flower`, `select_fruit`), introducing explicit tactile or contact-force shaping will convert these near-complete approaches into full end-to-end task completions.
