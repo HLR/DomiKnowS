@@ -89,7 +89,27 @@ where:
 
 ### Best Checkpoint Planning Evaluation ([`joint_stage2_best.pt`](file:///c:/Users/auszok/git/DomiKnowS/RelationalGraph/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt))
 
-Evaluation on the canonical validation set produced a **100.0% schema validity rate** under DomiKnowS declarative automaton constraints:
+Under DomiKnowS declarative automaton constraints, all generated plans achieve a **100.0% schema validity rate** across both splits.
+
+#### 1. Complete Held-Out Test Set Evaluation ($N = 450$ Episodes)
+
+The complete canonical test split ($N = 450$) tests the model across diverse tasks, visual contexts, and manipulation complexities:
+
+| Planning Dimension | Progress Score | Skill Recall (SR) | Parameter Recall (PR) | Skill-Parameter Recall (SPR) | Dependency Match (PM) | Evaluation Examples |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Overall Aggregate** | **60.80 / 100.0** | **80.12%** | **50.93%** | **53.76%** | **30.00%** | **N = 450** |
+| Semantic Reasoning (`Semantic`) | **77.99** | 97.40% | 66.23% | 73.38% | 51.95% | N = 77 |
+| Common Sense Reasoning (`ComSense`) | **77.67** | 95.33% | 69.33% | 72.67% | 45.33% | N = 75 |
+| Manipulation & Tool Use (`M&T`) | **73.83** | 98.06% | 60.68% | 69.42% | 33.98% | N = 103 |
+| Spatial Reasoning (`Spatial`) | **64.24** | 97.83% | 43.48% | 53.26% | 23.91% | N = 46 |
+| Complex Multi-Step Tasks (`Complex`) | **35.32** | 60.76% | 20.89% | 24.86% | 1.79% | N = 56 |
+| Physical Laws (`PhysLaw`) | **0.00** | 0.00% | 0.00% | 0.00% | 0.00% | N = 16 |
+| **6-Dimension Macro Average** | **54.84** | — | — | — | — | — |
+
+*Held-Out Test Legacy Score: **52.42 / 100.0***  
+*Report artifact:* [`test_regr/JointEmbodiedAgentInterface/results/planning_progress_score_best_test450.json`](file:///c:/Users/auszok/git/DomiKnowS/RelationalGraph/test_regr/JointEmbodiedAgentInterface/results/planning_progress_score_best_test450.json)
+
+#### 2. Canonical Validation Set Evaluation ($N = 50$ Episodes)
 
 | Planning Dimension | Progress Score | Skill Recall (SR) | Parameter Recall (PR) | Skill-Parameter Recall (SPR) | Dependency Match (PM) | Evaluation Examples |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -102,11 +122,13 @@ Evaluation on the canonical validation set produced a **100.0% schema validity r
 | Physical Laws (`PhysLaw`) | **0.00** | 0.00% | 0.00% | 0.00% | 0.00% | N = 1 |
 | **6-Dimension Macro Average** | **56.34** | — | — | — | — | — |
 
-*Legacy Progress Score: **54.97 / 100.0***
+*Validation Legacy Score: **54.97 / 100.0***  
+*Report artifact:* [`test_regr/JointEmbodiedAgentInterface/results/planning_progress_score_best_50.json`](file:///c:/Users/auszok/git/DomiKnowS/RelationalGraph/test_regr/JointEmbodiedAgentInterface/results/planning_progress_score_best_50.json)
 
 ### Distinction Between Interactive Positive Return Rate and Planning Progress Score
 
 It is essential to distinguish between the two complementary progress scores reported:
 1. **Interactive Positive Return Rate (94.00%)**: Evaluated dynamically inside the 3D PyBullet simulation environment. Measures closed-loop sensorimotor execution competence—confirming that the low-level controller consistently produces feasible continuous end-effector trajectories, avoids catastrophic inverse-kinematic drift, makes physical contact, and achieves measurable stage progress ($R > 10^{-6}$) on 94 out of 100 rollouts.
-2. **Non-Interactive Planning Progress Score (63.60 / 100.0)**: Evaluated statically on discrete VLM token generation before robotic execution. Assesses the symbolic reasoning capability of the shared `Qwen3-VL-8B` backbone in generating complete, valid multi-step action graphs (achieving 83.64% primitive skill recall, 53.79% entity grounding accuracy, and 100% DFA schema compliance).
+2. **Non-Interactive Planning Progress Score (60.80 / 100.0 on Test 450, 63.60 on Val)**: Evaluated statically on discrete VLM token generation before robotic execution. Assesses the symbolic reasoning capability of the shared `Qwen3-VL-8B` backbone in generating complete, valid multi-step action graphs (achieving 80.12% primitive skill recall, 50.93% entity grounding accuracy, and 100% DFA schema compliance across all 450 test episodes).
+
 
