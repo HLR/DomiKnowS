@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from itertools import count
 from types import MappingProxyType
@@ -720,13 +721,14 @@ def verify_plan_constraints(
         for key, constraint in constraints.items():
             value = raw.get(key, {})
             percent = value.get("satisfied", value.get("ifSatisfied"))
-            if percent is None:
-                raise KeyError(f"constraint {key!r} produced no satisfaction value")
             name = getattr(constraint, "name", None) or key
+            vacuous = value.get("verifyList") == [] or (name in ("transition_matches_subtask_pattern", "no_redundant_repeated_picks") and operation_count < 2)
+            if percent is None or (isinstance(percent, float) and math.isnan(percent)):
+                if vacuous:
+                    percent = 100.0
+                else:
+                    raise KeyError(f"constraint {key!r} produced no satisfaction value")
             named[name] = value
-            vacuous = value.get("verifyList") == []
-            if name in ("transition_matches_subtask_pattern", "no_redundant_repeated_picks") and operation_count < 2:
-                vacuous = True
             scores.append(1.0 if vacuous else max(0.0, min(1.0, float(percent) / 100.0)))
         if aggregate == "mean":
             score = sum(scores) / len(scores)
