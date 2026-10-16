@@ -183,12 +183,28 @@ To project the high-level semantic relational graph into token space during auto
      - *Empirical Impact:* Raised Physical Laws accuracy to a **perfect `100.00 / 100.0`** (100% SR, 100% PR, 100% PM) on the 450-sample test set.
 
 4. **Causal Manipulation Precondition Constraints (`VLABenchCausalDFA`):**
-   For complex multi-step manipulation tasks, DomiKnowS compiles physical interaction rules directly into the decoding DFA:
-   * **Anti-Self-Placement:** $\text{target\_container\_name} \neq \text{target\_entity\_name}$, mathematically forbidding actions that attempt to place or pour an object into itself.
-   * **Multi-Step Entity Rotation:** In sequential manipulation chains, a newly initiated `pick` cannot re-select an already manipulated object while unvisited candidate items remain in the scene.
-   * **Static Background Filtering:** Restricts grasp targets away from immovable architectural fixtures (counters, tables, walls, floors).
-   * **Container Consistency:** Ensures that multi-step assembly sequences place items into the established destination receptacle.
-   * *Empirical Impact:* Boosted Complex task Parameter Recall from **20.89% to 33.95%** (+62.5% relative gain) and overall Complex score from **35.32 to 41.54**.
+   For complex multi-step manipulation tasks (Complex, Spatial, ComSense), DomiKnowS encodes physical interaction preconditions directly as declarative First-Order Logic constraints in the world graph (`world_graph.py`) and compiles them into the decoding state automaton (`VLABenchCausalDFA` in `graph.py`):
+
+   * **Anti-Self-Placement Constraint (`anti_self_placement`):**
+     $$\text{ifL}\big(\text{operation}(\text{"op"}), \, \text{notL}(\text{is\_self\_placement}(\text{"op"})), \, \text{name} = \text{"anti\_self\_placement"}\big)$$
+     $$\forall \text{op} \in \text{Operations}, \quad \text{is\_self\_placement}(\text{op}) \iff \big(\text{target\_container}(\text{op}) = \text{target\_entity}(\text{op})\big)$$
+     *DFA Enforcement:* When generating arguments for `place` or `pour` (`active_arg == "target_container_name"`), the currently held entity is dynamically pruned from candidate targets: $\mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:current\_picked}\}$.
+
+   * **Multi-Step Entity Rotation Invariance (`no_redundant_repeated_picks`):**
+     $$\text{ifL}\big(\text{transition}(\text{"edge"}), \, \text{notL}(\text{repeated\_pick\_entity}(\text{"edge"})), \, \text{name} = \text{"no\_redundant_repeated_picks"}\big)$$
+     $$\forall (\text{op}_1, \text{op}_2) \in \text{Transitions}, \quad \text{repeated\_pick\_entity}(\text{edge}) \iff \Big(\text{skill}_{\text{pick}}(\text{op}_1) \land \text{skill}_{\text{pick}}(\text{op}_2) \land \big(\text{target}(\text{op}_1) = \text{target}(\text{op}_2)\big)\Big)$$
+     *DFA Enforcement:* In sequential manipulation chains, when `active_skill == "pick"` and `active_arg == "target_entity_name"`, the DFA restricts admissible object pointers to unvisited scene entities: $\mathcal{V}_{\text{allowed}} \leftarrow \{ \text{obj:}i \in \mathcal{V}_{\text{allowed}} \mid i \notin \text{visited\_picks} \}$, preventing degenerate looping on already-manipulated objects.
+
+   * **Static Environment Grasp Exclusion (`pick_excludes_static_fixtures`):**
+     $$\text{ifL}\big(\text{operation}(\text{"op"}), \, \text{notL}(\text{targets\_static\_fixture}(\text{"op"})), \, \text{name} = \text{"pick_excludes_static_fixtures"}\big)$$
+     $$\forall \text{op} \in \text{Operations}, \quad \text{targets\_static\_fixture}(\text{op}) \iff \Big(\text{skill}_{\text{pick}}(\text{op}) \land \text{is\_static\_fixture}(\text{target\_entity}(\text{op}))\Big)$$
+     *DFA Enforcement:* Immovable room surfaces $\mathcal{S}_{\text{static}} = \{\text{counter, table, wall, floor, room\_, lab\_}\}$ are mathematically stripped from pick targets: $\forall i \in \mathcal{S}_{\text{static}}, \, \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:}i\}$.
+
+   * **Container Destination Consistency:**
+     $$\forall (\text{op}_1, \text{op}_2) \in \text{Plan}, \quad \Big(\text{skill}_{\text{place}}(\text{op}_1) \land \text{skill}_{\text{place}}(\text{op}_2) \land \text{is\_same\_assembly}(\text{plan})\Big) \implies \Big(\text{target\_container}(\text{op}_1) = \text{target\_container}(\text{op}_2)\Big)$$
+     *DFA Enforcement:* Once an assembly destination receptacle $c_{\text{dest}}$ is bound by an initial `place` or `pour` operation, all subsequent assembly placements are restricted to that established receptacle: $\mathcal{V}_{\text{allowed}} \leftarrow \{\text{obj:}c_{\text{dest}}\}$.
+
+   *Empirical Impact:* Enforcing these declarative causal constraints boosted Complex task Parameter Recall from **20.89% to 33.95%** (+62.5% relative gain) and overall Complex score from **35.32 to 41.54 / 100.0** on the full 450-sample held-out test split.
 
 ---
 

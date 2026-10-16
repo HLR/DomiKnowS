@@ -215,6 +215,53 @@ These constraints operate directly on token sequences during autoregressive deco
   ```
 * **Semantic Purpose:** Dynamically binds scene context to the decoding state machine. When answer buttons are present, it restricts the decoded plan strictly to pressing the designated button followed immediately by `<eos>`.
 
+### 2.3 Causal Manipulation Precondition Constraints (`VLABenchCausalDFA`)
+
+For multi-step manipulation tasks (Complex, Spatial, ComSense), DomiKnowS encodes physical interaction preconditions directly as declarative First-Order Logic constraints in `world_graph.py` and compiles them into the decoding state automaton (`VLABenchCausalDFA` in `graph.py`):
+
+#### 1. Anti-Self-Placement Constraint
+* **Identifier:** `anti_self_placement`
+* **DomiKnowS Syntax:**
+  ```python
+  ifL(operation("op"), notL(is_self_placement("op")), name="anti_self_placement")
+  ```
+* **First-Order Logic:**
+  $$\forall \text{op} \in \text{Operations}, \quad \text{is\_self\_placement}(\text{op}) \iff \big(\text{target\_container}(\text{op}) = \text{target\_entity}(\text{op})\big)$$
+  $$\forall \text{op} \in \text{Operations}, \quad \text{operation}(\text{op}) \implies \neg \text{is\_self\_placement}(\text{op})$$
+* **DFA Enforcement:** When generating arguments for `place` or `pour` (`active_arg == "target_container_name"`), the currently held entity is dynamically pruned from candidate targets:
+  $$\mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:current\_picked}\}$$
+
+#### 2. Multi-Step Entity Rotation Invariance
+* **Identifier:** `no_redundant_repeated_picks`
+* **DomiKnowS Syntax:**
+  ```python
+  ifL(transition("edge"), notL(repeated_pick_entity("edge")), name="no_redundant_repeated_picks")
+  ```
+* **First-Order Logic:**
+  $$\forall (\text{op}_1, \text{op}_2) \in \text{Transitions}, \quad \text{repeated\_pick\_entity}(\text{edge}) \iff \Big(\text{skill}_{\text{pick}}(\text{op}_1) \land \text{skill}_{\text{pick}}(\text{op}_2) \land \big(\text{target}(\text{op}_1) = \text{target}(\text{op}_2)\big)\Big)$$
+  $$\forall \text{edge} \in \text{Transitions}, \quad \text{transition}(\text{edge}) \implies \neg \text{repeated\_pick\_entity}(\text{edge})$$
+* **DFA Enforcement:** In sequential manipulation chains, when `active_skill == "pick"` and `active_arg == "target_entity_name"`, the DFA restricts admissible object pointers to unvisited scene entities:
+  $$\mathcal{V}_{\text{allowed}} \leftarrow \{ \text{obj:}i \in \mathcal{V}_{\text{allowed}} \mid i \notin \text{visited\_picks} \}$$
+  preventing degenerate looping on already-manipulated objects while unvisited candidates remain.
+
+#### 3. Static Environment Grasp Exclusion
+* **Identifier:** `pick_excludes_static_fixtures`
+* **DomiKnowS Syntax:**
+  ```python
+  ifL(operation("op"), notL(targets_static_fixture("op")), name="pick_excludes_static_fixtures")
+  ```
+* **First-Order Logic:**
+  $$\forall \text{op} \in \text{Operations}, \quad \text{targets\_static\_fixture}(\text{op}) \iff \Big(\text{skill}_{\text{pick}}(\text{op}) \land \text{is\_static\_fixture}(\text{target\_entity}(\text{op}))\Big)$$
+  $$\forall \text{op} \in \text{Operations}, \quad \text{operation}(\text{op}) \implies \neg \text{targets\_static_fixture}(\text{op})$$
+* **DFA Enforcement:** Immovable room surfaces $\mathcal{S}_{\text{static}} = \{\text{counter, table, wall, floor, room\_, lab\_}\}$ are mathematically stripped from pick targets:
+  $$\forall i \in \mathcal{S}_{\text{static}}, \quad \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:}i\}$$
+
+#### 4. Container Destination Consistency
+* **First-Order Logic:**
+  $$\forall (\text{op}_1, \text{op}_2) \in \text{Plan}, \quad \Big(\text{skill}_{\text{place}}(\text{op}_1) \land \text{skill}_{\text{place}}(\text{op}_2) \land \text{is\_same\_assembly}(\text{plan})\Big) \implies \Big(\text{target\_container}(\text{op}_1) = \text{target\_container}(\text{op}_2)\Big)$$
+* **DFA Enforcement:** Once an assembly destination receptacle $c_{\text{dest}}$ is bound by an initial `place` or `pour` operation, all subsequent assembly placements are locked to that established receptacle:
+  $$\mathcal{V}_{\text{allowed}} \leftarrow \{\text{obj:}c_{\text{dest}}\}$$
+
 ---
 
 ## 3. Which Component Uses Given Constraints and How
