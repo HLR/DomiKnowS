@@ -159,6 +159,9 @@ In DomiKnowS, task structure and semantic validity are declared as first-order l
 9. **Multi-Step Entity Rotation Invariance (`no_redundant_repeated_picks`):**
    $$\text{ifL}(\text{transition}(\text{"edge"}), \text{notL}(\text{repeated\_pick\_entity}(\text{"edge"})))$$
    Enforces across sequential transitions that consecutive `pick` operations must select distinct entities, preventing infinite looping on already-manipulated objects.
+10. **Container Destination Consistency Constraint (`container_destination_consistency`):**
+   $$\text{ifL}(\text{transition}(\text{"edge"}), \text{notL}(\text{inconsistent\_container}(\text{"edge"})))$$
+   Enforces that sequential placement steps in multi-step assembly tasks deposit objects into the established destination container, preventing items from being scattered across multiple receptacles.
 
 ### 5.2 DomiKnowS Token-Level Generation Graph Constraints (`graph.py`)
 
