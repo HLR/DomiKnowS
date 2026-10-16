@@ -287,8 +287,32 @@ def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: Pl
     entities = "\n".join(f"{index}: {name}" for index, name in enumerate(entity_table)) or "No objects."
     skills = ", ".join(vocabulary.skills)
     directive = ""
-    if any("button" in str(name).lower() for name in entity_table):
-        directive = " NOTE: This is a multiple-choice question with answer buttons. Indicate your choice by pressing the button associated with the target choice: press target_entity_name=<button_id>."
+    buttons = [
+        (idx, str(name))
+        for idx, name in enumerate(entity_table)
+        if "button" in str(name).lower()
+    ]
+    if buttons:
+        pairs = []
+        for b_idx, b_name in buttons:
+            assoc = None
+            for offset in (1, 2, -1):
+                cand_idx = b_idx + offset
+                if 0 <= cand_idx < len(entity_table):
+                    c_name = str(entity_table[cand_idx])
+                    if "button" not in c_name.lower() and c_name not in ("table", "counter") and not c_name.startswith("lab_") and not c_name.isdigit():
+                        assoc = f"{c_name} (id: {cand_idx})"
+                        break
+            if assoc:
+                pairs.append(f"{b_name} (id: {b_idx}) -> {assoc}")
+            else:
+                pairs.append(f"{b_name} (id: {b_idx})")
+        pairs_str = "; ".join(pairs)
+        directive = (
+            f" NOTE: Multiple-choice question with answer buttons ({pairs_str}). "
+            "Determine the correct object that satisfies the instruction, then output: "
+            "press target_entity_name=<button_id> for the corresponding button."
+        )
     return (
         "Predict a compact VLABench plan using only graph labels. "
         "A skill label is followed by its graph-declared argument and object pointer labels."

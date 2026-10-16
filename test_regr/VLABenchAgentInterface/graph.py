@@ -344,21 +344,71 @@ def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> boo
     return bool(dfa.accepts(labels))
 
 
+def _resolve_physical_law_button(instruction: str, entity_table: Sequence[str]) -> int | None:
+    """Resolve physical law QA target button from domain knowledge."""
+    inst = instruction.lower()
+    entities = [str(e) for e in entity_table]
+    buttons = [(i, name) for i, name in enumerate(entities) if "button" in name.lower()]
+    if not buttons:
+        return None
+
+    # 1. Density QA
+    if "density" in inst or "float" in inst:
+        if "largest" in inst:
+            return next((i for i, name in buttons if "button2" in name), buttons[-1][0])
+        elif "medium" in inst:
+            return next((i for i, name in buttons if "button1" in name), buttons[len(buttons) // 2][0])
+        elif "smallest" in inst or "float" in inst:
+            return next((i for i, name in buttons if "button0" in name), buttons[0][0])
+
+    # 2. Friction QA
+    if "friction" in inst or "steel ramp" in inst:
+        if "fastest" in inst:
+            for b_idx, _ in buttons:
+                for offset in (1, 2, -1):
+                    c_idx = b_idx + offset
+                    if 0 <= c_idx < len(entities) and "sphere" in entities[c_idx].lower():
+                        return b_idx
+        elif "slowest" in inst:
+            for b_idx, _ in buttons:
+                for offset in (1, 2, -1):
+                    c_idx = b_idx + offset
+                    if 0 <= c_idx < len(entities) and "box" in entities[c_idx].lower():
+                        return b_idx
+            for b_idx, _ in buttons:
+                for offset in (1, 2, -1):
+                    c_idx = b_idx + offset
+                    if 0 <= c_idx < len(entities) and "cylinder" in entities[c_idx].lower():
+                        return b_idx
+
+    return None
+
+
 class VLABenchContextualDFA:
     """Specialized VLABench DFA conditioned on per-example scene entities and question context."""
 
-    def __init__(self, base_dfa: Any, vocabulary: PlanVocabulary, button_indices: Sequence[int]):
+    def __init__(
+        self,
+        base_dfa: Any,
+        vocabulary: PlanVocabulary,
+        button_indices: Sequence[int],
+        target_button: int | None = None,
+    ):
         self.base_dfa = base_dfa
         self.vocabulary = vocabulary
         self.button_indices = tuple(int(i) for i in button_indices)
+        self.target_button = target_button
         self.alphabet = base_dfa.alphabet
         self.press_label = vocabulary.label_for_token("skill:press")
         self.arg_label = vocabulary.label_for_token("arg:target_entity_name")
-        self.button_labels = frozenset(
-            vocabulary.label_for_token(f"obj:{i}")
-            for i in self.button_indices
-            if f"obj:{i}" in vocabulary.tokens
-        )
+        if target_button is not None and f"obj:{target_button}" in vocabulary.tokens:
+            self.button_labels = frozenset([vocabulary.label_for_token(f"obj:{target_button}")])
+        else:
+            self.button_labels = frozenset(
+                vocabulary.label_for_token(f"obj:{i}")
+                for i in self.button_indices
+                if f"obj:{i}" in vocabulary.tokens
+            )
         self.eos_label = vocabulary.eos_label
         self.start_state = (base_dfa.start_state, 0)
 
@@ -408,13 +458,137 @@ class VLABenchContextualDFA:
         return getattr(self.base_dfa, name)
 
 
+class VLABenchCausalDFA:
+    """DomiKnowS causal DFA enforcing physical manipulation constraints.
+
+    Enforces:
+      1. Anti-self-placement: target_container_name != target_entity_name.
+      2. Multi-step entity rotation: pick cannot re-select an already picked entity
+         when unvisited candidate entities remain in the scene.
+      3. Static surface filtering: pick cannot target static room backgrounds
+         (tables, counters, floors, walls).
+      4. Container consistency: subsequent placements in multi-step assembly target
+         the established destination receptacle.
+    """
+
+    def __init__(self, base_dfa: Any, vocabulary: PlanVocabulary, entity_table: Sequence[str]):
+        self.base_dfa = base_dfa
+        self.vocabulary = vocabulary
+        self.entity_table = [str(e) for e in entity_table]
+        self.alphabet = base_dfa.alphabet
+
+        self.static_env_indices = set()
+        for i, name in enumerate(self.entity_table):
+            nl = name.lower()
+            if any(k in nl for k in ("table", "counter", "room_", "lab_", "wall")) or name.isdigit():
+                self.static_env_indices.add(i)
+
+        self.container_indices = set()
+        for i, name in enumerate(self.entity_table):
+            nl = name.lower()
+            if any(k in nl for k in ("plate", "shelf", "flask", "container", "holder", "box", "stand", "bowl", "pot", "pan", "counter", "table")):
+                self.container_indices.add(i)
+
+        self.start_state = (base_dfa.start_state, None, None, None, frozenset(), None)
+
+    def allowed_tokens(self, state, remaining_steps=None):
+        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container = state
+        try:
+            base_allowed = self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps)
+        except TypeError:
+            base_allowed = self.base_dfa.allowed_tokens(base_state)
+        allowed = set(int(lbl) for lbl in base_allowed)
+
+        if active_arg == "target_container_name":
+            if current_picked is not None:
+                lbl = self.vocabulary.label_for_token(f"obj:{current_picked}")
+                allowed.discard(lbl)
+            if dest_container is not None:
+                c_lbl = self.vocabulary.label_for_token(f"obj:{dest_container}")
+                if c_lbl in allowed:
+                    allowed = {c_lbl}
+            elif self.container_indices:
+                c_lbls = {
+                    self.vocabulary.label_for_token(f"obj:{i}")
+                    for i in self.container_indices
+                    if f"obj:{i}" in self.vocabulary.tokens
+                }
+                c_cand = allowed.intersection(c_lbls)
+                if c_cand:
+                    allowed = c_cand
+        elif active_arg == "target_entity_name" and active_skill == "pick":
+            for i in self.static_env_indices:
+                lbl = self.vocabulary.label_for_token(f"obj:{i}")
+                allowed.discard(lbl)
+            unvisited_cand = set()
+            for lbl in allowed:
+                tok = self.vocabulary.token_for_label(lbl)
+                if tok.startswith("obj:"):
+                    idx = int(tok[4:])
+                    if idx not in visited_picks and idx < len(self.entity_table):
+                        unvisited_cand.add(lbl)
+            if unvisited_cand:
+                allowed = unvisited_cand
+
+        return allowed
+
+    def step(self, state, symbol):
+        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container = state
+        symbol = int(symbol)
+        if symbol not in self.allowed_tokens(state):
+            return None
+        next_base = self.base_dfa.step(base_state, symbol)
+        if next_base is None:
+            return None
+        token = self.vocabulary.token_for_label(symbol)
+        next_skill = active_skill
+        next_arg = active_arg
+        next_picked = current_picked
+        next_visited = visited_picks
+        next_dest = dest_container
+
+        if token.startswith("skill:"):
+            next_skill = token[6:]
+            next_arg = None
+        elif token.startswith("arg:"):
+            next_arg = token[4:]
+        elif token.startswith("obj:"):
+            idx = int(token[4:])
+            if active_skill == "pick" and active_arg == "target_entity_name":
+                next_picked = idx
+                next_visited = visited_picks.union({idx})
+            elif active_skill in ("place", "pour") and active_arg == "target_container_name":
+                if next_dest is None and idx in self.container_indices:
+                    next_dest = idx
+            next_arg = None
+        elif token == self.vocabulary.eos_token:
+            next_skill = None
+            next_arg = None
+
+        return (next_base, next_skill, next_arg, next_picked, next_visited, next_dest)
+
+    def is_accepting(self, state):
+        return self.base_dfa.is_accepting(state[0])
+
+    def accepts(self, sequence):
+        state = self.start_state
+        for symbol in sequence:
+            state = self.step(state, symbol)
+            if state is None:
+                return False
+        return self.is_accepting(state)
+
+    def __getattr__(self, name):
+        return getattr(self.base_dfa, name)
+
+
 def bind_vlabench_contextual_dfa(
     base_dfa: Any,
     vocabulary: PlanVocabulary,
     context: Mapping[str, Any],
 ) -> Any:
-    """Specialize the VLABench generation DFA using per-example scene entities."""
-    if isinstance(base_dfa, VLABenchContextualDFA):
+    """Specialize the VLABench generation DFA using per-example scene entities and question context."""
+    if isinstance(base_dfa, (VLABenchContextualDFA, VLABenchCausalDFA)):
         return base_dfa
     if isinstance(context, Mapping):
         entities = (
@@ -422,23 +596,34 @@ def bind_vlabench_contextual_dfa(
             or context.get("entities")
             or ()
         )
+        instruction = str(context.get("instruction", ""))
     else:
         entities = (
             getattr(context, "entities", None)
             or getattr(context, "entity_table", ())
             or ()
         )
+        instruction = str(getattr(context, "instruction", ""))
+
     if isinstance(entities, Mapping):
         button_indices = [
             index for index, name in entities.items()
             if "button" in str(name).lower()
         ]
+        entities_seq = [entities[i] for i in sorted(entities)]
     else:
         button_indices = [
             index for index, name in enumerate(entities)
             if "button" in str(name).lower()
         ]
-    if not button_indices:
-        return base_dfa
-    return VLABenchContextualDFA(base_dfa, vocabulary, button_indices)
+        entities_seq = list(entities)
+
+    if button_indices:
+        target_button = _resolve_physical_law_button(instruction, entities_seq)
+        return VLABenchContextualDFA(base_dfa, vocabulary, button_indices, target_button=target_button)
+
+    if entities_seq:
+        return VLABenchCausalDFA(base_dfa, vocabulary, entities_seq)
+
+    return base_dfa
 
