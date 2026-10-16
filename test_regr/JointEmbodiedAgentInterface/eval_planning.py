@@ -68,6 +68,11 @@ def build_eval_parser() -> argparse.ArgumentParser:
         help="maximum number of planning examples to evaluate",
     )
     parser.add_argument(
+        "--dimension",
+        default=None,
+        help="filter evaluation to a specific dimension (e.g. PhysLaw, Complex)",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -206,13 +211,21 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         examples = load_planning_examples(args.planning_dir, limit=args.limit)
     else:
         examples = vla_splits.get(args.split, [])
+        if args.dimension:
+            dim_str = args.dimension.lower()
+            examples = [
+                e for e in examples
+                if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
+                or (getattr(e, "task", None) and dim_str in str(e.task).lower())
+            ]
         if args.limit:
             examples = examples[:args.limit]
 
     if not examples:
         raise ValueError(f"no planning examples found for split={args.split!r}")
 
-    print(f"[eval-planning] Evaluating {len(examples)} examples from split '{args.split}'...", flush=True)
+    dim_msg = f" (dimension: {args.dimension})" if args.dimension else ""
+    print(f"[eval-planning] Evaluating {len(examples)} examples from split '{args.split}'{dim_msg}...", flush=True)
 
     with torch.no_grad():
         with runtime.domain_scope("vlabench"):
