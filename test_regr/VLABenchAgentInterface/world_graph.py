@@ -388,6 +388,9 @@ class VLABenchWorldGraphBundle:
     valid_operation: Any
     allowed_transition: Any
     targets_button: Any = None
+    is_self_placement: Any = None
+    targets_static_fixture: Any = None
+    repeated_pick_entity: Any = None
 
     @property
     def has_constraints(self) -> bool:
@@ -464,10 +467,13 @@ def build_vlabench_world_graph(
         has_target_entity = operation(name="operation__has_target_entity")
         has_target_container = operation(name="operation__has_target_container")
         targets_button = operation(name="operation__targets_button")
+        is_self_placement = operation(name="operation__is_self_placement")
+        targets_static_fixture = operation(name="operation__targets_static_fixture")
         valid_skill_type = operation(name="operation__valid_skill_type")
         valid_pointer = operation(name="operation__valid_pointer")
         valid_operation = operation(name="operation__valid_schema")
         allowed_transition = transition(name="transition__allowed_pattern")
+        repeated_pick_entity = transition(name="transition__repeated_pick_entity")
 
         bundle = VLABenchWorldGraphBundle(
             graph=graph,
@@ -499,6 +505,9 @@ def build_vlabench_world_graph(
             valid_operation=valid_operation,
             allowed_transition=allowed_transition,
             targets_button=targets_button,
+            is_self_placement=is_self_placement,
+            targets_static_fixture=targets_static_fixture,
+            repeated_pick_entity=repeated_pick_entity,
         )
 
         if include_default_constraints:
@@ -509,6 +518,11 @@ def build_vlabench_world_graph(
             ifL(operation("op"), valid_pointer("op"), name="operation_pointer_is_valid")
             ifL(transition("edge"), allowed_transition("edge"), name="transition_matches_subtask_pattern")
             ifL(targets_button("op"), skills["press"]("op"), name="button_entity_requires_press_skill")
+
+            # Causal Precondition Constraints (First-Order Logic)
+            ifL(operation("op"), notL(is_self_placement("op")), name="anti_self_placement")
+            ifL(operation("op"), notL(targets_static_fixture("op")), name="pick_excludes_static_fixtures")
+            ifL(transition("edge"), notL(repeated_pick_entity("edge")), name="no_redundant_repeated_picks")
 
             for name, required in SKILL_ARGUMENTS.items():
                 required = set(required)
@@ -616,6 +630,21 @@ def materialize_plan(
                     pointer_name = ABSENT_ENTITY
                 _link(operation_node, bundle.operation_roles[role_name], entity_nodes[pointer_name])
 
+            # Causal property checks
+            entity_val = params.get("target_entity_name")
+            container_val = params.get("target_container_name")
+            is_self = (
+                entity_val is not None
+                and container_val is not None
+                and str(entity_val).strip() == str(container_val).strip()
+            )
+            is_static_target = False
+            if name == "pick" and entity_val is not None:
+                ptr_name, _ = _resolve_pointer(entity_val, entities)
+                nl = str(ptr_name).lower()
+                if any(k in nl for k in ("table", "counter", "room_", "lab_", "wall", "floor")):
+                    is_static_target = True
+
             local_validation = validate_plan(
                 [operation_value],
                 entity_table=entities,
@@ -629,6 +658,10 @@ def materialize_plan(
             _truth(operation_node, bundle.has_target_container, "target_container_name" in params)
             if getattr(bundle, "targets_button", None) is not None:
                 _truth(operation_node, bundle.targets_button, is_button_target)
+            if getattr(bundle, "is_self_placement", None) is not None:
+                _truth(operation_node, bundle.is_self_placement, is_self)
+            if getattr(bundle, "targets_static_fixture", None) is not None:
+                _truth(operation_node, bundle.targets_static_fixture, is_static_target)
             _truth(operation_node, bundle.valid_pointer, pointer_valid)
             _truth(operation_node, bundle.valid_operation, local_validation.valid)
             root.addChildDataNode(operation_node)
@@ -638,6 +671,19 @@ def materialize_plan(
             transition = _node(bundle.transition, index, value=index)
             _truth(transition, bundle.transition, True)
             _truth(transition, bundle.allowed_transition, full_validation.valid)
+
+            op_curr = plan[index]
+            op_next = plan[index + 1]
+            is_repeated_pick = (
+                op_curr["name"] == "pick"
+                and op_next["name"] == "pick"
+                and "target_entity_name" in op_curr.get("params", {})
+                and "target_entity_name" in op_next.get("params", {})
+                and str(op_curr["params"]["target_entity_name"]).strip() == str(op_next["params"]["target_entity_name"]).strip()
+            )
+            if getattr(bundle, "repeated_pick_entity", None) is not None:
+                _truth(transition, bundle.repeated_pick_entity, is_repeated_pick)
+
             _link(transition, bundle.transition_roles["current"], operation_nodes[index])
             _link(transition, bundle.transition_roles["following"], operation_nodes[index + 1])
             root.addChildDataNode(transition)
@@ -679,7 +725,7 @@ def verify_plan_constraints(
             name = getattr(constraint, "name", None) or key
             named[name] = value
             vacuous = value.get("verifyList") == []
-            if name == "transition_matches_subtask_pattern" and operation_count < 2:
+            if name in ("transition_matches_subtask_pattern", "no_redundant_repeated_picks") and operation_count < 2:
                 vacuous = True
             scores.append(1.0 if vacuous else max(0.0, min(1.0, float(percent) / 100.0)))
         if aggregate == "mean":

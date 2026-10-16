@@ -136,3 +136,44 @@ def test_task_contract_preserves_upstream_painting_and_book_semantics():
     assert task_contract_for("select_painting").skill_sequence == ("press",)
     assert task_contract_for("select_book").skill_sequence == ("pick", "pull")
     assert task_contract_for("unknown_task") is None
+
+
+def test_world_graph_verifies_causal_constraints():
+    bundle = build_vlabench_world_graph("test_vlabench_causal_world")
+    entities = ("apple", "bowl", "kitchen_counter")
+
+    # 1. Valid plan satisfies all causal constraints
+    valid_plan = [
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+    eval_valid = verify_plan_constraints(materialize_plan(valid_plan, entities, bundle), bundle)
+    assert eval_valid.score == 1.0
+    assert eval_valid.results["anti_self_placement"]["satisfied"] == 100.0
+    assert eval_valid.results["pick_excludes_static_fixtures"]["satisfied"] == 100.0
+
+    # 2. Self-placement violation (placing into self)
+    self_placement_plan = [
+        {"name": "place", "params": {"target_entity_name": 0, "target_container_name": 0}},
+    ]
+    eval_self = verify_plan_constraints(materialize_plan(self_placement_plan, entities, bundle), bundle)
+    assert eval_self.score == 0.0
+    assert eval_self.results["anti_self_placement"]["satisfied"] == 0.0
+
+    # 3. Static fixture violation (picking counter)
+    static_pick_plan = [
+        {"name": "pick", "params": {"target_entity_name": 2}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+    eval_static = verify_plan_constraints(materialize_plan(static_pick_plan, entities, bundle), bundle)
+    assert eval_static.score == 0.0
+    assert eval_static.results["pick_excludes_static_fixtures"]["satisfied"] == 0.0
+
+    # 4. Redundant repeated pick violation
+    repeated_pick_plan = [
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "pick", "params": {"target_entity_name": 0}},
+    ]
+    eval_repeated = verify_plan_constraints(materialize_plan(repeated_pick_plan, entities, bundle), bundle)
+    assert eval_repeated.score == 0.0
+    assert eval_repeated.results["no_redundant_repeated_picks"]["satisfied"] == 0.0
