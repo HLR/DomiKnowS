@@ -246,6 +246,27 @@ def _normalize_dfa_configuration(configuration: Mapping[str, Any] | None):
     }
 
 
+def _normalize_model_configuration(configuration: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    if not isinstance(configuration, Mapping):
+        return configuration
+    data = dict(configuration)
+    name = str(data.get("name_or_path", ""))
+    if name.endswith("Qwen/Qwen3-VL-8B-Instruct") or name.endswith("Qwen3-VL-8B-Instruct"):
+        data["name_or_path"] = "Qwen/Qwen3-VL-8B-Instruct"
+    peft = data.get("peft")
+    if isinstance(peft, Mapping):
+        peft = dict(peft)
+        default = peft.get("default")
+        if isinstance(default, Mapping):
+            default = dict(default)
+            base_name = str(default.get("base_model_name_or_path", ""))
+            if base_name.endswith("Qwen/Qwen3-VL-8B-Instruct") or base_name.endswith("Qwen3-VL-8B-Instruct"):
+                default["base_model_name_or_path"] = "Qwen/Qwen3-VL-8B-Instruct"
+            peft["default"] = default
+        data["peft"] = peft
+    return data
+
+
 def _controller_configuration(controller) -> Mapping[str, Any]:
     """Fingerprint controller semantics that cannot be inferred from tensors."""
 
@@ -390,6 +411,9 @@ def load_joint_checkpoint(
         if key in {"eai_dfa", "vlabench_dfa"}:
             saved_value = _normalize_dfa_configuration(saved_value)
             current_value = _normalize_dfa_configuration(current_value)
+        elif key == "model_configuration":
+            saved_value = _normalize_model_configuration(saved_value)
+            current_value = _normalize_model_configuration(current_value)
         if saved_value != current_value:
             raise ValueError(
                 f"joint checkpoint {key} differs from the current runtime: "
