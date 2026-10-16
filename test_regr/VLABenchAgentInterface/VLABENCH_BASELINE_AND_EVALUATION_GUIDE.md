@@ -150,6 +150,15 @@ In DomiKnowS, task structure and semantic validity are declared as first-order l
    * `push(target_entity_name, target_container_name)`: Requires pushed object and target destination.
    * `open_door(target_entity_name)`: Requires door/drawer object; forbids container argument.
    * `press(target_entity_name)`: Requires target button; forbids container argument.
+7. **Anti-Self-Placement Constraint (`anti_self_placement`):**
+   $$\text{ifL}(\text{operation}(\text{"op"}), \text{notL}(\text{is\_self\_placement}(\text{"op"})))$$
+   Mathematically forbids actions where $\text{target\_container\_name} == \text{target\_entity\_name}$, eliminating invalid attempts to place or pour an object into itself.
+8. **Static Environment Grasp Exclusion (`pick_excludes_static_fixtures`):**
+   $$\text{ifL}(\text{operation}(\text{"op"}), \text{notL}(\text{targets\_static\_fixture}(\text{"op"})))$$
+   Restricts grasp targets away from immovable architectural fixtures (counters, tables, walls, floors), ensuring the robot only attempts to pick manipulable objects.
+9. **Multi-Step Entity Rotation Invariance (`no_redundant_repeated_picks`):**
+   $$\text{ifL}(\text{transition}(\text{"edge"}), \text{notL}(\text{repeated\_pick\_entity}(\text{"edge"})))$$
+   Enforces across sequential transitions that consecutive `pick` operations must select distinct entities, preventing infinite looping on already-manipulated objects.
 
 ### 5.2 DomiKnowS Token-Level Generation Graph Constraints (`graph.py`)
 
