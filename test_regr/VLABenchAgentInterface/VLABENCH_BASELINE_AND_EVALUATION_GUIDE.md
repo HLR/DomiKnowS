@@ -200,8 +200,10 @@ To project the high-level semantic relational graph into token space during auto
      $$\forall \text{op} \in \text{Operations}, \quad \text{targets\_static\_fixture}(\text{op}) \iff \Big(\text{skill}_{\text{pick}}(\text{op}) \land \text{is\_static\_fixture}(\text{target\_entity}(\text{op}))\Big)$$
      *DFA Enforcement:* Immovable room surfaces $\mathcal{S}_{\text{static}} = \{\text{counter, table, wall, floor, room\_, lab\_}\}$ are mathematically stripped from pick targets: $\forall i \in \mathcal{S}_{\text{static}}, \, \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:}i\}$.
 
-   * **Container Destination Consistency:**
-     $$\forall (\text{op}_1, \text{op}_2) \in \text{Plan}, \quad \Big(\text{skill}_{\text{place}}(\text{op}_1) \land \text{skill}_{\text{place}}(\text{op}_2) \land \text{is\_same\_assembly}(\text{plan})\Big) \implies \Big(\text{target\_container}(\text{op}_1) = \text{target\_container}(\text{op}_2)\Big)$$
+   * **Container Destination Consistency Constraint (`container_destination_consistency`):**
+     $$\text{ifL}\big(\text{transition}(\text{"edge"}), \, \text{notL}(\text{inconsistent\_container}(\text{"edge"})), \, \text{name} = \text{"container\_destination\_consistency"}\big)$$
+     $$\forall (\text{op}_1, \text{op}_2) \in \text{Transitions}, \quad \text{inconsistent\_container}(\text{edge}) \iff \Big(\text{skill}_{\text{place}}(\text{op}_1) \land \text{skill}_{\text{place}}(\text{op}_2) \land \big(\text{target\_container}(\text{op}_1) \neq \text{target\_container}(\text{op}_2)\big)\Big)$$
+     $$\forall \text{edge} \in \text{Transitions}, \quad \text{transition}(\text{edge}) \implies \neg \text{inconsistent\_container}(\text{edge})$$
      *DFA Enforcement:* Once an assembly destination receptacle $c_{\text{dest}}$ is bound by an initial `place` or `pour` operation, all subsequent assembly placements are restricted to that established receptacle: $\mathcal{V}_{\text{allowed}} \leftarrow \{\text{obj:}c_{\text{dest}}\}$.
 
    *Empirical Impact:* Enforcing these declarative causal constraints boosted Complex task Parameter Recall from **20.89% to 33.95%** (+62.5% relative gain) and overall Complex score from **35.32 to 41.54 / 100.0** on the full 450-sample held-out test split.

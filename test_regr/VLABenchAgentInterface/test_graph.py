@@ -177,3 +177,12 @@ def test_world_graph_verifies_causal_constraints():
     eval_repeated = verify_plan_constraints(materialize_plan(repeated_pick_plan, entities, bundle), bundle)
     assert eval_repeated.score == 0.0
     assert eval_repeated.results["no_redundant_repeated_picks"]["satisfied"] == 0.0
+
+    # 5. Inconsistent container destination violation
+    inconsistent_container_plan = [
+        {"name": "place", "params": {"target_entity_name": 0, "target_container_name": 1}},
+        {"name": "place", "params": {"target_entity_name": 0, "target_container_name": 2}},
+    ]
+    eval_inconsistent = verify_plan_constraints(materialize_plan(inconsistent_container_plan, entities, bundle), bundle)
+    assert eval_inconsistent.score < 1.0
+    assert eval_inconsistent.results["container_destination_consistency"]["satisfied"] == 0.0

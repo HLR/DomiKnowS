@@ -392,6 +392,7 @@ class VLABenchWorldGraphBundle:
     is_self_placement: Any = None
     targets_static_fixture: Any = None
     repeated_pick_entity: Any = None
+    inconsistent_container: Any = None
 
     @property
     def has_constraints(self) -> bool:
@@ -475,6 +476,7 @@ def build_vlabench_world_graph(
         valid_operation = operation(name="operation__valid_schema")
         allowed_transition = transition(name="transition__allowed_pattern")
         repeated_pick_entity = transition(name="transition__repeated_pick_entity")
+        inconsistent_container = transition(name="transition__inconsistent_container")
 
         bundle = VLABenchWorldGraphBundle(
             graph=graph,
@@ -509,6 +511,7 @@ def build_vlabench_world_graph(
             is_self_placement=is_self_placement,
             targets_static_fixture=targets_static_fixture,
             repeated_pick_entity=repeated_pick_entity,
+            inconsistent_container=inconsistent_container,
         )
 
         if include_default_constraints:
@@ -524,6 +527,7 @@ def build_vlabench_world_graph(
             ifL(operation("op"), notL(is_self_placement("op")), name="anti_self_placement")
             ifL(operation("op"), notL(targets_static_fixture("op")), name="pick_excludes_static_fixtures")
             ifL(transition("edge"), notL(repeated_pick_entity("edge")), name="no_redundant_repeated_picks")
+            ifL(transition("edge"), notL(inconsistent_container("edge")), name="container_destination_consistency")
 
             for name, required in SKILL_ARGUMENTS.items():
                 required = set(required)
@@ -685,6 +689,16 @@ def materialize_plan(
             if getattr(bundle, "repeated_pick_entity", None) is not None:
                 _truth(transition, bundle.repeated_pick_entity, is_repeated_pick)
 
+            c1 = op_curr.get("params", {}).get("target_container_name")
+            c2 = op_next.get("params", {}).get("target_container_name")
+            is_inconsistent_container = (
+                c1 is not None
+                and c2 is not None
+                and str(c1).strip() != str(c2).strip()
+            )
+            if getattr(bundle, "inconsistent_container", None) is not None:
+                _truth(transition, bundle.inconsistent_container, is_inconsistent_container)
+
             _link(transition, bundle.transition_roles["current"], operation_nodes[index])
             _link(transition, bundle.transition_roles["following"], operation_nodes[index + 1])
             root.addChildDataNode(transition)
@@ -722,7 +736,7 @@ def verify_plan_constraints(
             value = raw.get(key, {})
             percent = value.get("satisfied", value.get("ifSatisfied"))
             name = getattr(constraint, "name", None) or key
-            vacuous = value.get("verifyList") == [] or (name in ("transition_matches_subtask_pattern", "no_redundant_repeated_picks") and operation_count < 2)
+            vacuous = value.get("verifyList") == [] or (name in ("transition_matches_subtask_pattern", "no_redundant_repeated_picks", "container_destination_consistency") and operation_count < 2)
             if percent is None or (isinstance(percent, float) and math.isnan(percent)):
                 if vacuous:
                     percent = 100.0

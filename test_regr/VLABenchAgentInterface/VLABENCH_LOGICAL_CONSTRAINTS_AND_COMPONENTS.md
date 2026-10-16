@@ -159,6 +159,17 @@ All world constraints are declared inside `build_vlabench_world_graph()` using D
   ```
 * **Semantic Purpose:** Prevents degenerate looping in multi-step rearrangement and cooking tasks, where a model attempts to pick the same object twice in succession without completing intermediary manipulation steps.
 
+#### 10. Container Destination Consistency Constraint
+* **Identifier:** `container_destination_consistency`
+* **Mathematical Formulation:**
+  $$\forall (\text{op}_1, \text{op}_2) \in \text{Transitions}, \quad \text{inconsistent\_container}(\text{edge}) \iff \Big(\text{skill}_{\text{place}}(\text{op}_1) \land \text{skill}_{\text{place}}(\text{op}_2) \land \big(\text{target\_container}(\text{op}_1) \neq \text{target\_container}(\text{op}_2)\big)\Big)$$
+  $$\forall \text{edge} \in \text{Transitions}, \quad \text{transition}(\text{edge}) \implies \neg \text{inconsistent\_container}(\text{edge})$$
+* **DomiKnowS Syntax:**
+  ```python
+  ifL(transition("edge"), notL(inconsistent_container("edge")), name="container_destination_consistency")
+  ```
+* **Semantic Purpose:** Enforces that sequential placement steps in multi-step assembly tasks deposit objects into the established destination container, preventing items from being scattered across multiple receptacles.
+
 ---
 
 ### 2.2 Token-Level Generation Graph Constraints (`test_regr/VLABenchAgentInterface/graph.py`)
@@ -257,8 +268,14 @@ For multi-step manipulation tasks (Complex, Spatial, ComSense), DomiKnowS encode
   $$\forall i \in \mathcal{S}_{\text{static}}, \quad \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:}i\}$$
 
 #### 4. Container Destination Consistency
+* **Identifier:** `container_destination_consistency`
+* **DomiKnowS Syntax:**
+  ```python
+  ifL(transition("edge"), notL(inconsistent_container("edge")), name="container_destination_consistency")
+  ```
 * **First-Order Logic:**
-  $$\forall (\text{op}_1, \text{op}_2) \in \text{Plan}, \quad \Big(\text{skill}_{\text{place}}(\text{op}_1) \land \text{skill}_{\text{place}}(\text{op}_2) \land \text{is\_same\_assembly}(\text{plan})\Big) \implies \Big(\text{target\_container}(\text{op}_1) = \text{target\_container}(\text{op}_2)\Big)$$
+  $$\forall (\text{op}_1, \text{op}_2) \in \text{Transitions}, \quad \text{inconsistent\_container}(\text{edge}) \iff \Big(\text{skill}_{\text{place}}(\text{op}_1) \land \text{skill}_{\text{place}}(\text{op}_2) \land \big(\text{target\_container}(\text{op}_1) \neq \text{target\_container}(\text{op}_2)\big)\Big)$$
+  $$\forall \text{edge} \in \text{Transitions}, \quad \text{transition}(\text{edge}) \implies \neg \text{inconsistent\_container}(\text{edge})$$
 * **DFA Enforcement:** Once an assembly destination receptacle $c_{\text{dest}}$ is bound by an initial `place` or `pour` operation, all subsequent assembly placements are locked to that established receptacle:
   $$\mathcal{V}_{\text{allowed}} \leftarrow \{\text{obj:}c_{\text{dest}}\}$$
 
@@ -270,11 +287,11 @@ The table below summarizes the component ecosystem and how each component utiliz
 
 | Component Name | Source File | Consumed Constraints | Enforcement Mechanism | Purpose & Role |
 | :--- | :--- | :--- | :--- | :--- |
-| **Ontology & Verifier** | `VLABenchAgentInterface/world_graph.py` | All 9 Semantic World Constraints (1–9) | `root.verifyResultsLC(key="/local/argmax")` | Materializes plans into `DataNode` hierarchies and evaluates mathematical satisfaction percentages. |
+| **Ontology & Verifier** | `VLABenchAgentInterface/world_graph.py` | All 10 Semantic World Constraints (1–10) | `root.verifyResultsLC(key="/local/argmax")` | Materializes plans into `DataNode` hierarchies and evaluates mathematical satisfaction percentages. |
 | **Generation Compiler** | `VLABenchAgentInterface/graph.py` | Token Constraints (1–3), World Patterns | `constraints_to_dfa_from_graph()`, `product_dfa()` | Compiles relational formulas into executable state machines (`VLABenchContextualDFA`, `VLABenchCausalDFA`). |
 | **Online VLM Decoder** | `JointEmbodiedAgentInterface/models.py` | All DFA Constraints (`allowed_tokens`) | Masked Categorical Logits (`logits[unallowed] = -inf`) | Masks unallowed token logits at every decoding step during greedy and beam search generation. |
 | **Differentiable PPO Replay** | `JointEmbodiedAgentInterface/models.py` | All DFA Constraints (`replay_labels_logprob`) | Differentiable Masked Categorical Log-Probabilities | Evaluates log-probabilities of sampled trajectories under masked logits to compute policy gradients. |
-| **RL Reward Engine** | `VLABenchAgentInterface/reward.py` | All 9 Semantic World Constraints | `verify_plan_constraints(root, bundle).score` | Evaluates constraint scores during rollout; zeros reward if constraint score $< 1.0$. |
+| **RL Reward Engine** | `VLABenchAgentInterface/reward.py` | All 10 Semantic World Constraints | `verify_plan_constraints(root, bundle).score` | Evaluates constraint scores during rollout; zeros reward if constraint score $< 1.0$. |
 | **Offline ILP Feasibility Gate** | `JointEmbodiedAgentInterface/structured_inference.py` | Hard validity + Constraint Satisfaction | Gurobi Binary Optimization (`gp.quicksum`) | Solves integer linear program across beam candidates to pick the maximum-likelihood constraint-satisfying plan. |
 | **Agent Controller** | `VLABenchAgentInterface/agent.py` | DFA Acceptance + Semantic Constraints | `dfa_accepts_plan()` and `verify_plan_constraints()` | Validates plans before dispatching primitive skills to robot actuators. |
 | **Evaluation Harness** | `JointEmbodiedAgentInterface/eval_planning.py` | Schema validity, Entity pointers, DAG match | Benchmark Scoring & Error Telemetry | Measures official ICCV 2025 Table 1 metrics (SR, PR, SPR, PM, Progress Score, Macro Average). |
@@ -287,8 +304,8 @@ The table below summarizes the component ecosystem and how each component utiliz
 ### 3.1 `VLABenchAgentInterface/world_graph.py` (Ontology & Verification Engine)
 * **What it does:** Defines the core ontology concepts (`plan`, `operation`, `entity`, `transition`) and their roles (`target_entity`, `target_container`, `current_operation`, `following_operation`).
 * **How it consumes constraints:**
-  1. `build_vlabench_world_graph`: Instantiates the 9 declarative first-order logic constraints using DomiKnowS `ifL` and `notL`.
-  2. `materialize_plan(plan, entity_table, bundle)`: Transforms a JSON plan into a deterministic `DataNode` tree. It grounds every object pointer against the physical scene table, determines whether causal edge conditions hold (e.g. `is_self_placement`, `targets_static_fixture`, `repeated_pick_entity`), and assigns truth tensors (`torch.tensor([-30.0, 30.0])`).
+  1. `build_vlabench_world_graph`: Instantiates the 10 declarative first-order logic constraints using DomiKnowS `ifL` and `notL`.
+  2. `materialize_plan(plan, entity_table, bundle)`: Transforms a JSON plan into a deterministic `DataNode` tree. It grounds every object pointer against the physical scene table, determines whether causal edge conditions hold (e.g. `is_self_placement`, `targets_static_fixture`, `repeated_pick_entity`, `inconsistent_container`), and assigns truth tensors (`torch.tensor([-30.0, 30.0])`).
   3. `verify_plan_constraints(root, bundle)`: Executes `root.verifyResultsLC(key="/local/argmax")`. It aggregates the satisfaction percentage across all active constraints and returns a normalized score $[0.0, 1.0]$ with per-constraint diagnostics.
 
 ### 3.2 `VLABenchAgentInterface/graph.py` (DFA Compilation & Specialization)
@@ -298,7 +315,7 @@ The table below summarizes the component ecosystem and how each component utiliz
   2. `compile_planner_dfa`: Intersects the token graph DFA with the subtask pattern DFA to construct the base product automaton.
   3. `bind_vlabench_contextual_dfa`: Examines per-example context during inference:
      - If button entities are present, it calls `_resolve_physical_law_button` (compiling density orderings or friction mechanics) and instantiates `VLABenchContextualDFA`.
-     - Otherwise, it instantiates `VLABenchCausalDFA` to enforce anti-self-placement, pick entity rotation, and static background filtering.
+     - Otherwise, it instantiates `VLABenchCausalDFA` to enforce anti-self-placement, pick entity rotation, static background filtering, and container consistency.
 
 ### 3.3 `JointEmbodiedAgentInterface/models.py` (Online Decoding & PPO Training)
 * **What it does:** Integrates vision-language backbones (Qwen3-VL) with DomiKnowS constraint automata.
@@ -361,6 +378,7 @@ The matrix below maps each constraint to its active enforcement mechanisms acros
 | `anti_self_placement` | `world_graph.py` | Yes (`CausalDFA`) | Yes (`models.py`) | Yes (`reward.py`) | Yes (`structured_inference.py`) | `test_graph.py` |
 | `pick_excludes_static_fixtures` | `world_graph.py` | Yes (`CausalDFA`) | Yes (`models.py`) | Yes (`reward.py`) | Yes (`structured_inference.py`) | `test_graph.py` |
 | `no_redundant_repeated_picks` | `world_graph.py` | Yes (`CausalDFA`) | Yes (`models.py`) | Yes (`reward.py`) | Yes (`structured_inference.py`) | `test_graph.py` |
+| `container_destination_consistency` | `world_graph.py` | Yes (`CausalDFA`) | Yes (`models.py`) | Yes (`reward.py`) | Yes (`structured_inference.py`) | `test_graph.py` |
 | Absorbing EOS Closure | `graph.py` | Yes (`graph_dfa`) | Yes (`models.py`) | N/A (token level) | N/A (token level) | `test_graph.py` |
 | Action Budget Horizon | `graph.py` | Yes (`graph_dfa`) | Yes (`models.py`) | N/A (token level) | N/A (token level) | `test_graph.py` |
 | Contextual Button DFA Dispatch | `graph.py` | Yes (`ContextualDFA`) | Yes (`models.py`) | N/A (token level) | N/A (token level) | `test_graph.py` |
