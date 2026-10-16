@@ -161,16 +161,16 @@ To project the high-level semantic relational graph into token space during auto
 2. **Action Budget Horizon Constraint (`mark_for_dfa`):**
    $$\text{mark\_for\_dfa} \left( \text{atMostAL}(\text{notL}(\text{token\_value}(\text{eos}, \text{"x"})), K_{\max} \times 5) \right)$$
    Enforces an upper bound on non-EOS tokens to ensure that planning terminates within the maximum allowed action horizon ($K_{\max} = 16$ operations, 80 tokens).
-3. **Contextual Button DFA Dispatch (`mark_for_contextual_dfa`):**
-   $$\text{button\_press\_lc} = \text{ifL}(\text{is\_before\_rel}, \text{ifL}(\text{token\_value}(\text{"skill:press"}), \text{token\_value}(\text{eos})))$$
-   $$\text{mark\_for\_contextual\_dfa}(\text{button\_press\_lc}, \text{context\_key} = \text{"button\_entities"}, \text{allow\_missing\_context} = \text{True})$$
-   Binds dynamic scene context (`button_entities`) to the decoder:
-   * **Phase 0:** Restricts start token strictly to `skill:press`.
-   * **Phase 1:** Enforces `arg:target_entity_name`.
-   * **Phase 2:** Restricts object pointers strictly to indices of buttons in the scene entity table (preventing clicks on tables, trays, or distractors).
-   * **Phase 3:** Forces plan termination `<eos>`.
+3. **Contextual Token Ordering Logical Constraint (`button_press_lc` via `mark_for_contextual_dfa`):**
+   $$\text{button\_press\_lc} = \text{ifL} \Big( \text{ctx.is\_before\_rel}(\text{"before"}), \, \text{ifL}\big(\text{ctx.token\_value}(\text{"skill:press"}, \text{"first\_tok"}), \, \text{ctx.token\_value}(\text{eos}, \text{"second\_tok"})\big), \, \text{name} = \text{"contextual\_qa_button\_press"} \Big)$$
+   $$\text{mark\_for\_contextual\_dfa}(\text{button\_press\_lc}, \, \text{context\_key} = \text{"button\_entities"}, \, \text{allow\_missing\_context} = \text{True})$$
+   * **First-Order Declarative Logic:**
+     $$\forall (t_1, t_2) \in \text{Tokens}, \quad \text{is\_before}(t_1, t_2) \implies \Big( \text{token\_value}(t_1, \text{"skill:press"}) \implies \text{token\_value}(t_2, \text{eos}) \Big)$$
+     $$\text{Active}(\text{button\_press\_lc}) \iff \big( \text{Context}(\text{"button\_entities"}) \neq \emptyset \big)$$
+   * **Logical Specification:** In multiple-choice physical intuition tasks, the agent must make a single selection by pressing a designated answer button. Rather than writing procedural decoding phases, DomiKnowS declares this structure purely as a relational formula: if a `skill:press` token is generated, the subsequent action token must strictly be the terminal `<eos>`.
+   * **Automated DFA Compilation:** When the scene context satisfies $\text{Context}(\text{"button\_entities"}) \neq \emptyset$, the DomiKnowS constraint compiler dynamically activates `button_press_lc` and conjunctively composes it with the world-graph constraints ($\text{targets\_button}(\text{op}) \implies \text{press}(\text{op})$ and entity pointer grounding), automatically synthesizing the valid DFA transition states.
 
-*Empirical Impact: This two-tier declarative formulation guarantees 100.0% schema validity by construction and resolved the Physical Laws failure, raising its score from **`0.00` to `47.50 / 100.0`** (100% skill recall).*
+*Empirical Impact: Declaring these first-order logical constraints in DomiKnowS resolved the Physical Laws failure mode without any model fine-tuning, elevating Physical Laws accuracy from **`0.00` to `47.50 / 100.0`** (100% skill recall) on the 450-sample held-out test split.*
 
 ---
 
