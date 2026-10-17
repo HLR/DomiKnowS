@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import Counter
 import json
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import networkx as nx
 
@@ -182,6 +182,10 @@ def score_planning_metrics(
         reference_plan = _read_plan(reference)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"invalid reference VLABench plan: {exc}") from exc
+    if entity_table:
+        reference_plan = _ground_plan_entities(reference_plan, entity_table)
+    reference_graph = _graph(reference_plan, dependency)
+
     try:
         predicted_plan = _read_plan(prediction)
     except (TypeError, ValueError):
@@ -190,10 +194,7 @@ def score_planning_metrics(
         return dict.fromkeys(COMPONENTS, 0.0)
 
     if entity_table:
-        reference_plan = _ground_plan_entities(reference_plan, entity_table)
         predicted_plan = _ground_plan_entities(predicted_plan, entity_table)
-
-    reference_graph = _graph(reference_plan, dependency)
 
     def skills(plan):
         return [operation["name"] for operation in plan]

@@ -1,6 +1,7 @@
 import torch
 
 from test_regr.VLABenchAgentInterface.graph import (
+    COMPLEX_TASK_SCHEMAS,
     PlanVocabulary,
     VLABenchCausalDFA,
     VLABenchCompositePlanningDFA,
