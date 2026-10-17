@@ -513,11 +513,25 @@ class VLABenchCausalDFA:
         except TypeError:
             base_allowed = self.base_dfa.allowed_tokens(base_state)
         allowed = set(int(lbl) for lbl in base_allowed)
+        strictly_forbidden = set()
 
         if active_arg == "target_container_name":
+            # Hard constraint 1: Anti-self-placement (cannot place into held entity)
             if current_picked is not None:
                 lbl = self.vocabulary.label_for_token(f"obj:{current_picked}")
-                allowed.discard(lbl)
+                strictly_forbidden.add(lbl)
+            # Hard constraint 2: Enclosed access precondition (cannot place/pour into unopened container)
+            if self.enclosed_indices:
+                opened_names = [self.entity_table[o] for o in opened_containers]
+                for idx in self.enclosed_indices:
+                    name = self.entity_table[idx]
+                    if not is_container_opened(name, opened_names):
+                        enc_lbl = self.vocabulary.label_for_token(f"obj:{idx}")
+                        strictly_forbidden.add(enc_lbl)
+
+            allowed.difference_update(strictly_forbidden)
+
+            # Soft preferences: preserve destination consistency or prefer designated containers
             if dest_container is not None:
                 c_lbl = self.vocabulary.label_for_token(f"obj:{dest_container}")
                 if c_lbl in allowed:
@@ -531,17 +545,16 @@ class VLABenchCausalDFA:
                 c_cand = allowed.intersection(c_lbls)
                 if c_cand:
                     allowed = c_cand
-            if self.enclosed_indices:
-                opened_names = [self.entity_table[o] for o in opened_containers]
-                for idx in self.enclosed_indices:
-                    name = self.entity_table[idx]
-                    if not is_container_opened(name, opened_names):
-                        enc_lbl = self.vocabulary.label_for_token(f"obj:{idx}")
-                        allowed.discard(enc_lbl)
+
         elif active_arg == "target_entity_name" and active_skill == "pick":
+            # Hard constraint 3: Static fixture exclusion (pick cannot target static room backgrounds)
             for i in self.static_env_indices:
                 lbl = self.vocabulary.label_for_token(f"obj:{i}")
-                allowed.discard(lbl)
+                strictly_forbidden.add(lbl)
+
+            allowed.difference_update(strictly_forbidden)
+
+            # Soft preference: prefer unvisited graspable entities
             unvisited_cand = set()
             for lbl in allowed:
                 tok = self.vocabulary.token_for_label(lbl)
@@ -553,7 +566,8 @@ class VLABenchCausalDFA:
                 allowed = unvisited_cand
 
         if not allowed:
-            allowed = set(int(lbl) for lbl in base_allowed)
+            # Fallback ONLY relaxes soft preferences, NEVER relaxing strictly forbidden causal constraints
+            allowed = set(int(lbl) for lbl in base_allowed).difference(strictly_forbidden)
 
         return allowed
 

@@ -658,6 +658,19 @@ def materialize_plan(
             skill_arguments=bundle.skill_arguments,
         )
 
+        if task_name is not None and (min_operations is None or required_skills is None):
+            try:
+                from .graph import COMPLEX_TASK_SCHEMAS
+            except ImportError:
+                from graph import COMPLEX_TASK_SCHEMAS
+            norm = str(task_name).strip().lower().replace("-", "_")
+            schema = COMPLEX_TASK_SCHEMAS.get(norm)
+            if schema is not None:
+                if min_operations is None:
+                    min_operations = schema.min_operations
+                if required_skills is None:
+                    required_skills = schema.required_skills
+
         is_premature_composite = False
         if min_operations is not None and len(plan) < min_operations:
             is_premature_composite = True

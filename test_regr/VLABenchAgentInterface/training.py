@@ -580,6 +580,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 _example_value(example, "dependency", "Sequential"),
                 entity_table=_example_value(example, "entities", ()),
                 world_bundle=None if native else runtime.world_bundle,
+                task_name=_example_value(example, "task") or inferred_task,
             )
             totals["reward"] += result.total
             totals["valid"] += float(result.valid)

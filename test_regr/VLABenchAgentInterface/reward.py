@@ -265,6 +265,7 @@ def score_vlabench_plan(
     entity_table: Mapping[int, str] | Sequence[str] | None = None,
     mode: str = "dense",
     world_bundle: Any = None,
+    task_name: str | None = None,
 ) -> PlanRewardBreakdown:
     """Score a plan and hard-gate it through schema and graph constraints."""
     if mode not in {"dense", "binary"}:
@@ -292,7 +293,12 @@ def score_vlabench_plan(
                 from .world_graph import materialize_plan, verify_plan_constraints
             except ImportError:
                 from world_graph import materialize_plan, verify_plan_constraints
-            root = materialize_plan(predicted_plan, entity_table or (), world_bundle)
+            root = materialize_plan(
+                predicted_plan,
+                entity_table or (),
+                world_bundle,
+                task_name=task_name,
+            )
             evaluation = verify_plan_constraints(root, world_bundle)
             constraint_score = None if evaluation is None else evaluation.score
             if constraint_score is not None and constraint_score < 1.0:
@@ -331,6 +337,7 @@ def make_vlabench_reward_function(
         item = context.get("data_item") or sample
         current_reference = item.get("operation_sequence", item.get("skill_sequence", item.get("plan", reference)))
         decoded = _decode_output(generator_output, vocabulary)
+        task_name = item.get("task") or item.get("task_name") or sample.get("task") or sample.get("task_name")
         breakdown = score_vlabench_plan(
             decoded,
             current_reference,
@@ -338,6 +345,7 @@ def make_vlabench_reward_function(
             entity_table=item.get("entity_table", item.get("entities", entity_table)),
             mode=mode,
             world_bundle=world_bundle,
+            task_name=task_name,
         )
         reward.last_breakdown = breakdown
         return torch.tensor([breakdown.total], dtype=torch.float32)

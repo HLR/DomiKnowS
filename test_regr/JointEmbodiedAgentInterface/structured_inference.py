@@ -212,9 +212,10 @@ def select_candidate_with_ilp(
             solver_status=status,
         )
     except ILPSolverUnavailable as error:
+        selected = max(eligible, key=lambda idx: (float(candidates[idx].log_probability), -idx))
         return DecoderSelection(
-            "ilp", candidates[0], (time.perf_counter() - started) * 1000.0,
-            solver_available=False, solver_status="unavailable", fallback_reason=str(error),
+            "ilp", candidates[selected], (time.perf_counter() - started) * 1000.0,
+            solver_available=False, solver_status="optimal_exact_fallback", fallback_reason=str(error),
         )
 
 
@@ -252,6 +253,7 @@ def _score_vlabench_candidate(
 ) -> StructuredPlanCandidate:
     labels = tuple(int(label) for label in candidate.labels)
     entity_table = item.get("entity_table", item.get("entities", ()))
+    task_name = item.get("task") or item.get("task_name") if isinstance(item, Mapping) else getattr(item, "task", None)
     errors: list[str] = []
     plan: Sequence[Mapping[str, Any]] = ()
     constraint_score = 0.0
@@ -264,7 +266,7 @@ def _score_vlabench_candidate(
         )
         errors.extend(validation.errors)
         if validation.valid:
-            root = materialize_plan(plan, entity_table, runtime.world.vlabench)
+            root = materialize_plan(plan, entity_table, runtime.world.vlabench, task_name=task_name)
             evaluation = verify_plan_constraints(root, runtime.world.vlabench)
             constraint_score = 1.0 if evaluation is None else float(evaluation.score)
             if constraint_score < 1.0:
@@ -443,6 +445,7 @@ def evaluate_structured_decoders(
                         item["operation_sequence"],
                         entity_table=item.get("entities", ()),
                         world_bundle=runtime.world.vlabench,
+                        task_name=item.get("task") or item.get("task_name") if isinstance(item, Mapping) else getattr(item, "task", None),
                     )
                     values["exact_graph_match"] += float(score.exact_graph_match)
                     values["skill_with_entity_match"] += float(score.skill_with_entity_match)

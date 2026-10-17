@@ -2,12 +2,14 @@ import torch
 
 from test_regr.VLABenchAgentInterface.graph import (
     PlanVocabulary,
+    VLABenchCausalDFA,
     VLABenchCompositePlanningDFA,
     bind_vlabench_contextual_dfa,
     compile_planner_dfa,
     create_planner_generation_graph,
     dfa_accepts_plan,
 )
+from test_regr.VLABenchAgentInterface.reward import score_vlabench_plan
 from test_regr.VLABenchAgentInterface.world_graph import (
     EOS_TOKEN,
     PRIMITIVE_TASK_PATTERNS,
@@ -310,4 +312,67 @@ def test_composite_planning_dfa_enforces_sequence_and_preconditions():
         vocabulary.label_for_token(EOS_TOKEN),
     ]
     assert dfa.accepts(valid_tokens)
+
+
+def test_causal_masking_never_relaxes_hard_constraints():
+    world = build_vlabench_world_graph("test_causal_fallback_world")
+    vocabulary = PlanVocabulary.from_world(world, max_entities=4)
+    graph, gen_bundle = create_planner_generation_graph(
+        world, vocabulary, max_operations=4, graph_name="test_causal_fallback_gen"
+    )
+    base_dfa = compile_planner_dfa(graph, gen_bundle, world, vocabulary, max_operations=4)
+
+    # entities: 0: apple, 1: cooler (enclosed), 2: table (static fixture)
+    entities = ("apple", "cooler", "table")
+    causal_dfa = VLABenchCausalDFA(base_dfa, vocabulary, entities)
+
+    # 1. When picking, static fixtures like table (obj:2) must NEVER be allowed
+    pick_state = (base_dfa.start_state, "pick", "target_entity_name", None, frozenset(), None, frozenset())
+    allowed = causal_dfa.allowed_tokens(pick_state)
+    table_lbl = vocabulary.label_for_token("obj:2")
+    assert table_lbl not in allowed
+
+    # 2. When placing, self-placement (placing obj:0 into obj:0) must NEVER be allowed
+    place_self_state = (base_dfa.start_state, "place", "target_container_name", 0, frozenset({0}), None, frozenset())
+    allowed_place = causal_dfa.allowed_tokens(place_self_state)
+    self_lbl = vocabulary.label_for_token("obj:0")
+    assert self_lbl not in allowed_place
+
+    # 3. When placing, placing into unopened cooler (obj:1) must NEVER be allowed
+    cooler_lbl = vocabulary.label_for_token("obj:1")
+    assert cooler_lbl not in allowed_place
+
+
+def test_materialize_plan_and_score_vlabench_plan_auto_resolve_task_name():
+    bundle = build_vlabench_world_graph("test_auto_resolve_world")
+    entities = ("apple", "bowl", "kitchen_counter")
+
+    # A 2-step plan for cook_dishes (which requires min 4 steps) must fail post-generation verification
+    short_plan = [
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+
+    # materialize_plan auto-resolves schema when task_name="cook_dishes" is passed
+    root = materialize_plan(short_plan, entities, bundle, task_name="cook_dishes")
+    evaluation = verify_plan_constraints(root, bundle)
+    assert evaluation.score < 1.0
+    assert evaluation.results["composite_subgoal_completion"]["satisfied"] < 100.0
+
+    # score_vlabench_plan also propagates task_name and marks short composite plans invalid
+    ref_plan = [
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+    breakdown = score_vlabench_plan(
+        short_plan,
+        ref_plan,
+        entity_table=entities,
+        world_bundle=bundle,
+        task_name="cook_dishes",
+    )
+    assert not breakdown.valid
+    assert any("composite_subgoal_completion" in err or "constraints scored" in err for err in breakdown.errors)
 
