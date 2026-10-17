@@ -455,7 +455,7 @@ def test_composite_completion_rejects_premature_eos_and_is_not_accepting():
 
     schema = COMPLEX_TASK_SCHEMAS["cook_dishes"]
     composite_dfa = VLABenchCompositePlanningDFA(
-        MockBaseDFA(), vocabulary, ("pot", "stove", "apple"), schema=schema
+        MockBaseDFA(), vocabulary, schema, ("pot", "stove", "apple")
     )
 
     # State with completed_ops=2 (< min_operations=4)
