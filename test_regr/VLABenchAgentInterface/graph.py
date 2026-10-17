@@ -791,7 +791,11 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
         # 1. Prevent premature EOS emission before schema subgoals and minimum operations are met
         is_premature = (completed_ops < self.schema.min_operations or required_mask != self.all_required_mask)
         if self.eos_label in allowed and is_premature:
-            allowed.discard(self.eos_label)
+            other_tokens = allowed - {self.eos_label}
+            if other_tokens:
+                allowed.discard(self.eos_label)
+            elif completed_ops < self.schema.min_operations:
+                allowed.discard(self.eos_label)
 
         # 2. Phase transitions constraint on skill selection (if specified in schema)
         if active_skill is None and not active_arg and self.schema.phase_transitions:
@@ -807,7 +811,10 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
 
         if not allowed:
             fallback = set(int(lbl) for lbl in base_causal_allowed)
-            if is_premature:
+            other_fallback = fallback - {self.eos_label}
+            if other_fallback and is_premature:
+                fallback.discard(self.eos_label)
+            elif completed_ops < self.schema.min_operations:
                 fallback.discard(self.eos_label)
             return fallback
 
