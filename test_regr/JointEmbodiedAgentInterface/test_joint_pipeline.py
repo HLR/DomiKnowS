@@ -1400,6 +1400,24 @@ def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
     invalid_target = [press_label, arg_label, table_label, eos_label]
     assert not dfa.accepts(invalid_target)
 
-    # Non-button context returns base DFA unmodified
+    # Non-button context with entities binds VLABenchCausalDFA; empty context returns base DFA
     no_btn_context = {"entities": ("table", "apple")}
-    assert runtime.dfa_for("vlabench", no_btn_context) is runtime.vlabench_dfa
+    from test_regr.VLABenchAgentInterface.graph import VLABenchCausalDFA
+    assert isinstance(runtime.dfa_for("vlabench", no_btn_context), VLABenchCausalDFA)
+    assert runtime.dfa_for("vlabench", {}) is runtime.vlabench_dfa
+
+
+def test_select_candidate_with_ilp_exact_fallback():
+    from test_regr.JointEmbodiedAgentInterface.structured_inference import (
+        StructuredPlanCandidate,
+        select_candidate_with_ilp,
+    )
+
+    c1 = StructuredPlanCandidate(labels=(1,), log_probability=-2.0, plan=(), dfa_valid=True, schema_valid=True, constraint_valid=False, constraint_score=0.5)
+    c2 = StructuredPlanCandidate(labels=(2,), log_probability=-1.5, plan=(), dfa_valid=True, schema_valid=True, constraint_valid=True, constraint_score=1.0)
+    c3 = StructuredPlanCandidate(labels=(3,), log_probability=-0.5, plan=(), dfa_valid=True, schema_valid=True, constraint_valid=True, constraint_score=1.0)
+
+    # select_candidate_with_ilp must pick candidate 3 (highest logprob among constraint-valid candidates)
+    res = select_candidate_with_ilp([c1, c2, c3], domain="vlabench")
+    assert res.selected.labels == (3,)
+    assert res.selected.constraint_valid
