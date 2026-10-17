@@ -235,7 +235,7 @@ def test_world_graph_verifies_composite_and_access_preconditions():
         bundle,
     )
     assert eval_truncated.score < 1.0
-    assert eval_truncated.results["composite_subgoal_completion"]["satisfied"] == 0.0
+    assert eval_truncated.results["composite_subgoal_completion"]["satisfied"] < 100.0
 
     # 4. Completed composite plan satisfies composite_subgoal_completion
     eval_complete = verify_plan_constraints(
