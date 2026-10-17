@@ -552,6 +552,9 @@ class VLABenchCausalDFA:
             if unvisited_cand:
                 allowed = unvisited_cand
 
+        if not allowed:
+            allowed = set(int(lbl) for lbl in base_allowed)
+
         return allowed
 
     def step(self, state, symbol):
@@ -673,25 +676,24 @@ def _resolve_composite_task(
 
     if raw_task:
         normalized = str(raw_task).strip().lower().replace("-", "_")
-        if normalized in COMPLEX_TASK_SCHEMAS:
-            return COMPLEX_TASK_SCHEMAS[normalized]
+        return COMPLEX_TASK_SCHEMAS.get(normalized)
 
     inst = str(instruction).lower()
-    if any(k in inst for k in ("cook", "dish", "soup")):
+    if any(k in inst for k in ("cook dish", "make soup", "cook dinner", "cook food")):
         return COMPLEX_TASK_SCHEMAS["cook_dishes"]
-    if any(k in inst for k in ("cool", "fridge", "cooler", "chilled")):
+    if any(k in inst for k in ("cool drink", "put drink in fridge", "cool the drink", "chill drink")):
         return COMPLEX_TASK_SCHEMAS["cool_drink"]
-    if any(k in inst for k in ("juice", "blender", "smoothie")):
+    if any(k in inst for k in ("make juice", "blend juice", "make smoothie")):
         return COMPLEX_TASK_SCHEMAS["make_juice"]
-    if any(k in inst for k in ("hammer", "nail", "hang picture")):
+    if any(k in inst for k in ("hammer nail", "hang picture")):
         return COMPLEX_TASK_SCHEMAS["hammer_nail_and_hang_picture"]
-    if any(k in inst for k in ("chemistry", "experiment", "tube")):
+    if any(k in inst for k in ("chemistry experiment", "test tube experiment")):
         return COMPLEX_TASK_SCHEMAS["take_chemistry_experiment"]
-    if any(k in inst for k in ("rearrange", "shelf", "bookshelf")):
+    if any(k in inst for k in ("rearrange book", "organize book", "rearrange shelf")):
         return COMPLEX_TASK_SCHEMAS["book_rearrange"]
-    if any(k in inst for k in ("holdem", "poker", "texas")):
+    if any(k in inst for k in ("texas holdem", "poker game")):
         return COMPLEX_TASK_SCHEMAS["texas_holdem"]
-    if any(k in inst for k in ("study table", "organize table", "clean table", "manage table")):
+    if any(k in inst for k in ("study table", "organize table", "clean study table", "manage study table")):
         return COMPLEX_TASK_SCHEMAS["manage_study_table"]
 
     return None
@@ -760,13 +762,14 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
             dest_container,
             opened_containers,
         )
-        allowed = super().allowed_tokens(causal_state, remaining_steps=remaining_steps)
-        allowed = set(allowed)
+        base_causal_allowed = super().allowed_tokens(causal_state, remaining_steps=remaining_steps)
+        allowed = set(base_causal_allowed)
 
         # 1. Prevent premature EOS emission before schema subgoals and minimum operations are met
         if self.eos_label in allowed:
             if completed_ops < self.schema.min_operations or required_mask != self.all_required_mask:
-                allowed.discard(self.eos_label)
+                if len(allowed) > 1:
+                    allowed.discard(self.eos_label)
 
         # 2. Phase transitions constraint on skill selection (if specified in schema)
         if active_skill is None and not active_arg and self.schema.phase_transitions:
@@ -779,6 +782,9 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
                         phase_candidates.add(lbl)
             if phase_candidates:
                 allowed = phase_candidates
+
+        if not allowed:
+            return set(int(lbl) for lbl in base_causal_allowed)
 
         return allowed
 
