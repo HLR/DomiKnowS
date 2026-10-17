@@ -800,45 +800,49 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
         if symbol not in self.allowed_tokens(state):
             return None
 
-        causal_state = (
-            base_state,
-            active_skill,
-            active_arg,
-            current_picked,
-            visited_picks,
-            dest_container,
-            opened_containers,
-        )
-        next_causal = super().step(causal_state, symbol)
-        if next_causal is None:
+        next_base = self.base_dfa.step(base_state, symbol)
+        if next_base is None:
             return None
 
-        (
-            next_base,
-            next_skill,
-            next_arg,
-            next_picked,
-            next_visited,
-            next_dest,
-            next_opened,
-        ) = next_causal
-
         token = self.vocabulary.token_for_label(symbol)
+        next_skill = active_skill
+        next_arg = active_arg
+        next_picked = current_picked
+        next_visited = visited_picks
+        next_dest = dest_container
+        next_opened = opened_containers
         next_completed = completed_ops
         next_mask = required_mask
         next_phase = phase
 
         if token.startswith("skill:"):
             sk = token[6:]
+            next_skill = sk
+            next_arg = None
             if sk in self.schema.required_skills:
                 next_mask = required_mask | (1 << self.schema.required_skills.index(sk))
             if self.schema.phase_transitions and (phase, sk) in self.schema.phase_transitions:
                 next_phase = self.schema.phase_transitions[(phase, sk)]
             if not SKILL_ARGUMENTS.get(sk, ()):
                 next_completed += 1
+        elif token.startswith("arg:"):
+            next_arg = token[4:]
         elif token.startswith("obj:"):
+            idx = int(token[4:])
+            if active_skill == "pick" and active_arg == "target_entity_name":
+                next_picked = idx
+                next_visited = visited_picks.union({idx})
+            elif active_skill in ("place", "pour") and active_arg == "target_container_name":
+                if next_dest is None and idx in self.container_indices:
+                    next_dest = idx
+            elif active_skill == "open_door" and active_arg == "target_entity_name":
+                next_opened = opened_containers.union({idx})
+            next_arg = None
             if active_skill is not None:
                 next_completed += 1
+        elif token == self.vocabulary.eos_token:
+            next_skill = None
+            next_arg = None
 
         return (
             next_base,

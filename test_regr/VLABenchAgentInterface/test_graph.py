@@ -205,8 +205,9 @@ def test_world_graph_verifies_composite_and_access_preconditions():
     assert eval_unopened.score < 1.0
     assert eval_unopened.results["open_before_enclosed_placement"]["satisfied"] == 0.0
 
-    # 2. Valid access sequence: open_door cooler -> pick soda -> place in cooler
+    # 2. Valid access sequence: pick cooler -> open_door cooler -> pick soda -> place in cooler
     valid_access_plan = [
+        {"name": "pick", "params": {"target_entity_name": 1}},
         {"name": "open_door", "params": {"target_entity_name": 1}},
         {"name": "pick", "params": {"target_entity_name": 0}},
         {"name": "place", "params": {"target_container_name": 1}},
@@ -217,8 +218,9 @@ def test_world_graph_verifies_composite_and_access_preconditions():
     assert eval_valid.score == 1.0
     assert eval_valid.results["open_before_enclosed_placement"]["satisfied"] == 100.0
 
-    # 3. Premature composite EOS violation: composite schema requires 3 steps and ("open_door", "pick", "place")
+    # 3. Premature composite EOS violation: composite schema requires 4 steps and ("open_door", "pick", "place")
     truncated_plan = [
+        {"name": "pick", "params": {"target_entity_name": 1}},
         {"name": "open_door", "params": {"target_entity_name": 1}},
     ]
     eval_truncated = verify_plan_constraints(
@@ -227,7 +229,7 @@ def test_world_graph_verifies_composite_and_access_preconditions():
             entities,
             bundle,
             task_name="cool_drink",
-            min_operations=3,
+            min_operations=4,
             required_skills=("open_door", "pick", "place"),
         ),
         bundle,
@@ -242,7 +244,7 @@ def test_world_graph_verifies_composite_and_access_preconditions():
             entities,
             bundle,
             task_name="cool_drink",
-            min_operations=3,
+            min_operations=4,
             required_skills=("open_door", "pick", "place"),
         ),
         bundle,
@@ -264,8 +266,11 @@ def test_composite_planning_dfa_enforces_sequence_and_preconditions():
     dfa = bind_vlabench_contextual_dfa(base_dfa, vocabulary, context)
     assert isinstance(dfa, VLABenchCompositePlanningDFA)
 
-    # 1. Truncated plan without place (only open_door and pick) must be rejected
+    # 1. Truncated plan without place (only pick cooler, open_door cooler, pick soda) must be rejected
     truncated_tokens = [
+        vocabulary.label_for_token("skill:pick"),
+        vocabulary.label_for_token("arg:target_entity_name"),
+        vocabulary.label_for_token("obj:1"),
         vocabulary.label_for_token("skill:open_door"),
         vocabulary.label_for_token("arg:target_entity_name"),
         vocabulary.label_for_token("obj:1"),
@@ -288,8 +293,11 @@ def test_composite_planning_dfa_enforces_sequence_and_preconditions():
     ]
     assert not dfa.accepts(unopened_tokens)
 
-    # 3. Complete valid plan (open_door -> pick -> place -> EOS) must be accepted
+    # 3. Complete valid plan (pick cooler -> open_door -> pick soda -> place -> EOS) must be accepted
     valid_tokens = [
+        vocabulary.label_for_token("skill:pick"),
+        vocabulary.label_for_token("arg:target_entity_name"),
+        vocabulary.label_for_token("obj:1"),
         vocabulary.label_for_token("skill:open_door"),
         vocabulary.label_for_token("arg:target_entity_name"),
         vocabulary.label_for_token("obj:1"),
