@@ -496,7 +496,7 @@ class VLABenchCausalDFA:
         self.container_indices = set()
         for i, name in enumerate(self.entity_table):
             nl = name.lower()
-            if any(k in nl for k in ("plate", "shelf", "flask", "container", "holder", "box", "stand", "bowl", "pot", "pan", "counter", "table")):
+            if is_enclosed_container(name) or any(k in nl for k in ("plate", "shelf", "flask", "container", "holder", "box", "stand", "bowl", "pot", "pan", "counter", "table", "receptacle")):
                 self.container_indices.add(i)
 
         self.enclosed_indices = set()
