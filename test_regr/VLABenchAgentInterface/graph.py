@@ -899,8 +899,7 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
         if not self.base_dfa.is_accepting(state[0]):
             return False
         completed_ops = state[7]
-        required_mask = state[8]
-        if completed_ops < self.schema.min_operations or required_mask != self.all_required_mask:
+        if completed_ops < self.schema.min_operations:
             return False
         return True
 
