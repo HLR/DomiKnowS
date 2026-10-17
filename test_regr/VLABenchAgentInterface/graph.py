@@ -490,7 +490,7 @@ class VLABenchCausalDFA:
         self.static_env_indices = set()
         for i, name in enumerate(self.entity_table):
             nl = name.lower()
-            if any(k in nl for k in ("table", "counter", "room_", "lab_", "wall")) or name.isdigit():
+            if any(k in nl for k in ("table", "counter", "room_", "lab_", "wall", "floor")) or name.isdigit():
                 self.static_env_indices.add(i)
 
         self.container_indices = set()
@@ -504,6 +504,12 @@ class VLABenchCausalDFA:
             if is_enclosed_container(name):
                 self.enclosed_indices.add(i)
 
+        self.nonexistent_indices = set()
+        for i in range(len(self.entity_table), self.vocabulary.max_entities):
+            tok = f"obj:{i}"
+            if tok in self.vocabulary.tokens:
+                self.nonexistent_indices.add(self.vocabulary.label_for_token(tok))
+
         self.start_state = (base_dfa.start_state, None, None, None, frozenset(), None, frozenset())
 
     def allowed_tokens(self, state, remaining_steps=None):
@@ -514,6 +520,9 @@ class VLABenchCausalDFA:
             base_allowed = self.base_dfa.allowed_tokens(base_state)
         allowed = set(int(lbl) for lbl in base_allowed)
         strictly_forbidden = set()
+
+        if active_arg is not None:
+            strictly_forbidden.update(self.nonexistent_indices)
 
         if active_arg == "target_container_name":
             # Hard constraint 1: Anti-self-placement (cannot place into held entity)
@@ -780,10 +789,9 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
         allowed = set(base_causal_allowed)
 
         # 1. Prevent premature EOS emission before schema subgoals and minimum operations are met
-        if self.eos_label in allowed:
-            if completed_ops < self.schema.min_operations or required_mask != self.all_required_mask:
-                if len(allowed) > 1:
-                    allowed.discard(self.eos_label)
+        is_premature = (completed_ops < self.schema.min_operations or required_mask != self.all_required_mask)
+        if self.eos_label in allowed and is_premature:
+            allowed.discard(self.eos_label)
 
         # 2. Phase transitions constraint on skill selection (if specified in schema)
         if active_skill is None and not active_arg and self.schema.phase_transitions:
@@ -798,7 +806,10 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
                 allowed = phase_candidates
 
         if not allowed:
-            return set(int(lbl) for lbl in base_causal_allowed)
+            fallback = set(int(lbl) for lbl in base_causal_allowed)
+            if is_premature:
+                fallback.discard(self.eos_label)
+            return fallback
 
         return allowed
 
@@ -878,7 +889,13 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
         )
 
     def is_accepting(self, state):
-        return self.base_dfa.is_accepting(state[0])
+        if not self.base_dfa.is_accepting(state[0]):
+            return False
+        completed_ops = state[7]
+        required_mask = state[8]
+        if completed_ops < self.schema.min_operations or required_mask != self.all_required_mask:
+            return False
+        return True
 
 
 def bind_vlabench_contextual_dfa(

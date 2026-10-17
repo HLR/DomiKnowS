@@ -680,6 +680,8 @@ def materialize_plan(
                 is_premature_composite = True
 
         operation_nodes = []
+        current_held_entity = None
+        resolved_held_entity = None
         for index, operation_value in enumerate(plan):
             name = operation_value["name"]
             params = operation_value["params"]
@@ -705,11 +707,43 @@ def materialize_plan(
             # Causal property checks
             entity_val = params.get("target_entity_name")
             container_val = params.get("target_container_name")
-            is_self = (
+
+            resolved_entity = None
+            if entity_val is not None:
+                resolved_entity, _ = _resolve_pointer(entity_val, entities)
+
+            resolved_container = None
+            if container_val is not None:
+                resolved_container, _ = _resolve_pointer(container_val, entities)
+
+            is_self = False
+            if (
                 entity_val is not None
                 and container_val is not None
-                and str(entity_val).strip() == str(container_val).strip()
-            )
+                and str(entity_val).strip().lower() == str(container_val).strip().lower()
+            ):
+                is_self = True
+            elif (
+                resolved_entity is not None
+                and resolved_container is not None
+                and str(resolved_entity).strip().lower() == str(resolved_container).strip().lower()
+            ):
+                is_self = True
+            elif name in ("place", "pour", "insert") and container_val is not None and current_held_entity is not None:
+                held_raw = str(current_held_entity).strip().lower()
+                c_raw = str(container_val).strip().lower()
+                held_res = str(resolved_held_entity).strip().lower() if resolved_held_entity is not None else held_raw
+                c_res = str(resolved_container).strip().lower() if resolved_container is not None else c_raw
+                if held_raw == c_raw or held_res == c_res or held_raw == c_res or held_res == c_raw:
+                    is_self = True
+
+            if name == "pick" and entity_val is not None:
+                current_held_entity = entity_val
+                resolved_held_entity = resolved_entity
+            elif name in ("place", "pour"):
+                current_held_entity = None
+                resolved_held_entity = None
+
             is_static_target = False
             if name == "pick" and entity_val is not None:
                 ptr_name, _ = _resolve_pointer(entity_val, entities)
@@ -745,6 +779,7 @@ def materialize_plan(
             operation_nodes.append(operation_node)
 
         opened_so_far: set[str] = set()
+        containers_seen_so_far: set[str] = set()
         for index in range(max(0, len(operation_nodes) - 1)):
             transition = _node(bundle.transition, index, value=index)
             _truth(transition, bundle.transition, True)
@@ -759,6 +794,11 @@ def materialize_plan(
                     ptr_name, _ = _resolve_pointer(ent, entities)
                     opened_so_far.add(str(ptr_name).lower().strip())
 
+            c1 = op_curr.get("params", {}).get("target_container_name")
+            if c1 is not None:
+                c1_ptr_name, _ = _resolve_pointer(c1, entities)
+                containers_seen_so_far.add(str(c1_ptr_name).lower().strip())
+
             is_repeated_pick = (
                 op_curr["name"] == "pick"
                 and op_next["name"] == "pick"
@@ -769,13 +809,16 @@ def materialize_plan(
             if getattr(bundle, "repeated_pick_entity", None) is not None:
                 _truth(transition, bundle.repeated_pick_entity, is_repeated_pick)
 
-            c1 = op_curr.get("params", {}).get("target_container_name")
             c2 = op_next.get("params", {}).get("target_container_name")
-            is_inconsistent_container = (
-                c1 is not None
-                and c2 is not None
-                and str(c1).strip() != str(c2).strip()
-            )
+            is_inconsistent_container = False
+            if c2 is not None:
+                c2_ptr_name, _ = _resolve_pointer(c2, entities)
+                c2_clean = str(c2_ptr_name).lower().strip()
+                if containers_seen_so_far and any(prev != c2_clean for prev in containers_seen_so_far):
+                    is_inconsistent_container = True
+            elif c1 is not None and c2 is not None and str(c1).strip() != str(c2).strip():
+                is_inconsistent_container = True
+
             if getattr(bundle, "inconsistent_container", None) is not None:
                 _truth(transition, bundle.inconsistent_container, is_inconsistent_container)
 

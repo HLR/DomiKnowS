@@ -147,19 +147,53 @@ def _recall(reference, prediction) -> float:
     return 100.0 * sum((reference_counts & Counter(prediction)).values()) / denominator if denominator else 0.0
 
 
-def score_planning_metrics(prediction: Any, reference: Any, dependency: Any = "Sequential") -> dict[str, float]:
+def _ground_plan_entities(plan: Sequence[Mapping[str, Any]], entity_table: Any) -> list[dict[str, Any]]:
+    if not entity_table:
+        return [dict(op) for op in plan]
+    mapping: dict[int, str] = {}
+    if isinstance(entity_table, Mapping):
+        mapping = {int(k): str(v) for k, v in entity_table.items() if str(k).isdigit() or isinstance(k, int)}
+    elif isinstance(entity_table, Sequence):
+        mapping = {i: str(v) for i, v in enumerate(entity_table)}
+
+    grounded_plan = []
+    for op in plan:
+        params = dict(op.get("params", {}))
+        for role in ("target_entity_name", "target_container_name"):
+            val = params.get(role)
+            if val is not None:
+                val_str = str(val).strip()
+                if val_str.isdigit() and int(val_str) in mapping:
+                    params[role] = mapping[int(val_str)]
+                elif isinstance(val, int) and val in mapping:
+                    params[role] = mapping[val]
+        grounded_plan.append({"name": op.get("name"), "params": params})
+    return grounded_plan
+
+
+def score_planning_metrics(
+    prediction: Any,
+    reference: Any,
+    dependency: Any = "Sequential",
+    entity_table: Any = None,
+) -> dict[str, float]:
     """Score readable plans without applying schema, grounding, or world validity gates."""
     try:
         reference_plan = _read_plan(reference)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"invalid reference VLABench plan: {exc}") from exc
-    reference_graph = _graph(reference_plan, dependency)
     try:
         predicted_plan = _read_plan(prediction)
     except (TypeError, ValueError):
         return dict.fromkeys(COMPONENTS, 0.0)
     if not predicted_plan:
         return dict.fromkeys(COMPONENTS, 0.0)
+
+    if entity_table:
+        reference_plan = _ground_plan_entities(reference_plan, entity_table)
+        predicted_plan = _ground_plan_entities(predicted_plan, entity_table)
+
+    reference_graph = _graph(reference_plan, dependency)
 
     def skills(plan):
         return [operation["name"] for operation in plan]

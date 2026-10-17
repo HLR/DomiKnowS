@@ -567,6 +567,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 output,
                 _example_value(example, "operation_sequence"),
                 _example_value(example, "dependency", "Sequential"),
+                entity_table=_example_value(example, "entities", ()),
             )
             inferred_task, inferred_dimension = planning_metadata(_example_value(example, "episode_id", ""))
             planning_metrics.update(

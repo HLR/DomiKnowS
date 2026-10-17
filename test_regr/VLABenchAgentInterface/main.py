@@ -909,8 +909,16 @@ def command_evaluate_planner(args) -> None:
         from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
         examples = load_scene_planning_examples(args.planning_dir, limit=args.limit)
         splits = deterministic_split(examples, seed=args.seed)
+        eval_examples = examples if args.split == "all" else splits[args.split]
+        if getattr(args, "dimension", None):
+            dim_str = args.dimension.lower()
+            eval_examples = [
+                e for e in eval_examples
+                if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
+                or (getattr(e, "task", None) and dim_str in str(e.task).lower())
+            ]
         planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
-        result = evaluate_planner(planner, examples if args.split == "all" else splits[args.split],
+        result = evaluate_planner(planner, eval_examples,
                                   generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens)
         _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
                         "dfa_constrained": False, "max_new_tokens": args.max_new_tokens})
@@ -920,13 +928,21 @@ def command_evaluate_planner(args) -> None:
                          "use --generation-mode frozen-vlm for the unconstrained pretrained VLM baseline")
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
     splits = deterministic_split(examples, seed=args.seed)
+    eval_examples = examples if args.split == "all" else splits[args.split]
+    if getattr(args, "dimension", None):
+        dim_str = args.dimension.lower()
+        eval_examples = [
+            e for e in eval_examples
+            if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
+            or (getattr(e, "task", None) and dim_str in str(e.task).lower())
+        ]
     world = build_vlabench_world_graph("vlabench_eval_world")
     vocabulary = PlanVocabulary.load(args.vocab) if args.vocab else PlanVocabulary.from_world(world, args.max_entities)
     runtime = build_constraint_runtime(world, max_entities=vocabulary.max_entities, max_operations=args.max_operations, name_prefix="vlabench_eval")
     if runtime.vocabulary.checksum != vocabulary.checksum:
         raise ValueError("loaded vocabulary differs from the graph-derived runtime vocabulary")
     planner = _load_planner(args, runtime.vocabulary)
-    _json(evaluate_planner(planner, examples if args.split == "all" else splits[args.split], runtime)
+    _json(evaluate_planner(planner, eval_examples, runtime)
           | {"generation_mode": "graph", "dfa_constrained": True})
 
 
@@ -1306,6 +1322,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--vocab")
     evaluate.add_argument("--seed", type=int, default=42)
     evaluate.add_argument("--split", choices=["train", "validation", "test", "all"], default="test")
+    evaluate.add_argument("--dimension", help="filter evaluation to a specific dimension (e.g. PhysLaw, Complex)")
     evaluate.set_defaults(handler=command_evaluate_planner)
 
     rollout = sub.add_parser("rollout")

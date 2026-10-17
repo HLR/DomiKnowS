@@ -32,6 +32,7 @@ try:
         canonicalize_plan,
         validate_plan,
     )
+    from .planning_metrics import _ground_plan_entities
 except ImportError:
     from graph import tokens_to_plan
     from world_graph import (
@@ -41,6 +42,7 @@ except ImportError:
         canonicalize_plan,
         validate_plan,
     )
+    from planning_metrics import _ground_plan_entities
 
 
 PLANNER_WEIGHTS: Mapping[str, float] = MappingProxyType({
@@ -281,7 +283,13 @@ def score_vlabench_plan(
         skill_arguments=skill_arguments,
     )
     predicted_plan = list(validation.canonical_plan)
-    scores = _component_scores(reference_plan, predicted_plan, dependency) if predicted_plan else {
+    if entity_table:
+        grounded_reference = _ground_plan_entities(reference_plan, entity_table)
+        grounded_predicted = _ground_plan_entities(predicted_plan, entity_table)
+    else:
+        grounded_reference = reference_plan
+        grounded_predicted = predicted_plan
+    scores = _component_scores(grounded_reference, grounded_predicted, dependency) if predicted_plan else {
         key: 0.0 for key in PLANNER_WEIGHTS
     }
 

@@ -208,18 +208,19 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     # Select evaluation examples
     if args.split == "all":
-        examples = load_planning_examples(args.planning_dir, limit=args.limit)
+        examples = load_planning_examples(args.planning_dir)
     else:
         examples = vla_splits.get(args.split, [])
-        if args.dimension:
-            dim_str = args.dimension.lower()
-            examples = [
-                e for e in examples
-                if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
-                or (getattr(e, "task", None) and dim_str in str(e.task).lower())
-            ]
-        if args.limit:
-            examples = examples[:args.limit]
+
+    if args.dimension:
+        dim_str = args.dimension.lower()
+        examples = [
+            e for e in examples
+            if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
+            or (getattr(e, "task", None) and dim_str in str(e.task).lower())
+        ]
+    if args.limit:
+        examples = examples[:args.limit]
 
     if not examples:
         raise ValueError(f"no planning examples found for split={args.split!r}")

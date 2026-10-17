@@ -376,3 +376,136 @@ def test_materialize_plan_and_score_vlabench_plan_auto_resolve_task_name():
     assert not breakdown.valid
     assert any("composite_subgoal_completion" in err or "constraints scored" in err for err in breakdown.errors)
 
+
+def test_score_planning_metrics_grounds_entity_indices_against_names():
+    from test_regr.VLABenchAgentInterface.planning_metrics import score_planning_metrics
+
+    # Generated plan contains entity indices; reference contains names
+    pred_plan = [
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+    ref_plan = [
+        {"name": "pick", "params": {"target_entity_name": "apple"}},
+        {"name": "place", "params": {"target_container_name": "bowl"}},
+    ]
+    entities = ("apple", "bowl")
+
+    # With entity_table provided, pick 0 -> place 1 scores 100/100
+    scores = score_planning_metrics(pred_plan, ref_plan, entity_table=entities)
+    assert scores["SR"] == 100.0
+    assert scores["PR"] == 100.0
+    assert scores["SPR"] == 100.0
+    assert scores["PM"] == 100.0
+    assert scores["score"] == 100.0
+
+
+def test_decoding_excludes_nonexistent_entity_pointers_and_floor():
+    world = build_vlabench_world_graph("test_nonexistent_world")
+    vocabulary = PlanVocabulary.from_world(world, max_entities=4)
+    base_dfa = VLABenchCausalDFA.__new__(VLABenchCausalDFA)
+
+    class MockBaseDFA:
+        start_state = 0
+        alphabet = set(range(len(vocabulary.tokens)))
+        def allowed_tokens(self, state, remaining_steps=None):
+            return set(range(len(vocabulary.tokens)))
+
+    # Only 2 entities in the scene: apple (0) and unopened cooler (1) + floor (2)
+    entities = ("apple", "cooler", "kitchen_floor")
+    # vocabulary has 4 entities: obj:0, obj:1, obj:2, obj:3
+    causal_dfa = VLABenchCausalDFA(MockBaseDFA(), vocabulary, entities[:2])
+    # For entities[:2], obj:2 and obj:3 are nonexistent
+    assert causal_dfa.nonexistent_indices == {
+        vocabulary.label_for_token("obj:2"),
+        vocabulary.label_for_token("obj:3"),
+    }
+
+    # When placing, nonexistent pointers obj:2 and obj:3 must be excluded
+    place_state = (0, "place", "target_container_name", 0, frozenset({0}), None, frozenset())
+    allowed = causal_dfa.allowed_tokens(place_state)
+    assert vocabulary.label_for_token("obj:2") not in allowed
+    assert vocabulary.label_for_token("obj:3") not in allowed
+    # obj:0 is self, obj:1 is unopened cooler -> both strictly forbidden
+    assert vocabulary.label_for_token("obj:0") not in allowed
+    assert vocabulary.label_for_token("obj:1") not in allowed
+
+    # Floor exclusion: picking floor must be forbidden
+    dfa_with_floor = VLABenchCausalDFA(MockBaseDFA(), vocabulary, entities)
+    floor_lbl = vocabulary.label_for_token("obj:2")
+    pick_state = (0, "pick", "target_entity_name", None, frozenset(), None, frozenset())
+    allowed_pick = dfa_with_floor.allowed_tokens(pick_state)
+    assert floor_lbl not in allowed_pick
+
+
+def test_composite_completion_rejects_premature_eos_and_is_not_accepting():
+    world = build_vlabench_world_graph("test_composite_eos_world")
+    vocabulary = PlanVocabulary.from_world(world, max_entities=4)
+
+    class MockBaseDFA:
+        start_state = 0
+        alphabet = set(range(len(vocabulary.tokens)))
+        def allowed_tokens(self, state, remaining_steps=None):
+            return {vocabulary.eos_label}
+        def is_accepting(self, state):
+            return True
+        def step(self, state, symbol):
+            return state
+
+    schema = COMPLEX_TASK_SCHEMAS["cook_dishes"]
+    composite_dfa = VLABenchCompositePlanningDFA(
+        MockBaseDFA(), vocabulary, ("pot", "stove", "apple"), schema=schema
+    )
+
+    # State with completed_ops=2 (< min_operations=4)
+    premature_state = (0, None, None, None, frozenset(), None, frozenset(), 2, 0, 0)
+    allowed = composite_dfa.allowed_tokens(premature_state)
+    # EOS must be discarded even if it was the only token in base_allowed
+    assert vocabulary.eos_label not in allowed
+    # is_accepting must return False
+    assert not composite_dfa.is_accepting(premature_state)
+
+
+def test_verifier_catches_self_placement_across_operations():
+    bundle = build_vlabench_world_graph("test_self_placement_across_ops_world")
+    entities = ("apple", "bowl")
+
+    # pick apple -> place into apple
+    self_placement_plan = [
+        {"name": "pick", "params": {"target_entity_name": "apple"}},
+        {"name": "place", "params": {"target_container_name": "apple"}},
+    ]
+    root = materialize_plan(self_placement_plan, entities, bundle)
+    evaluation = verify_plan_constraints(root, bundle)
+    assert evaluation.score < 1.0
+    assert evaluation.results["anti_self_placement"]["satisfied"] < 100.0
+
+
+def test_destination_consistency_catches_divergent_containers():
+    bundle = build_vlabench_world_graph("test_dest_consistency_world")
+    entities = ("apple", "pear", "bowl", "plate")
+
+    # pick apple -> place bowl -> pick pear -> place plate
+    divergent_plan = [
+        {"name": "pick", "params": {"target_entity_name": "apple"}},
+        {"name": "place", "params": {"target_container_name": "bowl"}},
+        {"name": "pick", "params": {"target_entity_name": "pear"}},
+        {"name": "place", "params": {"target_container_name": "plate"}},
+    ]
+    root_bad = materialize_plan(divergent_plan, entities, bundle)
+    eval_bad = verify_plan_constraints(root_bad, bundle)
+    assert eval_bad.score < 1.0
+    assert eval_bad.results["container_destination_consistency"]["satisfied"] < 100.0
+
+    # Consistent destination: place into bowl both times
+    consistent_plan = [
+        {"name": "pick", "params": {"target_entity_name": "apple"}},
+        {"name": "place", "params": {"target_container_name": "bowl"}},
+        {"name": "pick", "params": {"target_entity_name": "pear"}},
+        {"name": "place", "params": {"target_container_name": "bowl"}},
+    ]
+    root_good = materialize_plan(consistent_plan, entities, bundle)
+    eval_good = verify_plan_constraints(root_good, bundle)
+    assert eval_good.results["container_destination_consistency"]["satisfied"] == 100.0
+
+
