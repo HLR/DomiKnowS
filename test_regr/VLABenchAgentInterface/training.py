@@ -552,18 +552,14 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                         if hasattr(runtime, "dfa_for")
                         else runtime.dfa
                     )
-                    try:
-                        output = planner.generate_plan(
-                            instruction=_example_value(example, "instruction", ""),
-                            images=images,
-                            entity_table=_example_value(example, "entities", ()),
-                            dfa=dfa,
-                            world=runtime.world_bundle,
-                            max_steps=runtime.max_tokens,
-                        )
-                    except Exception as err:
-                        print(f"[eval-planner] Warning: plan generation failed for example {count}: {err}", flush=True)
-                        output = []
+                    output = planner.generate_plan(
+                        instruction=_example_value(example, "instruction", ""),
+                        images=images,
+                        entity_table=_example_value(example, "entities", ()),
+                        dfa=dfa,
+                        world=runtime.world_bundle,
+                        max_steps=runtime.max_tokens,
+                    )
                 finally:
                     for image in images:
                         image.close()

@@ -341,19 +341,7 @@ def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_oper
     from domiknows.generation.dfa.core import product_dfa
 
     graph_dfa = constraints_to_dfa_from_graph(graph, generation_bundle, on_unsupported="error")
-    try:
-        from .constraint_compiler import CompiledPlannerDFA, compile_world_constraints
-    except ImportError:
-        from constraint_compiler import CompiledPlannerDFA, compile_world_constraints
-    rules = compile_world_constraints(world)
-    dfa = product_dfa([graph_dfa, _domain_dfa(world, vocabulary, max_operations)])
-    # Keep the immutable grammar available for existing checkpoint serialization.
-    # Semantic monitors are specialized lazily once scene facts are supplied.
-    return CompiledPlannerDFA(
-        states=dfa.states, alphabet=dfa.alphabet, transitions=dfa.transitions,
-        start_state=dfa.start_state, accepting_states=dfa.accepting_states, dead_states=dfa.dead_states,
-        world_constraint_rules=rules, world_constraint_bundle=world,
-    )
+    return product_dfa([graph_dfa, _domain_dfa(world, vocabulary, max_operations)])
 
 
 def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> bool:
@@ -361,8 +349,6 @@ def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> boo
         labels = [bundle.vocabulary.label_for_token(token) for token in plan_to_tokens(plan, entity_table, world=world)]
     except (KeyError, ValueError):
         return False
-    if entity_table is not None:
-        dfa = bind_vlabench_contextual_dfa(dfa, bundle.vocabulary, {"entities": entity_table})
     return bool(dfa.accepts(labels))
 
 
@@ -811,38 +797,17 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
             elif completed_ops < self.schema.min_operations:
                 allowed.discard(self.eos_label)
 
-        # 2. Phase transitions or required skills constraint on skill selection
-        if active_skill is None and not active_arg:
-            if self.schema.phase_transitions:
-                phase_candidates = set()
-                for lbl in allowed:
-                    tok = self.vocabulary.token_for_label(lbl)
-                    if tok.startswith("skill:"):
-                        sk = tok[6:]
-                        if (phase, sk) in self.schema.phase_transitions:
-                            phase_candidates.add(lbl)
-                if phase_candidates:
-                    allowed = phase_candidates
-            elif self.schema.required_skills:
-                req_candidates = set()
-                missing_candidates = set()
-                missing_skills = [
-                    sk for i, sk in enumerate(self.schema.required_skills)
-                    if not (required_mask & (1 << i))
-                ]
-                for lbl in allowed:
-                    tok = self.vocabulary.token_for_label(lbl)
-                    if tok.startswith("skill:"):
-                        sk = tok[6:]
-                        if sk in self.schema.required_skills:
-                            req_candidates.add(lbl)
-                        if sk in missing_skills:
-                            missing_candidates.add(lbl)
-                rem_ops = max(0, 8 - completed_ops)
-                if missing_candidates and rem_ops <= len(missing_skills):
-                    allowed = missing_candidates
-                elif req_candidates:
-                    allowed = req_candidates
+        # 2. Phase transitions constraint on skill selection (if specified in schema)
+        if active_skill is None and not active_arg and self.schema.phase_transitions:
+            phase_candidates = set()
+            for lbl in allowed:
+                tok = self.vocabulary.token_for_label(lbl)
+                if tok.startswith("skill:"):
+                    sk = tok[6:]
+                    if (phase, sk) in self.schema.phase_transitions:
+                        phase_candidates.add(lbl)
+            if phase_candidates:
+                allowed = phase_candidates
 
         if not allowed:
             fallback = set(int(lbl) for lbl in base_causal_allowed)
@@ -946,12 +911,6 @@ def bind_vlabench_contextual_dfa(
     context: Mapping[str, Any],
 ) -> Any:
     """Specialize the VLABench generation DFA using per-example scene entities and question context."""
-    try:
-        from .constraint_compiler import WorldConstraintDFA
-    except ImportError:
-        from constraint_compiler import WorldConstraintDFA
-    if isinstance(base_dfa, WorldConstraintDFA):
-        return base_dfa
     if isinstance(base_dfa, (VLABenchContextualDFA, VLABenchCausalDFA, VLABenchCompositePlanningDFA)):
         return base_dfa
     if isinstance(context, Mapping):
@@ -981,20 +940,6 @@ def bind_vlabench_contextual_dfa(
             if "button" in str(name).lower()
         ]
         entities_seq = list(entities)
-
-    if hasattr(base_dfa, "world_constraint_rules"):
-        # World rules replace handwritten causal/composite enforcement here.
-        # The button-answer heuristic remains an optional task policy outside
-        # the semantic monitor, and therefore can only restrict its language.
-        monitored = WorldConstraintDFA(
-            base_dfa, vocabulary, base_dfa.world_constraint_bundle,
-            base_dfa.world_constraint_rules, entities,
-            schema=_resolve_composite_task(instruction, context),
-        )
-        if button_indices:
-            target_button = _resolve_physical_law_button(instruction, entities_seq)
-            return VLABenchContextualDFA(monitored, vocabulary, button_indices, target_button=target_button)
-        return monitored
 
     if button_indices:
         target_button = _resolve_physical_law_button(instruction, entities_seq)
