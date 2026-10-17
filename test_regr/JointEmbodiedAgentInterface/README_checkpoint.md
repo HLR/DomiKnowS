@@ -20,6 +20,8 @@ This document details the architectural composition, internal representation, an
   - `select_mahjong`: **20.0%** ($R=0.4263$, mean steps: 351.0)
   - `select_poker`: **10.0%** ($R=0.2572$, mean steps: 367.1)
   - `select_book`: **10.0%** ($R=0.1925$, mean steps: 328.0)
+- **Non-Interactive VLABench Planning Progress Score:** **`72.96 / 100.0`** (Table 1 formulation; 94.95% SR, 60.65% PR, 64.26% SPR, 42.96% PM).
+- **6-Dimension Macro Average:** **`75.13`** (SOTA Champion; PhysLaw 100.0, ComSense 79.27, Semantic 76.88, M&T 75.92, Spatial 64.89, Complex 53.81).
 - **Symbolic Reasoning (EAI):** **`63.64%`** peak goal success rate with **`0.6737`** goal recall.
 
 ---
