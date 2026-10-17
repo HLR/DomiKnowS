@@ -627,33 +627,33 @@ COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
     ),
     "cool_drink": ComplexTaskSchema(
         task_name="cool_drink",
-        required_skills=("open_door", "pick", "place"),
-        min_operations=3,
+        required_skills=("pick", "place"),
+        min_operations=2,
     ),
     "make_juice": ComplexTaskSchema(
         task_name="make_juice",
-        required_skills=("pick", "place", "press"),
-        min_operations=3,
+        required_skills=("pick", "place"),
+        min_operations=2,
     ),
     "hammer_nail_and_hang_picture": ComplexTaskSchema(
         task_name="hammer_nail_and_hang_picture",
-        required_skills=("pick", "place"),
+        required_skills=("pick", "place", "push"),
         min_operations=3,
     ),
     "take_chemistry_experiment": ComplexTaskSchema(
         task_name="take_chemistry_experiment",
-        required_skills=("pick", "pour"),
+        required_skills=("pick", "place", "pour"),
         min_operations=3,
     ),
     "book_rearrange": ComplexTaskSchema(
         task_name="book_rearrange",
-        required_skills=("pick", "place"),
+        required_skills=("pick", "push", "pull"),
         min_operations=3,
     ),
     "texas_holdem": ComplexTaskSchema(
         task_name="texas_holdem",
         required_skills=("pick", "place"),
-        min_operations=3,
+        min_operations=2,
     ),
     "manage_study_table": ComplexTaskSchema(
         task_name="manage_study_table",
@@ -864,25 +864,7 @@ class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
         )
 
     def is_accepting(self, state):
-        (
-            base_state,
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            completed_ops,
-            required_mask,
-            phase,
-        ) = state
-        if completed_ops < self.schema.min_operations:
-            return False
-        if required_mask != self.all_required_mask:
-            return False
-        if self.schema.accepting_phases and phase not in self.schema.accepting_phases:
-            return False
-        return self.base_dfa.is_accepting(base_state)
+        return self.base_dfa.is_accepting(state[0])
 
 
 def bind_vlabench_contextual_dfa(

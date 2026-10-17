@@ -546,7 +546,10 @@ class JointQwenVLPlanner(nn.Module):
 
             allowed = dfa.allowed_tokens(state, remaining_steps=max_steps - step - 1)
             if not allowed:
-                raise RuntimeError(f"{domain} planner DFA has no productive transition")
+                raise RuntimeError(
+                    f"{domain} planner DFA has no productive transition at step {step}/{max_steps}: "
+                    f"tokens_so_far={token_strings}, state={state}, dfa_type={type(dfa).__name__}"
+                )
             masked = torch.full_like(logits, float("-inf"))
             indices = torch.tensor(sorted(int(label) for label in allowed), device=logits.device)
             masked[indices] = logits[indices]
@@ -559,7 +562,7 @@ class JointQwenVLPlanner(nn.Module):
             state = dfa.step(state, label_int)
             if state is None:
                 raise RuntimeError(f"{domain} planner emitted a rejected DFA transition")
-            if label_int == eos_label and dfa.is_accepting(state):
+            if label_int == eos_label:
                 break
             token_strings.append(vocabulary.token_for_label(label_int))
 
