@@ -297,6 +297,39 @@ def split_subtasks(
     return visit(0)
 
 
+ENCLOSED_CONTAINER_KEYWORDS: tuple[str, ...] = (
+    "cooler",
+    "fridge",
+    "refrigerator",
+    "drawer",
+    "microwave",
+    "blender",
+    "oven",
+    "cabinet",
+)
+
+
+def is_enclosed_container(name: Any) -> bool:
+    """Return True if the entity name corresponds to an enclosed receptacle."""
+    if name is None:
+        return False
+    lower = str(name).strip().lower()
+    return any(keyword in lower for keyword in ENCLOSED_CONTAINER_KEYWORDS)
+
+
+def is_container_opened(container_name: Any, opened_entities: Iterable[Any]) -> bool:
+    """Return True if an enclosed container has been opened by an earlier action."""
+    c_lower = str(container_name).strip().lower()
+    for o in opened_entities:
+        o_lower = str(o).strip().lower()
+        if c_lower in o_lower or o_lower in c_lower:
+            return True
+        for kw in ENCLOSED_CONTAINER_KEYWORDS:
+            if kw in c_lower and kw in o_lower:
+                return True
+    return False
+
+
 def _known_entity(value: Any, entity_table: Mapping[int, str] | Sequence[str] | None) -> bool:
     if value is None or value == "":
         return False
@@ -393,6 +426,8 @@ class VLABenchWorldGraphBundle:
     targets_static_fixture: Any = None
     repeated_pick_entity: Any = None
     inconsistent_container: Any = None
+    unopened_container_placement: Any = None
+    premature_composite_eos: Any = None
 
     @property
     def has_constraints(self) -> bool:
@@ -477,6 +512,8 @@ def build_vlabench_world_graph(
         allowed_transition = transition(name="transition__allowed_pattern")
         repeated_pick_entity = transition(name="transition__repeated_pick_entity")
         inconsistent_container = transition(name="transition__inconsistent_container")
+        unopened_container_placement = transition(name="transition__unopened_container_placement")
+        premature_composite_eos = operation(name="operation__premature_composite_eos")
 
         bundle = VLABenchWorldGraphBundle(
             graph=graph,
@@ -512,6 +549,8 @@ def build_vlabench_world_graph(
             targets_static_fixture=targets_static_fixture,
             repeated_pick_entity=repeated_pick_entity,
             inconsistent_container=inconsistent_container,
+            unopened_container_placement=unopened_container_placement,
+            premature_composite_eos=premature_composite_eos,
         )
 
         if include_default_constraints:
@@ -528,6 +567,8 @@ def build_vlabench_world_graph(
             ifL(operation("op"), notL(targets_static_fixture("op")), name="pick_excludes_static_fixtures")
             ifL(transition("edge"), notL(repeated_pick_entity("edge")), name="no_redundant_repeated_picks")
             ifL(transition("edge"), notL(inconsistent_container("edge")), name="container_destination_consistency")
+            ifL(transition("edge"), notL(unopened_container_placement("edge")), name="open_before_enclosed_placement")
+            ifL(operation("op"), notL(premature_composite_eos("op")), name="composite_subgoal_completion")
 
             for name, required in SKILL_ARGUMENTS.items():
                 required = set(required)
@@ -585,6 +626,10 @@ def materialize_plan(
     value: Any,
     entity_table: Mapping[int, str] | Sequence[str],
     bundle: VLABenchWorldGraphBundle,
+    *,
+    task_name: str | None = None,
+    min_operations: int | None = None,
+    required_skills: Sequence[str] | None = None,
 ):
     """Ground one canonical plan as a DomiKnowS ``DataNode`` hierarchy."""
     try:
@@ -612,6 +657,15 @@ def materialize_plan(
             entity_table=entities,
             skill_arguments=bundle.skill_arguments,
         )
+
+        is_premature_composite = False
+        if min_operations is not None and len(plan) < min_operations:
+            is_premature_composite = True
+        if required_skills is not None:
+            plan_skills = {op["name"] for op in plan}
+            if not all(req in plan_skills for req in required_skills):
+                is_premature_composite = True
+
         operation_nodes = []
         for index, operation_value in enumerate(plan):
             name = operation_value["name"]
@@ -667,11 +721,17 @@ def materialize_plan(
                 _truth(operation_node, bundle.is_self_placement, is_self)
             if getattr(bundle, "targets_static_fixture", None) is not None:
                 _truth(operation_node, bundle.targets_static_fixture, is_static_target)
+
+            is_premature_at_op = is_premature_composite and (index == len(plan) - 1)
+            if getattr(bundle, "premature_composite_eos", None) is not None:
+                _truth(operation_node, bundle.premature_composite_eos, is_premature_at_op)
+
             _truth(operation_node, bundle.valid_pointer, pointer_valid)
             _truth(operation_node, bundle.valid_operation, local_validation.valid)
             root.addChildDataNode(operation_node)
             operation_nodes.append(operation_node)
 
+        opened_so_far: set[str] = set()
         for index in range(max(0, len(operation_nodes) - 1)):
             transition = _node(bundle.transition, index, value=index)
             _truth(transition, bundle.transition, True)
@@ -679,6 +739,13 @@ def materialize_plan(
 
             op_curr = plan[index]
             op_next = plan[index + 1]
+
+            if op_curr["name"] == "open_door":
+                ent = op_curr.get("params", {}).get("target_entity_name")
+                if ent is not None:
+                    ptr_name, _ = _resolve_pointer(ent, entities)
+                    opened_so_far.add(str(ptr_name).lower().strip())
+
             is_repeated_pick = (
                 op_curr["name"] == "pick"
                 and op_next["name"] == "pick"
@@ -698,6 +765,15 @@ def materialize_plan(
             )
             if getattr(bundle, "inconsistent_container", None) is not None:
                 _truth(transition, bundle.inconsistent_container, is_inconsistent_container)
+
+            is_unopened_placement = False
+            if op_next["name"] in ("place", "insert", "pour"):
+                if c2 is not None:
+                    c2_ptr_name, _ = _resolve_pointer(c2, entities)
+                    if is_enclosed_container(c2_ptr_name) and not is_container_opened(c2_ptr_name, opened_so_far):
+                        is_unopened_placement = True
+            if getattr(bundle, "unopened_container_placement", None) is not None:
+                _truth(transition, bundle.unopened_container_placement, is_unopened_placement)
 
             _link(transition, bundle.transition_roles["current"], operation_nodes[index])
             _link(transition, bundle.transition_roles["following"], operation_nodes[index + 1])
@@ -736,7 +812,7 @@ def verify_plan_constraints(
             value = raw.get(key, {})
             percent = value.get("satisfied", value.get("ifSatisfied"))
             name = getattr(constraint, "name", None) or key
-            vacuous = value.get("verifyList") == [] or (name in ("transition_matches_subtask_pattern", "no_redundant_repeated_picks", "container_destination_consistency") and operation_count < 2)
+            vacuous = value.get("verifyList") == [] or (name in ("transition_matches_subtask_pattern", "no_redundant_repeated_picks", "container_destination_consistency", "open_before_enclosed_placement") and operation_count < 2)
             if percent is None or (isinstance(percent, float) and math.isnan(percent)):
                 if vacuous:
                     percent = 100.0

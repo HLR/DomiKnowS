@@ -2,6 +2,8 @@ import torch
 
 from test_regr.VLABenchAgentInterface.graph import (
     PlanVocabulary,
+    VLABenchCompositePlanningDFA,
+    bind_vlabench_contextual_dfa,
     compile_planner_dfa,
     create_planner_generation_graph,
     dfa_accepts_plan,
@@ -186,3 +188,118 @@ def test_world_graph_verifies_causal_constraints():
     eval_inconsistent = verify_plan_constraints(materialize_plan(inconsistent_container_plan, entities, bundle), bundle)
     assert eval_inconsistent.score < 1.0
     assert eval_inconsistent.results["container_destination_consistency"]["satisfied"] == 0.0
+
+
+def test_world_graph_verifies_composite_and_access_preconditions():
+    bundle = build_vlabench_world_graph("test_vlabench_composite_world")
+    entities = ("soda_can", "cooler", "kitchen_counter")
+
+    # 1. Unopened container placement violation: placing into cooler without open_door
+    unopened_placement_plan = [
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+    eval_unopened = verify_plan_constraints(
+        materialize_plan(unopened_placement_plan, entities, bundle), bundle
+    )
+    assert eval_unopened.score < 1.0
+    assert eval_unopened.results["open_before_enclosed_placement"]["satisfied"] == 0.0
+
+    # 2. Valid access sequence: open_door cooler -> pick soda -> place in cooler
+    valid_access_plan = [
+        {"name": "open_door", "params": {"target_entity_name": 1}},
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+    eval_valid = verify_plan_constraints(
+        materialize_plan(valid_access_plan, entities, bundle), bundle
+    )
+    assert eval_valid.score == 1.0
+    assert eval_valid.results["open_before_enclosed_placement"]["satisfied"] == 100.0
+
+    # 3. Premature composite EOS violation: composite schema requires 3 steps and ("open_door", "pick", "place")
+    truncated_plan = [
+        {"name": "open_door", "params": {"target_entity_name": 1}},
+    ]
+    eval_truncated = verify_plan_constraints(
+        materialize_plan(
+            truncated_plan,
+            entities,
+            bundle,
+            task_name="cool_drink",
+            min_operations=3,
+            required_skills=("open_door", "pick", "place"),
+        ),
+        bundle,
+    )
+    assert eval_truncated.score < 1.0
+    assert eval_truncated.results["composite_subgoal_completion"]["satisfied"] == 0.0
+
+    # 4. Completed composite plan satisfies composite_subgoal_completion
+    eval_complete = verify_plan_constraints(
+        materialize_plan(
+            valid_access_plan,
+            entities,
+            bundle,
+            task_name="cool_drink",
+            min_operations=3,
+            required_skills=("open_door", "pick", "place"),
+        ),
+        bundle,
+    )
+    assert eval_complete.score == 1.0
+    assert eval_complete.results["composite_subgoal_completion"]["satisfied"] == 100.0
+
+
+def test_composite_planning_dfa_enforces_sequence_and_preconditions():
+    world = build_vlabench_world_graph("test_composite_dfa_world")
+    vocabulary = PlanVocabulary.from_world(world, max_entities=4)
+    graph, gen_bundle = create_planner_generation_graph(
+        world, vocabulary, max_operations=5, graph_name="test_composite_dfa_gen"
+    )
+    base_dfa = compile_planner_dfa(graph, gen_bundle, world, vocabulary, max_operations=5)
+
+    entities = ("soda", "cooler", "table")
+    context = {"task": "cool_drink", "entities": entities, "instruction": "Cool the drink in the cooler"}
+    dfa = bind_vlabench_contextual_dfa(base_dfa, vocabulary, context)
+    assert isinstance(dfa, VLABenchCompositePlanningDFA)
+
+    # 1. Truncated plan without place (only open_door and pick) must be rejected
+    truncated_tokens = [
+        vocabulary.label_for_token("skill:open_door"),
+        vocabulary.label_for_token("arg:target_entity_name"),
+        vocabulary.label_for_token("obj:1"),
+        vocabulary.label_for_token("skill:pick"),
+        vocabulary.label_for_token("arg:target_entity_name"),
+        vocabulary.label_for_token("obj:0"),
+        vocabulary.label_for_token(EOS_TOKEN),
+    ]
+    assert not dfa.accepts(truncated_tokens)
+
+    # 2. Plan placing into unopened cooler (skipping open_door) must be rejected
+    unopened_tokens = [
+        vocabulary.label_for_token("skill:pick"),
+        vocabulary.label_for_token("arg:target_entity_name"),
+        vocabulary.label_for_token("obj:0"),
+        vocabulary.label_for_token("skill:place"),
+        vocabulary.label_for_token("arg:target_container_name"),
+        vocabulary.label_for_token("obj:1"),
+        vocabulary.label_for_token(EOS_TOKEN),
+    ]
+    assert not dfa.accepts(unopened_tokens)
+
+    # 3. Complete valid plan (open_door -> pick -> place -> EOS) must be accepted
+    valid_tokens = [
+        vocabulary.label_for_token("skill:open_door"),
+        vocabulary.label_for_token("arg:target_entity_name"),
+        vocabulary.label_for_token("obj:1"),
+        vocabulary.label_for_token("skill:pick"),
+        vocabulary.label_for_token("arg:target_entity_name"),
+        vocabulary.label_for_token("obj:0"),
+        vocabulary.label_for_token("skill:place"),
+        vocabulary.label_for_token("arg:target_container_name"),
+        vocabulary.label_for_token("obj:1"),
+        vocabulary.label_for_token(EOS_TOKEN),
+    ]
+    assert dfa.accepts(valid_tokens)
+

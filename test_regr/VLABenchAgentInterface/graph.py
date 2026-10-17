@@ -12,22 +12,30 @@ from typing import Any, Iterable, Mapping, Sequence
 
 try:
     from .world_graph import (
+        ENCLOSED_CONTAINER_KEYWORDS,
         EOS_TOKEN,
+        SKILL_ARGUMENTS,
         VLABENCH_DOMAIN_CHECKSUM,
         VLABenchWorldGraphBundle,
         build_vlabench_world_graph,
         canonicalize_plan,
+        is_container_opened,
+        is_enclosed_container,
         validate_plan,
     )
 except ImportError:
     from world_graph import (
+        ENCLOSED_CONTAINER_KEYWORDS,
         EOS_TOKEN,
+        SKILL_ARGUMENTS,
         VLABENCH_DOMAIN_CHECKSUM,
         VLABenchWorldGraphBundle,
         build_vlabench_world_graph,
         canonicalize_plan,
+        is_container_opened,
+        is_enclosed_container,
         validate_plan,
-)
+    )
 
 
 _DEFAULT_WORLD_IDS = count()
@@ -469,6 +477,8 @@ class VLABenchCausalDFA:
          (tables, counters, floors, walls).
       4. Container consistency: subsequent placements in multi-step assembly target
          the established destination receptacle.
+      5. Enclosed receptacle precondition: place/pour cannot target enclosed
+         receptacles (coolers, fridges, microwaves, drawers, blenders) before open_door.
     """
 
     def __init__(self, base_dfa: Any, vocabulary: PlanVocabulary, entity_table: Sequence[str]):
@@ -489,10 +499,15 @@ class VLABenchCausalDFA:
             if any(k in nl for k in ("plate", "shelf", "flask", "container", "holder", "box", "stand", "bowl", "pot", "pan", "counter", "table")):
                 self.container_indices.add(i)
 
-        self.start_state = (base_dfa.start_state, None, None, None, frozenset(), None)
+        self.enclosed_indices = set()
+        for i, name in enumerate(self.entity_table):
+            if is_enclosed_container(name):
+                self.enclosed_indices.add(i)
+
+        self.start_state = (base_dfa.start_state, None, None, None, frozenset(), None, frozenset())
 
     def allowed_tokens(self, state, remaining_steps=None):
-        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container = state
+        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container, opened_containers = state
         try:
             base_allowed = self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps)
         except TypeError:
@@ -516,6 +531,13 @@ class VLABenchCausalDFA:
                 c_cand = allowed.intersection(c_lbls)
                 if c_cand:
                     allowed = c_cand
+            if self.enclosed_indices:
+                opened_names = [self.entity_table[o] for o in opened_containers]
+                for idx in self.enclosed_indices:
+                    name = self.entity_table[idx]
+                    if not is_container_opened(name, opened_names):
+                        enc_lbl = self.vocabulary.label_for_token(f"obj:{idx}")
+                        allowed.discard(enc_lbl)
         elif active_arg == "target_entity_name" and active_skill == "pick":
             for i in self.static_env_indices:
                 lbl = self.vocabulary.label_for_token(f"obj:{i}")
@@ -533,7 +555,7 @@ class VLABenchCausalDFA:
         return allowed
 
     def step(self, state, symbol):
-        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container = state
+        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container, opened_containers = state
         symbol = int(symbol)
         if symbol not in self.allowed_tokens(state):
             return None
@@ -546,6 +568,7 @@ class VLABenchCausalDFA:
         next_picked = current_picked
         next_visited = visited_picks
         next_dest = dest_container
+        next_opened = opened_containers
 
         if token.startswith("skill:"):
             next_skill = token[6:]
@@ -560,12 +583,14 @@ class VLABenchCausalDFA:
             elif active_skill in ("place", "pour") and active_arg == "target_container_name":
                 if next_dest is None and idx in self.container_indices:
                     next_dest = idx
+            elif active_skill == "open_door" and active_arg == "target_entity_name":
+                next_opened = opened_containers.union({idx})
             next_arg = None
         elif token == self.vocabulary.eos_token:
             next_skill = None
             next_arg = None
 
-        return (next_base, next_skill, next_arg, next_picked, next_visited, next_dest)
+        return (next_base, next_skill, next_arg, next_picked, next_visited, next_dest, next_opened)
 
     def is_accepting(self, state):
         return self.base_dfa.is_accepting(state[0])
@@ -582,13 +607,281 @@ class VLABenchCausalDFA:
         return getattr(self.base_dfa, name)
 
 
+@dataclass(frozen=True)
+class ComplexTaskSchema:
+    task_name: str
+    required_skills: tuple[str, ...]
+    min_operations: int
+    phase_transitions: Mapping[tuple[str, str], str] | None = None
+    accepting_phases: frozenset[str] | None = None
+
+
+COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
+    "cook_dishes": ComplexTaskSchema(
+        task_name="cook_dishes",
+        required_skills=("pick", "place"),
+        min_operations=4,
+    ),
+    "cool_drink": ComplexTaskSchema(
+        task_name="cool_drink",
+        required_skills=("open_door", "pick", "place"),
+        min_operations=3,
+    ),
+    "make_juice": ComplexTaskSchema(
+        task_name="make_juice",
+        required_skills=("pick", "place", "press"),
+        min_operations=3,
+    ),
+    "hammer_nail_and_hang_picture": ComplexTaskSchema(
+        task_name="hammer_nail_and_hang_picture",
+        required_skills=("pick", "place"),
+        min_operations=3,
+    ),
+    "take_chemistry_experiment": ComplexTaskSchema(
+        task_name="take_chemistry_experiment",
+        required_skills=("pick", "pour"),
+        min_operations=3,
+    ),
+    "book_rearrange": ComplexTaskSchema(
+        task_name="book_rearrange",
+        required_skills=("pick", "place"),
+        min_operations=3,
+    ),
+    "texas_holdem": ComplexTaskSchema(
+        task_name="texas_holdem",
+        required_skills=("pick", "place"),
+        min_operations=3,
+    ),
+    "manage_study_table": ComplexTaskSchema(
+        task_name="manage_study_table",
+        required_skills=("pick", "place"),
+        min_operations=3,
+    ),
+}
+
+
+def _resolve_composite_task(
+    instruction: str,
+    context: Mapping[str, Any] | Any | None = None,
+) -> ComplexTaskSchema | None:
+    """Resolve composite task schema from context task metadata or instruction dialogue."""
+    raw_task = None
+    if isinstance(context, Mapping):
+        raw_task = context.get("task") or context.get("task_name")
+    elif context is not None:
+        raw_task = getattr(context, "task", None) or getattr(context, "task_name", None)
+
+    if raw_task:
+        normalized = str(raw_task).strip().lower().replace("-", "_")
+        if normalized in COMPLEX_TASK_SCHEMAS:
+            return COMPLEX_TASK_SCHEMAS[normalized]
+
+    inst = str(instruction).lower()
+    if any(k in inst for k in ("cook", "dish", "soup")):
+        return COMPLEX_TASK_SCHEMAS["cook_dishes"]
+    if any(k in inst for k in ("cool", "fridge", "cooler", "chilled")):
+        return COMPLEX_TASK_SCHEMAS["cool_drink"]
+    if any(k in inst for k in ("juice", "blender", "smoothie")):
+        return COMPLEX_TASK_SCHEMAS["make_juice"]
+    if any(k in inst for k in ("hammer", "nail", "hang picture")):
+        return COMPLEX_TASK_SCHEMAS["hammer_nail_and_hang_picture"]
+    if any(k in inst for k in ("chemistry", "experiment", "tube")):
+        return COMPLEX_TASK_SCHEMAS["take_chemistry_experiment"]
+    if any(k in inst for k in ("rearrange", "shelf", "bookshelf")):
+        return COMPLEX_TASK_SCHEMAS["book_rearrange"]
+    if any(k in inst for k in ("holdem", "poker", "texas")):
+        return COMPLEX_TASK_SCHEMAS["texas_holdem"]
+    if any(k in inst for k in ("study table", "organize table", "clean table", "manage table")):
+        return COMPLEX_TASK_SCHEMAS["manage_study_table"]
+
+    return None
+
+
+class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
+    """Hierarchical planning DFA for open-ended multi-step composite tasks.
+
+    Adapts the DomiKnowS declarative planning architecture from
+    `domiknows.generation.applications.planning` (PlanningBundle, required actions
+    bitmask, macro-phase transitions, non-terminal limits).
+
+    Guarantees:
+      1. Prevents premature <eos> emission before all composite subgoals are completed.
+      2. Enforces minimum operation thresholds (e.g. at least 3-4 steps for composite assemblies).
+      3. Physical access preconditions: enclosed receptacles (coolers, fridges, blenders, drawers)
+         must be opened via `open_door` before placing or pouring items inside.
+      4. Inherits physical causal manipulation laws from `VLABenchCausalDFA` (anti-self-placement,
+         entity rotation, static fixture exclusion, receptacle destination consistency).
+    """
+
+    def __init__(
+        self,
+        base_dfa: Any,
+        vocabulary: PlanVocabulary,
+        schema: ComplexTaskSchema,
+        entity_table: Sequence[str],
+    ):
+        super().__init__(base_dfa, vocabulary, entity_table)
+        self.schema = schema
+        self.eos_label = vocabulary.label_for_token(vocabulary.eos_token)
+        self.all_required_mask = (1 << len(schema.required_skills)) - 1
+        self.start_state = (
+            base_dfa.start_state,
+            None,
+            None,
+            None,
+            frozenset(),
+            None,
+            frozenset(),
+            0,
+            0,
+            "initial",
+        )
+
+    def allowed_tokens(self, state, remaining_steps=None):
+        (
+            base_state,
+            active_skill,
+            active_arg,
+            current_picked,
+            visited_picks,
+            dest_container,
+            opened_containers,
+            completed_ops,
+            required_mask,
+            phase,
+        ) = state
+
+        causal_state = (
+            base_state,
+            active_skill,
+            active_arg,
+            current_picked,
+            visited_picks,
+            dest_container,
+            opened_containers,
+        )
+        allowed = super().allowed_tokens(causal_state, remaining_steps=remaining_steps)
+        allowed = set(allowed)
+
+        # 1. Prevent premature EOS emission before schema subgoals and minimum operations are met
+        if self.eos_label in allowed:
+            if completed_ops < self.schema.min_operations or required_mask != self.all_required_mask:
+                allowed.discard(self.eos_label)
+
+        # 2. Phase transitions constraint on skill selection (if specified in schema)
+        if active_skill is None and not active_arg and self.schema.phase_transitions:
+            phase_candidates = set()
+            for lbl in allowed:
+                tok = self.vocabulary.token_for_label(lbl)
+                if tok.startswith("skill:"):
+                    sk = tok[6:]
+                    if (phase, sk) in self.schema.phase_transitions:
+                        phase_candidates.add(lbl)
+            if phase_candidates:
+                allowed = phase_candidates
+
+        return allowed
+
+    def step(self, state, symbol):
+        (
+            base_state,
+            active_skill,
+            active_arg,
+            current_picked,
+            visited_picks,
+            dest_container,
+            opened_containers,
+            completed_ops,
+            required_mask,
+            phase,
+        ) = state
+
+        symbol = int(symbol)
+        if symbol not in self.allowed_tokens(state):
+            return None
+
+        causal_state = (
+            base_state,
+            active_skill,
+            active_arg,
+            current_picked,
+            visited_picks,
+            dest_container,
+            opened_containers,
+        )
+        next_causal = super().step(causal_state, symbol)
+        if next_causal is None:
+            return None
+
+        (
+            next_base,
+            next_skill,
+            next_arg,
+            next_picked,
+            next_visited,
+            next_dest,
+            next_opened,
+        ) = next_causal
+
+        token = self.vocabulary.token_for_label(symbol)
+        next_completed = completed_ops
+        next_mask = required_mask
+        next_phase = phase
+
+        if token.startswith("skill:"):
+            sk = token[6:]
+            if sk in self.schema.required_skills:
+                next_mask = required_mask | (1 << self.schema.required_skills.index(sk))
+            if self.schema.phase_transitions and (phase, sk) in self.schema.phase_transitions:
+                next_phase = self.schema.phase_transitions[(phase, sk)]
+            if not SKILL_ARGUMENTS.get(sk, ()):
+                next_completed += 1
+        elif token.startswith("obj:"):
+            if active_skill is not None:
+                next_completed += 1
+
+        return (
+            next_base,
+            next_skill,
+            next_arg,
+            next_picked,
+            next_visited,
+            next_dest,
+            next_opened,
+            next_completed,
+            next_mask,
+            next_phase,
+        )
+
+    def is_accepting(self, state):
+        (
+            base_state,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            completed_ops,
+            required_mask,
+            phase,
+        ) = state
+        if completed_ops < self.schema.min_operations:
+            return False
+        if required_mask != self.all_required_mask:
+            return False
+        if self.schema.accepting_phases and phase not in self.schema.accepting_phases:
+            return False
+        return self.base_dfa.is_accepting(base_state)
+
+
 def bind_vlabench_contextual_dfa(
     base_dfa: Any,
     vocabulary: PlanVocabulary,
     context: Mapping[str, Any],
 ) -> Any:
     """Specialize the VLABench generation DFA using per-example scene entities and question context."""
-    if isinstance(base_dfa, (VLABenchContextualDFA, VLABenchCausalDFA)):
+    if isinstance(base_dfa, (VLABenchContextualDFA, VLABenchCausalDFA, VLABenchCompositePlanningDFA)):
         return base_dfa
     if isinstance(context, Mapping):
         entities = (
@@ -621,6 +914,12 @@ def bind_vlabench_contextual_dfa(
     if button_indices:
         target_button = _resolve_physical_law_button(instruction, entities_seq)
         return VLABenchContextualDFA(base_dfa, vocabulary, button_indices, target_button=target_button)
+
+    composite_schema = _resolve_composite_task(instruction, context)
+    if composite_schema is not None and entities_seq:
+        return VLABenchCompositePlanningDFA(
+            base_dfa, vocabulary, composite_schema, entities_seq
+        )
 
     if entities_seq:
         return VLABenchCausalDFA(base_dfa, vocabulary, entities_seq)

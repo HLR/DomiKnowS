@@ -279,6 +279,30 @@ For multi-step manipulation tasks (Complex, Spatial, ComSense), DomiKnowS encode
 * **DFA Enforcement:** Once an assembly destination receptacle $c_{\text{dest}}$ is bound by an initial `place` or `pour` operation, all subsequent assembly placements are locked to that established receptacle:
   $$\mathcal{V}_{\text{allowed}} \leftarrow \{\text{obj:}c_{\text{dest}}\}$$
 
+#### 5. Enclosed Receptacle Access Precondition
+* **Identifier:** `open_before_enclosed_placement`
+* **DomiKnowS Syntax:**
+  ```python
+  ifL(transition("edge"), notL(unopened_container_placement("edge")), name="open_before_enclosed_placement")
+  ```
+* **First-Order Logic:**
+  $$\forall (\text{op}_1, \text{op}_2) \in \text{Transitions}, \quad \text{unopened\_container\_placement}(\text{edge}) \iff \Big(\text{is\_placement}(\text{op}_2) \land \text{is\_enclosed}(\text{container}(\text{op}_2)) \land \neg \text{is\_opened}(\text{container}(\text{op}_2), \text{prefix}(\text{op}_2))\Big)$$
+  $$\forall \text{edge} \in \text{Transitions}, \quad \text{transition}(\text{edge}) \implies \neg \text{unopened\_container\_placement}(\text{edge})$$
+* **DFA Enforcement:** Placing or pouring into enclosed fixtures (coolers, refrigerators, microwaves, drawers, blenders, ovens, cabinets) is strictly pruned until an `open_door` primitive operation targeting that receptacle has been completed:
+  $$\forall i \in \mathcal{S}_{\text{enclosed}} \setminus \text{Opened}, \quad \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:}i\}$$
+
+#### 6. Composite Subgoal Completion & Intent Preservation
+* **Identifier:** `composite_subgoal_completion`
+* **DomiKnowS Syntax:**
+  ```python
+  ifL(operation("op"), notL(premature_composite_eos("op")), name="composite_subgoal_completion")
+  ```
+* **First-Order Logic:**
+  $$\forall \text{op} \in \text{Operations}, \quad \text{premature\_composite\_eos}(\text{op}) \iff \Big(\text{is\_terminal}(\text{op}) \land \big(|\text{plan}| < N_{\text{min}}(\text{schema}) \;\lor\; \text{RequiredSkills}(\text{schema}) \not\subseteq \text{PlanSkills}\big)\Big)$$
+  $$\forall \text{op} \in \text{Operations}, \quad \text{operation}(\text{op}) \implies \neg \text{premature\_composite\_eos}(\text{op})$$
+* **DFA Enforcement (`VLABenchCompositePlanningDFA`):** In open-ended dialogue tasks (e.g. `cook_dishes`, `cool_drink`, `make_juice`, `manage_study_table`), the DFA dynamically maintains a bitmask of fulfilled required subgoals and operation counts derived from `domiknows.generation.applications.planning.PlanningBundle`. It discards the terminal `<eos>` token until all required subgoals and minimum operation thresholds are satisfied:
+  $$\text{if } \Big(\text{completed\_ops} < N_{\text{min}} \;\lor\; \text{mask} \neq \text{all\_required\_mask}\Big) \implies \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{<eos>}\}$$
+
 ---
 
 ## 3. Which Component Uses Given Constraints and How
@@ -287,11 +311,11 @@ The table below summarizes the component ecosystem and how each component utiliz
 
 | Component Name | Source File | Consumed Constraints | Enforcement Mechanism | Purpose & Role |
 | :--- | :--- | :--- | :--- | :--- |
-| **Ontology & Verifier** | `VLABenchAgentInterface/world_graph.py` | All 10 Semantic World Constraints (1–10) | `root.verifyResultsLC(key="/local/argmax")` | Materializes plans into `DataNode` hierarchies and evaluates mathematical satisfaction percentages. |
-| **Generation Compiler** | `VLABenchAgentInterface/graph.py` | Token Constraints (1–3), World Patterns | `constraints_to_dfa_from_graph()`, `product_dfa()` | Compiles relational formulas into executable state machines (`VLABenchContextualDFA`, `VLABenchCausalDFA`). |
+| **Ontology & Verifier** | `VLABenchAgentInterface/world_graph.py` | All 12 Semantic World Constraints (1–12) | `root.verifyResultsLC(key="/local/argmax")` | Materializes plans into `DataNode` hierarchies and evaluates mathematical satisfaction percentages. |
+| **Generation Compiler** | `VLABenchAgentInterface/graph.py` | Token Constraints (1–3), World Patterns | `constraints_to_dfa_from_graph()`, `product_dfa()` | Compiles relational formulas into executable state machines (`VLABenchContextualDFA`, `VLABenchCausalDFA`, `VLABenchCompositePlanningDFA`). |
 | **Online VLM Decoder** | `JointEmbodiedAgentInterface/models.py` | All DFA Constraints (`allowed_tokens`) | Masked Categorical Logits (`logits[unallowed] = -inf`) | Masks unallowed token logits at every decoding step during greedy and beam search generation. |
 | **Differentiable PPO Replay** | `JointEmbodiedAgentInterface/models.py` | All DFA Constraints (`replay_labels_logprob`) | Differentiable Masked Categorical Log-Probabilities | Evaluates log-probabilities of sampled trajectories under masked logits to compute policy gradients. |
-| **RL Reward Engine** | `VLABenchAgentInterface/reward.py` | All 10 Semantic World Constraints | `verify_plan_constraints(root, bundle).score` | Evaluates constraint scores during rollout; zeros reward if constraint score $< 1.0$. |
+| **RL Reward Engine** | `VLABenchAgentInterface/reward.py` | All 12 Semantic World Constraints | `verify_plan_constraints(root, bundle).score` | Evaluates constraint scores during rollout; zeros reward if constraint score $< 1.0$. |
 | **Offline ILP Feasibility Gate** | `JointEmbodiedAgentInterface/structured_inference.py` | Hard validity + Constraint Satisfaction | Gurobi Binary Optimization (`gp.quicksum`) | Solves integer linear program across beam candidates to pick the maximum-likelihood constraint-satisfying plan. |
 | **Agent Controller** | `VLABenchAgentInterface/agent.py` | DFA Acceptance + Semantic Constraints | `dfa_accepts_plan()` and `verify_plan_constraints()` | Validates plans before dispatching primitive skills to robot actuators. |
 | **Evaluation Harness** | `JointEmbodiedAgentInterface/eval_planning.py` | Schema validity, Entity pointers, DAG match | Benchmark Scoring & Error Telemetry | Measures official ICCV 2025 Table 1 metrics (SR, PR, SPR, PM, Progress Score, Macro Average). |

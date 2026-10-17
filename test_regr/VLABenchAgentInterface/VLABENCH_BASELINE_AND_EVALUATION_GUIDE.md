@@ -209,6 +209,19 @@ To project the high-level semantic relational graph into token space during auto
      $$\forall \text{edge} \in \text{Transitions}, \quad \text{transition}(\text{edge}) \implies \neg \text{inconsistent\_container}(\text{edge})$$
      *DFA Enforcement:* Once an assembly destination receptacle $c_{\text{dest}}$ is bound by an initial `place` or `pour` operation, all subsequent assembly placements are restricted to that established receptacle: $\mathcal{V}_{\text{allowed}} \leftarrow \{\text{obj:}c_{\text{dest}}\}$.
 
+   * **Enclosed Receptacle Access Precondition (`open_before_enclosed_placement`):**
+     $$\text{ifL}\big(\text{transition}(\text{"edge"}), \, \text{notL}(\text{unopened\_container\_placement}(\text{"edge"})), \, \text{name} = \text{"open\_before\_enclosed\_placement"}\big)$$
+     $$\forall (\text{op}_1, \text{op}_2) \in \text{Transitions}, \quad \text{unopened\_container\_placement}(\text{edge}) \iff \Big(\text{is\_placement}(\text{op}_2) \land \text{is\_enclosed}(\text{container}(\text{op}_2)) \land \neg \text{is\_opened}(\text{container}(\text{op}_2), \text{prefix}(\text{op}_2))\Big)$$
+     $$\forall \text{edge} \in \text{Transitions}, \quad \text{transition}(\text{edge}) \implies \neg \text{unopened\_container\_placement}(\text{edge})$$
+     *DFA Enforcement:* Placing or pouring into enclosed fixtures (coolers, refrigerators, microwaves, drawers, blenders, ovens, cabinets) is strictly pruned until an `open_door` primitive operation targeting that receptacle has been completed: $\forall i \in \mathcal{S}_{\text{enclosed}} \setminus \text{Opened}, \, \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{obj:}i\}$.
+
+   * **Composite Subgoal Completion & Intent Preservation (`composite_subgoal_completion`):**
+     $$\text{ifL}\big(\text{operation}(\text{"op"}), \, \text{notL}(\text{premature\_composite\_eos}(\text{"op"})), \, \text{name} = \text{"composite\_subgoal\_completion"}\big)$$
+     $$\forall \text{op} \in \text{Operations}, \quad \text{premature\_composite\_eos}(\text{op}) \iff \Big(\text{is\_terminal}(\text{op}) \land \big(|\text{plan}| < N_{\text{min}}(\text{schema}) \;\lor\; \text{RequiredSkills}(\text{schema}) \not\subseteq \text{PlanSkills}\big)\Big)$$
+     $$\forall \text{op} \in \text{Operations}, \quad \text{operation}(\text{op}) \implies \neg \text{premature\_composite\_eos}(\text{op})$$
+     *DFA Enforcement (`VLABenchCompositePlanningDFA`):* In open-ended dialogue tasks (e.g. `cook_dishes`, `cool_drink`, `make_juice`, `manage_study_table`), the DFA dynamically maintains a bitmask of fulfilled required subgoals and operation counts derived from `domiknows.generation.applications.planning.PlanningBundle`. It discards the terminal `<eos>` token until all required subgoals and minimum operation thresholds are satisfied:
+     $$\text{if } \Big(\text{completed\_ops} < N_{\text{min}} \;\lor\; \text{mask} \neq \text{all\_required\_mask}\Big) \implies \mathcal{V}_{\text{allowed}} \leftarrow \mathcal{V}_{\text{allowed}} \setminus \{\text{<eos>}\}$$
+
    *Empirical Impact:* Enforcing these declarative causal constraints boosted Complex task Parameter Recall from **20.89% to 33.95%** (+62.5% relative gain) and overall Complex score from **35.32 to 41.54 / 100.0** on the full 450-sample held-out test split.
 
 ---
