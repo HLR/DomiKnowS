@@ -12,30 +12,28 @@ from typing import Any, Iterable, Mapping, Sequence
 
 try:
     from .world_graph import (
-        ENCLOSED_CONTAINER_KEYWORDS,
         EOS_TOKEN,
-        SKILL_ARGUMENTS,
         VLABENCH_DOMAIN_CHECKSUM,
         VLABenchWorldGraphBundle,
         build_vlabench_world_graph,
         canonicalize_plan,
-        is_container_opened,
-        is_enclosed_container,
         validate_plan,
     )
 except ImportError:
     from world_graph import (
-        ENCLOSED_CONTAINER_KEYWORDS,
         EOS_TOKEN,
-        SKILL_ARGUMENTS,
         VLABENCH_DOMAIN_CHECKSUM,
         VLABenchWorldGraphBundle,
         build_vlabench_world_graph,
         canonicalize_plan,
-        is_container_opened,
-        is_enclosed_container,
         validate_plan,
     )
+
+
+try:
+    from .task_policy import COMPLEX_TASK_SCHEMAS, ComplexTaskSchema
+except ImportError:
+    from task_policy import COMPLEX_TASK_SCHEMAS, ComplexTaskSchema
 
 
 _DEFAULT_WORLD_IDS = count()
@@ -238,24 +236,6 @@ def create_planner_generation_graph(
             ),
         ))
         mark_for_dfa(atMostAL(notL(ctx.token_value(vocabulary.eos_token, "x")), max_operations * 5))
-        from domiknows.generation import mark_for_contextual_dfa
-        button_press_lc = ifL(
-            ctx.is_before_rel("before"),
-            ifL(
-                ctx.token_value("skill:press", "first_tok", path=("before", ctx.first_token)),
-                ctx.token_value(vocabulary.eos_token, "second_tok", path=("before", ctx.second_token)),
-            ),
-            active=False,
-            name="contextual_qa_button_press",
-        )
-        mark_for_contextual_dfa(
-            button_press_lc,
-            context_key="button_entities",
-            token_to_value={"skill:press": "press"},
-            vocabulary=vocabulary,
-            name="contextual_qa_button_press",
-            allow_missing_context=True,
-        )
     return graph, bundle
 
 
@@ -277,10 +257,13 @@ def _legal_skill_sequences(world: VLABenchWorldGraphBundle, max_operations: int)
     return complete, prefixes
 
 
-def _domain_dfa(world: VLABenchWorldGraphBundle, vocabulary: PlanVocabulary, max_operations: int):
+def _domain_dfa(world: VLABenchWorldGraphBundle, vocabulary: PlanVocabulary, max_operations: int, complete_sequences=None):
     from domiknows.generation.dfa.core import DFA
 
     complete, skill_prefixes = _legal_skill_sequences(world, max_operations)
+    if complete_sequences is not None:
+        complete = set(complete_sequences)
+        skill_prefixes = {seq[:i] for seq in complete for i in range(len(seq)+1)}
     alphabet = frozenset(range(vocabulary.label_count))
     start = ((), None, 0, "skill", False)
 
@@ -341,7 +324,13 @@ def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_oper
     from domiknows.generation.dfa.core import product_dfa
 
     graph_dfa = constraints_to_dfa_from_graph(graph, generation_bundle, on_unsupported="error")
-    return product_dfa([graph_dfa, _domain_dfa(world, vocabulary, max_operations)])
+    try:
+        from .constraint_compiler import CompiledPlannerDFA, compile_world_constraints
+    except ImportError:
+        from constraint_compiler import CompiledPlannerDFA, compile_world_constraints
+    program = compile_world_constraints(world)
+    grammar = product_dfa([graph_dfa, _domain_dfa(world, vocabulary, max_operations)])
+    return CompiledPlannerDFA.from_dfa(grammar, program, world_constraint_bundle=world, token_dfa=graph_dfa, max_operations=max_operations)
 
 
 def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> bool:
@@ -349,609 +338,38 @@ def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> boo
         labels = [bundle.vocabulary.label_for_token(token) for token in plan_to_tokens(plan, entity_table, world=world)]
     except (KeyError, ValueError):
         return False
+    if entity_table is not None:
+        dfa = bind_vlabench_contextual_dfa(dfa, bundle.vocabulary, {"entities": entity_table})
     return bool(dfa.accepts(labels))
 
 
-def _resolve_physical_law_button(instruction: str, entity_table: Sequence[str]) -> int | None:
-    """Resolve physical law QA target button from domain knowledge."""
-    inst = instruction.lower()
-    entities = [str(e) for e in entity_table]
-    buttons = [(i, name) for i, name in enumerate(entities) if "button" in name.lower()]
-    if not buttons:
-        return None
-
-    # 1. Density QA
-    if "density" in inst or "float" in inst:
-        if "largest" in inst:
-            return next((i for i, name in buttons if "button2" in name), buttons[-1][0])
-        elif "medium" in inst:
-            return next((i for i, name in buttons if "button1" in name), buttons[len(buttons) // 2][0])
-        elif "smallest" in inst or "float" in inst:
-            return next((i for i, name in buttons if "button0" in name), buttons[0][0])
-
-    # 2. Friction QA
-    if "friction" in inst or "steel ramp" in inst:
-        if "fastest" in inst:
-            for b_idx, _ in buttons:
-                for offset in (1, 2, -1):
-                    c_idx = b_idx + offset
-                    if 0 <= c_idx < len(entities) and "sphere" in entities[c_idx].lower():
-                        return b_idx
-        elif "slowest" in inst:
-            for b_idx, _ in buttons:
-                for offset in (1, 2, -1):
-                    c_idx = b_idx + offset
-                    if 0 <= c_idx < len(entities) and "box" in entities[c_idx].lower():
-                        return b_idx
-            for b_idx, _ in buttons:
-                for offset in (1, 2, -1):
-                    c_idx = b_idx + offset
-                    if 0 <= c_idx < len(entities) and "cylinder" in entities[c_idx].lower():
-                        return b_idx
-
-    return None
-
-
-class VLABenchContextualDFA:
-    """Specialized VLABench DFA conditioned on per-example scene entities and question context."""
-
-    def __init__(
-        self,
-        base_dfa: Any,
-        vocabulary: PlanVocabulary,
-        button_indices: Sequence[int],
-        target_button: int | None = None,
-    ):
-        self.base_dfa = base_dfa
-        self.vocabulary = vocabulary
-        self.button_indices = tuple(int(i) for i in button_indices)
-        self.target_button = target_button
-        self.alphabet = base_dfa.alphabet
-        self.press_label = vocabulary.label_for_token("skill:press")
-        self.arg_label = vocabulary.label_for_token("arg:target_entity_name")
-        if target_button is not None and f"obj:{target_button}" in vocabulary.tokens:
-            self.button_labels = frozenset([vocabulary.label_for_token(f"obj:{target_button}")])
-        else:
-            self.button_labels = frozenset(
-                vocabulary.label_for_token(f"obj:{i}")
-                for i in self.button_indices
-                if f"obj:{i}" in vocabulary.tokens
-            )
-        self.eos_label = vocabulary.eos_label
-        self.start_state = (base_dfa.start_state, 0)
-
-    def allowed_tokens(self, state, remaining_steps=None):
-        base_state, phase = state
-        try:
-            base_allowed = self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps)
-        except TypeError:
-            base_allowed = self.base_dfa.allowed_tokens(base_state)
-        base_allowed = set(int(lbl) for lbl in base_allowed)
-
-        if phase == 0:
-            allowed = {self.press_label}
-        elif phase == 1:
-            allowed = {self.arg_label}
-        elif phase == 2:
-            allowed = set(self.button_labels)
-        elif phase >= 3:
-            allowed = {self.eos_label}
-        else:
-            allowed = set()
-        return base_allowed.intersection(allowed)
-
-    def step(self, state, symbol):
-        base_state, phase = state
-        symbol = int(symbol)
-        if symbol not in self.allowed_tokens(state):
-            return None
-        next_base = self.base_dfa.step(base_state, symbol)
-        if next_base is None:
-            return None
-        return (next_base, min(phase + 1, 4))
-
-    def is_accepting(self, state):
-        base_state, phase = state
-        return phase >= 3 and self.base_dfa.is_accepting(base_state)
-
-    def accepts(self, sequence):
-        state = self.start_state
-        for symbol in sequence:
-            state = self.step(state, symbol)
-            if state is None:
-                return False
-        return self.is_accepting(state)
-
-    def __getattr__(self, name):
-        return getattr(self.base_dfa, name)
-
-
-class VLABenchCausalDFA:
-    """DomiKnowS causal DFA enforcing physical manipulation constraints.
-
-    Enforces:
-      1. Anti-self-placement: target_container_name != target_entity_name.
-      2. Multi-step entity rotation: pick cannot re-select an already picked entity
-         when unvisited candidate entities remain in the scene.
-      3. Static surface filtering: pick cannot target static room backgrounds
-         (tables, counters, floors, walls).
-      4. Container consistency: subsequent placements in multi-step assembly target
-         the established destination receptacle.
-      5. Enclosed receptacle precondition: place/pour cannot target enclosed
-         receptacles (coolers, fridges, microwaves, drawers, blenders) before open_door.
-    """
-
-    def __init__(self, base_dfa: Any, vocabulary: PlanVocabulary, entity_table: Sequence[str]):
-        self.base_dfa = base_dfa
-        self.vocabulary = vocabulary
-        self.entity_table = [str(e) for e in entity_table]
-        self.alphabet = base_dfa.alphabet
-
-        self.static_env_indices = set()
-        for i, name in enumerate(self.entity_table):
-            nl = name.lower()
-            if any(k in nl for k in ("table", "counter", "room_", "lab_", "wall", "floor")) or name.isdigit():
-                self.static_env_indices.add(i)
-
-        self.container_indices = set()
-        for i, name in enumerate(self.entity_table):
-            nl = name.lower()
-            if is_enclosed_container(name) or any(k in nl for k in ("plate", "shelf", "flask", "container", "holder", "box", "stand", "bowl", "pot", "pan", "counter", "table", "receptacle")):
-                self.container_indices.add(i)
-
-        self.enclosed_indices = set()
-        for i, name in enumerate(self.entity_table):
-            if is_enclosed_container(name):
-                self.enclosed_indices.add(i)
-
-        self.nonexistent_indices = set()
-        for i in range(len(self.entity_table), self.vocabulary.max_entities):
-            tok = f"obj:{i}"
-            if tok in self.vocabulary.tokens:
-                self.nonexistent_indices.add(self.vocabulary.label_for_token(tok))
-
-        self.start_state = (base_dfa.start_state, None, None, None, frozenset(), None, frozenset())
-
-    def allowed_tokens(self, state, remaining_steps=None):
-        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container, opened_containers = state
-        try:
-            base_allowed = self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps)
-        except TypeError:
-            base_allowed = self.base_dfa.allowed_tokens(base_state)
-        allowed = set(int(lbl) for lbl in base_allowed)
-        strictly_forbidden = set()
-
-        if active_arg is not None:
-            strictly_forbidden.update(self.nonexistent_indices)
-
-        if active_arg == "target_container_name":
-            # Hard constraint 1: Anti-self-placement (cannot place into held entity)
-            if current_picked is not None:
-                lbl = self.vocabulary.label_for_token(f"obj:{current_picked}")
-                strictly_forbidden.add(lbl)
-            # Hard constraint 2: Enclosed access precondition (cannot place/pour into unopened container)
-            if self.enclosed_indices:
-                opened_names = [self.entity_table[o] for o in opened_containers]
-                for idx in self.enclosed_indices:
-                    name = self.entity_table[idx]
-                    if not is_container_opened(name, opened_names):
-                        enc_lbl = self.vocabulary.label_for_token(f"obj:{idx}")
-                        strictly_forbidden.add(enc_lbl)
-
-            allowed.difference_update(strictly_forbidden)
-
-            # Soft preferences: preserve destination consistency or prefer designated containers
-            if dest_container is not None:
-                c_lbl = self.vocabulary.label_for_token(f"obj:{dest_container}")
-                if c_lbl in allowed:
-                    allowed = {c_lbl}
-            elif self.container_indices:
-                c_lbls = {
-                    self.vocabulary.label_for_token(f"obj:{i}")
-                    for i in self.container_indices
-                    if f"obj:{i}" in self.vocabulary.tokens
-                }
-                c_cand = allowed.intersection(c_lbls)
-                if c_cand:
-                    allowed = c_cand
-
-        elif active_arg == "target_entity_name" and active_skill == "pick":
-            # Hard constraint 3: Static fixture exclusion (pick cannot target static room backgrounds)
-            for i in self.static_env_indices:
-                lbl = self.vocabulary.label_for_token(f"obj:{i}")
-                strictly_forbidden.add(lbl)
-
-            allowed.difference_update(strictly_forbidden)
-
-            # Soft preference: prefer unvisited graspable entities
-            unvisited_cand = set()
-            for lbl in allowed:
-                tok = self.vocabulary.token_for_label(lbl)
-                if tok.startswith("obj:"):
-                    idx = int(tok[4:])
-                    if idx not in visited_picks and idx < len(self.entity_table):
-                        unvisited_cand.add(lbl)
-            if unvisited_cand:
-                allowed = unvisited_cand
-
-        if not allowed:
-            # Fallback ONLY relaxes soft preferences, NEVER relaxing strictly forbidden causal constraints
-            allowed = set(int(lbl) for lbl in base_allowed).difference(strictly_forbidden)
-
-        return allowed
-
-    def step(self, state, symbol):
-        base_state, active_skill, active_arg, current_picked, visited_picks, dest_container, opened_containers = state
-        symbol = int(symbol)
-        if symbol not in self.allowed_tokens(state):
-            return None
-        next_base = self.base_dfa.step(base_state, symbol)
-        if next_base is None:
-            return None
-        token = self.vocabulary.token_for_label(symbol)
-        next_skill = active_skill
-        next_arg = active_arg
-        next_picked = current_picked
-        next_visited = visited_picks
-        next_dest = dest_container
-        next_opened = opened_containers
-
-        if token.startswith("skill:"):
-            next_skill = token[6:]
-            next_arg = None
-        elif token.startswith("arg:"):
-            next_arg = token[4:]
-        elif token.startswith("obj:"):
-            idx = int(token[4:])
-            if active_skill == "pick" and active_arg == "target_entity_name":
-                next_picked = idx
-                next_visited = visited_picks.union({idx})
-            elif active_skill in ("place", "pour") and active_arg == "target_container_name":
-                if next_dest is None and idx in self.container_indices:
-                    next_dest = idx
-            elif active_skill == "open_door" and active_arg == "target_entity_name":
-                next_opened = opened_containers.union({idx})
-            next_arg = None
-        elif token == self.vocabulary.eos_token:
-            next_skill = None
-            next_arg = None
-
-        return (next_base, next_skill, next_arg, next_picked, next_visited, next_dest, next_opened)
-
-    def is_accepting(self, state):
-        return self.base_dfa.is_accepting(state[0])
-
-    def accepts(self, sequence):
-        state = self.start_state
-        for symbol in sequence:
-            state = self.step(state, symbol)
-            if state is None:
-                return False
-        return self.is_accepting(state)
-
-    def __getattr__(self, name):
-        return getattr(self.base_dfa, name)
-
-
-@dataclass(frozen=True)
-class ComplexTaskSchema:
-    task_name: str
-    required_skills: tuple[str, ...]
-    min_operations: int
-    phase_transitions: Mapping[tuple[str, str], str] | None = None
-    accepting_phases: frozenset[str] | None = None
-
-
-COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
-    "cook_dishes": ComplexTaskSchema(
-        task_name="cook_dishes",
-        required_skills=("pick", "place"),
-        min_operations=4,
-    ),
-    "cool_drink": ComplexTaskSchema(
-        task_name="cool_drink",
-        required_skills=("pick", "place"),
-        min_operations=2,
-    ),
-    "make_juice": ComplexTaskSchema(
-        task_name="make_juice",
-        required_skills=("pick", "place"),
-        min_operations=2,
-    ),
-    "hammer_nail_and_hang_picture": ComplexTaskSchema(
-        task_name="hammer_nail_and_hang_picture",
-        required_skills=("pick", "place", "push"),
-        min_operations=3,
-    ),
-    "take_chemistry_experiment": ComplexTaskSchema(
-        task_name="take_chemistry_experiment",
-        required_skills=("pick", "place", "pour"),
-        min_operations=3,
-    ),
-    "book_rearrange": ComplexTaskSchema(
-        task_name="book_rearrange",
-        required_skills=("pick", "push", "pull"),
-        min_operations=3,
-    ),
-    "texas_holdem": ComplexTaskSchema(
-        task_name="texas_holdem",
-        required_skills=("pick", "place"),
-        min_operations=2,
-    ),
-    "manage_study_table": ComplexTaskSchema(
-        task_name="manage_study_table",
-        required_skills=("pick", "place"),
-        min_operations=3,
-    ),
-}
-
-
-def _resolve_composite_task(
-    instruction: str,
-    context: Mapping[str, Any] | Any | None = None,
-) -> ComplexTaskSchema | None:
-    """Resolve composite task schema from context task metadata or instruction dialogue."""
-    raw_task = None
-    if isinstance(context, Mapping):
-        raw_task = context.get("task") or context.get("task_name")
-    elif context is not None:
-        raw_task = getattr(context, "task", None) or getattr(context, "task_name", None)
-
-    if raw_task:
-        normalized = str(raw_task).strip().lower().replace("-", "_")
-        return COMPLEX_TASK_SCHEMAS.get(normalized)
-
-    inst = str(instruction).lower()
-    if any(k in inst for k in ("cook dish", "make soup", "cook dinner", "cook food")):
-        return COMPLEX_TASK_SCHEMAS["cook_dishes"]
-    if any(k in inst for k in ("cool drink", "put drink in fridge", "cool the drink", "chill drink")):
-        return COMPLEX_TASK_SCHEMAS["cool_drink"]
-    if any(k in inst for k in ("make juice", "blend juice", "make smoothie")):
-        return COMPLEX_TASK_SCHEMAS["make_juice"]
-    if any(k in inst for k in ("hammer nail", "hang picture")):
-        return COMPLEX_TASK_SCHEMAS["hammer_nail_and_hang_picture"]
-    if any(k in inst for k in ("chemistry experiment", "test tube experiment")):
-        return COMPLEX_TASK_SCHEMAS["take_chemistry_experiment"]
-    if any(k in inst for k in ("rearrange book", "organize book", "rearrange shelf")):
-        return COMPLEX_TASK_SCHEMAS["book_rearrange"]
-    if any(k in inst for k in ("texas holdem", "poker game")):
-        return COMPLEX_TASK_SCHEMAS["texas_holdem"]
-    if any(k in inst for k in ("study table", "organize table", "clean study table", "manage study table")):
-        return COMPLEX_TASK_SCHEMAS["manage_study_table"]
-
-    return None
-
-
-class VLABenchCompositePlanningDFA(VLABenchCausalDFA):
-    """Hierarchical planning DFA for open-ended multi-step composite tasks.
-
-    Adapts the DomiKnowS declarative planning architecture from
-    `domiknows.generation.applications.planning` (PlanningBundle, required actions
-    bitmask, macro-phase transitions, non-terminal limits).
-
-    Guarantees:
-      1. Prevents premature <eos> emission before all composite subgoals are completed.
-      2. Enforces minimum operation thresholds (e.g. at least 3-4 steps for composite assemblies).
-      3. Physical access preconditions: enclosed receptacles (coolers, fridges, blenders, drawers)
-         must be opened via `open_door` before placing or pouring items inside.
-      4. Inherits physical causal manipulation laws from `VLABenchCausalDFA` (anti-self-placement,
-         entity rotation, static fixture exclusion, receptacle destination consistency).
-    """
-
-    def __init__(
-        self,
-        base_dfa: Any,
-        vocabulary: PlanVocabulary,
-        schema: ComplexTaskSchema,
-        entity_table: Sequence[str],
-    ):
-        super().__init__(base_dfa, vocabulary, entity_table)
-        self.schema = schema
-        self.eos_label = vocabulary.label_for_token(vocabulary.eos_token)
-        self.all_required_mask = (1 << len(schema.required_skills)) - 1
-        self.start_state = (
-            base_dfa.start_state,
-            None,
-            None,
-            None,
-            frozenset(),
-            None,
-            frozenset(),
-            0,
-            0,
-            "initial",
-        )
-
-    def allowed_tokens(self, state, remaining_steps=None):
-        (
-            base_state,
-            active_skill,
-            active_arg,
-            current_picked,
-            visited_picks,
-            dest_container,
-            opened_containers,
-            completed_ops,
-            required_mask,
-            phase,
-        ) = state
-
-        causal_state = (
-            base_state,
-            active_skill,
-            active_arg,
-            current_picked,
-            visited_picks,
-            dest_container,
-            opened_containers,
-        )
-        base_causal_allowed = super().allowed_tokens(causal_state, remaining_steps=remaining_steps)
-        allowed = set(base_causal_allowed)
-
-        # 1. Prevent premature EOS emission before schema subgoals and minimum operations are met
-        is_premature = (completed_ops < self.schema.min_operations or required_mask != self.all_required_mask)
-        if self.eos_label in allowed and is_premature:
-            other_tokens = allowed - {self.eos_label}
-            if other_tokens:
-                allowed.discard(self.eos_label)
-            elif completed_ops < self.schema.min_operations:
-                allowed.discard(self.eos_label)
-
-        # 2. Phase transitions constraint on skill selection (if specified in schema)
-        if active_skill is None and not active_arg and self.schema.phase_transitions:
-            phase_candidates = set()
-            for lbl in allowed:
-                tok = self.vocabulary.token_for_label(lbl)
-                if tok.startswith("skill:"):
-                    sk = tok[6:]
-                    if (phase, sk) in self.schema.phase_transitions:
-                        phase_candidates.add(lbl)
-            if phase_candidates:
-                allowed = phase_candidates
-
-        if not allowed:
-            fallback = set(int(lbl) for lbl in base_causal_allowed)
-            other_fallback = fallback - {self.eos_label}
-            if other_fallback and is_premature:
-                fallback.discard(self.eos_label)
-            elif completed_ops < self.schema.min_operations:
-                fallback.discard(self.eos_label)
-            return fallback
-
-        return allowed
-
-    def step(self, state, symbol):
-        (
-            base_state,
-            active_skill,
-            active_arg,
-            current_picked,
-            visited_picks,
-            dest_container,
-            opened_containers,
-            completed_ops,
-            required_mask,
-            phase,
-        ) = state
-
-        symbol = int(symbol)
-        if symbol not in self.allowed_tokens(state):
-            return None
-
-        next_base = self.base_dfa.step(base_state, symbol)
-        if next_base is None:
-            return None
-
-        token = self.vocabulary.token_for_label(symbol)
-        next_skill = active_skill
-        next_arg = active_arg
-        next_picked = current_picked
-        next_visited = visited_picks
-        next_dest = dest_container
-        next_opened = opened_containers
-        next_completed = completed_ops
-        next_mask = required_mask
-        next_phase = phase
-
-        if token.startswith("skill:"):
-            sk = token[6:]
-            next_skill = sk
-            next_arg = None
-            if sk in self.schema.required_skills:
-                next_mask = required_mask | (1 << self.schema.required_skills.index(sk))
-            if self.schema.phase_transitions and (phase, sk) in self.schema.phase_transitions:
-                next_phase = self.schema.phase_transitions[(phase, sk)]
-            if not SKILL_ARGUMENTS.get(sk, ()):
-                next_completed += 1
-        elif token.startswith("arg:"):
-            next_arg = token[4:]
-        elif token.startswith("obj:"):
-            idx = int(token[4:])
-            if active_skill == "pick" and active_arg == "target_entity_name":
-                next_picked = idx
-                next_visited = visited_picks.union({idx})
-            elif active_skill in ("place", "pour") and active_arg == "target_container_name":
-                if next_dest is None and idx in self.container_indices:
-                    next_dest = idx
-            elif active_skill == "open_door" and active_arg == "target_entity_name":
-                next_opened = opened_containers.union({idx})
-            next_arg = None
-            if active_skill is not None:
-                next_completed += 1
-        elif token == self.vocabulary.eos_token:
-            next_skill = None
-            next_arg = None
-
-        return (
-            next_base,
-            next_skill,
-            next_arg,
-            next_picked,
-            next_visited,
-            next_dest,
-            next_opened,
-            next_completed,
-            next_mask,
-            next_phase,
-        )
-
-    def is_accepting(self, state):
-        if not self.base_dfa.is_accepting(state[0]):
-            return False
-        completed_ops = state[7]
-        if completed_ops < self.schema.min_operations:
-            return False
-        return True
-
-
-def bind_vlabench_contextual_dfa(
-    base_dfa: Any,
-    vocabulary: PlanVocabulary,
-    context: Mapping[str, Any],
-) -> Any:
-    """Specialize the VLABench generation DFA using per-example scene entities and question context."""
-    if isinstance(base_dfa, (VLABenchContextualDFA, VLABenchCausalDFA, VLABenchCompositePlanningDFA)):
+def bind_vlabench_contextual_dfa(base_dfa, vocabulary, context):
+    """Bind explicit task and scene facts to compiled world constraints."""
+    try:
+        from .constraint_compiler import WorldConstraintDFA
+        from .task_policy import task_requirements
+    except ImportError:
+        from constraint_compiler import WorldConstraintDFA
+        from task_policy import task_requirements
+    from domiknows.generation.dfa.predicate_monitor import find_predicate_monitor
+    if find_predicate_monitor(base_dfa) is not None:
+        # Retain the exact bound policy for sampling and replay.
         return base_dfa
-    if isinstance(context, Mapping):
-        entities = (
-            context.get("entity_table")
-            or context.get("entities")
-            or ()
-        )
-        instruction = str(context.get("instruction", ""))
-    else:
-        entities = (
-            getattr(context, "entities", None)
-            or getattr(context, "entity_table", ())
-            or ()
-        )
-        instruction = str(getattr(context, "instruction", ""))
-
-    if isinstance(entities, Mapping):
-        button_indices = [
-            index for index, name in entities.items()
-            if "button" in str(name).lower()
-        ]
-        entities_seq = [entities[i] for i in sorted(entities)]
-    else:
-        button_indices = [
-            index for index, name in enumerate(entities)
-            if "button" in str(name).lower()
-        ]
-        entities_seq = list(entities)
-
-    if button_indices:
-        target_button = _resolve_physical_law_button(instruction, entities_seq)
-        return VLABenchContextualDFA(base_dfa, vocabulary, button_indices, target_button=target_button)
-
-    composite_schema = _resolve_composite_task(instruction, context)
-    if composite_schema is not None and entities_seq:
-        return VLABenchCompositePlanningDFA(
-            base_dfa, vocabulary, composite_schema, entities_seq
-        )
-
-    if entities_seq:
-        return VLABenchCausalDFA(base_dfa, vocabulary, entities_seq)
-
-    return base_dfa
-
+    if not hasattr(base_dfa, "constraint_program"):
+        raise TypeError("VLABench binding requires a compiled world constraint program")
+    get = context.get if isinstance(context, Mapping) else lambda k, default=None: getattr(context, k, default)
+    entities = get("entity_table") or get("entities") or ()
+    from dataclasses import replace
+    from domiknows.generation.dfa.core import product_dfa
+    try:
+        from .task_policy import request_sequences
+    except ImportError:
+        from task_policy import request_sequences
+    world = base_dfa.world_constraint_bundle
+    requirements = task_requirements(context, world, entities)
+    sequences = request_sequences(world, base_dfa.max_operations, requirements)
+    requirements = replace(requirements, allowed_sequences=sequences)
+    grammar = base_dfa
+    if requirements.planning.completed_skill_prefix or requirements.planning.supplied:
+        grammar = product_dfa([base_dfa.token_dfa, _domain_dfa(world, vocabulary, base_dfa.max_operations, sequences)])
+    return WorldConstraintDFA(grammar, vocabulary, world, base_dfa.constraint_program, entities, requirements=requirements)

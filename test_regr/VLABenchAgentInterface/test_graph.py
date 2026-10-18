@@ -3,8 +3,6 @@ import torch
 from test_regr.VLABenchAgentInterface.graph import (
     COMPLEX_TASK_SCHEMAS,
     PlanVocabulary,
-    VLABenchCausalDFA,
-    VLABenchCompositePlanningDFA,
     bind_vlabench_contextual_dfa,
     compile_planner_dfa,
     create_planner_generation_graph,
@@ -188,7 +186,7 @@ def test_world_graph_verifies_causal_constraints():
         {"name": "place", "params": {"target_entity_name": 0, "target_container_name": 1}},
         {"name": "place", "params": {"target_entity_name": 0, "target_container_name": 2}},
     ]
-    eval_inconsistent = verify_plan_constraints(materialize_plan(inconsistent_container_plan, entities, bundle), bundle)
+    eval_inconsistent = verify_plan_constraints(materialize_plan(inconsistent_container_plan, entities, bundle, task_context={"task_target_container": "bowl"}), bundle)
     assert eval_inconsistent.score < 1.0
     assert eval_inconsistent.results["container_destination_consistency"]["satisfied"] == 0.0
 
@@ -267,7 +265,8 @@ def test_composite_planning_dfa_enforces_sequence_and_preconditions():
     entities = ("soda", "cooler", "table")
     context = {"task": "cool_drink", "entities": entities, "instruction": "Cool the drink in the cooler"}
     dfa = bind_vlabench_contextual_dfa(base_dfa, vocabulary, context)
-    assert isinstance(dfa, VLABenchCompositePlanningDFA)
+    from .constraint_compiler import WorldConstraintDFA
+    assert isinstance(dfa, WorldConstraintDFA)
 
     # 1. Truncated plan without place (only pick cooler, open_door cooler, pick soda) must be rejected
     truncated_tokens = [
@@ -316,32 +315,22 @@ def test_composite_planning_dfa_enforces_sequence_and_preconditions():
 
 
 def test_causal_masking_never_relaxes_hard_constraints():
-    world = build_vlabench_world_graph("test_causal_fallback_world")
+    world = build_vlabench_world_graph("test_causal_compiled_world")
     vocabulary = PlanVocabulary.from_world(world, max_entities=4)
-    graph, gen_bundle = create_planner_generation_graph(
-        world, vocabulary, max_operations=4, graph_name="test_causal_fallback_gen"
-    )
-    base_dfa = compile_planner_dfa(graph, gen_bundle, world, vocabulary, max_operations=4)
-
-    # entities: 0: apple, 1: cooler (enclosed), 2: table (static fixture)
-    entities = ("apple", "cooler", "table")
-    causal_dfa = VLABenchCausalDFA(base_dfa, vocabulary, entities)
-
-    # 1. When picking, static fixtures like table (obj:2) must NEVER be allowed
-    pick_state = (base_dfa.start_state, "pick", "target_entity_name", None, frozenset(), None, frozenset())
-    allowed = causal_dfa.allowed_tokens(pick_state)
-    table_lbl = vocabulary.label_for_token("obj:2")
-    assert table_lbl not in allowed
-
-    # 2. When placing, self-placement (placing obj:0 into obj:0) must NEVER be allowed
-    place_self_state = (base_dfa.start_state, "place", "target_container_name", 0, frozenset({0}), None, frozenset())
-    allowed_place = causal_dfa.allowed_tokens(place_self_state)
-    self_lbl = vocabulary.label_for_token("obj:0")
-    assert self_lbl not in allowed_place
-
-    # 3. When placing, placing into unopened cooler (obj:1) must NEVER be allowed
-    cooler_lbl = vocabulary.label_for_token("obj:1")
-    assert cooler_lbl not in allowed_place
+    graph, generation = create_planner_generation_graph(world, vocabulary, max_operations=2)
+    grammar = compile_planner_dfa(graph, generation, world, vocabulary, max_operations=2)
+    policy = bind_vlabench_contextual_dfa(grammar, vocabulary, {"entities": ("apple", "cooler", "table")})
+    def advance(*tokens):
+        state = policy.start_state
+        for token in tokens:
+            state = policy.step(state, vocabulary.label_for_token(token))
+            assert state is not None
+        return state
+    pick = advance("skill:pick", "arg:target_entity_name")
+    assert vocabulary.label_for_token("obj:2") not in policy.allowed_tokens(pick)
+    place = advance("skill:pick", "arg:target_entity_name", "obj:0", "skill:place", "arg:target_container_name")
+    assert vocabulary.label_for_token("obj:0") not in policy.allowed_tokens(place)
+    assert vocabulary.label_for_token("obj:1") not in policy.allowed_tokens(place)
 
 
 def test_materialize_plan_and_score_vlabench_plan_auto_resolve_task_name():
@@ -402,69 +391,34 @@ def test_score_planning_metrics_grounds_entity_indices_against_names():
 
 
 def test_decoding_excludes_nonexistent_entity_pointers_and_floor():
-    world = build_vlabench_world_graph("test_nonexistent_world")
-    vocabulary = PlanVocabulary.from_world(world, max_entities=4)
-    base_dfa = VLABenchCausalDFA.__new__(VLABenchCausalDFA)
-
-    class MockBaseDFA:
-        start_state = 0
-        alphabet = set(range(len(vocabulary.tokens)))
-        def allowed_tokens(self, state, remaining_steps=None):
-            return set(range(len(vocabulary.tokens)))
-
-    # Only 2 entities in the scene: apple (0) and unopened cooler (1) + floor (2)
-    entities = ("apple", "cooler", "kitchen_floor")
-    # vocabulary has 4 entities: obj:0, obj:1, obj:2, obj:3
-    causal_dfa = VLABenchCausalDFA(MockBaseDFA(), vocabulary, entities[:2])
-    # For entities[:2], obj:2 and obj:3 are nonexistent
-    assert causal_dfa.nonexistent_indices == {
-        vocabulary.label_for_token("obj:2"),
-        vocabulary.label_for_token("obj:3"),
-    }
-
-    # When placing, nonexistent pointers obj:2 and obj:3 must be excluded
-    place_state = (0, "place", "target_container_name", 0, frozenset({0}), None, frozenset())
-    allowed = causal_dfa.allowed_tokens(place_state)
-    assert vocabulary.label_for_token("obj:2") not in allowed
-    assert vocabulary.label_for_token("obj:3") not in allowed
-    # obj:0 is self, obj:1 is unopened cooler -> both strictly forbidden
-    assert vocabulary.label_for_token("obj:0") not in allowed
-    assert vocabulary.label_for_token("obj:1") not in allowed
-
-    # Floor exclusion: picking floor must be forbidden
-    dfa_with_floor = VLABenchCausalDFA(MockBaseDFA(), vocabulary, entities)
-    floor_lbl = vocabulary.label_for_token("obj:2")
-    pick_state = (0, "pick", "target_entity_name", None, frozenset(), None, frozenset())
-    allowed_pick = dfa_with_floor.allowed_tokens(pick_state)
-    assert floor_lbl not in allowed_pick
+    from .training import build_constraint_runtime
+    runtime = build_constraint_runtime(max_entities=4, max_operations=2, name_prefix="compiled_pointer_mask")
+    vocab = runtime.vocabulary
+    def advance(policy, *tokens):
+        state = policy.start_state
+        for token in tokens:
+            state = policy.step(state, vocab.label_for_token(token))
+            assert state is not None
+        return state
+    policy = runtime.dfa_for("vlabench", {"entities": ("apple", "cooler")})
+    place = advance(policy, "skill:pick", "arg:target_entity_name", "obj:0", "skill:place", "arg:target_container_name")
+    assert policy.allowed_tokens(place) == set()
+    floor = runtime.dfa_for("vlabench", {"entities": ("apple", "cooler", "kitchen_floor")})
+    pick = advance(floor, "skill:pick", "arg:target_entity_name")
+    assert vocab.label_for_token("obj:2") not in floor.allowed_tokens(pick)
+    assert vocab.label_for_token("obj:3") not in floor.allowed_tokens(pick)
 
 
 def test_composite_completion_rejects_premature_eos_and_is_not_accepting():
-    world = build_vlabench_world_graph("test_composite_eos_world")
-    vocabulary = PlanVocabulary.from_world(world, max_entities=4)
-
-    class MockBaseDFA:
-        start_state = 0
-        alphabet = set(range(len(vocabulary.tokens)))
-        def allowed_tokens(self, state, remaining_steps=None):
-            return {vocabulary.eos_label}
-        def is_accepting(self, state):
-            return True
-        def step(self, state, symbol):
-            return state
-
-    schema = COMPLEX_TASK_SCHEMAS["cook_dishes"]
-    composite_dfa = VLABenchCompositePlanningDFA(
-        MockBaseDFA(), vocabulary, schema, ("pot", "stove", "apple")
-    )
-
-    # State with completed_ops=2 (< min_operations=4)
-    premature_state = (0, None, None, None, frozenset(), None, frozenset(), 2, 0, 0)
-    allowed = composite_dfa.allowed_tokens(premature_state)
-    # EOS must be discarded even if it was the only token in base_allowed
-    assert vocabulary.eos_label not in allowed
-    # is_accepting must return False
-    assert not composite_dfa.is_accepting(premature_state)
+    from .training import build_constraint_runtime
+    runtime = build_constraint_runtime(max_entities=2, max_operations=2, name_prefix="compiled_completion")
+    policy = runtime.dfa_for("vlabench", {"entities": ("apple", "bowl"), "task": "cook_dishes"})
+    state = policy.start_state
+    for token in ("skill:pick", "arg:target_entity_name", "obj:0", "skill:place", "arg:target_container_name", "obj:1"):
+        state = policy.step(state, runtime.vocabulary.label_for_token(token))
+        assert state is not None
+    assert runtime.vocabulary.eos_label not in policy.allowed_tokens(state)
+    assert not policy.is_accepting(state)
 
 
 def test_verifier_catches_self_placement_across_operations():
@@ -493,7 +447,7 @@ def test_destination_consistency_catches_divergent_containers():
         {"name": "pick", "params": {"target_entity_name": "pear"}},
         {"name": "place", "params": {"target_container_name": "plate"}},
     ]
-    root_bad = materialize_plan(divergent_plan, entities, bundle)
+    root_bad = materialize_plan(divergent_plan, entities, bundle, task_context={"task_target_container": "bowl"})
     eval_bad = verify_plan_constraints(root_bad, bundle)
     assert eval_bad.score < 1.0
     assert eval_bad.results["container_destination_consistency"]["satisfied"] < 100.0
@@ -505,7 +459,7 @@ def test_destination_consistency_catches_divergent_containers():
         {"name": "pick", "params": {"target_entity_name": "pear"}},
         {"name": "place", "params": {"target_container_name": "bowl"}},
     ]
-    root_good = materialize_plan(consistent_plan, entities, bundle)
+    root_good = materialize_plan(consistent_plan, entities, bundle, task_context={"task_target_container": "bowl"})
     eval_good = verify_plan_constraints(root_good, bundle)
     assert eval_good.results["container_destination_consistency"]["satisfied"] == 100.0
 

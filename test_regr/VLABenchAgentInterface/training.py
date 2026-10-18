@@ -15,7 +15,7 @@ from PIL import Image
 try:
     from .planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics
     from .diagnostics import ControllerMetrics
-    from .graph import PlanVocabulary, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
+    from .graph import PlanVocabulary, bind_vlabench_contextual_dfa, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
     from .models import controller_loss
     from .program import VLABenchHierarchicalReinforcementProgram, build_stage1_program
     from .reward import make_vlabench_reward_function, score_vlabench_plan
@@ -23,7 +23,7 @@ try:
 except ImportError:
     from planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics
     from diagnostics import ControllerMetrics
-    from graph import PlanVocabulary, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
+    from graph import PlanVocabulary, bind_vlabench_contextual_dfa, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
     from models import controller_loss
     from program import VLABenchHierarchicalReinforcementProgram, build_stage1_program
     from reward import make_vlabench_reward_function, score_vlabench_plan
@@ -39,6 +39,11 @@ class PlannerConstraintRuntime:
     world_bundle: Any
     max_operations: int
     max_tokens: int
+
+    def dfa_for(self, domain: str, context=None):
+        if domain != "vlabench":
+            raise ValueError(f"unsupported planner domain {domain!r}")
+        return bind_vlabench_contextual_dfa(self.dfa, self.vocabulary, context or {})
 
 
 STANDALONE_CHECKPOINT_VERSION = 5
@@ -479,7 +484,7 @@ def train_planner_reinforcement_epoch(
                     instruction=_example_value(example, "instruction", ""),
                     images=images,
                     entity_table=_example_value(example, "entities", ()),
-                    dfa=runtime.dfa,
+                    dfa=runtime.dfa_for("vlabench", example),
                     world=runtime.world_bundle,
                     max_steps=runtime.max_tokens,
                 )
@@ -586,6 +591,8 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 entity_table=_example_value(example, "entities", ()),
                 world_bundle=None if native else runtime.world_bundle,
                 task_name=_example_value(example, "task") or inferred_task,
+                task_context=example if isinstance(example, Mapping) else None,
+                policy=None if native else dfa,
             )
             totals["reward"] += result.total
             totals["valid"] += float(result.valid)

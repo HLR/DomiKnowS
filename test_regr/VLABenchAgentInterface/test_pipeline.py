@@ -71,7 +71,6 @@ from test_regr.VLABenchAgentInterface.program import (
     _carried_entity_fits_container,
     _carry_reseat_pose,
     _condiment_orientation_step,
-    _entity_pointer_dfa,
     _flower_grasp_euler,
     _gripper_finger_positions,
     _live_task_condiment_grasp_point,
@@ -86,7 +85,6 @@ from test_regr.VLABenchAgentInterface.program import (
     _quat_rotate,
     _signal,
     _task_signals,
-    _press_button_fallback_plan,
     _quat_conjugate,
     _quat_multiply,
     _release_live_task_entity,
@@ -351,13 +349,10 @@ def test_select_toy_uses_upstream_pick_lift_place_pattern():
     assert PRIMITIVE_TASK_PATTERNS["select_toy"] == ("pick", "lift", "place")
 
 
-def test_press_button_fallback_uses_live_button_target():
-    diagnostics = RolloutDiagnostics()
-    diagnostics.targets = {"button2": {"samples": 1}}
-    assert _press_button_fallback_plan(("press",), diagnostics, ("button2",)) == [
-        {"name": "press", "params": {"target_entity_name": "button2"}}
-    ]
-    assert _press_button_fallback_plan(("pick", "place"), diagnostics, ("button2",)) is None
+def test_task_target_missing_from_scene_fails_closed():
+    runtime = build_constraint_runtime(max_entities=2, max_operations=1, name_prefix="missing_task_target")
+    with pytest.raises(ValueError, match="absent from the current scene"):
+        _task_pattern_dfa(runtime.dfa, runtime.vocabulary, ("press",), target_name="button_missing", entities=("button1",))
 
 
 def test_task_pattern_dfa_forces_press_skill_and_live_pointer():
@@ -407,7 +402,7 @@ def test_online_entity_pointer_dfa_masks_unknown_observation_pointers():
     runtime = build_constraint_runtime(
         world, max_entities=4, max_operations=2, name_prefix="test_online_pointer"
     )
-    conditioned = _entity_pointer_dfa(runtime.dfa, runtime.vocabulary, entity_count=2)
+    conditioned = runtime.dfa_for("vlabench", {"entities": ("apple", "bowl")})
     valid = [
         {"name": "pick", "params": {"target_entity_name": 0}},
         {"name": "place", "params": {"target_container_name": 1}},
@@ -1761,7 +1756,7 @@ def test_joint_rewards_telescope_and_planner_uses_return_to_go():
     planner = TinyCompactPlanner(runtime.vocabulary)
     controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
     program = _joint_program(runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=True))
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert episode.total_return == pytest.approx(0.95)
     assert sum(item.reward for item in episode.controller) == pytest.approx(episode.total_return)
     assert episode.planner_returns == pytest.approx([episode.total_return])
@@ -1801,7 +1796,7 @@ def test_rollout_stores_sampled_policy_action_before_execution_safety_transform(
         runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=True),
         num_samples=1,
     )
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     transition = episode.controller[0]
     torch.testing.assert_close(
         transition.actions[0, 0],
@@ -1865,7 +1860,7 @@ def test_feasibility_credit_targets_rejected_action_not_successful_prefix():
         max_consecutive_ik_rejections=1,
     )
 
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     transition = episode.controller[0]
 
     assert transition.executed == 2
@@ -2075,7 +2070,7 @@ def test_recoverable_simulator_initialization_failure_retries_one_rollout():
         return FakeSimulator(success=True)
 
     program = _joint_program(runtime, planner, controller, factory, num_samples=1)
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert calls["count"] == 2
     assert episode.valid and episode.success
 
@@ -2112,7 +2107,7 @@ def test_online_controller_converts_dataset_frame_target_to_world_before_ik():
         runtime, planner, controller, lambda **_kwargs: simulator, num_samples=1
     )
 
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
 
     assert episode.success
     assert len(simulator.robot.positions) == 1
@@ -2128,7 +2123,7 @@ def test_invalid_plan_never_executes_controller_or_environment():
     controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
     simulator = FakeSimulator(success=True)
     program = _joint_program(runtime, planner, controller, lambda **_kwargs: simulator)
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert not episode.valid
     assert episode.total_return == 0.0
     assert episode.controller == []
@@ -2145,7 +2140,7 @@ def test_failed_ik_action_receives_zero_and_is_not_executed():
     simulator = FakeSimulator(success=True)
     simulator.robot = FailedRobot()
     program = _joint_program(runtime, planner, controller, lambda **_kwargs: simulator)
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert episode.valid
     assert episode.total_return == 0.0
     assert simulator.count == 0
@@ -2193,7 +2188,7 @@ def test_flat_progress_uses_episode_phase_to_advance_operation_context():
         controller_bc_weight=0.0,
     )
 
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
 
     assert episode.steps == 4
     assert len(controller.contexts) == 4
@@ -2244,7 +2239,7 @@ def test_geometric_progress_does_not_switch_pick_to_place_before_grasp():
         controller_bc_weight=0.0,
     )
 
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
 
     assert episode.steps == 4
     assert len(controller.contexts) == 4
@@ -2888,7 +2883,7 @@ def test_ik_recovery_retries_a_smaller_bounded_delta():
     simulator = FakeSimulator(success=True)
     simulator.robot = RecoveringRobot()
     program = _joint_program(runtime, planner, controller, lambda **_kwargs: simulator)
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert episode.success and episode.valid
     assert episode.ik_failures == 1
     assert episode.ik_recoveries == 1
@@ -2929,7 +2924,7 @@ def test_online_controller_uses_language_task_id_not_skill_pattern():
         supervised_weight=0.0,
         controller_bc_weight=0.0,
     )
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert episode.success
     assert controller.seen_task_index == 73
 
@@ -2947,7 +2942,7 @@ def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
         runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=False),
         num_samples=1,
     )
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert episode.total_return == 0.0 and episode.controller
     transition = episode.controller[0]
     transition.feasibility_cost = 1.0
@@ -2999,7 +2994,7 @@ def test_controller_ppo_rolls_back_complete_update_when_policy_drift_exceeds_lim
         supervised_weight=0.0,
         controller_bc_weight=0.0,
     )
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     before = {
         name: value.detach().clone()
         for name, value in controller.state_dict().items()
@@ -3047,7 +3042,7 @@ def test_joint_simulator_training_updates_planner_and_controller():
     )
     planner_before = planner.preference.detach().clone()
     controller_before = controller.value_head.weight.detach().clone()
-    metrics = program.train_joint_epoch([{"task": "select_book"}], rollouts_per_update=2)
+    metrics = program.train_joint_epoch([{"task": "select_book", "task_skill_sequence": ("pick", "place")}], rollouts_per_update=2)
     assert metrics["success_rate"] == 0.5
     task_metrics = metrics["per_task"]["select_book"]
     assert task_metrics["episodes"] == 2
@@ -3086,7 +3081,7 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     planner_before = planner.preference.detach().clone()
     controller_before = {name: value.detach().clone() for name, value in controller.state_dict().items()}
     metrics = program.evaluate_rollouts(
-        [{"task": "select_book"}, {"task": "select_fruit"}],
+        [{"task": "select_book", "task_skill_sequence": ("pick", "place")}, {"task": "select_fruit"}],
         rollouts_per_task=1,
         seed=17,
     )
@@ -3384,7 +3379,7 @@ def test_rollout_physics_failure_preserves_diagnostics():
         raise physics_error("Physics state is invalid: mjWARN_BADQACC")
     simulator.step = fail_step
     program = _joint_program(runtime, planner, controller, lambda **kwargs: simulator, num_samples=1)
-    episode = program.collect_episode({"task": "select_book"})
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
     assert not episode.valid and not episode.success
     assert episode.termination_reason == "physics_failure"
     assert episode.diagnostics["error_type"] == "PhysicsError"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -9,6 +10,11 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from domiknows.generation.dfa.predicate_monitor import require_bound_predicate_dfa
+from domiknows.generation.dfa.stop_policy import (
+    StopPolicy, make_progress_tracker, remaining_steps_for, should_stop_decoding,
+    should_stop_on_token, stop_policy_from_legacy,
+)
 from test_regr.common_backbone import COMMON_VLM_MODEL_ID
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
@@ -516,16 +522,30 @@ class JointQwenVLPlanner(nn.Module):
         prompt_hidden = hidden_states[-1][:, -1, :].float().to(self.device)
         return EncodedContext(prompt_hidden, context=prepared_context, domain=domain)
 
+    def _planning_dfa(self, domain, context, dfa):
+        if domain == "eai":
+            from test_regr.EmbodiedAgentInterface.constraint_compiler import bind_eai_policy
+            dfa = bind_eai_policy(dfa, self.vocabulary(domain), context)
+        if domain == "vlabench" and isinstance(context, Mapping) and any(
+            key in context for key in ("entities", "entity_table")
+        ):
+            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+            dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary(domain), context)
+        return require_bound_predicate_dfa(dfa)
+
     def sample_labels(
         self,
         domain: str,
         context: Mapping[str, Any],
         dfa: Any,
         *,
-        max_steps: int,
+        max_steps: int | None = None,
+        stop_policy: StopPolicy | None = None,
         deterministic: bool = False,
     ) -> tuple[list[int], torch.Tensor]:
         """Sample a valid plan autoregressively through the causal transformer with DFA constraints."""
+        policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
+        dfa = self._planning_dfa(domain, context, dfa)
         vocabulary = self.vocabulary(domain)
         eos_label = int(vocabulary.eos_label)
         state = dfa.start_state
@@ -533,7 +553,13 @@ class JointQwenVLPlanner(nn.Module):
         token_strings: list[str] = []
         logprob = torch.zeros((), device=self.device)
 
-        for step in range(int(max_steps)):
+        update_progress = make_progress_tracker()
+        while True:
+            step = len(labels)
+            progress = update_progress(step_index=step, dfa_state=state, prompt_token_count=0,
+                                       generated_labels=labels, accepted=dfa.is_accepting(state))
+            if should_stop_decoding(policy, progress):
+                break
             inputs, boundaries = self._prepare_inputs_and_boundaries(domain, context, token_strings)
             model_inputs = self._inputs_to_model_device(inputs)
             output = self.model(**model_inputs, output_hidden_states=True, use_cache=False)
@@ -544,10 +570,10 @@ class JointQwenVLPlanner(nn.Module):
             hidden = hidden_states[-1][0, last_idx, :].float().to(self.device)
             logits = self.label_heads[domain](hidden)
 
-            allowed = dfa.allowed_tokens(state, remaining_steps=max_steps - step - 1)
+            allowed = dfa.allowed_tokens(state, remaining_steps=remaining_steps_for(policy, step))
             if not allowed:
                 raise RuntimeError(
-                    f"{domain} planner DFA has no productive transition at step {step}/{max_steps}: "
+                    f"{domain} planner DFA has no productive transition at step {step}/{policy.max_steps}: "
                     f"tokens_so_far={token_strings}, state={state}, dfa_type={type(dfa).__name__}"
                 )
             masked = torch.full_like(logits, float("-inf"))
@@ -562,7 +588,7 @@ class JointQwenVLPlanner(nn.Module):
             state = dfa.step(state, label_int)
             if state is None:
                 raise RuntimeError(f"{domain} planner emitted a rejected DFA transition")
-            if label_int == eos_label:
+            if should_stop_on_token(policy, eos_emitted=label_int == eos_label, accepted=dfa.is_accepting(state)):
                 break
             token_strings.append(vocabulary.token_for_label(label_int))
 
@@ -576,7 +602,8 @@ class JointQwenVLPlanner(nn.Module):
         context_vector: Any,
         dfa: Any,
         *,
-        max_steps: int,
+        max_steps: int | None = None,
+        stop_policy: StopPolicy | None = None,
         deterministic: bool = False,
     ) -> tuple[list[int], torch.Tensor]:
         """Sample a plan from an EncodedContext or context dictionary."""
@@ -588,6 +615,7 @@ class JointQwenVLPlanner(nn.Module):
             context,
             dfa,
             max_steps=max_steps,
+            stop_policy=stop_policy,
             deterministic=deterministic,
         )
 
@@ -598,18 +626,23 @@ class JointQwenVLPlanner(nn.Module):
         labels: Sequence[int],
         dfa: Any,
         *,
-        max_steps: int,
+        max_steps: int | None = None,
+        stop_policy: StopPolicy | None = None,
     ) -> torch.Tensor:
         """Re-evaluate a sampled DFA trajectory with differentiable masked logits in a single forward pass."""
+        policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
+        dfa = self._planning_dfa(domain, prepared_context, dfa)
         label_list = [int(x) for x in labels]
         if not label_list:
+            if not dfa.is_accepting(dfa.start_state):
+                raise RuntimeError(f"{domain} replay trajectory is not accepting")
             return torch.zeros((), device=self.device, requires_grad=True)
-        if len(label_list) > int(max_steps):
+        if policy.max_steps is not None and len(label_list) > policy.max_steps:
             raise RuntimeError(f"{domain} replay trajectory exceeds its maximum length")
 
         vocabulary = self.vocabulary(domain)
         eos_label = int(vocabulary.eos_label)
-        active_tokens = [vocabulary.token_for_label(l) for l in label_list if l != eos_label]
+        active_tokens = [vocabulary.token_for_label(l) for l in label_list]
 
         inputs, boundary_positions = self._prepare_inputs_and_boundaries(domain, prepared_context, active_tokens)
         model_inputs = self._inputs_to_model_device(inputs)
@@ -626,9 +659,15 @@ class JointQwenVLPlanner(nn.Module):
 
         state = dfa.start_state
         logprob = torch.zeros((), device=self.device)
+        replay_policy = replace(policy, timeout_seconds=None, external_stop_fn=None)
+        update_progress = make_progress_tracker()
         for step, label_value in enumerate(label_list):
+            progress = update_progress(step_index=step, dfa_state=state, prompt_token_count=0,
+                                       generated_labels=label_list[:step], accepted=dfa.is_accepting(state))
+            if should_stop_decoding(replay_policy, progress):
+                raise RuntimeError(f"{domain} replay trajectory exceeds its stop-policy budget")
             logits = all_logits[step]
-            allowed = dfa.allowed_tokens(state, remaining_steps=max_steps - step - 1)
+            allowed = dfa.allowed_tokens(state, remaining_steps=remaining_steps_for(policy, step))
             if label_value not in allowed:
                 raise RuntimeError(f"{domain} replay trajectory contains a rejected DFA transition")
             masked = torch.full_like(logits, float("-inf"))
@@ -640,6 +679,10 @@ class JointQwenVLPlanner(nn.Module):
             state = dfa.step(state, label_value)
             if state is None:
                 raise RuntimeError(f"{domain} replay trajectory contains a rejected DFA transition")
+            if step + 1 < len(label_list) and should_stop_on_token(
+                policy, eos_emitted=label_value == eos_label, accepted=dfa.is_accepting(state),
+            ):
+                raise RuntimeError(f"{domain} replay trajectory continues after stop-policy termination")
 
         if not dfa.is_accepting(state):
             raise RuntimeError(f"{domain} replay trajectory is not accepting")
@@ -653,7 +696,8 @@ class JointQwenVLPlanner(nn.Module):
         labels: Sequence[int],
         dfa: Any,
         *,
-        max_steps: int,
+        max_steps: int | None = None,
+        stop_policy: StopPolicy | None = None,
     ) -> torch.Tensor:
         context = getattr(context_vector, "context", None)
         if context is None:
@@ -664,6 +708,7 @@ class JointQwenVLPlanner(nn.Module):
             labels,
             dfa,
             max_steps=max_steps,
+            stop_policy=stop_policy,
         )
 
     def save_pretrained(self, path: str | Path) -> None:
@@ -738,12 +783,13 @@ class JointPlannerDomainView(nn.Module):
     def sequence_logits(self, context, prefix_labels):
         return self.joint.sequence_logits(self.domain, context, prefix_labels)
 
-    def sample_labels(self, context, dfa, *, max_steps, deterministic=False):
+    def sample_labels(self, context, dfa, *, max_steps=None, deterministic=False, stop_policy=None):
         return self.joint.sample_labels(
             self.domain,
             context,
             dfa,
             max_steps=max_steps,
+            stop_policy=stop_policy,
             deterministic=deterministic,
         )
 
@@ -756,27 +802,30 @@ class JointPlannerDomainView(nn.Module):
     def encode_replay_context(self, prepared_context):
         return self.joint.encode_replay_context(self.domain, prepared_context)
 
-    def replay_labels_logprob(self, prepared_context, labels, dfa, *, max_steps):
+    def replay_labels_logprob(self, prepared_context, labels, dfa, *, max_steps=None, stop_policy=None):
         return self.joint.replay_labels_logprob(
             self.domain,
             prepared_context,
             labels,
             dfa,
             max_steps=max_steps,
+            stop_policy=stop_policy,
         )
 
-    def sample_labels_from_context(self, context_vector, dfa, *, max_steps, deterministic=False):
+    def sample_labels_from_context(self, context_vector, dfa, *, max_steps=None, deterministic=False, stop_policy=None):
         return self.joint.sample_labels_from_context(
             self.domain,
             context_vector,
             dfa,
             max_steps=max_steps,
+            stop_policy=stop_policy,
             deterministic=deterministic,
         )
 
     def supervised_loss(self, **kwargs):
         if self.domain == "eai":
             context = kwargs.get("context") or {
+                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
                 "instruction": kwargs.get("instruction", ""),
                 "goal": kwargs.get("goal", ""),
             }
@@ -785,6 +834,7 @@ class JointPlannerDomainView(nn.Module):
                 raise ValueError("EAI supervised_loss requires target_labels")
         else:
             context = kwargs.get("context") or {
+                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
                 "instruction": kwargs.get("instruction", ""),
                 "images": kwargs.get("images", ()),
                 "entity_table": kwargs.get("entity_table", ()),
@@ -802,6 +852,7 @@ class JointPlannerDomainView(nn.Module):
 
     def sample_with_logprob(self, **kwargs):
         context = kwargs.get("context") or {
+                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
             "instruction": kwargs.get("instruction", ""),
             "goal": kwargs.get("goal", ""),
             "images": kwargs.get("images", ()),
@@ -816,13 +867,15 @@ class JointPlannerDomainView(nn.Module):
             labels, logprob = self.sample_labels(
                 context,
                 dfa,
-                max_steps=kwargs.get("max_steps", 60),
+                max_steps=kwargs.get("max_steps", None if kwargs.get("stop_policy") is not None else 60),
+                stop_policy=kwargs.get("stop_policy"),
             )
         else:
             labels, logprob = self.sample_labels_from_context(
                 encoded_context,
                 dfa,
-                max_steps=kwargs.get("max_steps", 60),
+                max_steps=kwargs.get("max_steps", None if kwargs.get("stop_policy") is not None else 60),
+                stop_policy=kwargs.get("stop_policy"),
             )
         output = (
             labels_to_plan(labels, self.vocabulary, world=kwargs.get("world"))
@@ -836,6 +889,7 @@ class JointPlannerDomainView(nn.Module):
     @torch.no_grad()
     def generate_plan(self, **kwargs):
         context = kwargs.get("context") or {
+                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
             "instruction": kwargs.get("instruction", ""),
             "goal": kwargs.get("goal", ""),
             "images": kwargs.get("images", ()),
@@ -848,7 +902,8 @@ class JointPlannerDomainView(nn.Module):
         labels, _ = self.sample_labels(
             context,
             dfa,
-            max_steps=kwargs.get("max_steps", 60),
+            max_steps=kwargs.get("max_steps", None if kwargs.get("stop_policy") is not None else 60),
+            stop_policy=kwargs.get("stop_policy"),
             deterministic=True,
         )
         if self.domain == "vlabench":

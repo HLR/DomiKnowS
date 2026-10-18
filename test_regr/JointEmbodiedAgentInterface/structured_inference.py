@@ -15,6 +15,8 @@ from typing import Any, Callable, Mapping, Sequence
 
 import torch
 
+from domiknows.generation.dfa.stop_policy import StopPolicy, remaining_steps_for, should_stop_on_token
+
 from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan
 from test_regr.VLABenchAgentInterface.reward import score_vlabench_plan
@@ -44,6 +46,7 @@ class StructuredPlanCandidate:
     goal_recall: float | None = None
     reward_score: float | None = None
     errors: tuple[str, ...] = ()
+    grounding_report: Mapping[str, Any] | None = None
 
     @property
     def hard_valid(self) -> bool:
@@ -89,6 +92,7 @@ def constrained_dfa_beam_search(
     """Return complete DFA-valid paths scored by autoregressive log probability."""
     if beam_width <= 0 or max_steps <= 0:
         raise ValueError("beam_width and max_steps must be positive")
+    policy = StopPolicy(max_steps=max_steps)
     start_state = dfa.start_state
     beams: list[tuple[tuple[int, ...], Any, float, bool]] = [
         ((), start_state, 0.0, False)
@@ -101,7 +105,7 @@ def constrained_dfa_beam_search(
         if logits.ndim != 2 or logits.shape[0] != len(live):
             raise ValueError("next_logits must return [number_of_prefixes, vocabulary_size]")
         expanded = [beam for beam in beams if beam[3]]
-        remaining_steps = max_steps - step_index - 1
+        remaining_steps = remaining_steps_for(policy, step_index)
         for row, (prefix, state, score, _complete) in zip(logits, live):
             allowed = tuple(sorted(
                 int(label)
@@ -119,7 +123,9 @@ def constrained_dfa_beam_search(
                 if next_state is None:
                     continue
                 next_prefix = prefix + (label,)
-                complete = label == eos_label and dfa.is_accepting(next_state)
+                complete = should_stop_on_token(
+                    policy, eos_emitted=label == eos_label, accepted=dfa.is_accepting(next_state),
+                )
                 expanded.append((next_prefix, next_state, score + float(value), complete))
         beams = sorted(expanded, key=lambda item: (-item[2], item[0]))[:beam_width]
     complete = [beam for beam in beams if beam[3]]
@@ -230,6 +236,7 @@ def _score_eai_candidate(
         vocabulary=vocabulary,
         world_bundle=runtime.world.eai,
         reward_mode="dense",
+        policy=dfa,
     )
     constraint_score = metrics.get("world_constraint_score")
     constraint_valid = constraint_score is None or float(constraint_score) >= 1.0
@@ -244,6 +251,7 @@ def _score_eai_candidate(
         goal_success=bool(metrics["is_success"]),
         goal_recall=float(metrics["recall"]),
         reward_score=float(metrics["rl_reward_score"]),
+        grounding_report=metrics.get("grounding_report"),
         errors=(() if metrics.get("parse_error") is None else (str(metrics["parse_error"]),)),
     )
 
@@ -257,17 +265,20 @@ def _score_vlabench_candidate(
     errors: list[str] = []
     plan: Sequence[Mapping[str, Any]] = ()
     constraint_score = 0.0
+    grounding = None
     try:
         plan = labels_to_plan(labels, runtime.vlabench_vocabulary, world=runtime.world.vlabench)
         validation = validate_plan(
             plan,
             entity_table=entity_table,
             skill_arguments=runtime.world.vlabench.skill_arguments,
+            policy=dfa,
         )
         errors.extend(validation.errors)
         if validation.valid:
-            root = materialize_plan(plan, entity_table, runtime.world.vlabench, task_name=task_name)
+            root = materialize_plan(plan, entity_table, runtime.world.vlabench, task_name=task_name, policy=dfa)
             evaluation = verify_plan_constraints(root, runtime.world.vlabench)
+            grounding = root.attributes.get("grounding_report")
             constraint_score = 1.0 if evaluation is None else float(evaluation.score)
             if constraint_score < 1.0:
                 errors.append(f"DomiKnowS constraints scored {constraint_score:.6f}")
@@ -283,6 +294,7 @@ def _score_vlabench_candidate(
         constraint_valid=constraint_score >= 1.0,
         constraint_score=constraint_score,
         errors=tuple(errors),
+        grounding_report=grounding,
     )
 
 
@@ -297,6 +309,7 @@ def _planner_context(item: Mapping[str, Any], domain: str) -> Mapping[str, Any]:
             "goal": item.get("goal") or item.get("tl_goal", ""),
         }
     return {
+        **{k: item[k] for k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence") if k in item},
         "instruction": item.get("instruction", ""),
         "images": item.get("images", item.get("segmented_image_paths", ())),
         "entity_table": item.get("entities", ()),
@@ -446,6 +459,7 @@ def evaluate_structured_decoders(
                         entity_table=item.get("entities", ()),
                         world_bundle=runtime.world.vlabench,
                         task_name=item.get("task") or item.get("task_name") if isinstance(item, Mapping) else getattr(item, "task", None),
+                        task_context=item if isinstance(item, Mapping) else None,
                     )
                     values["exact_graph_match"] += float(score.exact_graph_match)
                     values["skill_with_entity_match"] += float(score.skill_with_entity_match)

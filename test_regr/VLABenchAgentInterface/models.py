@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import sys
 from typing import Any, Mapping, Sequence
@@ -12,11 +12,16 @@ from torch import nn
 from torch.nn import functional as F
 
 try:
-    from .graph import PlanVocabulary, labels_to_plan, plan_to_tokens
+    from .graph import PlanVocabulary, bind_vlabench_contextual_dfa, labels_to_plan, plan_to_tokens
 except ImportError:
-    from graph import PlanVocabulary, labels_to_plan, plan_to_tokens
+    from graph import PlanVocabulary, bind_vlabench_contextual_dfa, labels_to_plan, plan_to_tokens
 
 
+from domiknows.generation.dfa.predicate_monitor import require_bound_predicate_dfa
+from domiknows.generation.dfa.stop_policy import (
+    StopPolicy, make_progress_tracker, remaining_steps_for, should_stop_decoding,
+    should_stop_on_token, stop_policy_from_legacy,
+)
 from test_regr.common_backbone import COMMON_VLM_MODEL_ID
 
 
@@ -1041,17 +1046,19 @@ class QwenVLPlanner(nn.Module):
         tokens = plan_to_tokens(target_plan, entity_table, world=world)
         labels = torch.tensor([self.vocabulary.label_for_token(token) for token in tokens], device=self.device)
         logits = self.sequence_logits(
-            {"instruction": instruction, "images": images, "entity_table": entity_table},
+            {**{k: v for k, v in _kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")}, "instruction": instruction, "images": images, "entity_table": entity_table},
             self._shift_right(labels),
         )[0]
         return F.cross_entropy(logits, labels)
 
-    def sample_labels(self, context: Mapping[str, Any], dfa, *, max_steps: int, deterministic: bool = False):
+    def sample_labels(self, context: Mapping[str, Any], dfa, *, max_steps: int | None = None, deterministic: bool = False, stop_policy: StopPolicy | None = None):
+        policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
+        dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         context_vector = self.encode_context(context)
         return self.sample_labels_from_context(
             context_vector,
             dfa,
-            max_steps=max_steps,
+            stop_policy=policy,
             deterministic=deterministic,
         )
 
@@ -1060,9 +1067,12 @@ class QwenVLPlanner(nn.Module):
         context_vector: torch.Tensor,
         dfa,
         *,
-        max_steps: int,
+        max_steps: int | None = None,
+        stop_policy: StopPolicy | None = None,
         deterministic: bool = False,
     ):
+        policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
+        require_bound_predicate_dfa(dfa)
         state = dfa.start_state
         labels = []
         logprob = torch.zeros((), device=self.device)
@@ -1070,10 +1080,16 @@ class QwenVLPlanner(nn.Module):
         previous = torch.tensor(
             [[int(self.eos_label)]], dtype=torch.long, device=self.device
         )
-        for step in range(max_steps):
+        update_progress = make_progress_tracker()
+        while True:
+            step = len(labels)
+            progress = update_progress(step_index=step, dfa_state=state, prompt_token_count=0,
+                                       generated_labels=labels, accepted=dfa.is_accepting(state))
+            if should_stop_decoding(policy, progress):
+                break
             decoded, hidden = self.graph_decoder(self.token_embedding(previous), hidden)
             logits = self.output(decoded)[0, -1]
-            allowed = dfa.allowed_tokens(state, remaining_steps=max_steps - step - 1)
+            allowed = dfa.allowed_tokens(state, remaining_steps=remaining_steps_for(policy, step))
             mask = torch.full_like(logits, float("-inf"))
             if not allowed:
                 raise RuntimeError("planner DFA has no productive transition")
@@ -1087,7 +1103,7 @@ class QwenVLPlanner(nn.Module):
             state = dfa.step(state, int(label))
             if state is None:
                 raise RuntimeError("planner emitted a rejected DFA transition")
-            if int(label) == self.eos_label and dfa.is_accepting(state):
+            if should_stop_on_token(policy, eos_emitted=int(label) == self.eos_label, accepted=dfa.is_accepting(state)):
                 break
         if not dfa.is_accepting(state):
             raise RuntimeError("planner did not terminate in an accepting DFA state")
@@ -1099,20 +1115,27 @@ class QwenVLPlanner(nn.Module):
         labels: Sequence[int],
         dfa,
         *,
-        max_steps: int,
+        max_steps: int | None = None,
+        stop_policy: StopPolicy | None = None,
     ) -> torch.Tensor:
+        policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
+        require_bound_predicate_dfa(dfa)
         state = dfa.start_state
         logprob = torch.zeros((), device=self.device)
         hidden = self._initial_decoder_state(context_vector, 1)
         previous = torch.tensor(
             [[int(self.eos_label)]], dtype=torch.long, device=self.device
         )
+        replay_policy = replace(policy, timeout_seconds=None, external_stop_fn=None)
+        update_progress = make_progress_tracker()
         for step, raw_label in enumerate(labels):
-            if step >= int(max_steps):
-                raise RuntimeError("planner replay trajectory exceeds its maximum length")
+            progress = update_progress(step_index=step, dfa_state=state, prompt_token_count=0,
+                                       generated_labels=labels[:step], accepted=dfa.is_accepting(state))
+            if should_stop_decoding(replay_policy, progress):
+                raise RuntimeError("planner replay trajectory exceeds its stop-policy budget")
             decoded, hidden = self.graph_decoder(self.token_embedding(previous), hidden)
             logits = self.output(decoded)[0, -1]
-            allowed = dfa.allowed_tokens(state, remaining_steps=max_steps - step - 1)
+            allowed = dfa.allowed_tokens(state, remaining_steps=remaining_steps_for(policy, step))
             label_value = int(raw_label)
             if label_value not in allowed:
                 raise RuntimeError("planner replay trajectory contains a rejected DFA transition")
@@ -1126,6 +1149,10 @@ class QwenVLPlanner(nn.Module):
             state = dfa.step(state, label_value)
             if state is None:
                 raise RuntimeError("planner replay trajectory contains a rejected DFA transition")
+            if step + 1 < len(labels) and should_stop_on_token(
+                policy, eos_emitted=label_value == self.eos_label, accepted=dfa.is_accepting(state),
+            ):
+                raise RuntimeError("planner replay trajectory continues after stop-policy termination")
         if not dfa.is_accepting(state):
             raise RuntimeError("planner replay trajectory is not accepting")
         return logprob
@@ -1136,31 +1163,39 @@ class QwenVLPlanner(nn.Module):
         labels: Sequence[int],
         dfa,
         *,
-        max_steps: int,
+        max_steps: int | None = None,
+        stop_policy: StopPolicy | None = None,
     ) -> torch.Tensor:
+        policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
+        require_bound_predicate_dfa(dfa)
         return self.labels_logprob_from_context(
             self.encode_replay_context(prepared_context),
             labels,
             dfa,
-            max_steps=max_steps,
+            stop_policy=policy,
         )
 
     @torch.no_grad()
-    def generate_plan(self, *, instruction, images, entity_table, dfa, world=None, max_steps: int = 41, **_kwargs):
+    def generate_plan(self, *, instruction, images, entity_table, dfa, world=None, max_steps: int | None = None, stop_policy: StopPolicy | None = None, **_kwargs):
+        if max_steps is None and stop_policy is None:
+            max_steps = 41
         labels, _ = self.sample_labels(
-            {"instruction": instruction, "images": images, "entity_table": entity_table},
-            dfa, max_steps=max_steps, deterministic=True,
+            {**{k: v for k, v in _kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")}, "instruction": instruction, "images": images, "entity_table": entity_table},
+            dfa, max_steps=max_steps, stop_policy=stop_policy, deterministic=True,
         )
         return labels_to_plan(labels, self.vocabulary, world=world)
 
-    def sample_with_logprob(self, *, instruction, images, entity_table, dfa, world=None, max_steps: int = 41, **kwargs):
+    def sample_with_logprob(self, *, instruction, images, entity_table, dfa, world=None, max_steps: int | None = None, stop_policy: StopPolicy | None = None, **kwargs):
+        if max_steps is None and stop_policy is None:
+            max_steps = 41
         encoded_context = kwargs.get("encoded_context")
-        context = {"instruction": instruction, "images": images, "entity_table": entity_table}
+        context = {**{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")}, "instruction": instruction, "images": images, "entity_table": entity_table}
+        dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         if encoded_context is None:
-            labels, logprob = self.sample_labels(context, dfa, max_steps=max_steps)
+            labels, logprob = self.sample_labels(context, dfa, max_steps=max_steps, stop_policy=stop_policy)
         else:
             labels, logprob = self.sample_labels_from_context(
-                encoded_context, dfa, max_steps=max_steps
+                encoded_context, dfa, max_steps=max_steps, stop_policy=stop_policy
             )
         plan = labels_to_plan(labels, self.vocabulary, world=world)
         if kwargs.get("return_labels", False):

@@ -482,27 +482,28 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                         policy_dfa,
                         max_steps=self.joint_runtime.max_eai_steps,
                     )
-                    reward = reward_fn(labels, data_item=item)
+                    reward = reward_fn(labels, data_item=item, policy=policy_dfa)
                     from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
                     goal = evaluate_goal_satisfaction(
                         labels, item, self.joint_runtime.eai_vocabulary,
                         world_bundle=self.joint_runtime.world.eai,
+                        policy=policy_dfa,
                     )
                     samples.append((
                         labels,
                         float(torch.as_tensor(reward).float().mean()),
                         float(goal["recall"]),
                         float(goal["is_success"]),
+                        policy_dfa,
                     ))
             rewards = torch.tensor([s[1] for s in samples], device=self.joint_planner.device, dtype=torch.float32)
             advantages = rewards - rewards.mean()
             self.planner_optimizer.zero_grad(set_to_none=True)
             total_loss = 0.0
             count = max(1, len(samples))
-            for i, (labels, _, _, _) in enumerate(samples):
+            for i, (labels, _, _, _, policy_dfa) in enumerate(samples):
                 adv = advantages[i].detach()
                 if adv.abs() > 1e-6:
-                    policy_dfa = self.joint_runtime.dfa_for("eai", item)
                     logprob = self.eai_planner.replay_labels_logprob(
                         prepared_context,
                         labels,

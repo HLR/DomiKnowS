@@ -1,0 +1,177 @@
+"""Declarative VLABench task facts and their executable predicate meanings.
+
+Task metadata supplies requirements; scene composition and answer keywords do
+not invent task goals. The generic compiler enforces the world LCs over these
+predicates, just as it does over physical world predicates.
+"""
+from dataclasses import dataclass, replace
+from domiknows.generation.grounded import PlanningFacts
+from typing import Any, Mapping
+
+try:
+    from .semantics import entity_mapping, resolve_pointer
+except ImportError:
+    from semantics import entity_mapping, resolve_pointer
+
+
+@dataclass(frozen=True)
+class ComplexTaskSchema:
+    task_name: str
+    required_skills: tuple[str, ...]
+    min_operations: int
+    phase_transitions: Mapping[tuple[str, str], str] | None = None
+    accepting_phases: frozenset[str] | None = None
+
+
+COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
+    "cook_dishes": ComplexTaskSchema(
+        task_name="cook_dishes",
+        required_skills=("pick", "place"),
+        min_operations=4,
+    ),
+    "cool_drink": ComplexTaskSchema(
+        task_name="cool_drink",
+        required_skills=("pick", "place"),
+        min_operations=2,
+    ),
+    "make_juice": ComplexTaskSchema(
+        task_name="make_juice",
+        required_skills=("pick", "place"),
+        min_operations=2,
+    ),
+    "hammer_nail_and_hang_picture": ComplexTaskSchema(
+        task_name="hammer_nail_and_hang_picture",
+        required_skills=("pick", "place", "push"),
+        min_operations=3,
+    ),
+    "take_chemistry_experiment": ComplexTaskSchema(
+        task_name="take_chemistry_experiment",
+        required_skills=("pick", "place", "pour"),
+        min_operations=3,
+    ),
+    "book_rearrange": ComplexTaskSchema(
+        task_name="book_rearrange",
+        required_skills=("pick", "push", "pull"),
+        min_operations=3,
+    ),
+    "texas_holdem": ComplexTaskSchema(
+        task_name="texas_holdem",
+        required_skills=("pick", "place"),
+        min_operations=2,
+    ),
+    "manage_study_table": ComplexTaskSchema(
+        task_name="manage_study_table",
+        required_skills=("pick", "place"),
+        min_operations=3,
+    ),
+}
+
+
+
+@dataclass(frozen=True)
+class TaskRequirements:
+    expected_skills: tuple[str, ...] | None = None
+    initial_target: str | None = None
+    schema: ComplexTaskSchema | None = None
+    planning: PlanningFacts = PlanningFacts()
+    allowed_sequences: frozenset | None = None
+
+    def skill_allowed(self, index, skill):
+        return (self.expected_skills is None or
+                (index < len(self.expected_skills) and self.expected_skills[index] == skill))
+
+    def target_allowed(self, index, params, entities):
+        if index != 0 or self.initial_target is None:
+            return True
+        if "target_entity_name" not in params:
+            held = dict(self.planning.initial.holdings).get("right")
+            if held is not None:
+                return held == self.initial_target
+        value = params.get("target_entity_name")
+        name, valid = resolve_pointer(value, entity_mapping(entities))
+        return valid and name == self.initial_target
+
+    def sequence_complete(self, count):
+        return self.expected_skills is None or count == len(self.expected_skills)
+
+
+def task_requirements(context, world, entities):
+    """Resolve explicit task data; unknown tasks add no implicit goal rules."""
+    context = context or {}
+    get = context.get if isinstance(context, Mapping) else lambda k, default=None: getattr(context, k, default)
+    task = str(get("task") or get("task_name") or "").strip().lower().replace("-", "_")
+    if not task and get("episode_id"):
+        try:
+            from .planning_metrics import planning_metadata
+        except ImportError:
+            from planning_metrics import planning_metadata
+        task = planning_metadata(str(get("episode_id")))[0] or ""
+    expected = get("task_skill_sequence")
+    if expected is None:
+        expected = world.primitive_task_patterns.get(task)
+    if expected is not None:
+        if isinstance(expected, str):
+            raise ValueError("task_skill_sequence must be a sequence of skill names")
+        expected = tuple(expected)
+        if not expected or any(skill not in world.skill_arguments for skill in expected):
+            raise ValueError("task_skill_sequence must contain known skills")
+    target = get("task_target_entity")
+    if target is not None:
+        target, valid = resolve_pointer(target, entity_mapping(entities))
+        if not valid:
+            raise ValueError("task target is absent from the current scene")
+    table = entity_mapping(entities)
+    def resolve(value):
+        name, valid = resolve_pointer(value, table)
+        if not valid:
+            raise ValueError(f"planning entity {value!r} is absent from the current scene")
+        return name
+    planning = PlanningFacts.parse(get("planning_facts"), entities=table.values(), resolve=resolve,
+                                   default_destination=get("task_target_container"), constants=("left", "right"))
+    # Normalize only supplied domain observations before binding or validation.
+    try:
+        from .semantics import PlanSemantics
+    except ImportError:
+        from semantics import PlanSemantics
+    planning = replace(planning, initial=PlanSemantics(entities, world.skill_arguments, planning).initial_state().grounded)
+    prefix = planning.completed_skill_prefix
+    if any(skill not in world.skill_arguments for skill in prefix):
+        raise ValueError("completed_skill_prefix contains an unknown skill")
+    if expected is not None and tuple(expected[:len(prefix)]) != prefix:
+        raise ValueError("completed_skill_prefix contradicts the task skill sequence")
+    if prefix and "pick" in prefix and not any(obj is not None for _,obj in planning.initial.holdings) and prefix[-1] not in ("place", "insert"):
+        raise ValueError("completed grasp progress requires an explicitly held object")
+    return TaskRequirements(expected, target, COMPLEX_TASK_SCHEMAS.get(task), planning)
+
+
+
+def request_sequences(world, max_operations, requirements):
+    """Syntactic derivatives justified by explicit task progress/held state."""
+    try:
+        from .graph import _legal_skill_sequences
+    except ImportError:
+        from graph import _legal_skill_sequences
+    prefix = requirements.planning.completed_skill_prefix
+    complete, _ = _legal_skill_sequences(world, max_operations + len(prefix))
+    complete = set(complete)
+    held = any(obj is not None for _,obj in requirements.planning.initial.holdings)
+    if prefix:
+        suffixes = {seq[len(prefix):] for seq in complete if seq[:len(prefix)] == prefix}
+        if not suffixes:
+            raise ValueError("completed_skill_prefix is not a declared subtask prefix")
+        complete.update(seq for seq in suffixes if seq)
+    if held:
+        complete.update(seq[1:] for seq in tuple(complete) if seq and seq[0] == "pick" and len(seq) > 1)
+    expected = requirements.expected_skills
+    remaining = None if expected is None else expected[len(prefix):]
+    if remaining and remaining[0] in {"place", "insert", "pour", "lift", "pull", "push"}:
+        if not held:
+            raise ValueError("a continuation task requires an explicitly held object")
+        complete.add(tuple(remaining))
+    completion = requirements.planning.completion(requirements.planning.initial)
+    schema = requirements.schema
+    obligations_met = schema is None or (len(prefix) >= schema.min_operations and set(schema.required_skills) <= set(prefix))
+    if completion.applicable and completion.satisfied is True and not completion.missing and not remaining and obligations_met:
+        complete.add(())
+    # A completed prefix alone does not authorize arbitrary empty plans.
+    return frozenset(seq for seq in complete if len(seq) <= max_operations)

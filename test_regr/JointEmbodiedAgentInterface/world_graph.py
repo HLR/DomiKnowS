@@ -106,8 +106,6 @@ class JointDomainRuntime:
     activation_profile_version: int = ACTIVATION_PROFILE_VERSION
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _domain_stack: list[str | None] = field(default_factory=list, repr=False)
-    _eai_policy_cache: dict[int, Any] = field(default_factory=dict, repr=False)
-    _vlabench_policy_cache: dict[int, Any] = field(default_factory=dict, repr=False)
     _selected_domain: str | None = field(default=None, repr=False)
 
     @property
@@ -146,30 +144,15 @@ class JointDomainRuntime:
                 return self.vlabench_dfa
             from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
 
-            key = id(context)
-            cached = self._vlabench_policy_cache.get(key)
-            if cached is None:
-                cached = bind_vlabench_contextual_dfa(
-                    self.vlabench_dfa,
-                    self.vlabench_vocabulary,
-                    context,
-                )
-                self._vlabench_policy_cache[key] = cached
-            return cached
+            # Context mappings can be mutated or their ids reused. Scene binding
+            # is cheap; never cache a semantic policy by Python object identity.
+            return bind_vlabench_contextual_dfa(
+                self.vlabench_dfa, self.vlabench_vocabulary, context,
+            )
         if domain != "eai":
             raise ValueError(f"unknown joint domain {domain!r}; expected one of {DOMAINS}")
-        from domiknows.generation import bind_contextual_dfa
-
-        key = id(context)
-        cached = self._eai_policy_cache.get(key)
-        if cached is None:
-            cached = bind_contextual_dfa(
-                self.eai_dfa,
-                self.eai_generation_graph,
-                context or {},
-            )
-            self._eai_policy_cache[key] = cached
-        return cached
+        from test_regr.EmbodiedAgentInterface.constraint_compiler import bind_eai_policy
+        return bind_eai_policy(self.eai_dfa, self.eai_vocabulary, context or {})
 
     @contextmanager
     def domain_scope(
@@ -295,6 +278,9 @@ def build_joint_runtime(
     eai_dfa = constraints_to_dfa_from_graph(
         eai_graph, eai_generation, on_unsupported="raise", minimize=False,
     )
+    from test_regr.EmbodiedAgentInterface.constraint_compiler import CompiledEAIPlannerDFA, compile_world_constraints
+    eai_dfa = CompiledEAIPlannerDFA.from_dfa(eai_dfa, compile_world_constraints(world_bundle.eai),
+                                            world_constraint_bundle=world_bundle.eai, generation_graph=eai_graph)
     vlabench_dfa = compile_planner_dfa(
         vlabench_graph,
         vlabench_generation,

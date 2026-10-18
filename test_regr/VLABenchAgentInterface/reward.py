@@ -63,6 +63,7 @@ class PlanRewardBreakdown:
     constraint_score: float | None
     valid: bool
     errors: tuple[str, ...] = ()
+    grounding_report: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -268,6 +269,8 @@ def score_vlabench_plan(
     mode: str = "dense",
     world_bundle: Any = None,
     task_name: str | None = None,
+    task_context: Mapping[str, Any] | None = None,
+    policy: Any = None,
 ) -> PlanRewardBreakdown:
     """Score a plan and hard-gate it through schema and graph constraints."""
     if mode not in {"dense", "binary"}:
@@ -277,10 +280,18 @@ def score_vlabench_plan(
     except Exception as exc:
         raise ValueError(f"invalid reference VLABench plan: {exc}") from exc
     skill_arguments = getattr(world_bundle, "skill_arguments", SKILL_ARGUMENTS)
+    requirements = None
+    if policy is None and world_bundle is not None and task_context is not None:
+        from dataclasses import replace
+        from test_regr.VLABenchAgentInterface.task_policy import task_requirements, request_sequences
+        requirements = task_requirements(task_context, world_bundle, entity_table or ())
+        requirements = replace(requirements, allowed_sequences=request_sequences(world_bundle, max(8, len(reference_plan)), requirements))
     validation: PlanValidation = validate_plan(
         prediction,
         entity_table=entity_table,
         skill_arguments=skill_arguments,
+        policy=policy,
+        requirements=requirements,
     )
     predicted_plan = list(validation.canonical_plan)
     if entity_table:
@@ -294,8 +305,9 @@ def score_vlabench_plan(
     }
 
     constraint_score: float | None = None
+    grounding = None
     errors = list(validation.errors)
-    if world_bundle is not None and predicted_plan:
+    if world_bundle is not None and validation.valid:
         try:
             try:
                 from .world_graph import materialize_plan, verify_plan_constraints
@@ -306,9 +318,12 @@ def score_vlabench_plan(
                 entity_table or (),
                 world_bundle,
                 task_name=task_name,
+                task_context=task_context,
+                policy=policy,
             )
             evaluation = verify_plan_constraints(root, world_bundle)
             constraint_score = None if evaluation is None else evaluation.score
+            grounding = root.attributes.get("grounding_report")
             if constraint_score is not None and constraint_score < 1.0:
                 errors.append(f"DomiKnowS plan constraints scored {constraint_score:.6f}")
         except Exception as exc:
@@ -325,6 +340,7 @@ def score_vlabench_plan(
         constraint_score=constraint_score,
         valid=valid,
         errors=tuple(errors),
+        grounding_report=grounding,
         **scores,
     )
 
@@ -354,6 +370,8 @@ def make_vlabench_reward_function(
             mode=mode,
             world_bundle=world_bundle,
             task_name=task_name,
+            task_context=item,
+            policy=context.get("policy"),
         )
         reward.last_breakdown = breakdown
         return torch.tensor([breakdown.total], dtype=torch.float32)

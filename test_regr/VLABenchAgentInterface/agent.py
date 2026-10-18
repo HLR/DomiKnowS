@@ -31,6 +31,7 @@ class PlanDecision:
     errors: tuple[str, ...]
     dfa_valid: bool
     constraint_score: float | None
+    grounding_report: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -114,12 +115,15 @@ class HierarchicalVLABenchAgent:
         self.execute_horizon = int(execute_horizon)
         self.camera_views = int(camera_views)
 
-    def plan(self, instruction: str, images: Sequence[Image.Image], entity_table: Sequence[str]) -> PlanDecision:
+    def plan(self, instruction: str, images: Sequence[Image.Image], entity_table: Sequence[str],
+             *, task_context: Mapping[str, Any] | None = None) -> PlanDecision:
+        context = {**(task_context or {}), "instruction": instruction, "entity_table": entity_table, "entities": entity_table}
+        policy = self.runtime.dfa_for("vlabench", context)
         raw = self.planner.generate_plan(
             instruction=instruction,
             images=images,
             entity_table=entity_table,
-            dfa=self.runtime.dfa,
+            dfa=policy,
             world=self.runtime.world_bundle,
             max_steps=self.runtime.max_tokens,
         )
@@ -127,22 +131,25 @@ class HierarchicalVLABenchAgent:
             raw,
             entity_table=entity_table,
             skill_arguments=self.runtime.vocabulary.skill_argument_map,
+            policy=policy,
         )
         plan = list(validation.canonical_plan)
-        dfa_valid = bool(plan) and dfa_accepts_plan(
-            self.runtime.dfa,
+        dfa_valid = validation.valid and dfa_accepts_plan(
+            policy,
             self.runtime.generation_bundle,
             plan,
             entity_table,
             world=self.runtime.world_bundle,
         )
         constraint_score = None
+        grounding = None
         errors = list(validation.errors)
-        if plan:
+        if validation.valid:
             try:
-                root = materialize_plan(plan, entity_table, self.runtime.world_bundle)
+                root = materialize_plan(plan, entity_table, self.runtime.world_bundle, policy=policy)
                 evaluation = verify_plan_constraints(root, self.runtime.world_bundle)
                 constraint_score = None if evaluation is None else evaluation.score
+                grounding = root.attributes.get("grounding_report")
                 if constraint_score is not None and constraint_score < 1.0:
                     errors.append(f"DomiKnowS plan constraint score={constraint_score:.6f}")
             except Exception as exc:
@@ -151,7 +158,7 @@ class HierarchicalVLABenchAgent:
         if not dfa_valid:
             errors.append("symbolic plan is rejected by the DomiKnowS generation DFA")
         valid = validation.valid and dfa_valid and (constraint_score is None or constraint_score >= 1.0)
-        return PlanDecision(tuple(plan), str(raw), valid, tuple(errors), dfa_valid, constraint_score)
+        return PlanDecision(tuple(plan), str(raw), valid, tuple(errors), dfa_valid, constraint_score, grounding)
 
     def _controller_input(self, observation_history: Sequence[Mapping[str, Any]], task_index: int, plan_context=(0, 0, 0)):
         histories = list(observation_history)[-2:]
@@ -191,7 +198,8 @@ class HierarchicalVLABenchAgent:
         except (TypeError, ValueError, AttributeError):
             return np.zeros_like(value), False
 
-    def rollout(self, env: Any, instruction: str, *, max_steps: int = 400) -> RolloutResult:
+    def rollout(self, env: Any, instruction: str, *, max_steps: int = 400,
+                task_context: Mapping[str, Any] | None = None) -> RolloutResult:
         timestep = env.reset()
         observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
         history = [observation]
@@ -203,12 +211,15 @@ class HierarchicalVLABenchAgent:
 
         while reward.steps < max_steps:
             numbered, entities = numbered_views_from_observation(env, observation, max_views=self.camera_views)
-            decision = self.plan(instruction, numbered, entities)
+            decision = self.plan(instruction, numbered, entities, task_context=task_context)
             plans.append(decision)
             for image in numbered:
                 image.close()
-            if not decision.valid or not decision.plan:
+            if not decision.valid:
                 valid = False
+                break
+            if not decision.plan:
+                success = _task_success(env)
                 break
             # Receding-horizon execution: use the next high-level skill and
             # obtain a fresh plan after four low-level controls.

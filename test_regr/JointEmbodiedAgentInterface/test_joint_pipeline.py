@@ -265,11 +265,12 @@ def test_vlabench_replay_keeps_collection_graph_free_and_restores_lora_gradient(
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)
     context = {
-        "instruction": "Pick the apple.",
+        "instruction": "Press a button.",
         "images": (),
-        "entity_table": ("apple", "bowl"),
+        "entity_table": ("button0", "button1"),
     }
     max_steps = runtime.max_vlabench_operations * 5 + 1
+    policy_dfa = runtime.dfa_for("vlabench", context)
     prepared = planner.prepare_replay_context("vlabench", context)
     assert all(not torch.is_tensor(value) or value.device.type == "cpu" for value in prepared.values())
 
@@ -278,7 +279,7 @@ def test_vlabench_replay_keeps_collection_graph_free_and_restores_lora_gradient(
         labels, collected_logprob = planner.sample_labels_from_context(
             "vlabench",
             encoded,
-            runtime.vlabench_dfa,
+            policy_dfa,
             max_steps=max_steps,
         )
     assert not collected_logprob.requires_grad
@@ -288,7 +289,7 @@ def test_vlabench_replay_keeps_collection_graph_free_and_restores_lora_gradient(
         "vlabench",
         prepared,
         labels,
-        runtime.vlabench_dfa,
+        policy_dfa,
         max_steps=max_steps,
     )
     assert replayed_logprob.requires_grad
@@ -1400,10 +1401,10 @@ def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
     invalid_target = [press_label, arg_label, table_label, eos_label]
     assert not dfa.accepts(invalid_target)
 
-    # Non-button context with entities binds VLABenchCausalDFA; empty context returns base DFA
+    # Non-button scenes bind compiled world monitors; empty context returns the grammar.
     no_btn_context = {"entities": ("table", "apple")}
-    from test_regr.VLABenchAgentInterface.graph import VLABenchCausalDFA
-    assert isinstance(runtime.dfa_for("vlabench", no_btn_context), VLABenchCausalDFA)
+    from test_regr.VLABenchAgentInterface.constraint_compiler import WorldConstraintDFA
+    assert isinstance(runtime.dfa_for("vlabench", no_btn_context), WorldConstraintDFA)
     assert runtime.dfa_for("vlabench", {}) is runtime.vlabench_dfa
 
 
@@ -1421,3 +1422,46 @@ def test_select_candidate_with_ilp_exact_fallback():
     res = select_candidate_with_ilp([c1, c2, c3], domain="vlabench")
     assert res.selected.labels == (3,)
     assert res.selected.constraint_valid
+
+
+def test_vlabench_policy_rebinds_after_scene_context_changes(joint_fixture):
+    _examples, runtime = joint_fixture
+    context = {"entities": ("button_a", "floor")}
+    first = runtime.dfa_for("vlabench", context)
+    context["entities"] = ("floor", "button_b")
+    second = runtime.dfa_for("vlabench", context)
+    vocabulary = runtime.vlabench_vocabulary
+    def press_targets(policy):
+        state = policy.start_state
+        for token in ("skill:press", "arg:target_entity_name"):
+            state = policy.step(state, vocabulary.label_for_token(token))
+        return policy.allowed_tokens(state)
+    obj0 = vocabulary.label_for_token("obj:0")
+    assert obj0 in press_targets(first)
+    assert obj0 not in press_targets(second)
+
+
+def test_vlabench_context_free_replay_requires_a_bound_policy(joint_fixture):
+    from domiknows.generation import MissingSemanticBinding
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    with pytest.raises(MissingSemanticBinding, match="request-bound"):
+        planner.replay_labels_logprob("vlabench", {}, (), runtime.vlabench_dfa, max_steps=6)
+    assert planner.model.forward_calls == 0
+
+
+
+def test_joint_domain_facade_accepts_shared_stop_policy(joint_fixture):
+    from domiknows.generation.dfa.stop_policy import StopPolicy
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    context = {"instruction": "Press the button", "images": (), "entity_table": ("table", "button1")}
+    dfa = runtime.dfa_for("vlabench", context)
+    facade = planner.for_domain("vlabench")
+    policy = StopPolicy(max_steps=4)
+    plan = facade.generate_plan(**context, dfa=dfa, stop_policy=policy)
+    assert plan == [{"name": "press", "params": {"target_entity_name": 1}}]
+    labels, sampled = facade.sample_labels(context, dfa, stop_policy=policy, deterministic=True)
+    assert len(labels) == 4
+    replayed = facade.replay_labels_logprob(context, labels, dfa, stop_policy=policy)
+    torch.testing.assert_close(sampled, replayed)

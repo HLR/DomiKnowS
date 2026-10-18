@@ -325,6 +325,10 @@ class PlanningExample:
     entities: tuple[str, ...] = ()
     task: str | None = None
     dimension: str | None = None
+    planning_facts: Mapping[str, Any] | None = None
+    task_target_container: str | int | None = None
+    task_target_entity: str | int | None = None
+    task_skill_sequence: tuple[str, ...] | None = None
 
     def as_reward_item(self) -> dict[str, Any]:
         return {
@@ -335,6 +339,10 @@ class PlanningExample:
             "entities": self.entities,
             "task": self.task,
             "dimension": self.dimension,
+            "planning_facts": self.planning_facts,
+            "task_target_container": self.task_target_container,
+            "task_target_entity": self.task_target_entity,
+            "task_skill_sequence": self.task_skill_sequence,
         }
 
 
@@ -562,6 +570,10 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None) -> lis
             image_paths=image_paths,
             segmented_image_paths=segmented_paths,
             env_config_path=config_path,
+            planning_facts=config.get("planning_facts"),
+            task_target_container=config.get("task_target_container"),
+            task_target_entity=config.get("task_target_entity"),
+            task_skill_sequence=tuple(config["task_skill_sequence"]) if config.get("task_skill_sequence") is not None else None,
             dependency=dependency,
             entities=tuple(entities),
             task=task,

@@ -160,6 +160,7 @@ class EAIWorldGraphBundle:
     precondition_concepts: Mapping[str, Any]
     default_preconditions: tuple[ActionPreconditionSpec, ...]
     default_constraint_names: frozenset[str]
+    grounded_constraints: Any = None
 
     @property
     def has_constraints(self) -> bool:
@@ -234,6 +235,7 @@ class WorldConstraintEvaluation:
     results: Mapping[str, Any]
     # Total number declared on the graph, including inactive constraints.
     declared_constraint_count: int
+    grounding_report: Any = None
 
 
 class WorldGraphConfigurationError(RuntimeError):
@@ -525,7 +527,13 @@ def build_eai_world_graph(
                 default_preconditions.append(specification)
                 default_constraint_names.add(specification.name)
 
+        from domiknows.generation.grounded import declare_predicates, FAMILIES
+        grounded_constraints = declare_predicates(action, trajectory, active=include_default_constraints)
+        if include_default_constraints:
+            default_constraint_names.update("grounded__"+name for name in FAMILIES)
+
         bundle = EAIWorldGraphBundle(
+            grounded_constraints=grounded_constraints,
             graph=graph,
             trajectory=trajectory,
             step=step,
@@ -592,6 +600,7 @@ def materialize_world_trajectory(
     states: Sequence[set[Fact]],
     events: Sequence[Any],
     world_bundle: EAIWorldGraphBundle,
+    *, planning_facts=None,
 ):
     """Create deterministic DataNodes for one simulated trajectory.
 
@@ -683,6 +692,15 @@ def materialize_world_trajectory(
                     _set_truth(grounding, concept, (name, subject, obj) in binary_true)
                 step_node.addChildDataNode(grounding)
 
+        from test_regr.EmbodiedAgentInterface.constraint_compiler import EAIExecutor
+        from domiknows.generation.grounded import observations
+        explicit = planning_facts if planning_facts is not None else getattr(prepared_goal, "planning_facts", None)
+        executor = EAIExecutor(world_bundle, {"planning_facts": explicit,
+                               "generation_entity_types": getattr(prepared_goal, "task_entity_types", ())}, entities)
+        grounded_values, final_values, grounding = executor.audit(events)
+        root.attributes["grounding_report"] = grounding
+        for key in ("goal_completion__applicable", "goal_completion__satisfied"):
+            _set_truth(root, world_bundle.grounded_constraints[key], final_values[key])
         for index, event in enumerate(events):
             if not step_nodes:
                 break
@@ -697,6 +715,9 @@ def materialize_world_trajectory(
             _link(event_node, world_bundle.action_roles["arg1"], entity_nodes[args[0] if args else ABSENT_ENTITY])
             _link(event_node, world_bundle.action_roles["arg2"], entity_nodes[args[1] if len(args) > 1 else ABSENT_ENTITY])
             _set_truth(event_node, world_bundle.action, True)
+            for key, concept in world_bundle.grounded_constraints.items():
+                if not key.startswith("goal_completion__"):
+                    _set_truth(event_node, concept, grounded_values[index][key])
             for action_name, concept in world_bundle.actions.items():
                 _set_truth(event_node, concept, action_name == name)
             source_state = normalized_states[source_index]
@@ -708,7 +729,7 @@ def materialize_world_trajectory(
                     source_state,
                     getattr(prepared_goal, "task_entity_types", ()),
                 )
-                _set_truth(event_node, concept, satisfied)
+                _set_truth(event_node, concept, grounded_values[index]["precondition:"+kind] if explicit is not None else satisfied)
             step_nodes[source_index].addChildDataNode(event_node)
         return root
     except Exception as exc:
@@ -732,6 +753,8 @@ def evaluate_default_world_constraints(
     world_bundle: EAIWorldGraphBundle,
     aggregate: str = "mean",
     task_entity_types: Iterable[str] = (),
+    planning_facts: Any = None,
+    entity_universe: Sequence[str] = (),
 ) -> WorldConstraintEvaluation | None:
     """Evaluate built-in source-state preconditions without the general solver.
 
@@ -777,7 +800,11 @@ def evaluate_default_world_constraints(
         if applicable:
             scores.append(bounded)
 
+    active_names = {lc.name for lc in world_bundle.graph.logicalConstrains.values()
+                    if getattr(lc, "headLC", True) and getattr(lc, "active", True)}
     for specification in world_bundle.default_preconditions:
+        if specification.name not in active_names:
+            continue
         matching = [
             (index, args)
             for index, (name, args) in enumerate(normalized_events)
@@ -805,6 +832,33 @@ def evaluate_default_world_constraints(
         )
         record(specification.name, bool(applicable_count), score)
 
+    # Audit unknown grounding as well as supplied facts.
+    from test_regr.EmbodiedAgentInterface.constraint_compiler import EAIExecutor, compile_world_constraints
+    from domiknows.generation.dfa.predicate_monitor import PredicateEvent, _evaluate
+    identities = set(entity_universe) | set(task_entity_types)
+    identities.update(arg for _, args in normalized_events for arg in args)
+    initial = planning_facts.get("initial_state", {}) if isinstance(planning_facts, Mapping) else {}
+    identities.update(x for x in initial.get("held", {}).values() if x is not None)
+    identities.update(arg for f in (*initial.get("positive", ()), *initial.get("negative", ())) for arg in f[1:] if arg not in ("left","right","character"))
+    executor = EAIExecutor(world_bundle, {"planning_facts": planning_facts, "generation_entity_types": tuple(task_entity_types)}, identities)
+    rows, final, grounding = executor.audit(events)
+    if planning_facts is not None:
+        for specification in world_bundle.default_preconditions:
+            if specification.name not in active_names:
+                continue
+            selected = [rows[i]["precondition:"+specification.kind]
+                        for i, (name, _) in enumerate(normalized_events) if name == specification.action]
+            record(specification.name, bool(selected), sum(selected)/len(selected) if selected else 1.0)
+    program = compile_world_constraints(world_bundle)
+    for rule in program.rules:
+        if not rule.name.startswith("grounded__"):
+            continue
+        family = rule.name[len("grounded__"):]
+        values = [final] if family == "goal_completion" else rows
+        selected = [v for v in values if v.get(family+"__applicable")]
+        record(rule.name, bool(selected), sum(_evaluate(rule.expression, v) for v in selected)/len(selected) if selected else 1.0)
+
+    scores = [value["satisfied"] / 100.0 for value in results.values() if value["applicable"]]
     if not scores:
         # No applicable default precondition means callers should continue with
         # custom constraints, rather than treating the trajectory as perfect.
@@ -814,6 +868,7 @@ def evaluate_default_world_constraints(
         constraint_count=len(scores),
         results=MappingProxyType(results),
         declared_constraint_count=len(world_bundle.default_constraint_names),
+        grounding_report=grounding,
     )
 
 
@@ -828,7 +883,7 @@ def verify_world_constraints(
         for key, constraint in getattr(
             world_bundle.graph, "logicalConstrains", {}
         ).items()
-        if getattr(constraint, "headLC", True)
+        if getattr(constraint, "headLC", True) and getattr(constraint, "active", True)
     }
     if not constraints:
         return None
@@ -854,9 +909,15 @@ def verify_world_constraints(
         for key, constraint in constraints.items():
             value = raw_results.get(key, {})
             percent = value.get("satisfied", value.get("ifSatisfied"))
+            name = getattr(constraint, "name", None) or key
+            if name.startswith("grounded__"):
+                family = name[len("grounded__"):]
+                rows = (root.getAttributes() or {}).get("grounding_report", {}).get("checks", ())
+                if not any(row["family"] == family and row["status"] in ("checked", "partial", "violated") for row in rows):
+                    named_results[name] = {"applicable": False, "satisfied": 100.0}
+                    continue
             if percent is None:
                 raise KeyError(f"constraint {key!r} produced no satisfaction value")
-            name = getattr(constraint, "name", None) or key
             if name in named_results:
                 name = key
 
@@ -900,6 +961,7 @@ def verify_world_constraints(
             constraint_count=len(scores),
             results=MappingProxyType(named_results),
             declared_constraint_count=len(constraints),
+            grounding_report=root_attributes.get("grounding_report"),
         )
     except Exception as exc:
         raise WorldGraphConfigurationError(f"{task_id}: failed to verify EAI world constraints: {exc}") from exc

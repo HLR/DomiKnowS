@@ -14,6 +14,8 @@ import torch
 from torch.nn import functional as F
 
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
+from domiknows.generation import ProductiveDFA
+from domiknows.generation.dfa.stop_policy import StopPolicy, stop_policy_from_legacy
 
 
 POSITIVE_RETURN_EPSILON = 1e-6
@@ -62,7 +64,7 @@ try:
         robot_to_world_ee_action,
         world_to_robot_ee_state,
     )
-    from .graph import dfa_accepts_plan
+    from .graph import bind_vlabench_contextual_dfa, dfa_accepts_plan
     from .models import controller_loss
     from .world_graph import (
         PRIMITIVE_TASK_PATTERNS,
@@ -97,7 +99,7 @@ except ImportError:
         robot_to_world_ee_action,
         world_to_robot_ee_state,
     )
-    from graph import dfa_accepts_plan
+    from graph import bind_vlabench_contextual_dfa, dfa_accepts_plan
     from models import controller_loss
     from world_graph import PRIMITIVE_TASK_PATTERNS, condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, task_contract_for, validate_plan, verify_plan_constraints
 
@@ -210,18 +212,19 @@ class PlannerReplayDecision:
     prepared_context: Mapping[str, Any]
     labels: tuple[int, ...]
     dfa: Any
-    max_steps: int
+    max_steps: int | None = None
+    stop_policy: StopPolicy | None = None
 
     def logprob(self, planner) -> torch.Tensor:
         replay = getattr(planner, "replay_labels_logprob", None)
         if not callable(replay):
             raise TypeError("planner does not support bounded-memory trajectory replay")
-        return replay(
-            self.prepared_context,
-            self.labels,
-            self.dfa,
-            max_steps=self.max_steps,
-        )
+        stop_policy_from_legacy(max_new_tokens=self.max_steps, stop_policy=self.stop_policy)
+        # Reuse masks and token stops; wall-clock/callback cancellation belongs
+        # to collection and must not be re-executed during gradient replay.
+        stopping = ({"stop_policy": self.stop_policy} if self.stop_policy is not None
+                    else {"max_steps": self.max_steps})
+        return replay(self.prepared_context, self.labels, self.dfa, **stopping)
 
 
 def generalized_advantage_estimate(
@@ -465,140 +468,16 @@ def _episode_assist_steps(episode: "JointEpisode") -> int:
     return sum(int(diagnostics.get(key, 0) or 0) for key in _ASSIST_DIAGNOSTIC_KEYS)
 
 
-def _press_button_fallback_plan(
-    expected_pattern: Sequence[str],
-    diagnostics: RolloutDiagnostics,
-    entities: Sequence[Any],
-) -> list[dict[str, Any]] | None:
-    """Build a grounded press operation when a primitive planner drifts.
-
-    ``SelectPaintingTask`` is implemented upstream as ``PressButtonTask``. A
-    syntactically valid but unrelated plan can pass generic graph checks while
-    remaining unusable for the simulator. The diagnostics target is resolved
-    from the live task object, so this fallback keeps the safety gate while
-    allowing a smoke rollout to exercise the controller and success predicate.
-    """
-
-    if tuple(expected_pattern) != ("press",):
-        return None
-    target_names = [
-        str(name)
-        for name, values in diagnostics.targets.items()
-        if int(values.get("samples", 0)) > 0
-    ]
-    if not target_names:
-        # Only an explicitly named button is eligible when live geometry was
-        # unavailable.
-        target_names = [
-            str(entity)
-            for entity in entities
-            if "button" in str(entity).lower()
-        ]
-    if not target_names:
-        return None
-    return [{"name": "press", "params": {"target_entity_name": target_names[0]}}]
-
-
-class _TaskPatternDFA:
-    """Restrict online planner sampling to a task's canonical skill family."""
-
-    def __init__(self, base_dfa, vocabulary, expected_pattern, forced_labels=()):
-        self.base_dfa = base_dfa
-        self.vocabulary = vocabulary
-        self.expected_pattern = tuple(str(name) for name in expected_pattern)
-        self.forced_labels = tuple(int(label) for label in forced_labels)
-        self.start_state = (base_dfa.start_state, 0, 0)
-        self.alphabet = base_dfa.alphabet
-
-    def _state(self, state):
-        if not isinstance(state, tuple) or len(state) != 3:
-            raise ValueError("invalid task-pattern DFA state")
-        return state
-
-    def allowed_tokens(self, state, remaining_steps=None):
-        base_state, skill_index, forced_index = self._state(state)
-        try:
-            allowed = self.base_dfa.allowed_tokens(
-                base_state, remaining_steps=remaining_steps
-            )
-        except TypeError:
-            allowed = self.base_dfa.allowed_tokens(base_state)
-        allowed = set(int(label) for label in allowed)
-        # Forced labels form a grounded prefix; resume pattern sampling after it.
-        if forced_index < len(self.forced_labels):
-            return allowed.intersection({self.forced_labels[forced_index]})
-        filtered = set()
-        for label in allowed:
-            token = self.vocabulary.token_for_label(label)
-            if token.startswith("skill:"):
-                expected = (
-                    self.expected_pattern[skill_index]
-                    if skill_index < len(self.expected_pattern)
-                    else None
-                )
-                if token != f"skill:{expected}":
-                    continue
-            elif token == self.vocabulary.eos_token and skill_index != len(self.expected_pattern):
-                continue
-            filtered.add(label)
-        return filtered
-
-    def step(self, state, symbol):
-        base_state, skill_index, forced_index = self._state(state)
-        symbol = int(symbol)
-        if symbol not in self.allowed_tokens(state):
-            return None
-        next_base = self.base_dfa.step(base_state, symbol)
-        if next_base is None:
-            return None
-        token = self.vocabulary.token_for_label(symbol)
-        next_skill_index = skill_index + int(token.startswith("skill:"))
-        return (next_base, next_skill_index, forced_index + int(bool(self.forced_labels)))
-
-    def is_accepting(self, state):
-        base_state, skill_index, forced_index = self._state(state)
-        if not self.base_dfa.is_accepting(base_state):
-            return False
-        return (
-            forced_index >= len(self.forced_labels)
-            and skill_index == len(self.expected_pattern)
-        )
-
-    def accepts(self, sequence):
-        state = self.start_state
-        for symbol in sequence:
-            state = self.step(state, symbol)
-            if state is None:
-                return False
-        return self.is_accepting(state)
-
-    def __getattr__(self, name):
-        return getattr(self.base_dfa, name)
-
-
 def _task_pattern_dfa(base_dfa, vocabulary, expected_pattern, *, target_name=None, entities=()):
-    """Build a task-conditioned view of the graph DFA for online sampling."""
-
-    forced_labels = ()
-    if target_name is not None and expected_pattern:
-        try:
-            target_index = next(
-                index for index, entity in enumerate(entities)
-                if str(entity) == str(target_name)
-            )
-            forced_tokens = (
-                "skill:" + str(expected_pattern[0]),
-                "arg:target_entity_name",
-                f"obj:{target_index}",
-            )
-            if tuple(expected_pattern) == ("press",):
-                forced_tokens += (vocabulary.eos_token,)
-            forced_labels = tuple(vocabulary.label_for_token(token) for token in forced_tokens)
-        except (KeyError, StopIteration, TypeError, ValueError):
-            forced_labels = ()
-    return _TaskPatternDFA(
-        base_dfa, vocabulary, expected_pattern, forced_labels=forced_labels
-    )
+    """Bind task facts to world LCs; retained for existing online callers."""
+    try:
+        from .constraint_compiler import bind_task_policy
+    except ImportError:
+        from constraint_compiler import bind_task_policy
+    return bind_task_policy(base_dfa, vocabulary, {
+        "entities": entities, "task_skill_sequence": tuple(expected_pattern),
+        "task_target_entity": target_name,
+    })
 
 
 def _condiment_orientation_step(current_euler, max_angle):
@@ -1307,63 +1186,6 @@ def _blend_skill_action(action, expert_action, alpha: float) -> np.ndarray:
     return p_act
 
 
-class _EntityPointerDFA:
-    """Lazy DFA view that removes unknown observation-local pointers."""
-
-    def __init__(self, base_dfa, *, valid_labels, all_labels):
-        self.base_dfa = base_dfa
-        self.valid_labels = frozenset(int(value) for value in valid_labels)
-        self.invalid_labels = frozenset(int(value) for value in all_labels) - self.valid_labels
-        self.start_state = base_dfa.start_state
-        self.alphabet = base_dfa.alphabet
-
-    def step(self, state, symbol):
-        if int(symbol) in self.invalid_labels:
-            return None
-        return self.base_dfa.step(state, symbol)
-
-    def is_accepting(self, state):
-        return self.base_dfa.is_accepting(state)
-
-    def accepts(self, sequence):
-        state = self.start_state
-        for symbol in sequence:
-            state = self.step(state, symbol)
-            if state is None:
-                return False
-        return self.is_accepting(state)
-
-    def allowed_tokens(self, state, remaining_steps=None):
-        try:
-            allowed = self.base_dfa.allowed_tokens(state, remaining_steps=remaining_steps)
-        except TypeError:
-            allowed = self.base_dfa.allowed_tokens(state)
-        return set(allowed).difference(self.invalid_labels)
-
-    def __getattr__(self, name):
-        return getattr(self.base_dfa, name)
-
-
-def _entity_pointer_dfa(base_dfa, vocabulary, entity_count: int):
-    """Mask object-pointer labels that are absent from this observation."""
-    count = min(max(0, int(entity_count)), int(vocabulary.max_entities))
-    if count >= int(vocabulary.max_entities):
-        return base_dfa
-    all_labels = [
-        vocabulary.label_for_token(f"obj:{index}")
-        for index in range(vocabulary.max_entities)
-    ]
-    valid_labels = [
-        vocabulary.label_for_token(f"obj:{index}")
-        for index in range(count)
-    ]
-    return _EntityPointerDFA(
-        base_dfa,
-        valid_labels=valid_labels,
-        all_labels=all_labels,
-    )
-
-
 def _controller_inputs(
     observations,
     task_index: int,
@@ -1539,7 +1361,6 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self._assist_components_override: frozenset[str] | None = None
         self.curriculum_progress = 0.0
         self.progress_callback = progress_callback
-        self._entity_dfa_cache: dict[int, Any] = {}
         self.last_controller_update: dict[str, Any] = {}
 
     def set_curriculum_progress(self, progress: float) -> None:
@@ -1565,16 +1386,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         if self.progress_callback is not None:
             self.progress_callback(message)
 
-    def _dfa_for_entities(self, entities) -> Any:
-        count = len(entities)
-        cached = self._entity_dfa_cache.get(count)
-        if cached is None:
-            cached = _entity_pointer_dfa(self.runtime.dfa, self.runtime.vocabulary, count)
-            self._entity_dfa_cache[count] = cached
-        return cached
+    def _dfa_for_entities(self, entities, *, instruction="", task=None, task_context=None) -> Any:
+        # Semantic policies depend on identities and task facts, not just the
+        # number of pointers. Binding is cheap and cannot reuse a stale scene.
+        policy = bind_vlabench_contextual_dfa(
+            self.runtime.dfa, self.runtime.vocabulary,
+            {**(task_context or {}), "entities": entities, "instruction": instruction, "task": task},
+        )
+        return policy
 
     def _plan_rejection_reason(self, plan, entities, *, dfa=None) -> str | None:
-        validation = validate_plan(plan, entity_table=entities, skill_arguments=self.runtime.world_bundle.skill_arguments)
+        validation = validate_plan(plan, entity_table=entities, skill_arguments=self.runtime.world_bundle.skill_arguments, policy=dfa)
         if not validation.valid:
             return "schema:" + (validation.errors[0] if validation.errors else "invalid")
         if not dfa_accepts_plan(
@@ -1586,7 +1408,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         ):
             return "dfa"
         try:
-            root = materialize_plan(plan, entities, self.runtime.world_bundle)
+            root = materialize_plan(plan, entities, self.runtime.world_bundle, policy=dfa)
             result = verify_plan_constraints(root, self.runtime.world_bundle)
             return None if result is None or result.score >= 1.0 else "semantic_constraint"
         except Exception as exc:
@@ -1780,17 +1602,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     valid = False
                     termination_reason = "unknown_instruction"
 
-            expected_pattern = PRIMITIVE_TASK_PATTERNS.get(descriptor.get("task"))
-            # Synthetic test environments deliberately use the historical
-            # pick/place fixture. Apply the upstream task pattern only to the
-            # real VLABench task implementation running on the server.
             task_type = type(getattr(env, "task", None))
-            if (
-                descriptor.get("task") == "select_book"
-                and expected_pattern is not None
-                and not task_type.__module__.startswith("VLABench.")
-            ):
-                expected_pattern = ("pick", "place")
+            expected_pattern = descriptor.get("task_skill_sequence", PRIMITIVE_TASK_PATTERNS.get(descriptor.get("task")))
             while steps < self.max_steps:
                 if not valid:
                     break
@@ -1806,13 +1619,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     )
                     last_progress_report = now
                 views, entities = numbered_views_from_observation(env, observation)
-                sampling_dfa = self._dfa_for_entities(entities)
+                sampling_dfa = self._dfa_for_entities(entities, instruction=instruction, task=descriptor.get("task"), task_context=descriptor)
                 if expected_pattern is not None:
-                    target_name = next(
+                    target_name = descriptor.get("task_target_entity", next(
                         (str(name) for name, values in diagnostics.targets.items()
                          if int(values.get("samples", 0)) > 0),
                         None,
-                    )
+                    ))
                     sampling_dfa = _task_pattern_dfa(
                         sampling_dfa,
                         self.runtime.vocabulary,
@@ -1820,6 +1633,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         target_name=target_name,
                         entities=entities,
                     )
+                sampling_dfa = ProductiveDFA(sampling_dfa)
                 selected_plan = None
                 selected_logprob = None
                 rejection_counts: dict[str, int] = {}
@@ -1895,30 +1709,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     termination_reason = "invalid_plan"
                     break
                 plan = selected_plan
-                if expected_pattern is not None:
-                    actual_pattern = tuple(str(operation.get("name")) for operation in plan)
-                    if actual_pattern != tuple(expected_pattern):
-                        fallback_plan = _press_button_fallback_plan(
-                            expected_pattern, diagnostics, entities
-                        )
-                        if fallback_plan is not None and self._valid_plan(
-                            fallback_plan, entities, dfa=sampling_dfa
-                        ):
-                            self._report_progress(
-                                f"VLABench planner task-pattern fallback task={descriptor.get('task', 'unknown')} "
-                                f"expected={list(expected_pattern)} actual={list(actual_pattern)}"
-                            )
-                            plan = fallback_plan
-                        else:
-                            self._report_progress(
-                                f"VLABench planner task-pattern mismatch task={descriptor.get('task', 'unknown')} "
-                                f"expected={list(expected_pattern)} actual={list(actual_pattern)}"
-                            )
-                            valid = False
-                            termination_reason = "task_pattern_mismatch"
-                            break
                 planner_logprobs.append(selected_logprob)
                 planner_transition_indices.append(len(transitions))
+                if not plan:
+                    planner_transition_indices[-1] = None
+                    success = _task_success(env)
+                    termination_reason = "success" if success else "symbolic_completion"
+                    break
                 # Only plans that end by placing the target may re-seat a
                 # poorly latched carry: tasks judged by is_grasped need the
                 # object to stay in contact with the fingers.

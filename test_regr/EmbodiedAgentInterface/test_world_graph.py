@@ -166,7 +166,8 @@ def test_default_precondition_registry_and_verification():
         include_default_constraints=True,
     )
     assert bundle.default_preconditions
-    assert len(bundle.default_constraint_names) == len(bundle.default_preconditions)
+    from domiknows.generation.grounded import FAMILIES
+    assert bundle.default_constraint_names == frozenset(spec.name for spec in bundle.default_preconditions) | frozenset("grounded__" + name for name in FAMILIES)
     assert not any(name.startswith("action_effect__") for name in bundle.default_constraint_names)
     assert not any(name.startswith("state_mutex__") for name in bundle.default_constraint_names)
     assert {spec.kind for spec in bundle.default_preconditions} == {

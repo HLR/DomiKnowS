@@ -4,7 +4,7 @@ import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Iterable, Sequence, Set, Tuple
+from typing import Any, Iterable, Mapping, Sequence, Set, Tuple
 
 import torch
 
@@ -193,6 +193,9 @@ def _simulate_events(
     # effects for final-state recall and ordered temporal evaluation.
     states: list[Set[Fact]] = [set(state)]
     held: dict[str, str | None] = {"left": None, "right": None}
+    for fact in state:
+        if len(fact) == 3 and fact[1] == "character" and fact[0] in ("holds_lh", "holds_rh"):
+            held["left" if fact[0] == "holds_lh" else "right"] = fact[2]
     negative_spatial_goals = {
         fact for fact in goal_facts
         if fact and fact[0] in {"not_inside", "not_nextto", "not_ontop", "not_under"}
@@ -207,6 +210,7 @@ def _simulate_events(
             hand = side or ("right" if held["right"] is None else "left")
             held[hand] = obj
             hold_pred = "holds_lh" if hand == "left" else "holds_rh"
+            state.difference_update(fact for fact in tuple(state) if len(fact) == 3 and fact[0] == hold_pred and fact[1] == "character")
             state.add((hold_pred, "character", obj))
             for fact in negative_spatial_goals:
                 if len(fact) >= 2 and _entities_match(fact[1], obj):
@@ -237,8 +241,8 @@ def _simulate_events(
                             state.discard(("holds_lh" if hand_name == "left" else "holds_rh", "character", held_obj))
                 else:
                     state.add((relation, "object", obj))
-            elif any(part in action for part in ("release", "drop", "putobjback")):
-                held_obj = held.get(side or "right") or held.get("right") or held.get("left")
+            elif any(part in action for part in ("release", "realease", "drop", "putobjback")):
+                held_obj = (held.get(side) if side else next((value for value in held.values() if obj and value == obj), None)) or held.get("right") or held.get("left")
                 if held_obj:
                     state.add(("released", held_obj))
                     for fact in goal_facts:
@@ -311,6 +315,19 @@ def _simulate_events(
                 state.update({("lying", "character"), ("ontop", "character", obj)})
         states.append(set(state))
     return states, list(events)
+
+
+def apply_observed_action(event, initial_state, *, world_bundle=None):
+    """Pure action effects from supplied observations; no reference or goal inputs."""
+    source = set(initial_state)
+    side = _side_for_action(event.name)
+    other_predicate = "holds_rh" if side == "left" else "holds_lh"
+    untouched = {fact for fact in source if side is not None and fact[0] == other_predicate}
+    with _using_world_bundle(world_bundle):
+        states, _ = _simulate_events((event,), initial_state=source - untouched, goal_facts=())
+    # The legacy evaluator supports placeholders for unobserved sources. They
+    # are not observations and must never become decoder knowledge.
+    return {fact for fact in states[-1] if "object" not in fact[1:]} | untouched
 
 
 def _tokens_for_sequence(labels_or_tokens: Sequence[int | str | torch.Tensor], vocabulary: Any) -> list[str]:
@@ -710,6 +727,7 @@ class PreparedEAIGoal:
     types: dict[str, Set[str]]
     tracked_binary_pairs: frozenset[tuple[str, str]]
     task_entity_types: tuple[str, ...]
+    planning_facts: Any = None
 
 
 def prepare_eai_goal(
@@ -727,6 +745,13 @@ def _prepare_eai_goal(sample: dict[str, Any], vocabulary: Any = None) -> Prepare
     reference = _reference_facts(reference_states, reference_events)
     initial_state = _initial_goal_facts(gold_state, reference)
     universe = _entity_universe(sample, ast, reference_events)
+    planning = sample.get("planning_facts")
+    if planning is not None or sample.get("task_target_container") is not None:
+        from domiknows.generation.grounded import PlanningFacts
+        scene = sample.get("entities") or sample.get("entity_table") or getattr(vocabulary, "tokens", ()) or universe
+        if isinstance(scene, Mapping):
+            scene = scene.values()
+        planning = PlanningFacts.parse(planning, entities=scene, default_destination=sample.get("task_target_container"), constants=("left", "right", "character"))
     pairs = {
         (fact[1], fact[2])
         for fact in (
@@ -743,6 +768,7 @@ def _prepare_eai_goal(sample: dict[str, Any], vocabulary: Any = None) -> Prepare
         if len(event.args) >= 2
     )
     return PreparedEAIGoal(
+        planning_facts=planning,
         task_id=str(sample.get("task_id", "")),
         ast=ast,
         gold_state=frozenset(gold_state),
@@ -937,6 +963,7 @@ def evaluate_goal_satisfaction(
     reward_mode: str = "binary",
     constraint_weight: float = 0.25,
     constraint_aggregate: str = "mean",
+    policy: Any = None,
 ) -> dict[str, Any]:
     """Evaluate a generated trajectory against the sample's actual ``tl_goal``."""
     with _using_world_bundle(world_bundle):
@@ -949,6 +976,7 @@ def evaluate_goal_satisfaction(
             reward_mode=reward_mode,
             constraint_weight=constraint_weight,
             constraint_aggregate=constraint_aggregate,
+            policy=policy,
         )
 
 
@@ -961,12 +989,19 @@ def _evaluate_goal_satisfaction(
     reward_mode: str = "binary",
     constraint_weight: float = 0.25,
     constraint_aggregate: str = "mean",
+    policy: Any = None,
 ) -> dict[str, Any]:
     if reward_mode not in {"binary", "dense"}:
         raise ValueError(f"Unsupported EAI reward mode: {reward_mode!r}")
     if not 0.0 <= float(constraint_weight) <= 1.0:
         raise ValueError("constraint_weight must be between 0 and 1")
     prepared = prepared_goal or _prepare_eai_goal(sample, vocabulary)
+    if policy is not None:
+        from dataclasses import replace
+        from domiknows.generation.dfa.predicate_monitor import find_predicate_monitor
+        monitor = find_predicate_monitor(policy)
+        if monitor is not None and hasattr(monitor.adapter, "executor"):
+            prepared = replace(prepared, planning_facts=monitor.adapter.executor.planning)
     ast = prepared.ast
     gold_state = set(prepared.gold_state)
     initial_state = set(prepared.initial_state)
@@ -1017,6 +1052,8 @@ def _evaluate_goal_satisfaction(
                 world_bundle,
                 aggregate=constraint_aggregate,
                 task_entity_types=prepared.task_entity_types,
+                planning_facts=prepared.planning_facts,
+                entity_universe=prepared.entity_universe,
             )
     world_constraint_score = (
         constraint_evaluation.score if constraint_evaluation is not None else None
@@ -1038,6 +1075,7 @@ def _evaluate_goal_satisfaction(
         "gold_state": gold_state,
         "initial_state": initial_state,
         "parse_error": parse_error,
+        "grounding_report": constraint_evaluation.grounding_report if constraint_evaluation is not None else None,
         "world_constraint_score": world_constraint_score,
         "world_constraint_results": (
             constraint_evaluation.results if constraint_evaluation is not None else None
@@ -1088,6 +1126,7 @@ def eai_goal_reward_function(
         reward_mode=mode,
         constraint_weight=constraint_weight,
         constraint_aggregate=constraint_aggregate,
+        policy=kwargs.get("policy"),
     )
     return torch.tensor([result["rl_reward_score"]], dtype=torch.float32)
 
@@ -1112,7 +1151,10 @@ def make_eai_reward_function(
             value if isinstance(value, (str, int, float, bool, type(None))) else repr(value)
             for value in flattened
         )
-        cache_key = (str(item.get("task_id", "")), normalized_output)
+        from domiknows.generation.dfa.predicate_monitor import find_predicate_monitor
+        monitor = find_predicate_monitor(context.get("policy"))
+        snapshot = (monitor.program, monitor.adapter.executor.planning) if monitor is not None and hasattr(monitor.adapter, "executor") else None
+        cache_key = (str(item.get("task_id", "")), repr(item.get("planning_facts")), repr(item.get("task_target_container")), snapshot, normalized_output)
         cached = reward_cache.get(cache_key)
         if cached is not None:
             _reward.cache_hits += 1
@@ -1128,6 +1170,7 @@ def make_eai_reward_function(
             mode=mode,
             world_bundle=world_bundle,
             prepared_goal=active_prepared,
+            policy=context.get("policy"),
             constraint_weight=constraint_weight,
             constraint_aggregate=constraint_aggregate,
         )

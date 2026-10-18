@@ -297,54 +297,19 @@ def split_subtasks(
     return visit(0)
 
 
-ENCLOSED_CONTAINER_KEYWORDS: tuple[str, ...] = (
-    "cooler",
-    "fridge",
-    "refrigerator",
-    "drawer",
-    "microwave",
-    "blender",
-    "oven",
-    "cabinet",
-)
-
-
-def is_enclosed_container(name: Any) -> bool:
-    """Return True if the entity name corresponds to an enclosed receptacle."""
-    if name is None:
-        return False
-    lower = str(name).strip().lower()
-    return any(keyword in lower for keyword in ENCLOSED_CONTAINER_KEYWORDS)
-
-
-def is_container_opened(container_name: Any, opened_entities: Iterable[Any]) -> bool:
-    """Return True if an enclosed container has been opened by an earlier action."""
-    c_lower = str(container_name).strip().lower()
-    for o in opened_entities:
-        o_lower = str(o).strip().lower()
-        if c_lower in o_lower or o_lower in c_lower:
-            return True
-        for kw in ENCLOSED_CONTAINER_KEYWORDS:
-            if kw in c_lower and kw in o_lower:
-                return True
-    return False
-
-
-def _known_entity(value: Any, entity_table: Mapping[int, str] | Sequence[str] | None) -> bool:
-    if value is None or value == "":
-        return False
-    if entity_table is None:
-        return True
-    if isinstance(entity_table, Mapping):
-        ids = set(entity_table)
-        names = {str(name) for name in entity_table.values()}
-    else:
-        ids = set(range(len(entity_table)))
-        names = {str(name) for name in entity_table}
-    if isinstance(value, int):
-        return value in ids
-    text = str(value)
-    return text in names or (text.isdigit() and int(text) in ids)
+# Preserve the public world-graph helper names while sharing their semantics.
+try:
+    from .semantics import (
+        ENCLOSED_CONTAINER_KEYWORDS, PlanSemantics, PlanSemanticState,
+        entity_mapping as _entity_mapping, resolve_pointer as _resolve_pointer,
+        is_enclosed_container, is_container_opened, operation_schema_errors,
+    )
+except ImportError:
+    from semantics import (
+        ENCLOSED_CONTAINER_KEYWORDS, PlanSemantics, PlanSemanticState,
+        entity_mapping as _entity_mapping, resolve_pointer as _resolve_pointer,
+        is_enclosed_container, is_container_opened, operation_schema_errors,
+    )
 
 
 def validate_plan(
@@ -354,31 +319,25 @@ def validate_plan(
     skill_arguments: Mapping[str, Sequence[str]] = SKILL_ARGUMENTS,
     patterns: Sequence[Sequence[str]] = SUBTASK_PATTERNS,
     require_pattern: bool = True,
+    policy: Any = None,
+    requirements: Any = None,
 ) -> PlanValidation:
     errors: list[str] = []
     try:
         plan = canonicalize_plan(value)
     except PlanSchemaError as exc:
         return PlanValidation(False, (str(exc),), ())
-    if not plan:
+    if requirements is None and policy is not None:
+        from test_regr.VLABenchAgentInterface.constraint_compiler import requirements_for_policy
+        requirements = requirements_for_policy(policy)
+    allowed = getattr(requirements, "allowed_sequences", None)
+    if not plan and (allowed is None or () not in allowed):
         errors.append("plan is empty")
     for index, operation in enumerate(plan):
-        name = operation["name"]
-        params = operation["params"]
-        if name not in skill_arguments:
-            errors.append(f"operation {index} uses unknown skill {name!r}")
-            continue
-        required = set(skill_arguments[name])
-        semantic_keys = {"target_entity_name", "target_container_name"}
-        for key in required:
-            if key not in params:
-                errors.append(f"operation {index} ({name}) requires {key}")
-            elif not _known_entity(params[key], entity_table):
-                errors.append(f"operation {index} ({name}) has invalid {key}={params[key]!r}")
-        for key in semantic_keys - required:
-            if key in params:
-                errors.append(f"operation {index} ({name}) forbids {key}")
-    if require_pattern and plan and split_subtasks([op["name"] for op in plan], patterns) is None:
+        errors.extend(operation_schema_errors(
+            operation["name"], operation["params"], skill_arguments, entity_table, index=index,
+        ))
+    if require_pattern and plan and ((tuple(op["name"] for op in plan) not in allowed) if allowed is not None else split_subtasks([op["name"] for op in plan], patterns) is None):
         errors.append("skill sequence is not a complete VLABench subtask pattern")
     return PlanValidation(not errors, tuple(errors), tuple(plan))
 
@@ -428,11 +387,15 @@ class VLABenchWorldGraphBundle:
     inconsistent_container: Any = None
     unopened_container_placement: Any = None
     premature_composite_eos: Any = None
+    task_skill_allowed: Any = None
+    task_target_allowed: Any = None
+    task_sequence_complete: Any = None
+    grounded_constraints: Any = None
 
     @property
     def has_constraints(self) -> bool:
         return any(
-            getattr(constraint, "headLC", True)
+            getattr(constraint, "headLC", True) and getattr(constraint, "active", True)
             for constraint in getattr(self.graph, "logicalConstrains", {}).values()
         )
 
@@ -442,6 +405,7 @@ class PlanConstraintEvaluation:
     score: float
     constraint_count: int
     results: Mapping[str, Any]
+    grounding_report: Any = None
 
 
 class PlanGraphConfigurationError(RuntimeError):
@@ -514,8 +478,15 @@ def build_vlabench_world_graph(
         inconsistent_container = transition(name="transition__inconsistent_container")
         unopened_container_placement = transition(name="transition__unopened_container_placement")
         premature_composite_eos = operation(name="operation__premature_composite_eos")
+        task_skill_allowed = operation(name="operation__task_skill_allowed")
+        task_target_allowed = operation(name="operation__task_target_allowed")
+        task_sequence_complete = operation(name="operation__task_sequence_complete")
+
+        from domiknows.generation.grounded import declare_predicates
+        grounded_constraints = declare_predicates(operation, plan, active=include_default_constraints)
 
         bundle = VLABenchWorldGraphBundle(
+            grounded_constraints=grounded_constraints,
             graph=graph,
             plan=plan,
             operation=operation,
@@ -551,6 +522,9 @@ def build_vlabench_world_graph(
             inconsistent_container=inconsistent_container,
             unopened_container_placement=unopened_container_placement,
             premature_composite_eos=premature_composite_eos,
+            task_skill_allowed=task_skill_allowed,
+            task_target_allowed=task_target_allowed,
+            task_sequence_complete=task_sequence_complete,
         )
 
         if include_default_constraints:
@@ -561,6 +535,11 @@ def build_vlabench_world_graph(
             ifL(operation("op"), valid_pointer("op"), name="operation_pointer_is_valid")
             ifL(transition("edge"), allowed_transition("edge"), name="transition_matches_subtask_pattern")
             ifL(targets_button("op"), skills["press"]("op"), name="button_entity_requires_press_skill")
+
+            ifL(skills["press"]("op"), targets_button("op"), name="press_requires_button_target")
+            ifL(operation("op"), task_skill_allowed("op"), name="task_skill_sequence")
+            ifL(operation("op"), task_target_allowed("op"), name="task_initial_target")
+            ifL(operation("op"), task_sequence_complete("op"), name="task_sequence_completion")
 
             # Causal Precondition Constraints (First-Order Logic)
             ifL(operation("op"), notL(is_self_placement("op")), name="anti_self_placement")
@@ -608,20 +587,6 @@ def _link(node: Any, role: Any, target: Any) -> None:
     node.addRelationLink(role.name, target)
 
 
-def _entity_mapping(entity_table: Mapping[int, str] | Sequence[str]) -> dict[int, str]:
-    if isinstance(entity_table, Mapping):
-        return {int(index): str(name) for index, name in entity_table.items()}
-    return {index: str(name) for index, name in enumerate(entity_table)}
-
-
-def _resolve_pointer(value: Any, entities: Mapping[int, str]) -> tuple[str, bool]:
-    if isinstance(value, int) or str(value).isdigit():
-        index = int(value)
-        return entities.get(index, str(value)), (not entities or index in entities)
-    name = str(value)
-    return name, (not entities or name in entities.values())
-
-
 def materialize_plan(
     value: Any,
     entity_table: Mapping[int, str] | Sequence[str],
@@ -630,6 +595,8 @@ def materialize_plan(
     task_name: str | None = None,
     min_operations: int | None = None,
     required_skills: Sequence[str] | None = None,
+    task_context: Mapping[str, Any] | None = None,
+    policy: Any = None,
 ):
     """Ground one canonical plan as a DomiKnowS ``DataNode`` hierarchy."""
     try:
@@ -652,36 +619,51 @@ def materialize_plan(
             _truth(node, bundle.entity, True)
             root.addChildDataNode(node)
 
-        full_validation = validate_plan(
-            plan,
-            entity_table=entities,
-            skill_arguments=bundle.skill_arguments,
+        try:
+            from test_regr.VLABenchAgentInterface.task_policy import task_requirements
+            from test_regr.VLABenchAgentInterface.constraint_compiler import requirements_for_policy
+        except ImportError:
+            from task_policy import task_requirements
+            from constraint_compiler import requirements_for_policy
+        requirements = requirements_for_policy(policy) if policy is not None else None
+        if requirements is None:
+            context = dict(task_context or {})
+            if task_name is not None:
+                context.setdefault("task", task_name)
+            requirements = task_requirements(context, bundle, entities)
+        schema = requirements.schema
+        if schema is not None:
+            if min_operations is None:
+                min_operations = schema.min_operations
+            if required_skills is None:
+                required_skills = schema.required_skills
+
+        if requirements.allowed_sequences is None:
+            from dataclasses import replace
+            from test_regr.VLABenchAgentInterface.task_policy import request_sequences
+            requirements = replace(requirements, allowed_sequences=request_sequences(bundle, max(8,len(plan)), requirements))
+        full_validation = validate_plan(plan, entity_table=entities, skill_arguments=bundle.skill_arguments, requirements=requirements)
+        from domiknows.generation.grounded import observations, report
+        semantics = PlanSemantics(entities, bundle.skill_arguments, requirements.planning)
+        state = semantics.initial_state()
+        grounded_operations, grounded_checks = [], []
+        operation_predicates = []
+        for operation in plan:
+            _successor, checks = semantics.grounded_transition(state, operation["name"], operation["params"])
+            grounded_operations.append(checks)
+            grounded_checks.extend(checks)
+            operation_predicates.append(semantics.evaluate_operation(state, operation["name"], operation["params"]))
+            state = semantics.advance(state, operation["name"], operation["params"])
+        is_premature_composite = semantics.premature_composite_eos(
+            state, min_operations=min_operations, required_skills=required_skills,
         )
 
-        if task_name is not None and (min_operations is None or required_skills is None):
-            try:
-                from .graph import COMPLEX_TASK_SCHEMAS
-            except ImportError:
-                from graph import COMPLEX_TASK_SCHEMAS
-            norm = str(task_name).strip().lower().replace("-", "_")
-            schema = COMPLEX_TASK_SCHEMAS.get(norm)
-            if schema is not None:
-                if min_operations is None:
-                    min_operations = schema.min_operations
-                if required_skills is None:
-                    required_skills = schema.required_skills
-
-        is_premature_composite = False
-        if min_operations is not None and len(plan) < min_operations:
-            is_premature_composite = True
-        if required_skills is not None:
-            plan_skills = {op["name"] for op in plan}
-            if not all(req in plan_skills for req in required_skills):
-                is_premature_composite = True
-
+        final_check = requirements.planning.completion(state.grounded)
+        grounded_checks.append(final_check)
+        root.attributes["grounding_report"] = report(grounded_checks)
+        for key, value in observations((final_check,)).items():
+            _truth(root, bundle.grounded_constraints[key], value)
         operation_nodes = []
-        current_held_entity = None
-        resolved_held_entity = None
         for index, operation_value in enumerate(plan):
             name = operation_value["name"]
             params = operation_value["params"]
@@ -689,147 +671,57 @@ def materialize_plan(
             _truth(operation_node, bundle.operation, True)
             _link(operation_node, bundle.operation_roles["plan"], root)
 
-            pointer_valid = True
-            is_button_target = False
             for key, role_name in (
                 ("target_entity_name", "target_entity"),
                 ("target_container_name", "target_container"),
             ):
                 if key in params:
-                    pointer_name, is_valid = _resolve_pointer(params[key], entities)
-                    pointer_valid = pointer_valid and is_valid
-                    if "button" in str(pointer_name).lower():
-                        is_button_target = True
+                    pointer_name, _ = _resolve_pointer(params[key], entities)
                 else:
                     pointer_name = ABSENT_ENTITY
                 _link(operation_node, bundle.operation_roles[role_name], entity_nodes[pointer_name])
 
-            # Causal property checks
-            entity_val = params.get("target_entity_name")
-            container_val = params.get("target_container_name")
+            for key, value in observations(grounded_operations[index]).items():
+                _truth(operation_node, bundle.grounded_constraints[key], value)
+            predicates = operation_predicates[index]
 
-            resolved_entity = None
-            if entity_val is not None:
-                resolved_entity, _ = _resolve_pointer(entity_val, entities)
-
-            resolved_container = None
-            if container_val is not None:
-                resolved_container, _ = _resolve_pointer(container_val, entities)
-
-            is_self = False
-            if (
-                entity_val is not None
-                and container_val is not None
-                and str(entity_val).strip().lower() == str(container_val).strip().lower()
-            ):
-                is_self = True
-            elif (
-                resolved_entity is not None
-                and resolved_container is not None
-                and str(resolved_entity).strip().lower() == str(resolved_container).strip().lower()
-            ):
-                is_self = True
-            elif name in ("place", "pour", "insert") and container_val is not None and current_held_entity is not None:
-                held_raw = str(current_held_entity).strip().lower()
-                c_raw = str(container_val).strip().lower()
-                held_res = str(resolved_held_entity).strip().lower() if resolved_held_entity is not None else held_raw
-                c_res = str(resolved_container).strip().lower() if resolved_container is not None else c_raw
-                if held_raw == c_raw or held_res == c_res or held_raw == c_res or held_res == c_raw:
-                    is_self = True
-
-            if name == "pick" and entity_val is not None:
-                current_held_entity = entity_val
-                resolved_held_entity = resolved_entity
-            elif name in ("place", "pour"):
-                current_held_entity = None
-                resolved_held_entity = None
-
-            is_static_target = False
-            if name == "pick" and entity_val is not None:
-                ptr_name, _ = _resolve_pointer(entity_val, entities)
-                nl = str(ptr_name).lower()
-                if any(k in nl for k in ("table", "counter", "room_", "lab_", "wall", "floor")):
-                    is_static_target = True
-
-            local_validation = validate_plan(
-                [operation_value],
-                entity_table=entities,
-                skill_arguments=bundle.skill_arguments,
-                require_pattern=False,
-            )
             for skill_name, concept in bundle.skills.items():
                 _truth(operation_node, concept, skill_name == name)
-            _truth(operation_node, bundle.valid_skill_type, name in bundle.skills)
-            _truth(operation_node, bundle.has_target_entity, "target_entity_name" in params)
-            _truth(operation_node, bundle.has_target_container, "target_container_name" in params)
+            _truth(operation_node, bundle.valid_skill_type, predicates.valid_skill_type)
+            _truth(operation_node, bundle.has_target_entity, predicates.has_target_entity)
+            _truth(operation_node, bundle.has_target_container, predicates.has_target_container)
             if getattr(bundle, "targets_button", None) is not None:
-                _truth(operation_node, bundle.targets_button, is_button_target)
+                _truth(operation_node, bundle.targets_button, predicates.targets_button)
             if getattr(bundle, "is_self_placement", None) is not None:
-                _truth(operation_node, bundle.is_self_placement, is_self)
+                _truth(operation_node, bundle.is_self_placement, predicates.is_self_placement)
             if getattr(bundle, "targets_static_fixture", None) is not None:
-                _truth(operation_node, bundle.targets_static_fixture, is_static_target)
+                _truth(operation_node, bundle.targets_static_fixture, predicates.targets_static_fixture)
 
             is_premature_at_op = is_premature_composite and (index == len(plan) - 1)
             if getattr(bundle, "premature_composite_eos", None) is not None:
                 _truth(operation_node, bundle.premature_composite_eos, is_premature_at_op)
 
-            _truth(operation_node, bundle.valid_pointer, pointer_valid)
-            _truth(operation_node, bundle.valid_operation, local_validation.valid)
+            _truth(operation_node, bundle.task_skill_allowed, requirements.skill_allowed(index + len(requirements.planning.completed_skill_prefix), name))
+            _truth(operation_node, bundle.task_target_allowed, requirements.target_allowed(index + len(requirements.planning.completed_skill_prefix), params, entities))
+            _truth(operation_node, bundle.task_sequence_complete,
+                   index != len(plan) - 1 or requirements.sequence_complete(len(plan) + len(requirements.planning.completed_skill_prefix)))
+            _truth(operation_node, bundle.valid_pointer, predicates.valid_pointer)
+            _truth(operation_node, bundle.valid_operation, predicates.valid_operation)
             root.addChildDataNode(operation_node)
             operation_nodes.append(operation_node)
 
-        opened_so_far: set[str] = set()
-        containers_seen_so_far: set[str] = set()
         for index in range(max(0, len(operation_nodes) - 1)):
             transition = _node(bundle.transition, index, value=index)
             _truth(transition, bundle.transition, True)
             _truth(transition, bundle.allowed_transition, full_validation.valid)
 
-            op_curr = plan[index]
-            op_next = plan[index + 1]
-
-            if op_curr["name"] == "open_door":
-                ent = op_curr.get("params", {}).get("target_entity_name")
-                if ent is not None:
-                    ptr_name, _ = _resolve_pointer(ent, entities)
-                    opened_so_far.add(str(ptr_name).lower().strip())
-
-            c1 = op_curr.get("params", {}).get("target_container_name")
-            if c1 is not None:
-                c1_ptr_name, _ = _resolve_pointer(c1, entities)
-                containers_seen_so_far.add(str(c1_ptr_name).lower().strip())
-
-            is_repeated_pick = (
-                op_curr["name"] == "pick"
-                and op_next["name"] == "pick"
-                and "target_entity_name" in op_curr.get("params", {})
-                and "target_entity_name" in op_next.get("params", {})
-                and str(op_curr["params"]["target_entity_name"]).strip() == str(op_next["params"]["target_entity_name"]).strip()
-            )
-            if getattr(bundle, "repeated_pick_entity", None) is not None:
-                _truth(transition, bundle.repeated_pick_entity, is_repeated_pick)
-
-            c2 = op_next.get("params", {}).get("target_container_name")
-            is_inconsistent_container = False
-            if c2 is not None:
-                c2_ptr_name, _ = _resolve_pointer(c2, entities)
-                c2_clean = str(c2_ptr_name).lower().strip()
-                if containers_seen_so_far and any(prev != c2_clean for prev in containers_seen_so_far):
-                    is_inconsistent_container = True
-            elif c1 is not None and c2 is not None and str(c1).strip() != str(c2).strip():
-                is_inconsistent_container = True
-
-            if getattr(bundle, "inconsistent_container", None) is not None:
-                _truth(transition, bundle.inconsistent_container, is_inconsistent_container)
-
-            is_unopened_placement = False
-            if op_next["name"] in ("place", "insert", "pour"):
-                if c2 is not None:
-                    c2_ptr_name, _ = _resolve_pointer(c2, entities)
-                    if is_enclosed_container(c2_ptr_name) and not is_container_opened(c2_ptr_name, opened_so_far):
-                        is_unopened_placement = True
-            if getattr(bundle, "unopened_container_placement", None) is not None:
-                _truth(transition, bundle.unopened_container_placement, is_unopened_placement)
+            predicates = operation_predicates[index + 1]
+            for predicate_name in (
+                "repeated_pick_entity", "inconsistent_container", "unopened_container_placement",
+            ):
+                concept = getattr(bundle, predicate_name, None)
+                if concept is not None:
+                    _truth(transition, concept, getattr(predicates, predicate_name))
 
             _link(transition, bundle.transition_roles["current"], operation_nodes[index])
             _link(transition, bundle.transition_roles["following"], operation_nodes[index + 1])
@@ -848,7 +740,7 @@ def verify_plan_constraints(
     constraints = {
         key: constraint
         for key, constraint in getattr(bundle.graph, "logicalConstrains", {}).items()
-        if getattr(constraint, "headLC", True)
+        if getattr(constraint, "headLC", True) and getattr(constraint, "active", True)
     }
     if not constraints:
         return None
@@ -884,6 +776,6 @@ def verify_plan_constraints(
             score = 1.0
             for item in scores:
                 score *= item
-        return PlanConstraintEvaluation(score, len(scores), MappingProxyType(named))
+        return PlanConstraintEvaluation(score, len(scores), MappingProxyType(named), (root.getAttributes() or {}).get("grounding_report"))
     except Exception as exc:
         raise PlanGraphConfigurationError(f"failed to verify VLABench plan constraints: {exc}") from exc

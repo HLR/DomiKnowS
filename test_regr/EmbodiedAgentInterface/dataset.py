@@ -470,6 +470,8 @@ def row_to_example(row, device="cpu", max_steps=8, vocab=None):
     openable_object_tokens = set(openable_object_tokens_from_row(row))
     action_object_constraint_pairs = constrained_action_object_pairs_from_row(row)
     return {
+        "planning_facts": row.get("planning_facts"),
+        "task_target_container": row.get("task_target_container"),
         "task_id": str(task_id),
         "task_name": str(row.get("task_name", "")),
         "natural_language_description": str(row.get("natural_language_description", "")),
