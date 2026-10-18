@@ -3,6 +3,7 @@
 from importlib import import_module
 
 _EXPORTS = {
+    "DFACompletionBounds": ".productive",
     "ProductiveDFA": ".productive",
     "SemanticSearchLimitExceeded": ".productive",
     "PredicateCompilationCoverage": ".predicate_monitor",

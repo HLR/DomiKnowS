@@ -180,6 +180,29 @@ discovery with state dominance to avoid unrolling cycles to the full horizon.
 Proven witness lengths apply to larger budgets; exhausted budgets apply to
 smaller ones. Successor enumerations are cached only after they finish. Both
 search stages and all candidate symbols share the same query expansion cap.
+For large semantic state spaces, `DFACompletionBounds.from_dfa(...)` computes
+reverse shortest-path distances in a finite relaxation. Optional
+`transition_allowed(source, symbol, target)` and `accepting_allowed(state)`
+callbacks can retain rules whose predicates are fully observable there. Use
+`program.project(predicate_names, domain=..., phases=...)` to select those
+complete compiled rules; rules mentioning omitted predicates stay exclusively
+in the concrete monitor. Omitted observations are never replaced with truth.
+
+Pass `completion_bound=...` to `PredicateMonitorDFA`, `compiled.bind(...)`, or
+`ProductiveDFA`. The callback receives that policy's concrete state and returns
+the projected state's distance, or `None` if the relaxation has no completion.
+It must be an admissible lower bound: every concrete completion must have a
+corresponding relaxed path. An unreachable or over-budget bound prunes search;
+a finite bound guides the witness probe but never proves concrete acceptance.
+The full LC monitor still verifies every explored transition and accepting
+state. Defaults remain unchanged for adapters without a relaxation.
+
+VLABench projects its explicit operation grammar and the compiled task skill
+and completion rules, forgetting entity assignments and their physical rules.
+Its structural cache includes the projected LC snapshot, declared sequence,
+completed progress, and schema requirements; it does not use reference plans,
+context-object identities, or entity-count approximations. This can reject an
+impossible required-skill suffix before enumerating object combinations.
 Exceeding this cap raises `SemanticSearchLimitExceeded`: feasibility remains
 unknown, no approximate rejection is cached, and no hard rule is relaxed.
 

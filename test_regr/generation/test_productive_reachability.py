@@ -4,6 +4,7 @@ from random import Random
 
 import pytest
 
+from domiknows.generation import DFA, DFACompletionBounds
 from domiknows.generation.dfa.productive import BoundedReachability, SemanticSearchLimitExceeded
 
 
@@ -93,3 +94,41 @@ def test_masks_and_cached_answers_match_independent_word_enumeration():
                 expected = {a for a in (0, 1) if step(state, a) is not None
                             and oracle(step(state, a), budget)}
                 assert search.allowed_tokens(state, budget) == expected
+
+
+def test_relaxed_completion_bounds_prune_impossible_paths_without_proving_concrete_acceptance():
+    grammar = DFA(frozenset(range(4)), frozenset({0, 1}),
+                  {(0, 0): 1, (1, 0): 2, (0, 1): 3, (3, 1): 3}, 0, frozenset({2, 3}))
+    bounds = DFACompletionBounds.from_dfa(
+        grammar, transition_allowed=lambda s, a, t: a != 1,
+        accepting_allowed=lambda s: s == 2,
+    )
+    assert dict(bounds.distances) == {2: 0, 1: 1, 0: 2}
+    with pytest.raises(TypeError):
+        bounds.distances[0] = 99
+    calls = []
+    def step(s, a):
+        calls.append((s, a))
+        return grammar.step(s, a) if a == 0 else None
+    search = BoundedReachability(step, lambda s: False, lambda s: (0, 1),
+                                 completion_bound=bounds, max_state_expansions=3)
+    assert not search.can_reach_accepting(0, 1)
+    assert not search.can_reach_accepting(3, 80)
+    assert not calls
+    # A finite relaxed bound does not override the concrete acceptance test.
+    assert not search.can_reach_accepting(0, 2)
+
+
+def test_completion_bounds_guide_probe_toward_a_valid_short_witness():
+    grammar = DFA(frozenset(range(5)), frozenset({0, 1}),
+                  {(0, 0): 1, (1, 0): 2, (2, 0): 3, (0, 1): 4},
+                  0, frozenset({3, 4}))
+    bounds = DFACompletionBounds.from_dfa(grammar)
+    visits = []
+    def accepting(s):
+        visits.append(s)
+        return grammar.is_accepting(s)
+    search = BoundedReachability(grammar.step, accepting, lambda s: grammar.allowed_tokens(s),
+                                 completion_bound=bounds)
+    assert search.can_reach_accepting(0, 80)
+    assert visits == [0, 4]

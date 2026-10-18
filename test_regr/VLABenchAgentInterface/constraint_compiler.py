@@ -1,5 +1,5 @@
 """VLABench predicate bindings and token/state adapter for the generic compiler."""
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
 from domiknows.generation.dfa.predicate_monitor import (
@@ -26,6 +26,8 @@ class CompiledPlannerDFA(PredicateConstrainedDFA):
     world_constraint_bundle: Any = None
     token_dfa: Any = None
     max_operations: int = 8
+    operation_dfa: Any = None
+    completion_bounds_cache: Any = field(default_factory=dict, compare=False, repr=False)
 
     @property
     def world_constraint_rules(self):
@@ -111,11 +113,21 @@ class VLABenchPredicateAdapter:
         root_event = PredicateEvent("episode", {"episode": True, **observations((self.requirements.planning.completion(state.semantic.grounded),))}, "completion")
         if not values:
             return (root_event,) if eos else ()
-        values["task_sequence_complete"] = not eos or self.requirements.sequence_complete(state.semantic.completed_operations)
-        values["premature_composite_eos"] = bool(eos and self.schema and self.semantics.premature_composite_eos(
-            state.semantic, min_operations=self.schema.min_operations, required_skills=self.schema.required_skills,
-        ))
+        values.update(self.task_completion_values(state.semantic, eos=eos))
         return (PredicateEvent("operation", values, "completion"),) + ((root_event,) if eos else ())
+
+    def task_completion_values(self, semantic, *, eos):
+        return {
+            "task_sequence_complete": not eos or self.requirements.sequence_complete(semantic.completed_operations),
+            "premature_composite_eos": bool(eos and self.schema and self.semantics.premature_composite_eos(
+                semantic, min_operations=self.schema.min_operations, required_skills=self.schema.required_skills,
+            )),
+        }
+
+    def task_skill_values(self, count, skill):
+        return {"operation": True,
+                "task_skill_allowed": self.requirements.skill_allowed(count, skill),
+                **{"skill:" + name: skill == name for name in self.world.skills}}
 
     def step(self, state, symbol):
         token = self.vocabulary.token_for_label(int(symbol))
@@ -134,9 +146,7 @@ class VLABenchPredicateAdapter:
                       else self._finish(next_state))
             # Finalize the previous operation's deferred predicates with False:
             # only the actual last operation is grounded as a premature EOS.
-            skill_values = {"skill:" + name: skill == name for name in self.world.skills}
-            skill_values.update(operation=True,
-                                task_skill_allowed=self.requirements.skill_allowed(state.semantic.completed_operations, skill))
+            skill_values = self.task_skill_values(state.semantic.completed_operations, skill)
             skill_event = PredicateEvent("operation", skill_values, "task_skill")
             return SemanticTransition(result.state, self._completion_events(state, eos=False) + (skill_event,) + result.events)
         if token.startswith("arg:"):
@@ -161,7 +171,78 @@ class WorldConstraintDFA(PredicateMonitorDFA):
     """Compatibility entry point binding VLABench to the reusable monitor."""
 
     def __init__(self, base_dfa, vocabulary, world, program, entities, schema=None, *, requirements=None):
-        super().__init__(base_dfa, program, VLABenchPredicateAdapter(vocabulary, world, entities, schema, requirements))
+        adapter = VLABenchPredicateAdapter(vocabulary, world, entities, schema, requirements)
+        bounds = task_completion_bounds(base_dfa, vocabulary, adapter, program)
+        super().__init__(base_dfa, program, adapter,
+                         completion_bound=None if bounds is None else lambda state: bounds(state.grammar[1]))
+
+
+def task_completion_bounds(base_dfa, vocabulary, adapter, program):
+    """Relax entity-dependent rules, retaining observable task LCs exactly.
+
+    The grammar builder explicitly composes (token grammar, operation grammar).
+    The latter records selected skills and argument phase, independent of entity
+    assignments. Any accepted concrete path must also pass this projection.
+    """
+    from domiknows.generation.dfa.productive import DFACompletionBounds
+    grammar = getattr(base_dfa, "operation_dfa", None)
+    if grammar is None:
+        return None
+    names = {"operation", "task_skill_allowed", "task_sequence_complete", "premature_composite_eos"}
+    names.update("skill:" + skill for skill in adapter.world.skills)
+    projected = program.project(names, domain="operation", phases=("task_skill", "completion"))
+    if not projected.rules:
+        return None
+    requirements = adapter.requirements
+    prefix = requirements.planning.completed_skill_prefix
+    schema = adapter.schema
+    # This cache is structural, not keyed by context identity or entity counts.
+    # Entity facts are absent from the projection and remain request-bound.
+    key = (projected, requirements.expected_skills, prefix,
+           None if schema is None else (schema.min_operations, schema.required_skills))
+    cache = base_dfa.completion_bounds_cache
+    if key in cache:
+        return cache[key]
+    completions, skill_checks = {}, {}
+    skills_by_label = {vocabulary.label_for_token("skill:" + skill): skill for skill in adapter.world.skills}
+
+    def completion_allowed(history, eos):
+        if not history:
+            # No previous operation event exists at a grounded no-op start.
+            return True
+        key = (history, eos)
+        if key not in completions:
+            semantic = PlanSemanticState(completed_operations=len(prefix) + len(history),
+                                         completed_skills=frozenset(prefix) | frozenset(history))
+            values = {"operation": True, **adapter.task_completion_values(semantic, eos=eos),
+                      **{"skill:" + skill: history[-1] == skill for skill in adapter.world.skills}}
+            completions[key] = projected.check(PredicateEvent("operation", values, "completion"))
+        return completions[key]
+
+    def transition_allowed(source, symbol, target):
+        history, _skill, _index, _phase, ended = source
+        if ended:
+            return True
+        if symbol in skills_by_label:
+            skill = skills_by_label[symbol]
+            count = len(prefix) + len(history)
+            key = (count, skill)
+            if key not in skill_checks:
+                skill_checks[key] = projected.check(PredicateEvent(
+                    "operation", adapter.task_skill_values(count, skill), "task_skill"))
+            return skill_checks[key] and completion_allowed(history, False)
+        if symbol == vocabulary.eos_label:
+            return completion_allowed(history, True)
+        return True
+
+    bounds = DFACompletionBounds.from_dfa(
+        grammar, transition_allowed=transition_allowed,
+        accepting_allowed=lambda state: completion_allowed(state[0], True),
+    )
+    if len(cache) >= 32:
+        cache.pop(next(iter(cache)))
+    cache[key] = bounds
+    return bounds
 
 
 def requirements_for_policy(policy):

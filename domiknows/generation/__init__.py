@@ -1,6 +1,7 @@
 """Utilities for constraint-aware text generation with DomiKnowS."""
 
 from .dfa import (
+    DFACompletionBounds,
     ProductiveDFA,
     SemanticSearchLimitExceeded,
     PredicateCompilationCoverage,
@@ -270,6 +271,7 @@ from .prompting import (
 )
 
 __all__ = [
+    "DFACompletionBounds",
     "ProductiveDFA",
     "SemanticSearchLimitExceeded",
     "PredicateCompilationCoverage",

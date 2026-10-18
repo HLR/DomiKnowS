@@ -2,11 +2,47 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 from operator import index
+from types import MappingProxyType
+from typing import Mapping
 
 
 class SemanticSearchLimitExceeded(RuntimeError):
     """A reachability query exhausted its computational budget, not its language."""
+
+
+@dataclass(frozen=True)
+class DFACompletionBounds:
+    """Shortest completion distances in an explicit finite relaxation.
+
+    Filters may remove only transitions or accepting states forbidden by the
+    concrete policy. Project a concrete state to this DFA before querying its
+    bound. None proves no completion; a finite distance is a lower bound, never
+    a proof that a concrete completion exists.
+    """
+
+    distances: Mapping
+
+    def __call__(self, state):
+        return self.distances.get(state)
+
+    @classmethod
+    def from_dfa(cls, dfa, *, transition_allowed=None, accepting_allowed=None):
+        reverse = {}
+        for (source, symbol), target in dfa.transitions.items():
+            if transition_allowed is None or transition_allowed(source, symbol, target):
+                reverse.setdefault(target, set()).add(source)
+        distances = {state: 0 for state in dfa.accepting_states
+                     if accepting_allowed is None or accepting_allowed(state)}
+        pending = deque(distances)
+        while pending:
+            target = pending.popleft()
+            for source in reverse.get(target, ()):
+                if source not in distances:
+                    distances[source] = distances[target] + 1
+                    pending.append(source)
+        return cls(MappingProxyType(distances))
 
 
 class BoundedReachability:
@@ -19,10 +55,12 @@ starvation behind long branches and repeated cycle expansion. Both stages share
 the query's expansion cap; exhaustion never returns an approximate answer.
 """
 
-    def __init__(self, step, is_accepting, candidates, *, max_state_expansions=10000):
+    def __init__(self, step, is_accepting, candidates, *, max_state_expansions=10000,
+                 completion_bound=None):
         self.step = step
         self.is_accepting = is_accepting
         self.candidates = candidates
+        self.completion_bound = completion_bound
         self.max_state_expansions = index(max_state_expansions)
         if self.max_state_expansions <= 0:
             raise ValueError("max_state_expansions must be positive")
@@ -49,6 +87,15 @@ the query's expansion cap; exhaustion never returns an approximate answer.
     def _known(self, state, budget):
         if budget < 0:
             return False
+        if self.completion_bound is not None:
+            distance = self.completion_bound(state)
+            if distance is None:
+                return False
+            distance = index(distance)
+            if distance < 0:
+                raise ValueError("completion bounds must be nonnegative or None")
+            if distance > budget:
+                return False
         witness = self._witness_lengths.get(state)
         if witness is not None and witness <= budget:
             return True
@@ -64,6 +111,10 @@ the query's expansion cap; exhaustion never returns an approximate answer.
                 break
             state = parents[state]
             distance += 1
+
+    def _completion_rank(self, successor):
+        distance = self.completion_bound(successor[1])
+        return (distance is None, 0 if distance is None else index(distance))
 
     def _probe(self, state, budget, work):
         """Try a cheap depth-first witness before allocating a broad frontier."""
@@ -91,8 +142,11 @@ the query's expansion cap; exhaustion never returns an approximate answer.
                 self._remember_witness(current, 0, parents)
                 return True
             if remaining:
+                successors = tuple(self._successors(current))
+                if self.completion_bound is not None:
+                    successors = sorted(successors, key=self._completion_rank)
                 pending.extend((successor, remaining - 1, current)
-                               for _, successor in reversed(tuple(self._successors(current))))
+                               for _, successor in reversed(successors))
         for current, covered in best.items():
             self._failed_budgets[current] = max(self._failed_budgets.get(current, -1), covered)
         return False
@@ -175,13 +229,14 @@ This outer view includes restrictions introduced by wrappers above a semantic
 monitor. step and acceptance retain the underlying policy's exact language.
 """
 
-    def __init__(self, base_dfa, *, max_state_expansions=10000):
+    def __init__(self, base_dfa, *, max_state_expansions=10000, completion_bound=None):
         self.base_dfa = base_dfa
         self.start_state = base_dfa.start_state
         self.alphabet = base_dfa.alphabet
         self._reachability = BoundedReachability(
             self.step, self.is_accepting, lambda state: base_dfa.allowed_tokens(state),
             max_state_expansions=max_state_expansions,
+            completion_bound=completion_bound,
         )
 
     def step(self, state, symbol):

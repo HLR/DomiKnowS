@@ -249,6 +249,21 @@ def test_search_limit_is_explicit_and_does_not_cache_unknown_as_infeasible():
         limited.can_reach_accepting(0)
 
 
+def test_program_projection_keeps_complete_observable_rules_and_their_snapshot():
+    graph, needs_review, approved, program = document_policy()
+    # A known predicate is not enough to evaluate a rule containing an unknown one.
+    assert not program.project({"needs_review"}).rules
+    projected = program.project({"needs_review", "approved"}, domain="publication", phases=("immediate",))
+    assert projected.rules == program.rules
+    assert not projected.check(PredicateEvent("publication", {"needs_review": True, "approved": False}))
+    assert not program.project({"needs_review", "approved"}, domain="other").rules
+    assert not program.project({"needs_review", "approved"}, phases=("later",)).rules
+    for rule in graph.logicalConstrains.values():
+        rule.active = False
+    # Both programs retain the compiled LC snapshot, irrespective of later edits.
+    assert projected.rules == program.rules
+
+
 def test_compilation_coverage_accounts_for_every_active_head_and_inactive_rule():
     graph, needs_review, approved, _ = document_policy()
     with graph:

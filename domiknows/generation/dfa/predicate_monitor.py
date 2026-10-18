@@ -166,6 +166,23 @@ class PredicateConstraintProgram:
     def coverage(self) -> PredicateCompilationCoverage:
         return PredicateCompilationCoverage(tuple(rule.name for rule in self.rules), self.inactive_constraints)
 
+    def project(self, predicates, *, domain=None, phases=None):
+        """Keep complete rules observable in a sound abstraction.
+
+        Rules mentioning any omitted predicate remain in the concrete monitor;
+        their absence here relaxes the program rather than inventing values.
+        The caller must supply the same event lifecycle and retained predicate
+        meanings as the concrete adapter.
+        """
+        names = frozenset(predicates)
+        phases = None if phases is None else frozenset(phases)
+        return PredicateConstraintProgram(
+            tuple(rule for rule in self.rules if rule.predicates <= names
+                  and (domain is None or rule.domain == domain)
+                  and (phases is None or rule.phase in phases)),
+            self.inactive_constraints, self.max_groundings,
+        )
+
     def check(self, event: PredicateEvent) -> bool:
         domains = None
         for rule in self.rules:
@@ -445,7 +462,7 @@ their original hashable type.
 """
 
     def __init__(self, base_dfa, program: PredicateConstraintProgram, adapter: PredicateMonitorAdapter,
-                 *, max_state_expansions=10000):
+                 *, max_state_expansions=10000, completion_bound=None):
         self.base_dfa = base_dfa
         self.program = program
         self.rules = program.rules
@@ -455,6 +472,7 @@ their original hashable type.
         self._reachability = BoundedReachability(
             self.step, self.is_accepting, lambda state: base_dfa.allowed_tokens(state.grammar),
             max_state_expansions=max_state_expansions,
+            completion_bound=completion_bound,
         )
 
     def step(self, state, symbol):
@@ -500,8 +518,11 @@ class PredicateConstrainedDFA(DFA):
                    start_state=dfa.start_state, accepting_states=dfa.accepting_states,
                    dead_states=dfa.dead_states, constraint_program=program, **kwargs)
 
-    def bind(self, adapter: PredicateMonitorAdapter, *, max_state_expansions=10000) -> PredicateMonitorDFA:
-        return PredicateMonitorDFA(self, self.constraint_program, adapter, max_state_expansions=max_state_expansions)
+    def bind(self, adapter: PredicateMonitorAdapter, *, max_state_expansions=10000,
+             completion_bound=None) -> PredicateMonitorDFA:
+        return PredicateMonitorDFA(self, self.constraint_program, adapter,
+                                   max_state_expansions=max_state_expansions,
+                                   completion_bound=completion_bound)
 
 
 def find_predicate_monitor(dfa) -> PredicateMonitorDFA | None:

@@ -329,8 +329,10 @@ def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_oper
     except ImportError:
         from constraint_compiler import CompiledPlannerDFA, compile_world_constraints
     program = compile_world_constraints(world)
-    grammar = product_dfa([graph_dfa, _domain_dfa(world, vocabulary, max_operations)])
-    return CompiledPlannerDFA.from_dfa(grammar, program, world_constraint_bundle=world, token_dfa=graph_dfa, max_operations=max_operations)
+    operation_dfa = _domain_dfa(world, vocabulary, max_operations)
+    grammar = product_dfa([graph_dfa, operation_dfa])
+    return CompiledPlannerDFA.from_dfa(grammar, program, world_constraint_bundle=world, token_dfa=graph_dfa,
+                                     max_operations=max_operations, operation_dfa=operation_dfa)
 
 
 def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> bool:
@@ -371,5 +373,10 @@ def bind_vlabench_contextual_dfa(base_dfa, vocabulary, context):
     requirements = replace(requirements, allowed_sequences=sequences)
     grammar = base_dfa
     if requirements.planning.completed_skill_prefix or requirements.planning.supplied:
-        grammar = product_dfa([base_dfa.token_dfa, _domain_dfa(world, vocabulary, base_dfa.max_operations, sequences)])
+        operation_dfa = _domain_dfa(world, vocabulary, base_dfa.max_operations, sequences)
+        grammar = type(base_dfa).from_dfa(
+            product_dfa([base_dfa.token_dfa, operation_dfa]), base_dfa.constraint_program,
+            world_constraint_bundle=world, token_dfa=base_dfa.token_dfa,
+            max_operations=base_dfa.max_operations, operation_dfa=operation_dfa,
+        )
     return WorldConstraintDFA(grammar, vocabulary, world, base_dfa.constraint_program, entities, requirements=requirements)
