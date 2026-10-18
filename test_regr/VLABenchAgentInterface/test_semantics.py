@@ -1,7 +1,23 @@
 """Independent semantic examples for completed plans and decoding prefixes."""
 
+import pytest
 from .semantics import PlanSemantics, PlanSemanticState
 from .world_graph import SKILL_ARGUMENTS, build_vlabench_world_graph, materialize_plan, verify_plan_constraints
+
+
+@pytest.mark.parametrize("skill,params", [
+    ("place", {"target_container_name": 2}), ("pour", {"target_container_name": 2}),
+    ("pull", {}), ("open_door", {"target_entity_name": 3}),
+])
+def test_pick_history_survives_intervening_actions_without_mutating_prior_state(skill, params):
+    semantics = PlanSemantics(("apple", "pear", "bowl", "door"), SKILL_ARGUMENTS)
+    initial = semantics.initial_state()
+    picked = semantics.advance(initial, "pick", {"target_entity_name": 0})
+    later = semantics.advance(picked, skill, params)
+    assert not initial.visited_picks
+    assert picked.visited_picks == later.visited_picks == frozenset({"apple"})
+    assert semantics.evaluate_operation(later, "pick", {"target_entity_name": "apple"}).repeated_pick_entity
+    assert not semantics.evaluate_operation(later, "pick", {"target_entity_name": 1}).repeated_pick_entity
 
 
 def test_operation_schema_semantics_distinguish_missing_invalid_and_forbidden_arguments():

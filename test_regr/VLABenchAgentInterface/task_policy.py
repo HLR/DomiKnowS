@@ -109,6 +109,12 @@ def task_requirements(context, world, entities):
     expected = get("task_skill_sequence")
     if expected is None:
         expected = world.primitive_task_patterns.get(task)
+        if expected is None:
+            try:
+                from .world_graph import QA_TASK_PATTERNS
+            except ImportError:
+                from world_graph import QA_TASK_PATTERNS
+            expected = QA_TASK_PATTERNS.get(task)
     if expected is not None:
         if isinstance(expected, str):
             raise ValueError("task_skill_sequence must be a sequence of skill names")
@@ -128,6 +134,14 @@ def task_requirements(context, world, entities):
         return name
     planning = PlanningFacts.parse(get("planning_facts"), entities=table.values(), resolve=resolve,
                                    default_destination=get("task_target_container"), constants=("left", "right"))
+    if task in {"density_qa", "friction_qa"} and not any(s.action == "press" for s in planning.selections):
+        from domiknows.generation.grounded import SelectionRequirement
+        # QA action shape is known; the answer is unavailable without exposed
+        # measurements, option bindings and a declared comparison requirement.
+        candidates = tuple(name for name in table.values() if "button" in name.lower())
+        planning = replace(planning, selections=(
+            *planning.selections, SelectionRequirement("press", candidates, property=task),
+        ))
     # Normalize only supplied domain observations before binding or validation.
     try:
         from .semantics import PlanSemantics

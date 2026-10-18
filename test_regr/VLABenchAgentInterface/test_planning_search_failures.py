@@ -119,11 +119,11 @@ def test_evaluation_reports_generation_failures_without_dropping_examples(error_
 def test_composite_plan_masks_with_long_horizon_retain_valid_completion_and_replay():
     runtime = build_constraint_runtime(max_entities=4, max_operations=4,
                                        name_prefix="composite_long_horizon")
-    entities = ("apple", "bowl", "plate", "button0")
+    entities = ("apple", "bowl", "pear", "button0")
     policy = runtime.dfa_for("vlabench", {"entities": entities, "task": "cook_dishes"})
     plan = [{"name": name, "params": {key: target}} for name, key, target in (
         ("pick", "target_entity_name", 0), ("place", "target_container_name", 1),
-        ("pick", "target_entity_name", 0), ("place", "target_container_name", 2),
+        ("pick", "target_entity_name", 2), ("place", "target_container_name", 1),
     )]
     labels = [runtime.vocabulary.label_for_token(token)
               for token in plan_to_tokens(plan, entities, world=runtime.world_bundle)]

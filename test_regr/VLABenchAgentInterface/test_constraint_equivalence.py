@@ -12,7 +12,7 @@ from .world_graph import build_vlabench_world_graph, materialize_plan, verify_pl
 
 
 def compile_policy(world, entities, *, operations=2, task=None):
-    vocab = PlanVocabulary.from_world(world, max_entities=3)
+    vocab = PlanVocabulary.from_world(world, max_entities=max(3, len(entities)))
     graph, generation = create_planner_generation_graph(world, vocab, max_operations=operations)
     grammar = compile_planner_dfa(graph, generation, world, vocab, max_operations=operations)
     policy = bind_vlabench_contextual_dfa(grammar, vocab, {"entities": entities, "task": task})
@@ -68,10 +68,11 @@ def op(skill, pointer=None):
     (("apple", "bowl"), [op("pick", 2), op("place", 1)], False),
     (("apple", "floor"), [op("pick", 1), op("lift")], False),
     (("apple", "cooler"), [op("pick", 0), op("place", 1)], False),
-    (("apple", "cooler"), [op("pick", 0), op("open_door", 1), op("pick", 0), op("place", 1)], True),
+    (("apple", "cooler"), [op("pick", 0), op("open_door", 1), op("pick", 0), op("place", 1)], False),
     (("apple", "cooler_a", "cooler_b"), [op("pick", 0), op("open_door", 1), op("pick", 0), op("place", 2)], False),
-    (("apple", "bowl", "plate"), [op("pick", 0), op("place", 1), op("pick", 0), op("place", 2)], True),
-    (("apple", "bowl", "plate"), [op("pick", 0), op("place", 1), op("pick", 0), op("place", 1)], True),
+    (("apple", "bowl", "plate"), [op("pick", 0), op("place", 1), op("pick", 0), op("place", 2)], False),
+    (("apple", "bowl", "plate"), [op("pick", 0), op("place", 1), op("pick", 0), op("place", 1)], False),
+    (("apple", "bowl", "pear", "plate"), [op("pick", 0), op("place", 1), op("pick", 2), op("place", 3)], True),
     (("apple", "bowl"), [op("pick", 0), op("pour", 1), op("place", 0)], False),
 ])
 def test_independent_semantic_counterexamples(entities, plan, expected):

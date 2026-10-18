@@ -74,6 +74,19 @@ def test_each_family_is_compiled_and_can_be_deactivated(family, facts, tokens):
     assert not policy.accepts(encoded)  # Previous compilation remains immutable.
 
 
+def test_observed_numeric_target_selection_is_shared_without_changing_hand_semantics(world):
+    facts = {"selections": [{"action": "left_grasp", "criterion": "max",
+                              "candidates": ["apple", "cup"],
+                              "scores": {"apple": 1, "cup": 2}}]}
+    policy, vocab = policy_for(world, facts)
+    for entity, expected in (("apple", False), ("cup", True)):
+        tokens = ("left_grasp", entity)
+        assert policy.accepts(encode(vocab, tokens)) == expected
+        assert verify(world, facts, [_ActionEvent("left_grasp", (entity,))]) == expected
+    # A requirement for the left hand's action does not silently constrain right_grasp.
+    assert policy.accepts(encode(vocab, ("right_grasp", "apple")))
+
+
 def test_hand_specific_continuation_and_idempotence(world):
     facts = {"initial_state": {"held": {"left": "apple", "right": "cup"}, "positive": [["open", "bowl"]]}, "destinations": {"apple": "bowl", "cup": "cooler"}}
     policy, vocab = policy_for(world, facts)

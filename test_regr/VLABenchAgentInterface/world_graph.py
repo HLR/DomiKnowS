@@ -59,6 +59,13 @@ PRIMITIVE_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "select_toy": ("pick", "lift", "place"),
 })
 
+# Planning-only QA aliases do not add controller primitives or change token IDs.
+# Keep their task requirements separate from the checkpoint's controller schema.
+QA_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
+    "density_qa": ("press",),
+    "friction_qa": ("press",),
+})
+
 
 @dataclass(frozen=True)
 class TaskContract:

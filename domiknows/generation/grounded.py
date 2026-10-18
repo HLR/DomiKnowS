@@ -4,6 +4,7 @@ Adapters supply action meanings. This module never guesses observations from
 reference trajectories, entity names, or a desired answer.
 """
 from dataclasses import dataclass, field, replace
+from math import isfinite
 from typing import Mapping
 
 FAMILIES = ("destination", "holding", "capacity", "affordance", "compatibility",
@@ -75,6 +76,10 @@ class Check:
 def observations(checks):
     values = {}
     for check in checks:
+        if check.family not in FAMILIES:
+            # Detailed diagnostic checks (for example numeric selection or
+            # missing effects) are folded into declared LC families upstream.
+            continue
         # Unknowns are disclosed separately; they are not observations of truth.
         values[check.family + "__applicable"] = check.applicable and check.satisfied is not None
         values[check.family + "__satisfied"] = check.satisfied is not False
@@ -97,6 +102,94 @@ def combined(family, values, *, applicable=True, missing=()):
 
 
 @dataclass(frozen=True)
+class SelectionRequirement:
+    """Action-target eligibility from an explicit candidate universe and scores.
+
+    Scores are exposed observations in one declared property/unit. No entity
+    order, task name, reference answer, or geometric model supplies a score.
+    """
+
+    action: str
+    candidates: tuple = ()
+    scores: tuple = ()
+    criterion: str | None = None
+    property: str = "value"
+    argument: str = "subject"
+    threshold: float | None = None
+
+    @classmethod
+    def parse(cls, raw, resolve):
+        if not isinstance(raw, Mapping) or not isinstance(raw.get("action"), str) or not raw["action"]:
+            raise ValueError("selection requirements need an action name")
+        criterion = raw.get("criterion")
+        if criterion not in (None, "min", "max", "below", "above"):
+            raise ValueError("selection criterion must be min, max, below, or above")
+        argument = raw.get("argument", "subject")
+        if argument not in ("subject", "destination"):
+            raise ValueError("selection argument must be subject or destination")
+        scores = raw.get("scores", {})
+        if not isinstance(scores, Mapping):
+            raise ValueError("selection scores must map candidates to observed numbers")
+        candidates = raw.get("candidates")
+        if not isinstance(candidates, (list, tuple)) or not candidates:
+            raise ValueError("selection candidates must be a nonempty entity sequence")
+        candidates = tuple(resolve(candidate) for candidate in candidates)
+        if len(set(candidates)) != len(candidates):
+            raise ValueError("duplicate selection candidate")
+        def number(value):
+            if value is None:
+                return None
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("selection scores and thresholds must be finite numbers or unknown")
+            try:
+                converted = float(value)
+            except OverflowError as error:
+                raise ValueError("selection scores and thresholds must be finite numbers or unknown") from error
+            if not isfinite(converted):
+                raise ValueError("selection scores and thresholds must be finite numbers or unknown")
+            return converted
+        observed = tuple((resolve(candidate), number(value)) for candidate, value in scores.items())
+        if len({candidate for candidate, _ in observed}) != len(observed):
+            raise ValueError("duplicate selection score observation")
+        if set(candidate for candidate, _ in observed) - set(candidates):
+            raise ValueError("selection score refers to an undeclared candidate")
+        return cls(raw["action"], candidates, observed, criterion, str(raw.get("property", "value")),
+                   argument, number(raw.get("threshold")))
+
+    def check(self, op):
+        if op.action != self.action:
+            return Check("selection")
+        chosen = getattr(op, self.argument)
+        scores = dict(self.scores)
+        value = scores.get(chosen)
+        missing = []
+        if not self.candidates:
+            missing.append("selection candidate universe")
+        if self.criterion is None:
+            missing.append("selection criterion")
+        if chosen is None:
+            missing.append("selection " + self.argument)
+        if value is None:
+            missing.append(f"{self.property} of selected candidate")
+        if self.candidates and chosen is not None and chosen not in self.candidates:
+            return Check("selection", True, False, tuple(missing))
+        satisfied = None
+        if self.criterion in ("min", "max"):
+            missing.extend(f"{self.property} of {candidate}" for candidate in self.candidates
+                           if scores.get(candidate) is None)
+            if value is not None:
+                better = any(other is not None and (other < value if self.criterion == "min" else other > value)
+                             for candidate in self.candidates for other in (scores.get(candidate),))
+                satisfied = False if better else True if not missing else None
+        elif self.criterion in ("below", "above"):
+            if self.threshold is None:
+                missing.append("selection threshold")
+            elif value is not None:
+                satisfied = value < self.threshold if self.criterion == "below" else value > self.threshold
+        return Check("selection", True, satisfied, tuple(dict.fromkeys(missing)))
+
+
+@dataclass(frozen=True)
 class PlanningFacts:
     initial: GroundedState = GroundedState()
     properties: tuple = ()
@@ -111,6 +204,7 @@ class PlanningFacts:
     effects: tuple = ()
     completed_skill_prefix: tuple = ()
     supplied: bool = False
+    selections: tuple = ()
 
     @classmethod
     def parse(cls, raw=None, *, entities=(), resolve=None, default_destination=None, constants=()):
@@ -193,7 +287,8 @@ class PlanningFacts:
                    entity(default_destination) if default_destination is not None else None,
                    tuple(compatibility), facts(raw.get("goals")), facts(raw.get("preserve")),
                    frozenset(entity(x) for x in raw.get("protected_entities", ())), tuple(milestones), tuple(effects),
-                   tuple(raw.get("completed_skill_prefix", ())), bool(raw) or default_destination is not None)
+                   tuple(raw.get("completed_skill_prefix", ())), bool(raw) or default_destination is not None,
+                   selections=tuple(SelectionRequirement.parse(item, entity) for item in raw.get("selections", ())))
 
     def completion(self, state):
         values = [state.facts.truth(f) for f in self.goals.positive]
@@ -218,7 +313,14 @@ class PlanningFacts:
         checks.append(combined("capacity", [False if capacity == 0 or (capacity is not None and hand_known and held is not None and held != subject) else
                                            capacity > 0 if capacity is not None and hand_known else None], applicable=op.grasp))
         properties = {(s,k): v for s,k,v in self.properties}
-        checks.append(combined("affordance", [properties.get(pair) for pair in op.affordances] + [state.facts.truth(f) for f in op.preconditions], applicable=bool(op.affordances or op.preconditions)))
+        selections = tuple(selection.check(replace(op, subject=subject)) for selection in self.selections
+                           if selection.action == op.action)
+        checks.append(combined("affordance", [properties.get(pair) for pair in op.affordances]
+                               + [state.facts.truth(f) for f in op.preconditions]
+                               + [selection.satisfied for selection in selections],
+                               applicable=bool(op.affordances or op.preconditions or selections),
+                               missing=tuple(reason for selection in selections for reason in selection.missing)))
+        checks.extend(selections)
         pairs = {(s,d): v for s,d,v in self.compatibility}
         checks.append(combined("compatibility", [pairs.get((subject, op.destination))] + ([properties.get((op.destination,"container"))] if op.container_required else []),
                                applicable=op.destination is not None))

@@ -539,6 +539,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
     native_valid = 0
     planning_metrics = PlanningMetrics()
     generation_errors = []
+    grounding_coverage = {}
     total_examples = len(examples) if hasattr(examples, "__len__") else None
     try:
         for count, example in enumerate(examples, start=1):
@@ -602,6 +603,9 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 policy=None if native else dfa,
             )
             totals["reward"] += result.total
+            for check in (result.grounding_report or {}).get("checks", ()):
+                statuses = grounding_coverage.setdefault(check["family"], {})
+                statuses[check["status"]] = statuses.get(check["status"], 0) + 1
             totals["valid"] += float(result.valid)
             for key in ("skill_match", "entity_match", "skill_with_entity_match", "exact_graph_match"):
                 totals[key] += getattr(result, key)
@@ -614,6 +618,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
             error["error_type"] == "SemanticSearchLimitExceeded" for error in generation_errors
         ),
         "generation_errors": generation_errors,
+        "grounding_coverage": grounding_coverage,
     } | ({"native_valid": native_valid / max(1, count)} if native else {})
 
 

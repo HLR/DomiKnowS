@@ -81,6 +81,7 @@ class PlanSemanticState:
     previous_entity: str | None = None
     completed_operations: int = 0
     completed_skills: frozenset[str] = frozenset()
+    visited_picks: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -181,7 +182,7 @@ class PlanSemantics:
             targets_button=any(value is not None and "button" in value.lower() for value in (entity, container)),
             is_self_placement=container is not None and subject == container and (placement or entity is not None),
             targets_static_fixture=skill == "pick" and entity is not None and is_static_fixture(entity),
-            repeated_pick_entity=skill == "pick" and state.previous_skill == "pick" and entity is not None and entity == state.previous_entity,
+            repeated_pick_entity=skill == "pick" and entity is not None and entity in state.visited_picks,
             inconsistent_container=container is not None and
                 (expected := dict(self.planning.destinations).get(subject, self.planning.default_destination)) is not None and container != expected,
             unopened_container_placement=placement and container is not None and is_enclosed_container(container)
@@ -208,7 +209,8 @@ class PlanSemantics:
                        destination=state.destination if state.destination is not None else container,
                        previous_skill=skill, previous_entity=entity,
                        completed_operations=state.completed_operations + 1,
-                       completed_skills=state.completed_skills | {skill})
+                       completed_skills=state.completed_skills | {skill},
+                       visited_picks=state.visited_picks | ({entity} if skill == "pick" and entity is not None else set()))
 
     @staticmethod
     def premature_composite_eos(state: PlanSemanticState, *, min_operations=None, required_skills=None) -> bool:

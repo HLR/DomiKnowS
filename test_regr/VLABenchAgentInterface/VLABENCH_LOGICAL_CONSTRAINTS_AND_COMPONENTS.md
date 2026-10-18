@@ -53,7 +53,7 @@ In the formulas below, `O(op)` means `operation(op)`, `T(e)` means `transition(e
 | `task_sequence_completion` **(new)** | `O(op) -> task_sequence_complete(op)` | On the last operation, the completed operation count must equal the declared sequence length. Nonfinal operations receive a true completion fact. |
 | `anti_self_placement` | `O(op) -> not is_self_placement(op)` | The placement destination cannot equal the subject, using the held entity when the operation omits an explicit subject. |
 | `pick_excludes_static_fixtures` | `O(op) -> not targets_static_fixture(op)` | A pick cannot target a recognized static fixture. |
-| `no_redundant_repeated_picks` | `T(e) -> not repeated_pick_entity(e)` | Consecutive picks of the same resolved entity are forbidden. This is not a global prohibition on revisiting previously picked objects. |
+| `no_redundant_repeated_picks` | `T(e) -> not repeated_pick_entity(e)` | A second pick of any previously picked resolved entity is forbidden throughout the current plan, including intervening place, pour, pull, or open operations. This is a plan-diversity policy; deactivate this LC for a domain that intentionally permits regrasping. |
 | `container_destination_consistency` | `T(e) -> not inconsistent_container(e)` | A container operation must match the explicit object-specific destination, or the global `task_target_container` fallback. Different objects can have different destinations; an earlier placement does not invent a destination requirement. |
 | `open_before_enclosed_placement` | `T(e) -> not unopened_container_placement(e)` | `place`, `pour`, or `insert` into a recognized enclosed container requires that container or its named door/lid to have been opened. |
 | `composite_subgoal_completion` | `O(op) -> not premature_composite_eos(op)` | The last operation must meet the selected composite task's minimum operation count and required-skill set. |
@@ -111,7 +111,7 @@ In particular, `place` and `pour` do not require both a subject and a container 
 
 `semantics.py` owns `PlanSemantics`, `OperationPredicates`, and immutable `PlanSemanticState`. Both materialization and the decoding adapter evaluate an operation against the state before advancing it.
 
-State includes the held entity, opened entity names, first destination, previous skill/entity, completed operation count, and completed skill set. Picking updates the held entity; placing or inserting releases it; pouring retains it. Opening a door records the opened entity without releasing the held object.
+State includes the held entity, opened entity names, first destination, previous skill/entity, immutable visited-pick set, completed operation count, and completed skill set. Pick history contains actions actually observed in the current plan; an initially held object does not invent a previous pick or completed milestones. Picking updates the held entity; placing or inserting releases it; pouring retains it. Opening a door records the opened entity without releasing the held object.
 
 Grounding currently uses explicit name-based classifiers: button names contain `button`; static fixture names contain markers such as `table`, `counter`, `wall`, or `floor`; enclosed-container names match the declared keyword list. These are predicate definitions, not decoder-side enforcement wrappers, and do not constitute a complete physical model. Opening `cooler_a` or its named door/lid does not open `cooler_b`.
 
@@ -147,9 +147,44 @@ root = materialize_plan(
 evaluation = verify_plan_constraints(root, runtime.world_bundle)
 ```
 
-A button's presence does not force the whole plan into `press -> button -> EOS`. Density/friction keywords do not choose an answer button. An explicit task sequence can require a press plan, and explicit target facts can identify its target.
+A button's presence does not force the whole plan into `press -> button -> EOS`. Known `density_qa` and `friction_qa` task identifiers (including episode metadata) select a press sequence through `QA_TASK_PATTERNS`; these planning-only aliases do not add controller primitives or change checkpoint token/schema checksums. Instruction keywords alone do not choose an answer button. Explicit target facts or grounded numeric selection requirements can constrain the option.
 
 Deactivating a task LC removes that rule's contribution after recompilation, without editing the decoder. Other active LCs and the grammar can still reject a sequence. Compiled policies are snapshots: graph edits require recompilation and a new binding; an existing collected policy retains its original program.
+
+### 3.0 QA eligibility and plan diversity
+
+`no_redundant_repeated_picks` now reads the whole-plan `visited_picks` set rather than only the previous action. Named and numeric pointers are resolved before comparison, so `pick obj:0 -> place bowl -> pick apple` is rejected when pointer 0 denotes apple. Distinct objects remain selectable. The LC, rather than a handwritten token mask, controls both completed-plan verification and decoding; deactivation permits intentional revisits, and compiled programs retain their original activation snapshot.
+
+The two QA aliases require `press` through the existing `task_skill_sequence` and `task_sequence_completion` LCs. They remain separate from the ten controller primitive contracts so existing checkpoint vocabularies retain their token IDs and schema checksums. This fixes action shape without hardcoding an answer index.
+
+Generic `SelectionRequirement` in `domiknows/generation/grounded.py` evaluates explicit `planning_facts.selections`. It supports `min`, `max`, `below`, and `above` over finite observed scores, targeting an operation's subject or destination. Ranking ties admit every tied optimum. Threshold criteria require an exposed threshold. Observations must refer to declared scene candidates and use a common property/unit; Boolean, nonfinite, contradictory alias, and unresolved-entity inputs are rejected.
+
+The complete candidate universe must be declared explicitly; score keys alone do not establish it. Missing scores can be omitted or set to `None`. Evaluation aggregates per-check grounding statuses in `detailed_metrics.grounding_coverage`, including `selection` checked/unavailable/partial/violated counts, so missing observations remain visible in the benchmark JSON.
+
+```python
+context = {
+    "task": "density_qa",
+    "entities": ("button2", "button0", "button1"),
+    "planning_facts": {
+        "selections": [{
+            "action": "press",
+            "property": "density",  # measured density for each explicitly bound option
+            "criterion": "max",
+            "candidates": ["button2", "button0", "button1"],
+            "scores": {"button2": 1.0, "button0": 9.0, "button1": 4.0},
+        }],
+    },
+}
+# The admissible target is button0 (pointer 1), based on observations, not its label.
+```
+
+A friction question can similarly supply `property="observed_slide_time"`, `criterion="min"`, and observed option times. Floating can use `criterion="below"` with measured object densities and an explicit fluid-density threshold. The generic evaluator does not infer slide speed from shape names, assume button order encodes density, or read reference plans, hidden success conditions, or prepared reference state. Observation adapters must expose option bindings and measurements; the planning loader currently consumes these only from explicit `planning_facts` annotations.
+
+Eligibility is an action-target precondition enforced by the existing `grounded__affordance` LC in VLABench and EAI. Detailed `selection` diagnostic rows explain its grounding; they are not extra head LCs. Known losing options remain forbidden even when another option's score is missing. An unproven winner remains unavailable/partial. QA requests without observations get an explicit unavailable selection check, while their press sequence is still enforced. The default head counts therefore remain 41 (VLABench) and 62 (joint EAI).
+
+The first chosen receptacle is not restored as a universal destination requirement. The accepted design permits task/object-specific destinations; use `task_target_container` or `planning_facts.destinations` when the task declares them. Changing this globally would incorrectly reject legitimate plans with different destinations. Distinct-object diversity alone also does not identify the correct ingredients: those targets require exposed task facts or the planner's grounded prediction.
+
+Validation: 196 focused generic/standalone/EAI/joint checks passed; an additional 44-test QA, semantic, decoding/replay, and reachability run passed. The broader generation suite passed 634 tests with the existing trace-log-path failure described in section 4.4. Reproduce the new requirements with `.venv/Scripts/python.exe -m pytest test_regr/generation/test_selection_requirements.py test_regr/VLABenchAgentInterface/test_qa_and_pick_history.py test_regr/EmbodiedAgentInterface/test_grounded_constraints.py -q`. A fresh 450-episode checkpoint run is required to measure benchmark changes; neither restoring 75.13 macro nor 100% PhysLaw is implied by these local tests.
 
 ### 3.1 Optional `planning_facts` input
 
