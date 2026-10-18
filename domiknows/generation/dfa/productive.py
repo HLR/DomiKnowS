@@ -1,6 +1,7 @@
 """Exact bounded reachability for lazy DFA-like runtime policies."""
 from __future__ import annotations
 
+from collections import deque
 from operator import index
 
 
@@ -12,8 +13,10 @@ class BoundedReachability:
     """Reusable search over pure transition, acceptance and candidate callbacks.
 
 The token budget counts additional transitions, including termination symbols.
-Results are memoized per state and budget. A separate expansion cap raises an
-explicit error; hitting it never returns an approximate feasibility answer.
+Proven witness lengths and exhausted budgets are reused across queries. A small
+depth-first probe preserves cheap deep witnesses; breadth-first fallback avoids
+starvation behind long branches and repeated cycle expansion. Both stages share
+the query's expansion cap; exhaustion never returns an approximate answer.
 """
 
     def __init__(self, step, is_accepting, candidates, *, max_state_expansions=10000):
@@ -24,57 +27,124 @@ explicit error; hitting it never returns an approximate feasibility answer.
         if self.max_state_expansions <= 0:
             raise ValueError("max_state_expansions must be positive")
         self._reachable = {}
+        self._witness_lengths = {}
+        self._failed_budgets = {}
+        self._successor_cache = {}
 
     def _successors(self, state):
+        cached = self._successor_cache.get(state)
+        if cached is not None:
+            yield from cached
+            return
+        successors = []
         for symbol in sorted(self.candidates(state), key=lambda item: (type(item).__name__, repr(item))):
             successor = self.step(state, symbol)
             if successor is not None:
+                successors.append((symbol, successor))
                 yield symbol, successor
+        # Publish only a complete enumeration; an interrupted search must not
+        # turn a partial successor list into a permanent token restriction.
+        self._successor_cache[state] = tuple(successors)
+
+    def _known(self, state, budget):
+        if budget < 0:
+            return False
+        witness = self._witness_lengths.get(state)
+        if witness is not None and witness <= budget:
+            return True
+        failed = self._failed_budgets.get(state)
+        if failed is not None and failed >= budget:
+            return False
+        return self._reachable.get((state, budget))
+
+    def _remember_witness(self, state, distance, parents):
+        while True:
+            self._witness_lengths[state] = min(self._witness_lengths.get(state, distance), distance)
+            if state not in parents:
+                break
+            state = parents[state]
+            distance += 1
+
+    def _probe(self, state, budget, work):
+        """Try a cheap depth-first witness before allocating a broad frontier."""
+        limit = min(256, self.max_state_expansions // 4)
+        stop = min(work[0] + limit, self.max_state_expansions)
+        pending = [(state, budget, None)]
+        best, parents = {}, {}
+        while pending:
+            if work[0] >= stop:
+                return None
+            current, remaining, parent = pending.pop()
+            if best.get(current, -1) >= remaining:
+                continue
+            best[current] = remaining
+            if parent is not None:
+                parents[current] = parent
+            known = self._known(current, remaining)
+            if known is True:
+                self._remember_witness(current, self._witness_lengths[current], parents)
+                return True
+            if known is False:
+                continue
+            work[0] += 1
+            if self.is_accepting(current):
+                self._remember_witness(current, 0, parents)
+                return True
+            if remaining:
+                pending.extend((successor, remaining - 1, current)
+                               for _, successor in reversed(tuple(self._successors(current))))
+        for current, covered in best.items():
+            self._failed_budgets[current] = max(self._failed_budgets.get(current, -1), covered)
+        return False
 
     def _search(self, state, budget, work):
-        root = (state, budget)
-        stack = [root]
-        iterators, pending = {}, {}
-        while stack:
-            key = stack[-1]
-            if key in self._reachable:
-                stack.pop()
-                iterators.pop(key, None)
+        known = self._known(state, budget)
+        if known is not None:
+            return known
+        probed = self._probe(state, budget, work)
+        if probed is not None:
+            self._reachable[state, budget] = probed
+            return probed
+        # Breadth-first discovery visits a state with the greatest remaining
+        # budget first. A later, longer route to that same state cannot expose
+        # a new completion, so cycles never need to be unrolled to the horizon.
+        depths = {state: 0}
+        parents = {}
+        queue = deque([state])
+        while queue:
+            current = queue.popleft()
+            remaining = budget - depths[current]
+            known = self._known(current, remaining)
+            if known is True:
+                self._remember_witness(current, self._witness_lengths[current], parents)
+                self._reachable[state, budget] = True
+                return True
+            if known is False:
                 continue
-            current, remaining = key
-            if key not in iterators:
-                work[0] += 1
-                if work[0] > self.max_state_expansions:
-                    raise SemanticSearchLimitExceeded(
-                        f"bounded semantic reachability exceeded {self.max_state_expansions} state expansions; "
-                        "feasibility is unknown (no hard constraint was relaxed)"
-                    )
-                if remaining < 0:
-                    self._reachable[key] = False
-                    continue
-                if self.is_accepting(current):
-                    self._reachable[key] = True
-                    continue
-                if remaining == 0:
-                    self._reachable[key] = False
-                    continue
-                iterators[key] = self._successors(current)
-            child = pending.pop(key, None)
-            if child is not None and self._reachable[child]:
-                self._reachable[key] = True
+            work[0] += 1
+            if work[0] > self.max_state_expansions:
+                raise SemanticSearchLimitExceeded(
+                    f"bounded semantic reachability exceeded {self.max_state_expansions} state expansions; "
+                    "feasibility is unknown (no hard constraint was relaxed)"
+                )
+            if self.is_accepting(current):
+                self._remember_witness(current, 0, parents)
+                self._reachable[state, budget] = True
+                return True
+            if remaining == 0:
                 continue
-            successor = next(iterators[key], None)
-            if successor is None:
-                self._reachable[key] = False
-                continue
-            child = (successor[1], remaining - 1)
-            if child in self._reachable:
-                if self._reachable[child]:
-                    self._reachable[key] = True
-            else:
-                pending[key] = child
-                stack.append(child)
-        return self._reachable[root]
+            for _, successor in self._successors(current):
+                if successor not in depths:
+                    depths[successor] = depths[current] + 1
+                    parents[successor] = current
+                    queue.append(successor)
+        # Only a fully exhausted search proves infeasibility. Each discovered
+        # state was covered for at least budget-depth additional transitions.
+        for current, depth in depths.items():
+            covered = budget - depth
+            self._failed_budgets[current] = max(self._failed_budgets.get(current, -1), covered)
+        self._reachable[state, budget] = False
+        return False
 
     def can_reach_accepting(self, state, max_steps):
         if max_steps is None:

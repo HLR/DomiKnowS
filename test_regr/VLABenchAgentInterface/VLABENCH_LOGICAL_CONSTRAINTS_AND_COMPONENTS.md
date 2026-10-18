@@ -270,6 +270,10 @@ With a finite budget, the semantic monitor masks a candidate unless an accepting
 
 Reachability uses an iterative exact search with a default cap of 10,000 state expansions per query. Exceeding the cap raises `SemanticSearchLimitExceeded`, meaning feasibility is unknown. It does not relax constraints or cache an approximate rejection as an exact answer. An empty allowed set is reported as failure rather than restoring forbidden tokens.
 
+The shared search first spends at most 256 expansions (and at most one quarter of the configured cap) probing for a depth-first witness. If that probe remains inconclusive, breadth-first discovery avoids repeatedly unrolling cycles and starvation behind long branches. Proven witness lengths and exhausted budgets are reusable across token horizons; successor lists are cached only after complete enumeration. Both stages and every candidate token share the original per-query expansion cap.
+
+Planner evaluation retains failed generations in the score denominator and reports `generation_failures`, `semantic_search_limit_failures`, and `generation_errors` with episode identifiers and error messages. The joint evaluation JSON exposes both counts at the top level and prints them in the scorecard. An empty output caused by unknown reachability must therefore be distinguished from a successfully decoded plan. Search regression tests do not establish a replacement 450-episode checkpoint score; that requires rerunning the checkpoint evaluation.
+
 Replay uses the same bound policy, finite-budget masks, token termination rules, and stagnation checks. It does not rerun collection wall-clock timeouts or external cancellation callbacks while computing gradients.
 
 ## 5. Component consumption and enforcement

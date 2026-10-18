@@ -237,7 +237,9 @@ def test_search_limit_is_explicit_and_does_not_cache_unknown_as_infeasible():
     from domiknows.generation import ProductiveDFA, SemanticSearchLimitExceeded
 
     loop = DFA(frozenset({0}), frozenset({"wait"}), {(0, "wait"): 0}, 0, frozenset())
-    limited = ProductiveDFA(loop, max_state_expansions=2)
+    chain = DFA(frozenset(range(22)), frozenset({"wait"}),
+                {(i, "wait"): i + 1 for i in range(21)}, 0, frozenset())
+    limited = ProductiveDFA(chain, max_state_expansions=2)
     with pytest.raises(SemanticSearchLimitExceeded, match="feasibility is unknown"):
         limited.allowed_tokens(0, remaining_steps=20)
     assert limited.allowed_tokens(0, remaining_steps=1) == set()

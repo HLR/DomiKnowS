@@ -538,6 +538,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
     count = 0
     native_valid = 0
     planning_metrics = PlanningMetrics()
+    generation_errors = []
     total_examples = len(examples) if hasattr(examples, "__len__") else None
     try:
         for count, example in enumerate(examples, start=1):
@@ -567,6 +568,12 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                             max_steps=runtime.max_tokens,
                         )
                     except Exception as err:
+                        generation_errors.append({
+                            "example": count,
+                            "episode_id": _example_value(example, "episode_id", ""),
+                            "error_type": type(err).__name__,
+                            "message": str(err),
+                        })
                         print(f"[eval-planner] Warning: plan generation failed for example {count}: {err}", flush=True)
                         output = []
                 finally:
@@ -602,6 +609,11 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
         module.train(was_training)
     return {key: value / max(1, count) for key, value in totals.items()} | {
         "examples": count, "planning_metrics": planning_metrics.result(),
+        "generation_failures": len(generation_errors),
+        "semantic_search_limit_failures": sum(
+            error["error_type"] == "SemanticSearchLimitExceeded" for error in generation_errors
+        ),
+        "generation_errors": generation_errors,
     } | ({"native_valid": native_valid / max(1, count)} if native else {})
 
 

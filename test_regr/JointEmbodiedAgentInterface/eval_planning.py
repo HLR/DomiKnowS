@@ -248,6 +248,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "epoch": payload.get("epoch"),
         "split": args.split,
         "examples_evaluated": len(examples),
+        "generation_failures": metrics.get("generation_failures", 0),
+        "semantic_search_limit_failures": metrics.get("semantic_search_limit_failures", 0),
         "overall": overall,
         "macro_score": macro,
         "legacy_macro_score": legacy_macro,
@@ -260,6 +262,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     print(f" VLABench Non-Interactive Planning Scorecard: {checkpoint_path.name}")
     print("=" * 70)
     print(f" Split: {args.split}  |  Examples: {len(examples)}  |  Stage: {payload.get('stage')} (Epoch {payload.get('epoch')})")
+    print(f" Generation failures: {metrics.get('generation_failures', 0)}"
+          f" (semantic search limit: {metrics.get('semantic_search_limit_failures', 0)})")
     print("-" * 70)
     print(f" Overall Progress Score:  {overall.get('score', 0.0):.2f} / 100.0")
     print(f" Legacy Progress Score:   {overall.get('legacy_score', 0.0):.2f} / 100.0")

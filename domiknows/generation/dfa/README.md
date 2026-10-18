@@ -175,6 +175,11 @@ expose `can_reach_accepting(state, max_steps=...)`, requiring a finite budget.
 The iterative search memoizes exact answers and has a separate computational
 cap of 10,000 state expansions per query. Set `max_state_expansions` when
 binding a generic compiled DFA or constructing `ProductiveDFA` to change it.
+Search first tries a small depth-first witness probe, then uses breadth-first
+discovery with state dominance to avoid unrolling cycles to the full horizon.
+Proven witness lengths apply to larger budgets; exhausted budgets apply to
+smaller ones. Successor enumerations are cached only after they finish. Both
+search stages and all candidate symbols share the same query expansion cap.
 Exceeding this cap raises `SemanticSearchLimitExceeded`: feasibility remains
 unknown, no approximate rejection is cached, and no hard rule is relaxed.
 
