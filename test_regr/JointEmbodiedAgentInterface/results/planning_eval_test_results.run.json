@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/opt/dominows/venv/bin/python",
+    "-u",
+    "-m",
+    "test_regr.JointEmbodiedAgentInterface.eval_planning",
+    "--checkpoint",
+    "test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt",
+    "--split",
+    "test",
+    "--output",
+    "/workspace/test_regr/JointEmbodiedAgentInterface/results/planning_eval_test_results.json"
+  ],
+  "physical_gpu": 1,
+  "gpu_uuid": "GPU-df6f7760-5171-3c97-3dc6-dcca88ede043",
+  "git_commit": "2d2495c35a7424519a537dcee4c378aaebe6835d",
+  "checkpoint_target": "/workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt",
+  "density_repair_revision": "density-material-button-v1",
+  "dimension_mapping_revision": "vlabench-planning-coverage-v2",
+  "log": "/home/auszok/evaluation_runs/full_test_20261018T151438Z/evaluation.log",
+  "started_utc": "2026-10-18T15:14:39.380094+00:00",
+  "wrapper_pid": 614950,
+  "exit_code": 0,
+  "finished_utc": "2026-10-18T15:36:18.111929+00:00",
+  "evaluation_pid": 614951,
+  "report_sha256": "cc1016b9f5830225c435355821f2008d05b9afcf772964d2d722c6d7edc2ba5a",
+  "density_repair_manifest_sha256": "b7a1805c016ad752f22774edbe955249cad32c4f7ccbd533fa7a81e60119a8c1"
+}
