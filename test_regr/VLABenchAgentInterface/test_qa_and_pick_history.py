@@ -27,7 +27,8 @@ def accepted(runtime, policy, plan, entities):
     return actual
 
 
-@pytest.mark.parametrize("task", ["density_qa", "friction_qa"])
+@pytest.mark.parametrize("task", ["density_qa", "friction_qa", "magnetism_qa", "reflection_qa",
+                                  "speed_of_sound_qa", "thermal_expansion_qa"])
 def test_known_qa_metadata_requires_press_without_guessing_the_button(runtime, task):
     entities = ("button2", "button0", "button1", "apple")
     policy = runtime.dfa_for("vlabench", {"entities": entities, "episode_id": f"PhysLaw/{task}/example0"})
@@ -87,13 +88,14 @@ def test_evaluation_reports_qa_selection_grounding_coverage(runtime):
         def generate_plan(self, **kwargs):
             return plan
     example = {"entities": ("button0", "button1"), "task": "density_qa", "operation_sequence": plan}
-    annotated = {**example, "planning_facts": {"selections": [{
+    annotated = {**example, "planning_observation_profile": "declared_planning_facts", "planning_facts": {"selections": [{
         "action": "press", "criterion": "max", "candidates": ["button0", "button1"],
         "scores": {"button0": 2, "button1": 1},
     }]}}
     metrics = evaluate_planner(Planner(), [example, annotated], runtime)
     assert metrics["generation_failures"] == 0
     assert metrics["grounding_coverage"]["selection"] == {"unavailable": 1, "checked": 1}
+    assert metrics["observation_profiles"] == {"unspecified": 1, "declared_planning_facts": 1}
 
 
 def test_repeated_pick_after_other_operations_is_rejected_and_lc_can_be_disabled(runtime):

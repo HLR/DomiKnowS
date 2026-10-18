@@ -47,8 +47,9 @@ def test_native_shared_evaluator_scores_without_validity_gate(training_mode):
     assert metrics["overall"]["score"] == pytest.approx(100 / 3)
     assert metrics["overall"]["legacy_score"] == pytest.approx(80 / 3)
     assert metrics["dimensions"]["M&T"]["examples"] == 3
-    # Benchmark push role differs from the legacy graph schema: score independently.
-    assert result["valid"] == 0
+    # Optional push destinations now round-trip through the graph schema too.
+    # Malformed and empty outputs remain scored rather than filtered out.
+    assert result["valid"] == pytest.approx(1 / 3)
     assert result["native_valid"] == pytest.approx(1 / 3)
     assert planner.model.training == training_mode
     assert all(kwargs == {"mode": "raw", "sample": False, "max_tokens": 37}
@@ -82,8 +83,8 @@ def test_cli_native_uses_scene_loader_and_never_constructs_graph(monkeypatch, ca
         pytest.fail("native baseline entered the graph generation path")
     for name in ("load_planning_examples", "build_constraint_runtime", "build_vlabench_world_graph", "_load_planner"):
         monkeypatch.setattr(main, name, forbidden)
-    def load_scene(root, *, limit):
-        assert root == "data" and limit == 2
+    def load_scene(root, *, limit, observation_mode):
+        assert root == "data" and limit == 2 and observation_mode == "visual"
         return [example(), example()]
     monkeypatch.setattr(dataset, "load_scene_planning_examples", load_scene)
     planner = Native([json.dumps(REFERENCE)] * 2)
@@ -99,6 +100,7 @@ def test_cli_native_uses_scene_loader_and_never_constructs_graph(monkeypatch, ca
 
 
 @pytest.mark.parametrize("flags,message", [
+    (["--generation-mode", "frozen-vlm", "--observation-mode", "metadata-assisted"], "visual observation mode"),
     ([], "requires --resume-adapter"),
     (["--generation-mode", "frozen-vlm", "--resume-adapter", "adapter"], "only the base VLM"),
     (["--generation-mode", "frozen-vlm", "--vocab", "vocab.json"], "only the base VLM"),

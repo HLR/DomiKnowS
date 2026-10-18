@@ -298,21 +298,8 @@ def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: Pl
         if "button" in str(name).lower()
     ]
     if buttons:
-        pairs = []
-        for b_idx, b_name in buttons:
-            assoc = None
-            for offset in (1, 2, -1):
-                cand_idx = b_idx + offset
-                if 0 <= cand_idx < len(entity_table):
-                    c_name = str(entity_table[cand_idx])
-                    if "button" not in c_name.lower() and c_name not in ("table", "counter") and not c_name.startswith("lab_") and not c_name.isdigit():
-                        assoc = f"{c_name} (id: {cand_idx})"
-                        break
-            if assoc:
-                pairs.append(f"{b_name} (id: {b_idx}) -> {assoc}")
-            else:
-                pairs.append(f"{b_name} (id: {b_idx})")
-        pairs_str = "; ".join(pairs)
+        # Entity list order is not an observation of object/button association.
+        pairs_str = "; ".join(f"{name} (id: {idx})" for idx, name in buttons)
         directive = (
             f" NOTE: Multiple-choice question with answer buttons ({pairs_str}). "
             "Determine the correct object that satisfies the instruction, then output: "
@@ -1042,7 +1029,7 @@ class QwenVLPlanner(nn.Module):
         logits = self.sequence_logits(context, self._shift_right(target_labels))
         return logits.squeeze(0) if logits.shape[0] == 1 else logits
 
-    def supervised_loss(self, *, instruction, images, entity_table, target_plan, world=None) -> torch.Tensor:
+    def supervised_loss(self, *, instruction, images, entity_table, target_plan, world=None, **_kwargs) -> torch.Tensor:
         tokens = plan_to_tokens(target_plan, entity_table, world=world)
         labels = torch.tensor([self.vocabulary.label_for_token(token) for token in tokens], device=self.device)
         logits = self.sequence_logits(
@@ -1097,6 +1084,10 @@ class QwenVLPlanner(nn.Module):
             mask[indices] = logits[indices]
             distribution = torch.distributions.Categorical(logits=mask)
             label = torch.argmax(mask) if deterministic else distribution.sample()
+            observer = getattr(self, "decision_observer", None)
+            if observer is not None:
+                from domiknows.generation.decision_trace import decision_record
+                observer(decision_record(logits, allowed, label, self.vocabulary, [self.vocabulary.token_for_label(i) for i in labels]))
             logprob = logprob + distribution.log_prob(label)
             labels.append(int(label))
             previous = label.reshape(1, 1)

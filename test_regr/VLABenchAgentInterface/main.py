@@ -22,6 +22,7 @@ try:
         load_control_task_instructions,
         load_hf_control_records,
         load_planning_examples,
+        OBSERVATION_MODES,
     )
     from .graph import PlanVocabulary
     from .models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
@@ -42,7 +43,7 @@ try:
     from .world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
 except ImportError:
     from agent import HierarchicalVLABenchAgent
-    from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples
+    from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples, OBSERVATION_MODES
     from graph import PlanVocabulary
     from models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
     from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch, train_controller_steps
@@ -900,14 +901,17 @@ def command_train_agent(args) -> None:
 
 
 def command_evaluate_planner(args) -> None:
+    observation_mode = getattr(args, "observation_mode", "visual")
     if args.generation_mode == "frozen-vlm":
+        if observation_mode != "visual":
+            raise ValueError("frozen-vlm evaluation uses visual observation mode; metadata-assisted requires graph generation")
         if args.resume_adapter or args.vocab:
             raise ValueError("frozen-vlm evaluation loads only the base VLM; omit --resume-adapter and --vocab")
         if args.max_new_tokens <= 0:
             raise ValueError("--max-new-tokens must be positive")
         from test_regr.VLABenchAgentInterface.dataset import load_scene_planning_examples
         from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
-        examples = load_scene_planning_examples(args.planning_dir, limit=args.limit)
+        examples = load_scene_planning_examples(args.planning_dir, limit=args.limit, observation_mode=observation_mode)
         splits = deterministic_split(examples, seed=args.seed)
         eval_examples = examples if args.split == "all" else splits[args.split]
         if getattr(args, "dimension", None):
@@ -921,12 +925,13 @@ def command_evaluate_planner(args) -> None:
         result = evaluate_planner(planner, eval_examples,
                                   generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens)
         _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
-                        "dfa_constrained": False, "max_new_tokens": args.max_new_tokens})
+                        "dfa_constrained": False, "max_new_tokens": args.max_new_tokens,
+                        "observation_mode": observation_mode})
         return
     if not args.resume_adapter:
         raise ValueError("graph evaluation requires --resume-adapter with trained graph-decoder weights; "
                          "use --generation-mode frozen-vlm for the unconstrained pretrained VLM baseline")
-    examples = load_planning_examples(args.planning_dir, limit=args.limit)
+    examples = load_planning_examples(args.planning_dir, limit=args.limit, observation_mode=observation_mode)
     splits = deterministic_split(examples, seed=args.seed)
     eval_examples = examples if args.split == "all" else splits[args.split]
     if getattr(args, "dimension", None):
@@ -943,7 +948,7 @@ def command_evaluate_planner(args) -> None:
         raise ValueError("loaded vocabulary differs from the graph-derived runtime vocabulary")
     planner = _load_planner(args, runtime.vocabulary)
     _json(evaluate_planner(planner, eval_examples, runtime)
-          | {"generation_mode": "graph", "dfa_constrained": True})
+          | {"generation_mode": "graph", "dfa_constrained": True, "observation_mode": observation_mode})
 
 
 def _factory(value: str):
@@ -1119,7 +1124,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--resume-adapter")
         command.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
         command.add_argument("--max-entities", type=int, default=64)
-        command.add_argument("--max-operations", type=int, default=8)
+        command.add_argument("--max-operations", type=int, default=12)
         command.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
         command.add_argument("--limit", type=int)
         command.add_argument("--device")
@@ -1146,7 +1151,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--device")
     agent.add_argument("--limit", type=int)
     agent.add_argument("--max-entities", type=int, default=64)
-    agent.add_argument("--max-operations", type=int, default=8)
+    agent.add_argument("--max-operations", type=int, default=12)
     agent.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
     agent.add_argument("--sft-epochs", type=int, default=3)
     agent.add_argument("--controller-epochs", type=int, default=20)
@@ -1315,6 +1320,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     evaluate = sub.add_parser("evaluate-planner")
     planner_options(evaluate)
+    evaluate.add_argument("--observation-mode", choices=OBSERVATION_MODES, default="visual",
+                          help="QA property selection: visual predictions (default) or metadata-assisted constraints")
     evaluate.add_argument("--generation-mode", choices=["graph", "frozen-vlm"], default="graph",
                           help="graph: trained adapter and DFA decoder; frozen-vlm: direct base VLM, no DFA")
     evaluate.add_argument("--max-new-tokens", type=int, default=768,
@@ -1333,7 +1340,7 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.add_argument("--controller-checkpoint")
     rollout.add_argument("--agent-checkpoint")
     rollout.add_argument("--max-steps", type=int, default=400)
-    rollout.add_argument("--max-operations", type=int, default=8)
+    rollout.add_argument("--max-operations", type=int, default=12)
     rollout.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
     rollout.add_argument("--planner-model", default=PLANNER_MODEL_ID)
     rollout.add_argument("--resume-adapter")

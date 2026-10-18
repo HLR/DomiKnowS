@@ -50,6 +50,7 @@ class PlanVocabulary:
     eos_token: str = EOS_TOKEN
     domain_checksum: str = VLABENCH_DOMAIN_CHECKSUM
     version: int = 2
+    optional_skill_arguments: tuple = ()
 
     @property
     def tokens(self) -> tuple[str, ...]:
@@ -104,10 +105,12 @@ class PlanVocabulary:
         signatures = tuple((name, tuple(world.skill_arguments[name])) for name in sorted(world.skills))
         return cls(
             skills=tuple(name for name, _keys in signatures),
-            argument_keys=tuple(sorted({key for _name, keys in signatures for key in keys})),
+            argument_keys=tuple(sorted({key for _name, keys in signatures for key in keys} |
+                                       {key for keys in world.optional_skill_arguments.values() for key in keys})),
             skill_arguments=signatures,
             max_entities=int(max_entities),
             domain_checksum=world.domain_checksum,
+            optional_skill_arguments=tuple(sorted(world.optional_skill_arguments.items())),
         )
 
     @classmethod
@@ -154,6 +157,7 @@ class PlanVocabulary:
         payload["skill_arguments"] = tuple(
             (str(name), tuple(arguments)) for name, arguments in payload["skill_arguments"]
         )
+        payload["optional_skill_arguments"] = tuple((name, tuple(keys)) for name, keys in payload.get("optional_skill_arguments", ()))
         value = cls(**payload)
         if checksum is not None and checksum != value.checksum:
             raise ValueError(f"vocabulary checksum mismatch for {path}")
@@ -181,6 +185,9 @@ def plan_to_tokens(value: Any, entity_table=None, *, world: VLABenchWorldGraphBu
         tokens.append(f"skill:{operation['name']}")
         for key in skill_arguments.get(operation["name"], ()):
             tokens.extend((f"arg:{key}", f"obj:{_pointer_index(operation['params'][key], entity_table)}"))
+        for key in world.optional_skill_arguments.get(operation["name"], ()):
+            if key in operation['params']:
+                tokens.extend((f"arg:{key}", f"obj:{_pointer_index(operation['params'][key], entity_table)}"))
     tokens.append(EOS_TOKEN)
     return tokens
 
@@ -214,7 +221,7 @@ def create_planner_generation_graph(
     world: VLABenchWorldGraphBundle,
     vocabulary: PlanVocabulary | None = None,
     *,
-    max_operations: int = 8,
+    max_operations: int = 12,
     graph_name: str = "vlabench_planner_generation",
 ):
     """Build the token graph after and from the semantic world graph."""
@@ -260,39 +267,48 @@ def _legal_skill_sequences(world: VLABenchWorldGraphBundle, max_operations: int)
 def _domain_dfa(world: VLABenchWorldGraphBundle, vocabulary: PlanVocabulary, max_operations: int, complete_sequences=None):
     from domiknows.generation.dfa.core import DFA
 
-    complete, skill_prefixes = _legal_skill_sequences(world, max_operations)
-    if complete_sequences is not None:
-        complete = set(complete_sequences)
-        skill_prefixes = {seq[:i] for seq in complete for i in range(len(seq)+1)}
+    from domiknows.generation.dfa.pattern_language import BoundedPatternLanguage
+    language = BoundedPatternLanguage(world.subtask_patterns, max_operations) if complete_sequences is None else complete_sequences
+    if not isinstance(language, BoundedPatternLanguage):
+        language = BoundedPatternLanguage(tuple(language), max_operations, repeat=False, allow_empty=() in language)
     alphabet = frozenset(range(vocabulary.label_count))
-    start = ((), None, 0, "skill", False)
+    start = (language.start, None, 0, "skill", False)
 
     def successors(state):
         skills, current, argument_index, phase, ended = state
         if ended:
             yield vocabulary.eos_label, state
-        elif phase == "skill":
-            if skills in complete:
+        elif phase in ("skill", "optional"):
+            if phase == "optional":
+                key = world.optional_skill_arguments[current][argument_index]
+                yield vocabulary.label_for_token(f"arg:{key}"), (skills, current, argument_index, "optional_obj", False)
+            if skills.complete:
                 yield vocabulary.eos_label, (skills, None, 0, "skill", True)
             for skill in vocabulary.skills:
-                next_skills = skills + (skill,)
-                if next_skills not in skill_prefixes:
+                next_skills = language.advance(skills, skill)
+                if next_skills is None:
                     continue
                 arguments = world.skill_arguments[skill]
                 yield vocabulary.label_for_token(f"skill:{skill}"), (
                     next_skills,
-                    skill if arguments else None,
+                    skill if arguments or world.optional_skill_arguments.get(skill) else None,
                     0,
-                    "arg" if arguments else "skill",
+                    "arg" if arguments else "optional" if world.optional_skill_arguments.get(skill) else "skill",
                     False,
                 )
         elif phase == "arg":
             key = world.skill_arguments[current][argument_index]
             yield vocabulary.label_for_token(f"arg:{key}"), (skills, current, argument_index, "obj", False)
+        elif phase == "optional_obj":
+            more = argument_index + 1 < len(world.optional_skill_arguments[current])
+            target = (skills, current if more else None, argument_index + 1 if more else 0, "optional" if more else "skill", False)
+            for pointer in range(vocabulary.max_entities):
+                yield vocabulary.label_for_token(f"obj:{pointer}"), target
         elif phase == "obj":
             arguments = world.skill_arguments[current]
             last = argument_index + 1 >= len(arguments)
-            target = (skills, None if last else current, 0 if last else argument_index + 1, "skill" if last else "arg", False)
+            optional = last and bool(world.optional_skill_arguments.get(current))
+            target = (skills, current if optional or not last else None, 0 if last else argument_index + 1, "optional" if optional else "skill" if last else "arg", False)
             for pointer in range(vocabulary.max_entities):
                 yield vocabulary.label_for_token(f"obj:{pointer}"), target
 
@@ -318,7 +334,7 @@ def _domain_dfa(world: VLABenchWorldGraphBundle, vocabulary: PlanVocabulary, max
     )
 
 
-def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_operations: int = 8):
+def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_operations: int = 12):
     """Intersect graph LCs with the complete language declared by the world."""
     from domiknows.generation import constraints_to_dfa_from_graph
     from domiknows.generation.dfa.core import product_dfa
@@ -372,7 +388,7 @@ def bind_vlabench_contextual_dfa(base_dfa, vocabulary, context):
     sequences = request_sequences(world, base_dfa.max_operations, requirements)
     requirements = replace(requirements, allowed_sequences=sequences)
     grammar = base_dfa
-    if requirements.planning.completed_skill_prefix or requirements.planning.supplied:
+    if sequences.allow_empty or frozenset(sequences.roots) != frozenset(world.subtask_patterns):
         operation_dfa = _domain_dfa(world, vocabulary, base_dfa.max_operations, sequences)
         grammar = type(base_dfa).from_dfa(
             product_dfa([base_dfa.token_dfa, operation_dfa]), base_dfa.constraint_program,

@@ -29,6 +29,7 @@ except ImportError:
 
 
 PLANNING_DATASET_ID = "VLABench/vlm_evaluation_v1.0"
+OBSERVATION_MODES = ("visual", "metadata-assisted")
 CONTROL_DATASET_ID = "VLABench/vlabench_primitive_ft_lerobot_video"
 
 
@@ -329,6 +330,8 @@ class PlanningExample:
     task_target_container: str | int | None = None
     task_target_entity: str | int | None = None
     task_skill_sequence: tuple[str, ...] | None = None
+    planning_observation_profile: str | None = None
+    planning_interface: str = "compact"
 
     def as_reward_item(self) -> dict[str, Any]:
         return {
@@ -343,6 +346,8 @@ class PlanningExample:
             "task_target_container": self.task_target_container,
             "task_target_entity": self.task_target_entity,
             "task_skill_sequence": self.task_skill_sequence,
+            "planning_observation_profile": self.planning_observation_profile,
+            "planning_interface": self.planning_interface,
         }
 
 
@@ -524,8 +529,11 @@ def _extract_entities(config: Any) -> tuple[str, ...]:
     return tuple(found)
 
 
-def load_planning_examples(root: str | Path, *, limit: int | None = None) -> list[PlanningExample]:
+def load_planning_examples(root: str | Path, *, limit: int | None = None,
+                           observation_mode: str = "visual", ground_complex: bool = True) -> list[PlanningExample]:
     """Group the official image-folder layout back into complete episodes."""
+    if observation_mode not in OBSERVATION_MODES:
+        raise ValueError(f"observation_mode must be one of {OBSERVATION_MODES}")
     root = Path(root).resolve()
     if not root.exists():
         raise FileNotFoundError(f"planning dataset does not exist: {root}")
@@ -556,24 +564,44 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None) -> lis
         config = _read_json(config_path) if config_path is not None else {}
         episode_id = str(example_dir.relative_to(root)).replace("\\", "/")
         task, dimension = planning_metadata(episode_id)
+        try:
+            from .physics_grounding import QA_TASK_PATTERNS, physics_planning_facts, visual_qa_planning_facts
+        except ImportError:
+            from physics_grounding import QA_TASK_PATTERNS, physics_planning_facts, visual_qa_planning_facts
+        instruction = _read_instruction(input_dir)
+        # Only scene components and input language enter the physics adapter.
+        # In particular, task.conditions and output plans are not observations.
+        scene = config.get("task", config)
+        visual_qa = observation_mode == "visual" and task in QA_TASK_PATTERNS
+        if visual_qa:
+            planning_facts, observation_profile = visual_qa_planning_facts(task, instruction, scene.get("components", ()))
+        else:
+            planning_facts, observation_profile = physics_planning_facts(
+                task, instruction, scene.get("components", ()), config.get("planning_facts"),
+                observations=_read_json(input_dir / "property_observations.json")
+                if observation_mode == "metadata-assisted" and (input_dir / "property_observations.json").is_file() else None,
+            )
         dependency = payload.get("dependency", config.get("dependency", default_dependency(task))) if isinstance(payload, Mapping) else config.get("dependency", default_dependency(task))
-        entities = list(_extract_entities(config))
-        for operation in canonicalize_plan(plan_payload):
-            for key in ("target_entity_name", "target_container_name"):
-                value = operation["params"].get(key)
-                if value is not None and str(value) not in entities:
-                    entities.append(str(value))
+        entities = list(_extract_entities({key: scene[key] for key in ("components", "scene", "entities") if key in scene}))
+        try:
+            from .complex_grounding import complex_planning_facts
+        except ImportError:
+            from complex_grounding import complex_planning_facts
+        if ground_complex:
+            planning_facts = complex_planning_facts(task, instruction, entities, planning_facts)
         examples.append(PlanningExample(
             episode_id=episode_id,
-            instruction=_read_instruction(input_dir),
+            instruction=instruction,
             operation_sequence=tuple(canonicalize_plan(plan_payload)),
             image_paths=image_paths,
             segmented_image_paths=segmented_paths,
             env_config_path=config_path,
-            planning_facts=config.get("planning_facts"),
-            task_target_container=config.get("task_target_container"),
-            task_target_entity=config.get("task_target_entity"),
-            task_skill_sequence=tuple(config["task_skill_sequence"]) if config.get("task_skill_sequence") is not None else None,
+            planning_facts=planning_facts,
+            planning_observation_profile=observation_profile,
+            task_target_container=None if visual_qa else config.get("task_target_container"),
+            task_target_entity=None if visual_qa else config.get("task_target_entity"),
+            task_skill_sequence=QA_TASK_PATTERNS[task] if visual_qa else
+                tuple(config["task_skill_sequence"]) if config.get("task_skill_sequence") is not None else None,
             dependency=dependency,
             entities=tuple(entities),
             task=task,
@@ -586,10 +614,11 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None) -> lis
     return examples
 
 
-def load_scene_planning_examples(root: str | Path, *, limit: int | None = None) -> list[PlanningExample]:
+def load_scene_planning_examples(root: str | Path, *, limit: int | None = None,
+                                 observation_mode: str = "visual") -> list[PlanningExample]:
     """Load independent VLM inputs without reference-derived entity augmentation."""
     result = []
-    for example in load_planning_examples(root, limit=limit):
+    for example in load_planning_examples(root, limit=limit, observation_mode=observation_mode):
         if example.env_config_path is None:
             raise ValueError(f"scene configuration required for independent evaluation: {example.episode_id}")
         config = _read_json(example.env_config_path)

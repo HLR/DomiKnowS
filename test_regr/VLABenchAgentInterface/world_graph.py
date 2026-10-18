@@ -64,6 +64,17 @@ PRIMITIVE_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
 QA_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "density_qa": ("press",),
     "friction_qa": ("press",),
+    "magnetism_qa": ("press",),
+    "reflection_qa": ("press",),
+    "speed_of_sound_qa": ("press",),
+    "thermal_expansion_qa": ("press",),
+})
+
+# Compact non-interactive labels omit these simulator lift movements.
+PLANNING_TASK_PATTERNS = MappingProxyType({
+    **QA_TASK_PATTERNS,
+    "select_drink": ("pick", "pull"),
+    "select_toy": ("pick", "place"),
 })
 
 
@@ -149,6 +160,9 @@ SKILL_ARGUMENTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "open_door": ("target_entity_name",),
     "press": ("target_entity_name",),
 })
+
+# Optional symbolic roles are independent of simulator motion parameters.
+OPTIONAL_SKILL_ARGUMENTS = MappingProxyType({"push": ("target_container_name",)})
 
 # Index zero is deliberately reserved for "no active graph operation".  The
 # controller vocabulary is graph-owned so dataset loading and online rollout
@@ -349,19 +363,26 @@ def validate_plan(
     return PlanValidation(not errors, tuple(errors), tuple(plan))
 
 
-def _domain_checksum() -> str:
+def _domain_checksum(*, legacy=False) -> str:
     payload = {
-        "version": 2,
+        "version": 3,
+        "optional_arguments": dict(OPTIONAL_SKILL_ARGUMENTS),
+        "planning_tasks": dict(PLANNING_TASK_PATTERNS),
         "skills": {name: list(arguments) for name, arguments in SKILL_ARGUMENTS.items()},
         "patterns": [list(pattern) for pattern in SUBTASK_PATTERNS],
         "tasks": {name: list(pattern) for name, pattern in PRIMITIVE_TASK_PATTERNS.items()},
         "roles": ["target_entity_name", "target_container_name"],
     }
+    if legacy:
+        payload["version"] = 2
+        payload.pop("optional_arguments")
+        payload.pop("planning_tasks")
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 VLABENCH_DOMAIN_CHECKSUM = _domain_checksum()
+LEGACY_VLABENCH_DOMAIN_CHECKSUM = _domain_checksum(legacy=True)
 
 
 @dataclass(frozen=True)
@@ -398,6 +419,10 @@ class VLABenchWorldGraphBundle:
     task_target_allowed: Any = None
     task_sequence_complete: Any = None
     grounded_constraints: Any = None
+
+    @property
+    def optional_skill_arguments(self):
+        return OPTIONAL_SKILL_ARGUMENTS
 
     @property
     def has_constraints(self) -> bool:
@@ -562,6 +587,8 @@ def build_vlabench_world_graph(
                     ("target_entity_name", has_target_entity),
                     ("target_container_name", has_target_container),
                 ):
+                    if key in OPTIONAL_SKILL_ARGUMENTS.get(name, ()):
+                        continue
                     consequent = flag("op") if key in required else notL(flag("op"))
                     ifL(
                         skills[name]("op"),

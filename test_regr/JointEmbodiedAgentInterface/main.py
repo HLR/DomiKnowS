@@ -1217,7 +1217,7 @@ def build_parser():
         help="resample this many infeasible action chunks before truncating a rollout",
     )
     agent.add_argument("--max-entities", type=int, default=64)
-    agent.add_argument("--max-operations", type=int, default=8)
+    agent.add_argument("--max-operations", type=int, default=12)
     # Existing VLABench controller loader/model settings.
     agent.add_argument("--limit", type=int)
     agent.add_argument("--batch-size", type=int, default=8)
@@ -1255,7 +1255,7 @@ def build_parser():
     eval_planning.add_argument("--eai-max-steps", type=int, default=60)
     eval_planning.add_argument("--eai-reward-mode", default="dense")
     eval_planning.add_argument("--max-entities", type=int, default=64)
-    eval_planning.add_argument("--max-operations", type=int, default=8)
+    eval_planning.add_argument("--max-operations", type=int, default=12)
     eval_planning.add_argument("--tiny-vision", action="store_true")
     eval_planning.add_argument("--vision-dim", type=int, default=768)
     eval_planning.add_argument("--vision-model", default="google/siglip-base-patch16-224")

@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 import random
 import sys
+from contextlib import ExitStack
 from typing import Any, Mapping
 
 import torch
@@ -25,6 +26,7 @@ import torch
 from test_regr.VLABenchAgentInterface.dataset import (
     deterministic_split,
     load_planning_examples,
+    OBSERVATION_MODES,
 )
 from test_regr.VLABenchAgentInterface.main import _controller
 from test_regr.VLABenchAgentInterface.training import evaluate_planner
@@ -61,6 +63,8 @@ def build_eval_parser() -> argparse.ArgumentParser:
         default="validation",
         help="dataset split to evaluate (default: validation)",
     )
+    parser.add_argument("--observation-mode", choices=OBSERVATION_MODES, default="visual",
+                        help="QA property selection: visual VLM predictions (default) or explicit metadata-assisted constraints")
     parser.add_argument(
         "--limit",
         type=int,
@@ -114,7 +118,13 @@ def build_eval_parser() -> argparse.ArgumentParser:
     parser.add_argument("--eai-max-steps", type=int, default=60)
     parser.add_argument("--eai-reward-mode", default="dense")
     parser.add_argument("--max-entities", type=int, default=64)
-    parser.add_argument("--max-operations", type=int, default=8)
+    parser.add_argument("--max-operations", type=int, default=12)
+    parser.add_argument("--ground-complex", action=argparse.BooleanOptionalAction, default=True,
+                        help="enable input-grounded Complex goals; disable for the representation-only ablation")
+    parser.add_argument("--decision-trace", type=Path, help="write read-only token logits, masks, and probabilities as JSONL")
+    parser.add_argument("--input-probe", choices=("original", "permuted-entities", "no-images", "shuffled-images", "shuffled-instructions"), default="original",
+                        help="diagnostic ablation; non-original results are not benchmark scores")
+    parser.add_argument("--allow-planning-schema-migration", action="store_true", help="explicitly warm-start the audited optional-push/longer-budget schema; exact resume remains the default")
     # Controller arguments required to satisfy joint checkpoint deserialization
     parser.add_argument("--tiny-vision", action="store_true")
     parser.add_argument("--vision-dim", type=int, default=768)
@@ -148,7 +158,9 @@ def _prepare_eval(args, device):
     world = build_joint_world_graph("joint_embodied_training")
 
     print(f"[eval-planning] Loading VLABench planning data from {args.vlabench_planning_dir}...", flush=True)
-    vlabench_examples = load_planning_examples(args.vlabench_planning_dir)
+    vlabench_examples = load_planning_examples(args.vlabench_planning_dir,
+                                             observation_mode=getattr(args, "observation_mode", "visual"),
+                                             **({"ground_complex": False} if not getattr(args, "ground_complex", True) else {}))
     if not vlabench_examples:
         raise ValueError("VLABench planning dataset is empty")
     vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
@@ -202,13 +214,15 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         planner=planner,
         controller=controller,
         map_location=device,
+        allow_planning_schema_migration=getattr(args, "allow_planning_schema_migration", False),
     )
 
     planner.eval()
 
     # Select evaluation examples
     if args.split == "all":
-        examples = load_planning_examples(args.planning_dir)
+        examples = load_planning_examples(args.planning_dir, observation_mode=getattr(args, "observation_mode", "visual"),
+                                         **({"ground_complex": False} if not getattr(args, "ground_complex", True) else {}))
     else:
         examples = vla_splits.get(args.split, [])
 
@@ -224,16 +238,23 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     if not examples:
         raise ValueError(f"no planning examples found for split={args.split!r}")
+    from test_regr.VLABenchAgentInterface.planning_augmentation import diagnostic_examples
+    examples = diagnostic_examples(examples, getattr(args, "input_probe", "original"), args.seed)
 
     dim_msg = f" (dimension: {args.dimension})" if args.dimension else ""
     print(f"[eval-planning] Evaluating {len(examples)} examples from split '{args.split}'{dim_msg}...", flush=True)
 
-    with torch.no_grad():
+    with ExitStack() as stack, torch.no_grad():
+        trace = None
+        if getattr(args, "decision_trace", None):
+            args.decision_trace.parent.mkdir(parents=True, exist_ok=True)
+            trace = stack.enter_context(args.decision_trace.open("w", encoding="utf-8"))
         with runtime.domain_scope("vlabench"):
             metrics = evaluate_planner(
                 planner.for_domain("vlabench"),
                 examples,
                 _runtime_adapter(runtime, "vlabench"),
+                **({"decision_trace": trace} if trace is not None else {}),
             )
 
     planning_metrics = metrics.get("planning_metrics", {})
@@ -247,6 +268,9 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "stage": payload.get("stage"),
         "epoch": payload.get("epoch"),
         "split": args.split,
+        "observation_mode": getattr(args, "observation_mode", "visual"),
+        "ground_complex": getattr(args, "ground_complex", True),
+        "input_probe": getattr(args, "input_probe", "original"),
         "examples_evaluated": len(examples),
         "generation_failures": metrics.get("generation_failures", 0),
         "semantic_search_limit_failures": metrics.get("semantic_search_limit_failures", 0),

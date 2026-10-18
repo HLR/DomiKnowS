@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -155,7 +156,7 @@ def build_constraint_runtime(
     world_bundle=None,
     *,
     max_entities: int = 64,
-    max_operations: int = 8,
+    max_operations: int = 12,
     name_prefix: str = "vlabench",
 ) -> PlannerConstraintRuntime:
     world_bundle = world_bundle or build_vlabench_world_graph(f"{name_prefix}_world")
@@ -515,7 +516,7 @@ def train_planner_reinforcement_epoch(
 
 @torch.no_grad()
 def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstraintRuntime | None = None,
-                     *, generation_mode: str = "graph", max_new_tokens: int = 768) -> dict[str, Any]:
+                     *, generation_mode: str = "graph", max_new_tokens: int = 768, decision_trace=None) -> dict[str, Any]:
     """Apply the same scoring to graph plans or unconstrained native VLM text."""
     if generation_mode not in {"graph", "frozen-vlm"}:
         raise ValueError(f"unknown planner generation mode {generation_mode!r}")
@@ -540,9 +541,28 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
     planning_metrics = PlanningMetrics()
     generation_errors = []
     grounding_coverage = {}
+    observation_profiles = {}
+    observation_reports = []
+    complex_grounding_reports = []
     total_examples = len(examples) if hasattr(examples, "__len__") else None
+    observer_owner = getattr(planner, "joint", planner)
+    previous_observer = getattr(observer_owner, "decision_observer", None)
     try:
         for count, example in enumerate(examples, start=1):
+            if decision_trace is not None:
+                def observe(record, episode_id=_example_value(example, "episode_id", None)):
+                    decision_trace.write(json.dumps({"episode_id": episode_id, **record}) + "\n")
+                    decision_trace.flush()
+                observer_owner.decision_observer = observe
+            profile = _example_value(example, "planning_observation_profile", None) or "unspecified"
+            observation_profiles[profile] = observation_profiles.get(profile, 0) + 1
+            facts = _example_value(example, "planning_facts", None)
+            if isinstance(facts, Mapping) and facts.get("observation_report"):
+                observation_reports.append({"episode_id": _example_value(example, "episode_id", None),
+                                            **facts["observation_report"]})
+            if isinstance(facts, Mapping) and facts.get("complex_grounding_report"):
+                complex_grounding_reports.append({"episode_id": _example_value(example, "episode_id", None),
+                                                  **facts["complex_grounding_report"]})
             if total_examples and (count == 1 or count % 25 == 0 or count == total_examples):
                 print(f"[eval-planner] Evaluating example {count}/{total_examples}...", flush=True)
             if native:
@@ -610,6 +630,8 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
             for key in ("skill_match", "entity_match", "skill_with_entity_match", "exact_graph_match"):
                 totals[key] += getattr(result, key)
     finally:
+        if decision_trace is not None:
+            observer_owner.decision_observer = previous_observer
         module.train(was_training)
     return {key: value / max(1, count) for key, value in totals.items()} | {
         "examples": count, "planning_metrics": planning_metrics.result(),
@@ -619,6 +641,9 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
         ),
         "generation_errors": generation_errors,
         "grounding_coverage": grounding_coverage,
+        "observation_profiles": observation_profiles,
+        "observation_reports": observation_reports,
+        "complex_grounding_reports": complex_grounding_reports,
     } | ({"native_valid": native_valid / max(1, count)} if native else {})
 
 

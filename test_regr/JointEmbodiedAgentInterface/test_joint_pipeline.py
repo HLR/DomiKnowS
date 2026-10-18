@@ -1387,7 +1387,7 @@ def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
     table_label = runtime.vlabench_vocabulary.label_for_token("obj:0")
     eos_label = runtime.vlabench_vocabulary.eos_label
 
-    assert dfa.allowed_tokens(dfa.start_state) == {press_label}
+    assert dfa.allowed_tokens(dfa.start_state, remaining_steps=20) == {press_label}
 
     # Valid plan targeting button1 (index 1)
     valid_seq1 = [press_label, arg_label, btn1_label, eos_label]

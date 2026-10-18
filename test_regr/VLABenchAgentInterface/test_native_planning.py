@@ -300,7 +300,7 @@ def test_evaluator_persists_native_and_graph_validity_separately_and_resumes(tmp
     episode=tmp_path/'data/select_fruit/example0'
     (episode/'output').mkdir(parents=True);(episode/'env_config').mkdir();(episode/'input').mkdir()
     reference=[{'name':'pick','params':{'target_entity_name':1}},
-               {'name':'push','params':{'target_container_name':3}}]
+               {'name':'push','params':{}}]
     (episode/'env_config/scene.json').write_text(json.dumps({'task':{'components':[
         {'name':'table','class':'Table'},{'name':'apple','class':'Fruit'},
         {'name':'pear','class':'Fruit'},{'name':'plate_seen','class':'Plate'}]}}))
@@ -317,8 +317,8 @@ def test_evaluator_persists_native_and_graph_validity_separately_and_resumes(tmp
         checkpoint=None,hmm=None,weight=0,seed=42,grammar_profile='benchmark',object_constraints='instruction')
     module.experiment(args)
     path=tmp_path/'run/episodes.jsonl';before=path.read_bytes();record=json.loads(before)
-    assert not record['valid']  # Legacy graph push cannot carry an argument.
-    assert record['native_valid'] and record['grounded_valid']
+    assert record['valid']  # The graph permits an omitted push destination.
+    assert not record['native_valid'] and not record['grounded_valid']  # The native benchmark protocol requires one.
     assert record['scores']['score']==100
     assert record['instruction_constraints']['restrictions']
     module.experiment(args)

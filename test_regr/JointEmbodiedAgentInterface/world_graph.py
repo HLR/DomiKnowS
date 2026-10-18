@@ -239,7 +239,7 @@ def build_joint_runtime(
     eai_openable_object_tokens=(),
     eai_action_object_constraint_tokens=None,
     max_vlabench_entities: int = 64,
-    max_vlabench_operations: int = 8,
+    max_vlabench_operations: int = 12,
 ) -> JointDomainRuntime:
     """Attach both generation schemas and compile both immutable DFAs."""
     from domiknows.generation import constraints_to_dfa_from_graph

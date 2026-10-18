@@ -20,6 +20,29 @@ JOINT_CHECKPOINT_VERSION = 8
 SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, 4, 5, 6, 7, JOINT_CHECKPOINT_VERSION})
 
 
+def validate_planning_schema_migration(saved, current):
+    """Permit only unchanged label meanings plus the audited optional push role.
+
+    This is a warm start, never an exact optimizer/run resume. Other domain,
+    model, EAI and controller compatibility checks still run normally.
+    """
+    from test_regr.VLABenchAgentInterface.world_graph import LEGACY_VLABENCH_DOMAIN_CHECKSUM, VLABENCH_DOMAIN_CHECKSUM
+    old, new = saved.get("vlabench_vocabulary", {}), current.get("vlabench_vocabulary", {})
+    allowed = {LEGACY_VLABENCH_DOMAIN_CHECKSUM, VLABENCH_DOMAIN_CHECKSUM}
+    if saved.get("vlabench_domain_checksum") not in allowed or current.get("vlabench_domain_checksum") != VLABENCH_DOMAIN_CHECKSUM:
+        raise ValueError("planning migration requires an audited VLABench schema")
+    for key in ("skills", "argument_keys", "skill_arguments", "max_entities", "eos_token", "version"):
+        if old.get(key) != new.get(key):
+            raise ValueError(f"planning migration cannot change label meanings: {key}")
+    optional = old.get("optional_skill_arguments", ())
+    if optional and optional != new.get("optional_skill_arguments"):
+        raise ValueError("planning migration cannot change unrelated optional roles")
+    old_limit = saved.get("vlabench_dfa", {}).get("max_operations")
+    new_limit = current.get("vlabench_dfa", {}).get("max_operations")
+    if old_limit is None or new_limit is None or new_limit < old_limit:
+        raise ValueError("planning migration requires a nondecreasing operation budget")
+
+
 def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
     """Return LoRA/other trainable planner parameters without frozen NF4 state.
 
@@ -366,6 +389,7 @@ def load_joint_checkpoint(
     planner_optimizer: torch.optim.Optimizer | None = None,
     controller_optimizer: torch.optim.Optimizer | None = None,
     map_location: str | torch.device = "cpu",
+    allow_planning_schema_migration: bool = False,
 ) -> Mapping[str, Any]:
     """Restore an exact joint run, rejecting any schema/model drift."""
     payload = torch.load(
@@ -394,6 +418,10 @@ def load_joint_checkpoint(
         )
     expected = _compatibility(runtime, planner, controller)
     actual = payload.get("compatibility", {})
+    migrating_planning = False
+    if allow_planning_schema_migration:
+        validate_planning_schema_migration(actual, expected)
+        migrating_planning = True
     for key in (
         "combined_domain_checksum",
         "eai_domain_checksum",
@@ -406,6 +434,8 @@ def load_joint_checkpoint(
         "vlabench_dfa",
         "model_configuration",
     ):
+        if migrating_planning and key in {"combined_domain_checksum", "vlabench_domain_checksum", "runtime_checksum", "vlabench_vocabulary", "vlabench_dfa"}:
+            continue
         saved_value = actual.get(key)
         current_value = expected.get(key)
         if key in {"eai_dfa", "vlabench_dfa"}:
@@ -520,6 +550,8 @@ def load_joint_checkpoint(
             f"saved={saved_controller!r}, current={current_controller!r}"
         )
     _load_planner_state(planner, payload["planner"])
+    if migrating_planning:
+        payload["planning_schema_migration"] = {"from": actual.get("vlabench_domain_checksum"), "to": expected.get("vlabench_domain_checksum"), "optimizer_restored": False}
     if migrate_legacy_controller or migrate_legacy_critic:
         result = _load_controller_state_dict(controller, payload["controller"], strict=False)
         unexpected = list(result.unexpected_keys)
@@ -530,7 +562,7 @@ def load_joint_checkpoint(
             )
     else:
         _load_controller_state_dict(controller, payload["controller"], strict=True)
-    if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
+    if planner_optimizer is not None and payload.get("planner_optimizer") is not None and not migrating_planning:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])
     if (
         not migrate_legacy_controller

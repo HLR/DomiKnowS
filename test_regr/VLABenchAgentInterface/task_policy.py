@@ -75,9 +75,10 @@ class TaskRequirements:
     schema: ComplexTaskSchema | None = None
     planning: PlanningFacts = PlanningFacts()
     allowed_sequences: frozenset | None = None
+    skill_cycle: tuple = ()
 
     def skill_allowed(self, index, skill):
-        return (self.expected_skills is None or
+        return (not self.skill_cycle or skill == self.skill_cycle[index % len(self.skill_cycle)]) and (self.expected_skills is None or
                 (index < len(self.expected_skills) and self.expected_skills[index] == skill))
 
     def target_allowed(self, index, params, entities):
@@ -92,7 +93,7 @@ class TaskRequirements:
         return valid and name == self.initial_target
 
     def sequence_complete(self, count):
-        return self.expected_skills is None or count == len(self.expected_skills)
+        return (not self.skill_cycle or count % len(self.skill_cycle) == 0) and (self.expected_skills is None or count == len(self.expected_skills))
 
 
 def task_requirements(context, world, entities):
@@ -107,8 +108,17 @@ def task_requirements(context, world, entities):
             from planning_metrics import planning_metadata
         task = planning_metadata(str(get("episode_id")))[0] or ""
     expected = get("task_skill_sequence")
+    if expected is None and isinstance(get("planning_facts"), Mapping):
+        expected = get("planning_facts").get("required_skill_sequence")
+    if expected is None and isinstance(get("planning_facts"), PlanningFacts):
+        expected = get("planning_facts").required_skill_sequence or None
     if expected is None:
-        expected = world.primitive_task_patterns.get(task)
+        try:
+            from .world_graph import PLANNING_TASK_PATTERNS
+        except ImportError:
+            from world_graph import PLANNING_TASK_PATTERNS
+        expected = (PLANNING_TASK_PATTERNS.get(task, world.primitive_task_patterns.get(task))
+                    if get("planning_interface") == "compact" else world.primitive_task_patterns.get(task))
         if expected is None:
             try:
                 from .world_graph import QA_TASK_PATTERNS
@@ -134,7 +144,11 @@ def task_requirements(context, world, entities):
         return name
     planning = PlanningFacts.parse(get("planning_facts"), entities=table.values(), resolve=resolve,
                                    default_destination=get("task_target_container"), constants=("left", "right"))
-    if task in {"density_qa", "friction_qa"} and not any(s.action == "press" for s in planning.selections):
+    try:
+        from .world_graph import QA_TASK_PATTERNS
+    except ImportError:
+        from world_graph import QA_TASK_PATTERNS
+    if task in QA_TASK_PATTERNS and not any(s.action == "press" for s in planning.selections):
         from domiknows.generation.grounded import SelectionRequirement
         # QA action shape is known; the answer is unavailable without exposed
         # measurements, option bindings and a declared comparison requirement.
@@ -155,37 +169,38 @@ def task_requirements(context, world, entities):
         raise ValueError("completed_skill_prefix contradicts the task skill sequence")
     if prefix and "pick" in prefix and not any(obj is not None for _,obj in planning.initial.holdings) and prefix[-1] not in ("place", "insert"):
         raise ValueError("completed grasp progress requires an explicitly held object")
-    return TaskRequirements(expected, target, COMPLEX_TASK_SCHEMAS.get(task), planning)
+    raw = get("planning_facts")
+    cycle = planning.skill_cycle
+    if any(skill not in world.skill_arguments for skill in cycle):
+        raise ValueError("skill_cycle contains an unknown skill")
+    return TaskRequirements(expected, target, COMPLEX_TASK_SCHEMAS.get(task), planning, skill_cycle=cycle)
 
 
 
 def request_sequences(world, max_operations, requirements):
     """Syntactic derivatives justified by explicit task progress/held state."""
-    try:
-        from .graph import _legal_skill_sequences
-    except ImportError:
-        from graph import _legal_skill_sequences
+    from domiknows.generation.dfa.pattern_language import BoundedPatternLanguage
     prefix = requirements.planning.completed_skill_prefix
-    complete, _ = _legal_skill_sequences(world, max_operations + len(prefix))
-    complete = set(complete)
-    held = any(obj is not None for _,obj in requirements.planning.initial.holdings)
+    base = BoundedPatternLanguage(world.subtask_patterns, max_operations + len(prefix))
+    roots = set(world.subtask_patterns)
     if prefix:
-        suffixes = {seq[len(prefix):] for seq in complete if seq[:len(prefix)] == prefix}
-        if not suffixes:
-            raise ValueError("completed_skill_prefix is not a declared subtask prefix")
-        complete.update(seq for seq in suffixes if seq)
+        state = base.start
+        for skill in prefix:
+            state = base.advance(state, skill)
+            if state is None:
+                raise ValueError("completed_skill_prefix is not a declared subtask prefix")
+        roots.update(state.remaining)
+    held = any(obj is not None for _, obj in requirements.planning.initial.holdings)
     if held:
-        complete.update(seq[1:] for seq in tuple(complete) if seq and seq[0] == "pick" and len(seq) > 1)
+        roots.update(seq[1:] for seq in world.subtask_patterns if seq[0] == "pick" and len(seq) > 1)
     expected = requirements.expected_skills
     remaining = None if expected is None else expected[len(prefix):]
     if remaining and remaining[0] in {"place", "insert", "pour", "lift", "pull", "push"}:
         if not held:
             raise ValueError("a continuation task requires an explicitly held object")
-        complete.add(tuple(remaining))
+        roots.add(tuple(remaining))
     completion = requirements.planning.completion(requirements.planning.initial)
     schema = requirements.schema
     obligations_met = schema is None or (len(prefix) >= schema.min_operations and set(schema.required_skills) <= set(prefix))
-    if completion.applicable and completion.satisfied is True and not completion.missing and not remaining and obligations_met:
-        complete.add(())
-    # A completed prefix alone does not authorize arbitrary empty plans.
-    return frozenset(seq for seq in complete if len(seq) <= max_operations)
+    allow_empty = bool(completion.applicable and completion.satisfied is True and not completion.missing and not remaining and obligations_met)
+    return BoundedPatternLanguage(world.subtask_patterns, max_operations, tuple(sorted(roots)), allow_empty)

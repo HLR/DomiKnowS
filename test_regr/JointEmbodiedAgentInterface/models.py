@@ -581,6 +581,10 @@ class JointQwenVLPlanner(nn.Module):
             masked[indices] = logits[indices]
             distribution = torch.distributions.Categorical(logits=masked)
             label = torch.argmax(masked) if deterministic else distribution.sample()
+            observer = getattr(self, "decision_observer", None)
+            if observer is not None:
+                from domiknows.generation.decision_trace import decision_record
+                observer(decision_record(logits, allowed, label, vocabulary, token_strings))
             logprob = logprob + distribution.log_prob(label)
             label_int = int(label)
             labels.append(label_int)

@@ -108,6 +108,50 @@ def test_context_free_decoding_and_replay_reject_unbound_program(setup):
     assert planner.model.calls == 0
 
 
+def test_optional_push_goal_collection_and_replay_agree(setup):
+    runtime, planner = setup
+    context = {"instruction": "Push the book to the shelf", "images": (), "entity_table": ("book", "shelf"),
+               "task_skill_sequence": ("pick", "push"), "planning_facts": {
+                   "initial_state": {"negative": [["pushed_to", "book", "shelf"]]},
+                   "goals": {"positive": [["pushed_to", "book", "shelf"]]}, "destinations": {"book": "shelf"}}}
+    policy = runtime.dfa_for("vlabench", context)
+    prepared = planner.prepare_replay_context(context)
+    with torch.no_grad():
+        encoded = planner.encode_replay_context(prepared)
+        plan, collected, labels = planner.sample_with_logprob(**context, dfa=policy, world=runtime.world_bundle,
+            max_steps=runtime.max_tokens, encoded_context=encoded, return_labels=True)
+    assert plan[-1] == {"name": "push", "params": {"target_container_name": 1}}
+    replayed = PlannerReplayDecision(prepared, tuple(labels), policy, runtime.max_tokens).logprob(planner)
+    torch.testing.assert_close(replayed.detach(), collected)
+
+
+def test_rank_constrained_collection_and_replay_share_policy_and_logprob(setup):
+    runtime, planner = setup
+    from .physics_grounding import physics_planning_facts
+    components = [{"name": f"button{i}", "class": "Button", "subentities": [
+        {"name": f"{material}_sphere", "class": "RandomGeom", "material": material}
+    ]} for i, material in enumerate(("wood", "stone", "metal"))]
+    facts, _ = physics_planning_facts("density_qa", "medium density", components)
+    context = {"instruction": "medium density", "images": (), "entity_table": ("button0", "button1", "button2"),
+               "task": "density_qa", "planning_facts": facts}
+    policy = runtime.dfa_for("vlabench", context)
+    prepared = planner.prepare_replay_context(context)
+    with torch.no_grad():
+        encoded = planner.encode_replay_context(prepared)
+        _, collected, labels = planner.sample_with_logprob(
+            **context, dfa=policy, world=runtime.world_bundle, max_steps=runtime.max_tokens,
+            encoded_context=encoded, return_labels=True,
+        )
+    assert labels[-2] == runtime.vocabulary.label_for_token("obj:1")
+    assert policy.accepts(labels)
+    replayed = PlannerReplayDecision(prepared, tuple(labels), policy, runtime.max_tokens).logprob(planner)
+    torch.testing.assert_close(replayed.detach(), collected)
+    invalid = list(labels)
+    invalid[-2] = runtime.vocabulary.label_for_token("obj:0")
+    with pytest.raises(RuntimeError, match="rejected DFA transition"):
+        planner.replay_labels_logprob(prepared, invalid, policy, max_steps=runtime.max_tokens)
+
+
 def test_online_policy_binds_identities_even_for_equal_entity_counts(setup):
     runtime, _ = setup
     program = SimpleNamespace(runtime=runtime)

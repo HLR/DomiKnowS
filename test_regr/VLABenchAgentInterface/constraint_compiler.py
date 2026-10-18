@@ -25,7 +25,7 @@ class CompiledPlannerDFA(PredicateConstrainedDFA):
 
     world_constraint_bundle: Any = None
     token_dfa: Any = None
-    max_operations: int = 8
+    max_operations: int = 12
     operation_dfa: Any = None
     completion_bounds_cache: Any = field(default_factory=dict, compare=False, repr=False)
 
@@ -131,6 +131,13 @@ class VLABenchPredicateAdapter:
 
     def step(self, state, symbol):
         token = self.vocabulary.token_for_label(int(symbol))
+        if state.skill is not None and (token.startswith("skill:") or token == self.vocabulary.eos_token):
+            # Optional roles finish at the next operation/EOS boundary when omitted.
+            if state.pending_argument or not all(key in dict(state.params) for key in self.world.skill_arguments[state.skill]):
+                return None
+            finished = self._finish(state)
+            following = self.step(finished.state, symbol)
+            return None if following is None else SemanticTransition(following.state, finished.events + following.events)
         if state.ended:
             return SemanticTransition(state) if token == self.vocabulary.eos_token else None
         if token == self.vocabulary.eos_token:
@@ -142,7 +149,7 @@ class VLABenchPredicateAdapter:
                 return None
             skill = token[6:]
             next_state = PlanDecodingState(state.semantic, skill=skill, last_values=state.last_values)
-            result = (SemanticTransition(next_state) if self.world.skill_arguments[skill]
+            result = (SemanticTransition(next_state) if self.world.skill_arguments[skill] or self.world.optional_skill_arguments.get(skill)
                       else self._finish(next_state))
             # Finalize the previous operation's deferred predicates with False:
             # only the actual last operation is grounded as a premature EOS.
@@ -155,7 +162,7 @@ class VLABenchPredicateAdapter:
             params = dict(state.params)
             params[state.pending_argument] = int(token[4:])
             next_state = replace(state, params=tuple(sorted(params.items())), pending_argument=None)
-            if all(key in params for key in self.world.skill_arguments[state.skill]):
+            if all(key in params for key in (*self.world.skill_arguments[state.skill], *self.world.optional_skill_arguments.get(state.skill, ()))):
                 return self._finish(next_state)
             return SemanticTransition(next_state)
         return None
@@ -198,7 +205,7 @@ def task_completion_bounds(base_dfa, vocabulary, adapter, program):
     schema = adapter.schema
     # This cache is structural, not keyed by context identity or entity counts.
     # Entity facts are absent from the projection and remain request-bound.
-    key = (projected, requirements.expected_skills, prefix,
+    key = (projected, requirements.expected_skills, requirements.skill_cycle, prefix,
            None if schema is None else (schema.min_operations, schema.required_skills))
     cache = base_dfa.completion_bounds_cache
     if key in cache:

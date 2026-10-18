@@ -65,7 +65,16 @@ def operation_schema_errors(skill, params, skill_arguments, entity_table=None, *
                 valid = resolve_pointer(value, entities)[1]
             if not valid:
                 errors.append(f"operation {index} ({skill}) has invalid {key}={value!r}")
-    for key in sorted({"target_entity_name", "target_container_name"} - required):
+    try:
+        from .world_graph import OPTIONAL_SKILL_ARGUMENTS
+    except ImportError:
+        from world_graph import OPTIONAL_SKILL_ARGUMENTS
+    optional = set(OPTIONAL_SKILL_ARGUMENTS.get(skill, ()))
+    for key in optional & params.keys():
+        value = params[key]
+        if value is None or isinstance(value, bool) or (entities is not None and not resolve_pointer(value, entities)[1]):
+            errors.append(f"operation {index} ({skill}) has invalid {key}={value!r}")
+    for key in sorted({"target_entity_name", "target_container_name"} - required - optional):
         if key in params:
             errors.append(f"operation {index} ({skill}) forbids {key}")
     return tuple(errors)
@@ -140,7 +149,7 @@ class PlanSemantics:
         if skill == "pour":
             capabilities.append((subject, "pourable"))
         op = Operation(skill, subject, container, "right", grasp=skill == "pick",
-                       requires_held=skill in ("place", "pour", "insert", "lift"), release=skill in ("place", "insert"),
+                       requires_held=skill in ("place", "pour", "insert", "lift") or (skill == "push" and container is not None), release=skill in ("place", "insert"),
                        container_required=skill in ("insert", "pour"), affordances=tuple(capabilities), writes=tuple(x for x in (subject, container) if x is not None),
                        preconditions=(("open", container),) if places and is_enclosed_container(container) else ())
         yes, no = [], []
@@ -156,6 +165,8 @@ class PlanSemantics:
             yes.extend(("open", name) for name in self.entities.values()
                        if is_container_opened(name, (entity,)))
             no.extend(("closed", fact[1]) for fact in yes if fact[0] == "open")
+        if skill == "push" and subject is not None and container is not None:
+            yes.append(("pushed_to", subject, container))
         return self.planning.evaluate(state.grounded, op, positive=yes, negative=no, clear_relations=clear,
                                       holding_fact=lambda hand, obj: ("held", hand, obj))
 
@@ -180,11 +191,11 @@ class PlanSemantics:
             has_target_entity="target_entity_name" in params,
             has_target_container="target_container_name" in params,
             targets_button=any(value is not None and "button" in value.lower() for value in (entity, container)),
-            is_self_placement=container is not None and subject == container and (placement or entity is not None),
+            is_self_placement=container is not None and subject == container and (placement or skill == "push" or entity is not None),
             targets_static_fixture=skill == "pick" and entity is not None and is_static_fixture(entity),
-            repeated_pick_entity=skill == "pick" and entity is not None and entity in state.visited_picks,
+            repeated_pick_entity=skill == "pick" and entity is not None and entity in state.visited_picks and entity not in self.planning.reusable_entities,
             inconsistent_container=container is not None and
-                (expected := dict(self.planning.destinations).get(subject, self.planning.default_destination)) is not None and container != expected,
+                (expected := self.planning.destination_for(skill, subject)) is not None and container != expected,
             unopened_container_placement=placement and container is not None and is_enclosed_container(container)
                 and not is_container_opened(container, state.opened_entities)
                 and (not self.planning.supplied or state.grounded.facts.truth(("open", container)) is False

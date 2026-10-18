@@ -214,16 +214,20 @@ def test_evaluator_keeps_empty_prediction_in_denominator_with_real_reward():
     assert result["planning_metrics"]["dimensions"]["M&T"]["examples"] == 2
 
 
-def test_evaluate_cli_all_and_default_split(monkeypatch, capsys):
+@pytest.mark.parametrize("observation_mode", ["visual", "metadata-assisted"])
+def test_evaluate_cli_all_and_default_split(monkeypatch, capsys, observation_mode):
     from test_regr.VLABenchAgentInterface import main
     parser = main.build_parser()
     args = parser.parse_args(["evaluate-planner", "--planning-dir", "unused", "--split", "all",
-                              "--resume-adapter", "trained-adapter"])
+                              "--resume-adapter", "trained-adapter", "--observation-mode", observation_mode])
     assert parser.parse_args(["evaluate-planner", "--planning-dir", "unused"]).split == "test"
     examples = [object(), object()]
     vocabulary = SimpleNamespace(checksum="same", max_entities=64)
     runtime = SimpleNamespace(vocabulary=vocabulary)
-    monkeypatch.setattr(main, "load_planning_examples", lambda *args, **kwargs: examples)
+    def load(*args, **kwargs):
+        assert kwargs["observation_mode"] == observation_mode
+        return examples
+    monkeypatch.setattr(main, "load_planning_examples", load)
     monkeypatch.setattr(main, "build_vlabench_world_graph", lambda *args: None)
     monkeypatch.setattr(main.PlanVocabulary, "from_world", lambda *args: vocabulary)
     monkeypatch.setattr(main, "build_constraint_runtime", lambda *args, **kwargs: runtime)
@@ -235,7 +239,8 @@ def test_evaluate_cli_all_and_default_split(monkeypatch, capsys):
     monkeypatch.setattr(main, "evaluate_planner", evaluate)
     main.command_evaluate_planner(args)
     assert seen == examples
-    assert json.loads(capsys.readouterr().out)["examples"] == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result["examples"] == 2 and result["observation_mode"] == observation_mode
 
 
 @pytest.mark.parametrize("task, dimension", [
