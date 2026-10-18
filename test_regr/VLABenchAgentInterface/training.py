@@ -603,7 +603,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 policy=None if native else dfa,
             )
             totals["reward"] += result.total
-            for check in (result.grounding_report or {}).get("checks", ()):
+            for check in (getattr(result, "grounding_report", None) or {}).get("checks", ()):
                 statuses = grounding_coverage.setdefault(check["family"], {})
                 statuses[check["status"]] = statuses.get(check["status"], 0) + 1
             totals["valid"] += float(result.valid)

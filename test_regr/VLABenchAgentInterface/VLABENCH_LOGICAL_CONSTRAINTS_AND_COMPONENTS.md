@@ -412,3 +412,23 @@ The broader command was:
 ```
 
 Baseline comparison used the pre-change source snapshot at `C:/Users/auszok/AppData/Local/Temp/grounded-planning-baseline-fvijmwzk`, with the 13 failing test nodes replayed against those interface modules. Results: two existing assistance assertions, one native CLI JSON-output assertion, one CLI rollout-default assertion, and nine controller API/numerical assertions reproduced. A surviving existing Python docstring escape warning and baseline `atMostAL` deprecation warnings are separate from semantic acceptance results.
+
+
+## Density QA dataset correction (2026-10-18)
+
+The offline migration `repair_density_labels.py` fixes the upstream density
+config manager to select the button associated with the chosen material,
+rather than treating density rank as button position. Saved answers are
+recomputed independently from input instructions, scene materials and positions,
+and VLABench's qualitative material ordering. Only after this selection does the
+migration inspect old labels to validate their encoding and update the saved
+press operation and success condition together. No label or success condition is
+added to decoder grounding, and no new logical constraint is introduced.
+
+On gpu2, repair revision `density-material-button-v1` corrected 74/100 density
+episodes, including 9/11 density test episodes. All 100 then passed the audit;
+images and instructions were unchanged. The material ordering is a benchmark
+model, not a measurement of physical density. Existing scorecards were not
+modified or reevaluated. Historical comparisons require the same repaired label
+revision and dimension mapping for every run. See the README's density repair
+section for the audit/apply commands and backup semantics.

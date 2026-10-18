@@ -32,7 +32,8 @@ _CONFIG = json.loads(Path(__file__).with_name("planning_benchmark.json").read_te
 _LABELS = {"CommonSense": "ComSense", "PhysicsLaw": "PhysLaw"}
 TASK_DIMENSIONS = {
     task: _LABELS.get(dimension, dimension)
-    for dimension, tasks in _CONFIG["dim2task"].items() for task in tasks
+    for mapping in (_CONFIG["dim2task"], _CONFIG.get("dim2task_extensions", {}))
+    for dimension, tasks in mapping.items() for task in tasks
 }
 INDEPENDENT_TASKS = frozenset(_CONFIG["seq_independent_task"])
 
@@ -257,4 +258,5 @@ class PlanningMetrics:
             "Macro": sum(item["score"] for item in dimensions.values()) / 6 if complete else None,
             "legacy_Macro": sum(item["legacy_score"] for item in dimensions.values()) / 6 if complete else None,
             "source_revision": _CONFIG["source_revision"],
+            "dimension_mapping_revision": _CONFIG["dimension_mapping_revision"],
         }

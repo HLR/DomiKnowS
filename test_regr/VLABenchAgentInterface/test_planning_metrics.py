@@ -236,3 +236,56 @@ def test_evaluate_cli_all_and_default_split(monkeypatch, capsys):
     main.command_evaluate_planner(args)
     assert seen == examples
     assert json.loads(capsys.readouterr().out)["examples"] == 2
+
+
+@pytest.mark.parametrize("task, dimension", [
+    ("select_billiards", "M&T"),
+    ("select_billiards_spatial", "Spatial"),
+    ("select_billiards_common_sense", "ComSense"),
+    ("select_billiards_semantic", "Semantic"),
+    ("thermal_expansion_qa", "PhysLaw"),
+    ("reflection_qa", "PhysLaw"),
+    ("speed_of_sound_qa", "PhysLaw"),
+    ("magnetism_qa", "PhysLaw"),
+])
+def test_extended_task_metadata_and_dimension_aggregation(task, dimension):
+    assert planning_metadata(f"{task}/example0") == (task, dimension)
+    metrics = PlanningMetrics()
+    scores = score_planning_metrics(subtask(), subtask())
+    metrics.update(scores, task=task)
+    result = metrics.result()
+    assert result["unknown_task_count"] == 0
+    assert result["dimensions"][dimension]["examples"] == 1
+    assert result["dimensions"][dimension]["score"] == 100
+    assert result["dimension_mapping_revision"] == "vlabench-planning-coverage-v2"
+
+
+def test_full_450_episode_task_coverage_keeps_pooled_scores():
+    # Historical test split: 373 previously classified plus 77 omitted episodes.
+    old_tasks = {"select_fruit": 103, "select_fruit_spatial": 46,
+                 "select_fruit_common_sense": 75, "select_fruit_semantic": 77,
+                 "density_qa": 16, "cook_dishes": 56}
+    omitted_tasks = {"select_billiards": 10, "select_billiards_spatial": 7,
+                     "select_billiards_common_sense": 9, "select_billiards_semantic": 7,
+                     "thermal_expansion_qa": 13, "reflection_qa": 14,
+                     "speed_of_sound_qa": 6, "magnetism_qa": 11}
+    metrics = PlanningMetrics()
+    perfect = score_planning_metrics(subtask(), subtask())
+    zero = score_planning_metrics([], subtask())
+    for tasks, scores in ((old_tasks, perfect), (omitted_tasks, zero)):
+        for task, count in tasks.items():
+            for _ in range(count):
+                metrics.update(scores, task=task)
+    result = metrics.result()
+    assert result["examples"] == 450
+    assert result["unknown_task_count"] == 0
+    assert {key: item["examples"] for key, item in result["dimensions"].items()} == {
+        "M&T": 113, "Spatial": 53, "ComSense": 84, "Semantic": 84,
+        "PhysLaw": 60, "Complex": 56,
+    }
+    assert sum(item["examples"] for item in result["dimensions"].values()) == 450
+    assert result["overall"]["score"] == pytest.approx(37300 / 450)
+    assert result["Macro"] == pytest.approx(sum(
+        100 * original / total for original, total in
+        ((103, 113), (46, 53), (75, 84), (77, 84), (16, 60), (56, 56))
+    ) / 6)

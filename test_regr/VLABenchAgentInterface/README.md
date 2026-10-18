@@ -45,7 +45,20 @@ Task mappings and sequence-independent task defaults are bundled in
 `cf588fe60c0c7282174fe979f5913170cfe69017`. Tasks come from episode directories;
 explicit output dependency metadata overrides environment metadata, which
 overrides the benchmark task default. Unknown tasks default to Sequential.
-The report includes `source_revision` so mapping/scoring provenance is visible.
+The report includes `source_revision` for the pinned upstream rules and
+`dimension_mapping_revision` for task coverage. The bundled
+`dim2task_extensions` adds billiards tasks to M&T, Spatial, ComSense, and Semantic,
+and thermal expansion, reflection, speed of sound, and magnetism QA to PhysLaw.
+Revision `vlabench-planning-coverage-v2` covers all 450 episodes of the seed-42
+test split: M&T 113, Spatial 53, ComSense 84, Semantic 84, PhysLaw 60, Complex 56.
+The upstream mapping remains preserved separately in `dim2task`.
+
+Earlier reports classified only 373 episodes. Their dimension means and macro
+scores cannot be compared directly with the extended mapping; rescore saved
+per-episode predictions under the same mapping for both runs. Aggregate-only
+reports cannot recover the missing dimension contributions. This correction
+changes no per-episode or pooled overall scores and requires no retraining.
+Genuinely unknown tasks remain explicitly counted and excluded from dimensions.
 Source: [official scoring helper](https://github.com/OpenMOSS/VLABench/blob/cf588fe60c0c7282174fe979f5913170cfe69017/VLABench/evaluation/utils.py),
 [dimension mapping](https://github.com/OpenMOSS/VLABench/blob/cf588fe60c0c7282174fe979f5913170cfe69017/VLABench/configs/evaluation/dim2task.json),
 and [independent tasks](https://github.com/OpenMOSS/VLABench/blob/cf588fe60c0c7282174fe979f5913170cfe69017/VLABench/configs/evaluation/seq_independent_task.json).
@@ -315,3 +328,38 @@ python -m test_regr.VLABenchAgentInterface.main diagnose-controller \
 ```
 
 Camera parity requires a held-out replay manifest, camera map, and scene restorer. See [Notes.md](Notes.md) for the required options and interpretation.
+
+
+## Density QA label repair
+
+The upstream density generator used the selected material's sorted density rank
+as its button index, despite assigning materials to buttons in shuffled order.
+`repair_density_labels.py` changes that comparison to material identity and
+migrates saved labels from the instruction, public material ordering, and scene
+positions. It does not introduce answer facts into decoder inputs.
+
+Audit first (the generator argument is optional for a dataset-only audit):
+
+```bash
+python -m test_regr.VLABenchAgentInterface.repair_density_labels \
+  --planning-dir test_regr/VLABenchAgentInterface/data/planning \
+  --generator /opt/dominows/VLABench/VLABench/tasks/hierarchical_tasks/primitive/physical_series/density_qa.py
+```
+
+To apply, add `--apply --backup-dir /path/outside/dataset/new-backup-directory`.
+The backup directory must not already exist. The migration saves every original
+file and a manifest of original/repaired SHA-256 hashes before writing. It
+updates both `conditions.press_button.target_button` and the corresponding
+`skill_sequence` target, preserving numeric or named entity encoding. Ambiguous
+associations, unknown materials, conflicting instructions, or inconsistent old
+labels prevent the entire batch from being applied. Images and instructions
+remain unchanged. Repeating the audit after repair should report zero changes.
+
+Repair revision `density-material-button-v1` corrected 74 of the 100 density
+episodes on gpu2 (2026-10-18), including nine test episodes. All 100 passed the
+post-repair audit; all images/instructions retained their original hashes.
+The actual patched generator passed all 18 permutations of three material
+positions and target choices. These are dataset/source validation results;
+no model benchmark was rerun. Historical scorecards retain their original
+labels and must be rescored from saved predictions against the repaired dataset
+before comparisons. Source patching affects newly loaded generator code.

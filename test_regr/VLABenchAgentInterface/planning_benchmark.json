@@ -59,5 +59,26 @@
   "seq_independent_task": [
     "cook_dishes",
     "texas_holdem"
-  ]
+  ],
+  "dimension_mapping_revision": "vlabench-planning-coverage-v2",
+  "dim2task_extensions": {
+    "M&T": [
+      "select_billiards"
+    ],
+    "Spatial": [
+      "select_billiards_spatial"
+    ],
+    "CommonSense": [
+      "select_billiards_common_sense"
+    ],
+    "Semantic": [
+      "select_billiards_semantic"
+    ],
+    "PhysicsLaw": [
+      "thermal_expansion_qa",
+      "reflection_qa",
+      "speed_of_sound_qa",
+      "magnetism_qa"
+    ]
+  }
 }
