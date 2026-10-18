@@ -243,7 +243,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                 allowed = {
                     int(label)
                     for label in policy_dfa.allowed_tokens(
-                        state, remaining_steps=self.max_steps - int(step)
+                        state, remaining_steps=self.max_steps - int(step) - 1
                     )
                 }
             if not allowed:

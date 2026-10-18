@@ -644,12 +644,12 @@ class BoundSemanticDFA:
         return False
 
     def allowed_tokens(self, state, remaining_steps=None):
-        if remaining_steps is not None and remaining_steps <= 0:
+        if remaining_steps is not None and remaining_steps < 0:
             return set()
         return {
             symbol for symbol in self.base_dfa.allowed_tokens(state[0], remaining_steps=remaining_steps)
             if (nxt := self.step(state, symbol)) is not None
             and self.can_reach_accepting(
-                nxt, None if remaining_steps is None else remaining_steps - 1,
+                nxt, remaining_steps,
             )
         }

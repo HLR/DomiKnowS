@@ -939,7 +939,7 @@ class SmallLLMPlanGenerator(torch.nn.Module):
                 allowed = {
                     int(label)
                     for label in self.policy_dfa.allowed_tokens(
-                        state, remaining_steps=self.max_steps - step
+                        state, remaining_steps=self.max_steps - step - 1
                     )
                 }
                 if not allowed:

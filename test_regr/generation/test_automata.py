@@ -35,7 +35,7 @@ def test_dfa_accepts_and_rejects_basic_sequences():
 def test_remaining_steps_force_required_token():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
     dfa = required_token_dfa(vocab, "B")
-    allowed = dfa.allowed_tokens(dfa.start_state, remaining_steps=1)
+    allowed = dfa.allowed_tokens(dfa.start_state, remaining_steps=0)
 
     assert allowed == {vocab.label_for_token("B")}
 
@@ -89,7 +89,7 @@ def test_union_dfa_preserves_acceptance_and_allowed_tokens():
     assert dfa.accepts([a])
     assert dfa.accepts([b])
     assert not dfa.accepts([eos])
-    assert dfa.allowed_tokens(dfa.start_state, remaining_steps=1) == {a, b}
+    assert dfa.allowed_tokens(dfa.start_state, remaining_steps=0) == {a, b}
 
 
 def test_complement_dfa_flips_acceptance_without_dead_state_pruning():

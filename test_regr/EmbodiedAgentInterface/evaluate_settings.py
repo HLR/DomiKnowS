@@ -342,7 +342,7 @@ def qwen_dfa_predictions(args, examples, dfa, vocabulary, desc="Qwen+DFA"):
         labels = []
         for step in range(args.max_steps):
             try:
-                allowed = set(dfa.allowed_tokens(state, remaining_steps=args.max_steps - step))
+                allowed = set(dfa.allowed_tokens(state, remaining_steps=args.max_steps - step - 1))
             except TypeError:
                 allowed = set(dfa.allowed_tokens(state))
             if not allowed:

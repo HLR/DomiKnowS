@@ -173,7 +173,7 @@ class ComposedRuntimeDFA:
         cached = self._allowed_cache.get(key)
         if cached is not None:
             return set(cached)
-        if remaining_key is not None and remaining_key <= 0:
+        if remaining_key is not None and remaining_key < 0:
             self._allowed_cache[key] = frozenset()
             return set()
 
@@ -193,7 +193,7 @@ class ComposedRuntimeDFA:
             nxt = self.step(state, symbol)
             if nxt is None:
                 continue
-            if self.can_reach_accepting(nxt, None if remaining_key is None else remaining_key - 1):
+            if self.can_reach_accepting(nxt, remaining_key):
                 allowed.add(symbol)
         self._allowed_cache[key] = frozenset(allowed)
         return allowed

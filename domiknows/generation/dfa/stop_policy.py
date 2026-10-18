@@ -40,7 +40,7 @@ class DecodeProgress:
 class StopPolicy:
     """Termination and safety policy for DFA-guided decoding.
 
-    Exactly one of the following must hold (validated by
+    At least one of the following must hold (validated by
     :func:`validate_stop_policy`):
 
     * ``max_steps is not None``
@@ -146,9 +146,7 @@ def stop_policy_from_legacy(
     * else, treat ``max_new_tokens`` as the legacy hard cap and wrap it in a
       ``StopPolicy(max_steps=max_new_tokens, stop_on_eos_if_accepting=True)``
       — the historic semantics.
-    * if both are ``None``, raise ``ValueError`` (the validator would also
-      reject a `StopPolicy()` with no signals; we surface the call-site issue
-      with a clearer message).
+    * if both are ``None``, raise ``ValueError`` to require an explicit policy or legacy budget at the call site.
     """
     if stop_policy is not None and max_new_tokens is not None:
         raise ValueError(
@@ -174,7 +172,20 @@ def remaining_steps_for(policy: StopPolicy, step_index: int) -> int | None:
 
     When the policy is unbounded (``max_steps is None``), returns ``None`` so
     :meth:`DFA.allowed_tokens` skips the reachability call entirely.  When
-    bounded, returns ``max_steps - step_index`` clamped at 0.
+    bounded, returns ``max_steps - step_index - 1`` clamped at 0: the
+    budget after consuming the candidate token. The decoder must check
+    should_stop_decoding before requesting another token.
+    """
+    if policy.max_steps is None:
+        return None
+    return max(0, int(policy.max_steps) - int(step_index) - 1)
+
+
+def remaining_tokens_for(policy: StopPolicy, step_index: int) -> int | None:
+    """Return an inclusive emission horizon for algorithms such as HMM lookahead.
+
+    Unlike remaining_steps_for, this includes the candidate token. Convert to
+    an after-candidate budget when calling DFA.allowed_tokens.
     """
     if policy.max_steps is None:
         return None
@@ -230,6 +241,7 @@ __all__ = [
     "StopPolicy",
     "make_progress_tracker",
     "remaining_steps_for",
+    "remaining_tokens_for",
     "should_stop_decoding",
     "should_stop_on_token",
     "stop_policy_from_legacy",

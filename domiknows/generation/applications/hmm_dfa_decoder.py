@@ -17,7 +17,7 @@ from ..dfa.stop_policy import (
     DecodeProgress,
     StopPolicy,
     make_progress_tracker,
-    remaining_steps_for,
+    remaining_tokens_for,
     should_stop_decoding,
     should_stop_on_token,
     stop_policy_from_legacy,
@@ -571,7 +571,7 @@ class HMMDFADecoder:
     ) -> HMMDFAStepScores:
         """Score the next compact labels for every HMM+DFA search mode."""
         score_started = time.perf_counter()
-        remaining_steps = remaining_steps_for(policy, step_index)
+        remaining_steps = remaining_tokens_for(policy, step_index)
         allowed_started = time.perf_counter()
         allowed_pairs = self._allowed_transitions(
             product_state.dfa_state,
@@ -1155,7 +1155,7 @@ class HMMDFADecoder:
         if cached is not None:
             return cached
 
-        allowed = {int(label) for label in self.dfa.allowed_tokens(dfa_state, remaining_steps=remaining_steps)}
+        allowed = {int(label) for label in self.dfa.allowed_tokens(dfa_state, remaining_steps=None if remaining_steps is None else remaining_steps - 1)}
         allowed &= emittable
         transitions: list[tuple[int, Any]] = []
         for label in sorted(allowed):

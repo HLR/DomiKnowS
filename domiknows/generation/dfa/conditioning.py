@@ -352,7 +352,7 @@ class ContextualDFA:
             nxt = self.step(state, symbol)
             if nxt is None:
                 continue
-            next_limit = None if limit is None else limit - 1
+            next_limit = limit
             if self.can_reach_accepting(nxt, next_limit):
                 allowed.add(symbol)
         self._allowed_cache[key] = frozenset(allowed)

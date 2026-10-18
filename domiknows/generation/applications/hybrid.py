@@ -332,7 +332,7 @@ class HybridController:
             except ValueError:
                 pass
         if remaining_steps is None:
-            remaining_steps = max(1, len(prefix_labels) + 1)
+            remaining_steps = max(0, len(prefix_labels))
         allowed = {int(label) for label in self.dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
         try:
             logits = _next_label_logits(self.scorer_head, prefix_token_ids, prompt_ids_t)
@@ -366,7 +366,7 @@ class HybridController:
             if next_state is None:
                 break
             state = next_state
-        allowed = {int(label) for label in self.dfa.allowed_tokens(state, remaining_steps=max(1, top_k))}
+        allowed = {int(label) for label in self.dfa.allowed_tokens(state, remaining_steps=max(0, top_k - 1))}
         next_labels = []
         logits = None
         if self.scorer_head is not None:
@@ -1167,7 +1167,7 @@ def _constraint_repair_suggestions(
             token = vocabulary.token_for_label(int(label))
             return [f"revise token {index} ({token!r}) or choose one of the DFA-allowed next labels before it"]
         state = next_state
-    allowed = sorted(int(label) for label in dfa.allowed_tokens(state, remaining_steps=1))
+    allowed = sorted(int(label) for label in dfa.allowed_tokens(state, remaining_steps=0))
     if allowed:
         rendered = ", ".join(repr(vocabulary.token_for_label(label)) for label in allowed[:5])
         return [f"append or replace with a DFA-allowed next token such as {rendered}"]

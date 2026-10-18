@@ -153,7 +153,7 @@ class DFA:
             else:
                 if nxt not in reachable:
                     reachable[nxt] = self.can_reach_accepting(
-                        nxt, remaining_steps - 1
+                        nxt, remaining_steps
                     )
                 if reachable[nxt]:
                     # Bounded: only include the symbol if we can still reach

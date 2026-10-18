@@ -95,7 +95,7 @@ def allowed_mass_loss(
         for step_idx in range(batched.shape[1]):
             allowed = sorted(
                 int(label)
-                for label in dfa.allowed_tokens(state, remaining_steps=batched.shape[1] - step_idx)
+                for label in dfa.allowed_tokens(state, remaining_steps=batched.shape[1] - step_idx - 1)
                 if 0 <= int(label) < label_count
             )
             if allowed:

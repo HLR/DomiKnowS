@@ -290,7 +290,7 @@ def trace_dfa(dfa: DFA, sequence: Sequence[Symbol], *, remaining_steps: int | No
     reason = None
 
     for index, symbol in enumerate(symbols):
-        budget = None if remaining_steps is None else max(remaining_steps - index, 0)
+        budget = None if remaining_steps is None else max(remaining_steps - index - 1, 0)
         allowed = tuple(_sorted_values(dfa.allowed_tokens(state, remaining_steps=budget)))
         next_state = dfa.step(state, symbol)
         if symbol not in allowed:
