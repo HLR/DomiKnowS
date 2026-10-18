@@ -116,14 +116,15 @@ class SelectionRequirement:
     property: str = "value"
     argument: str = "subject"
     threshold: float | None = None
+    rank: int | None = None  # Zero-based ascending order statistic; ties share eligibility.
 
     @classmethod
     def parse(cls, raw, resolve):
         if not isinstance(raw, Mapping) or not isinstance(raw.get("action"), str) or not raw["action"]:
             raise ValueError("selection requirements need an action name")
         criterion = raw.get("criterion")
-        if criterion not in (None, "min", "max", "below", "above"):
-            raise ValueError("selection criterion must be min, max, below, or above")
+        if criterion not in (None, "min", "max", "below", "above", "rank"):
+            raise ValueError("selection criterion must be min, max, below, above, or rank")
         argument = raw.get("argument", "subject")
         if argument not in ("subject", "destination"):
             raise ValueError("selection argument must be subject or destination")
@@ -136,6 +137,12 @@ class SelectionRequirement:
         candidates = tuple(resolve(candidate) for candidate in candidates)
         if len(set(candidates)) != len(candidates):
             raise ValueError("duplicate selection candidate")
+        rank = raw.get("rank")
+        if criterion == "rank":
+            if type(rank) is not int or not 0 <= rank < len(candidates):
+                raise ValueError("selection rank must be a zero-based integer within the candidate universe")
+        elif rank is not None:
+            raise ValueError("selection rank requires the rank criterion")
         def number(value):
             if value is None:
                 return None
@@ -154,7 +161,7 @@ class SelectionRequirement:
         if set(candidate for candidate, _ in observed) - set(candidates):
             raise ValueError("selection score refers to an undeclared candidate")
         return cls(raw["action"], candidates, observed, criterion, str(raw.get("property", "value")),
-                   argument, number(raw.get("threshold")))
+                   argument, number(raw.get("threshold")), rank)
 
     def check(self, op):
         if op.action != self.action:
@@ -181,6 +188,16 @@ class SelectionRequirement:
                 better = any(other is not None and (other < value if self.criterion == "min" else other > value)
                              for candidate in self.candidates for other in (scores.get(candidate),))
                 satisfied = False if better else True if not missing else None
+        elif self.criterion == "rank":
+            missing.extend(f"{self.property} of {candidate}" for candidate in self.candidates
+                           if scores.get(candidate) is None)
+            if value is not None and self.rank is not None:
+                lower = sum(scores.get(c) is not None and scores[c] < value for c in self.candidates)
+                greater = sum(scores.get(c) is not None and scores[c] > value for c in self.candidates)
+                # Even unknown scores cannot rescue a candidate with too many
+                # known values on either side of the requested order statistic.
+                impossible = lower > self.rank or greater > len(self.candidates) - self.rank - 1
+                satisfied = False if impossible else True if not missing else None
         elif self.criterion in ("below", "above"):
             if self.threshold is None:
                 missing.append("selection threshold")
@@ -205,6 +222,13 @@ class PlanningFacts:
     completed_skill_prefix: tuple = ()
     supplied: bool = False
     selections: tuple = ()
+    reusable_entities: frozenset = frozenset()
+    action_destinations: tuple = ()
+    skill_cycle: tuple = ()
+    required_skill_sequence: tuple = ()
+
+    def destination_for(self, action, subject):
+        return {(a, s): d for a, s, d in self.action_destinations}.get((action, subject), dict(self.destinations).get(subject, self.default_destination))
 
     @classmethod
     def parse(cls, raw=None, *, entities=(), resolve=None, default_destination=None, constants=()):
@@ -282,13 +306,19 @@ class PlanningFacts:
                             tuple(map(str, effect.get("release_hands", ())))))
         if any(set(additions) & set(removals) for _, additions, removals, _ in effects):
             raise ValueError("contradictory declared action effects")
+        action_destinations = tuple((str(item["action"]), entity(item["subject"]), entity(item["destination"])) for item in raw.get("action_destinations", ()))
+        if len({(a, s) for a, s, _ in action_destinations}) != len(action_destinations):
+            raise ValueError("duplicate action-specific destination requirement")
         return cls(GroundedState(facts(initial), holdings, completed), tuple(sorted(properties)), capacities,
                    tuple(sorted((entity(s), entity(d)) for s,d in raw.get("destinations", {}).items())),
                    entity(default_destination) if default_destination is not None else None,
                    tuple(compatibility), facts(raw.get("goals")), facts(raw.get("preserve")),
                    frozenset(entity(x) for x in raw.get("protected_entities", ())), tuple(milestones), tuple(effects),
                    tuple(raw.get("completed_skill_prefix", ())), bool(raw) or default_destination is not None,
-                   selections=tuple(SelectionRequirement.parse(item, entity) for item in raw.get("selections", ())))
+                   selections=tuple(SelectionRequirement.parse(item, entity) for item in raw.get("selections", ())),
+                   reusable_entities=frozenset(entity(x) for x in raw.get("reusable_entities", ())),
+                   action_destinations=action_destinations,
+                   skill_cycle=tuple(raw.get("skill_cycle", ())), required_skill_sequence=tuple(raw.get("required_skill_sequence", ())))
 
     def completion(self, state):
         values = [state.facts.truth(f) for f in self.goals.positive]
@@ -303,7 +333,7 @@ class PlanningFacts:
         held = holdings.get(op.hand)
         hand_known = op.hand in holdings
         subject = op.subject if op.subject is not None else held
-        expected = dict(self.destinations).get(subject, self.default_destination)
+        expected = self.destination_for(op.action, subject)
         checks = [combined("destination", [op.destination == expected] if expected is not None else [None],
                            applicable=op.destination is not None)]
         checks.append(combined("holding", [True if op.idempotent else
@@ -325,8 +355,11 @@ class PlanningFacts:
         checks.append(combined("compatibility", [pairs.get((subject, op.destination))] + ([properties.get((op.destination,"container"))] if op.container_required else []),
                                applicable=op.destination is not None))
         matched = [m for m in self.milestones if m[1] == op.action and (m[2] is None or m[2] == subject)
-                   and (m[3] is None or m[3] == op.destination)]
-        checks.append(combined("milestone_order", [set(m[4]) <= state.milestones for m in matched], applicable=bool(matched)))
+                   and (m[3] is None or m[3] == op.destination) and m[0] not in state.milestones]
+        enabled = [m for m in matched if set(m[4]) <= state.milestones]
+        # A repeated action may describe successive milestones. One source-state
+        # event advances enabled milestones only, never their future successors.
+        checks.append(combined("milestone_order", [bool(enabled)], applicable=bool(matched)))
         yes, no = set(map(tuple, positive)), set(map(tuple, negative))
         # Functional spatial updates invalidate known/required alternative locations.
         candidates = state.facts.positive | self.goals.positive | self.goals.negative | self.preserve.positive | self.preserve.negative
@@ -363,7 +396,7 @@ class PlanningFacts:
                         no.add(fact)
             no.difference_update(yes)
         next_facts = state.facts.update(yes, no)
-        done = state.milestones | {m[0] for m in matched if set(m[4]) <= state.milestones}
+        done = state.milestones | {m[0] for m in enabled}
         successor = GroundedState(next_facts, tuple(sorted(holdings.items())), frozenset(done))
         changed_subjects = {f[1] for f in yes if len(f) > 1 and state.facts.truth(f) is not True}
         changed_subjects.update(f[1] for f in no if len(f) > 1 and state.facts.truth(f) is not False)

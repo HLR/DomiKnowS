@@ -1,5 +1,6 @@
 """Numeric target eligibility uses supplied observations, not option positions."""
 import pytest
+from itertools import product
 
 from domiknows.generation.grounded import GroundedState, Operation, PlanningFacts, report
 
@@ -55,3 +56,34 @@ def test_destination_selection_and_action_applicability_are_generic():
 def test_malformed_or_unresolved_numeric_requirements_fail_closed(change):
     with pytest.raises(ValueError):
         facts(**{"criterion": "max", **change})
+
+
+@pytest.mark.parametrize("values", list(product((1, 2, 3), repeat=3)))
+@pytest.mark.parametrize("rank", (0, 1, 2))
+def test_rank_matches_independent_order_statistic_including_ties(values, rank):
+    scores = dict(zip(("a", "b", "c"), values))
+    planning = facts(criterion="rank", rank=rank, scores=scores)
+    expected = sorted(values)[rank]
+    for entity, value in scores.items():
+        check, _ = eligible(planning, entity)
+        assert check.satisfied == (value == expected)
+
+
+def test_rank_partial_observations_enforce_known_violations():
+    planning = facts(criterion="rank", rank=0, scores={"a": 1, "b": 3})
+    loser, _ = eligible(planning, "b")
+    possible, checks = eligible(planning, "a")
+    assert loser.satisfied is False
+    assert possible.satisfied is None
+    assert not report(checks)["fully_grounded"]
+    highest = facts(criterion="rank", rank=2, scores={"a": 1, "b": 3})
+    assert eligible(highest, "a")[0].satisfied is False
+
+
+@pytest.mark.parametrize("changes", [
+    {"rank": None}, {"rank": True}, {"rank": -1}, {"rank": 3}, {"rank": 1.0},
+    {"criterion": "min", "rank": 1},
+])
+def test_invalid_rank_requirements_are_rejected(changes):
+    with pytest.raises(ValueError):
+        facts(**{"criterion": "rank", **changes})

@@ -74,8 +74,9 @@ def test_each_family_is_compiled_and_can_be_deactivated(family, facts, tokens):
     assert not policy.accepts(encoded)  # Previous compilation remains immutable.
 
 
-def test_observed_numeric_target_selection_is_shared_without_changing_hand_semantics(world):
-    facts = {"selections": [{"action": "left_grasp", "criterion": "max",
+@pytest.mark.parametrize("comparison", [{"criterion": "max"}, {"criterion": "rank", "rank": 1}])
+def test_observed_numeric_target_selection_is_shared_without_changing_hand_semantics(world, comparison):
+    facts = {"selections": [{"action": "left_grasp", **comparison,
                               "candidates": ["apple", "cup"],
                               "scores": {"apple": 1, "cup": 2}}]}
     policy, vocab = policy_for(world, facts)
