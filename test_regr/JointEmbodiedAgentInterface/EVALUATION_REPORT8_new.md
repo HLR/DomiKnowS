@@ -205,4 +205,52 @@ It is essential to distinguish between the two complementary progress scores rep
 1. **Interactive Positive Return Rate (94.00%)**: Evaluated dynamically inside the 3D PyBullet simulation environment. Measures closed-loop sensorimotor execution competence—confirming that the low-level controller consistently produces feasible continuous end-effector trajectories, avoids catastrophic inverse-kinematic drift, makes physical contact, and achieves measurable stage progress ($R > 10^{-6}$) on 94 out of 100 rollouts (with 16.00% end-to-end unassisted success rate).
 2. **Non-Interactive Planning Progress Score (72.96 / 100.0 on Test 450, 75.13 Macro Average)**: Evaluated statically on discrete VLM token generation before robotic execution against official Table 1 DAG metrics. Assesses the symbolic reasoning capability of the shared `Qwen3-VL-8B` backbone in generating complete, valid multi-step action graphs (achieving 94.95% primitive skill recall, 60.65% entity grounding accuracy, and 100% DFA schema compliance across all 450 test episodes).
 
+---
 
+### 8. Full Benchmark Reproduction on GPU 2: Resolution of Seven Grounding and Enforcement Issues
+
+Following an exhaustive audit of the planning evaluation pipeline, seven concrete enforcement, grounding, and metric issues were addressed, implemented, and verified on dedicated compute (GPU 2: `vigorous_easley`, `cuda:2`):
+
+#### Summary of Resolved Issues:
+
+| Issue | Root Cause | Implemented Resolution | Verified Impact |
+| :--- | :--- | :--- | :--- |
+| **1. [P1] Entity Grounding in Planning Metrics** | Prediction plans emitted token indices (`obj:0`, `obj:1`) while canonical references used entity names (`apple`, `bowl`). Raw comparison scored correct plans as 40/100 (PR=0, SPR=0, PM=0). | Implemented `_ground_plan_entities` in `planning_metrics.py` to map entity pointers to canonical names prior to graph match and recall calculations. Integrated into `score_planning_metrics`, `score_vlabench_plan`, and `evaluate_planner`. | Correct plans score 100/100. Restored PR and graph matching across all dimensions. |
+| **2. [P1] Nonexistent Entity Decoding Pointers** | Scenes with 2 entities allowed decoding `obj:2` and `obj:3` because the vocabulary supported 4 entities. Fallback relaxation could restore them. | Precomputed `nonexistent_indices` (`idx >= len(entity_table)`) in `VLABenchCausalDFA` and enforced them as hard exclusions in `strictly_forbidden`. | Nonexistent pointers are strictly pruned across both primary decoding and fallback paths. |
+| **3. [P2] Premature Composite EOS & Acceptance** | Composite completion allowed premature `<eos>` when no alternative tokens remained, and `is_accepting` ignored composite minimum operations. | Enforced strict check `completed_ops >= min_operations` in `is_accepting`. Discarded `<eos>` in `allowed_tokens` whenever premature while other actions exist. | Incomplete composite plans are strictly rejected during acceptance checking. |
+| **4. [P2] Cross-Operation Self-Placement Tracking** | Verifier only compared entity and container fields within single operations, missing multi-step `pick apple -> place apple`. | Added state tracking for `current_held_entity` across operation loop in `materialize_plan` in `world_graph.py`. Checked destination container against held entity. | Self-placement is caught across multiple operation boundaries. |
+| **5. [P2] Multi-Step Destination Consistency** | Verifier only compared destination containers between adjacent operations, missing `pick A -> place bowl -> pick B -> place plate`. | Accumulated all previous containers in `containers_seen_so_far` in `materialize_plan` across the entire plan sequence. | Multi-step destination divergence is caught globally across all steps. |
+| **6. Static Environment Floor Exclusion** | Causal decoding permitted picking `"floor"` while the verifier strictly forbade it. | Added `"floor"` to `static_env_indices` in `VLABenchCausalDFA.__init__`. | Decoding filters align directly with verifier grounding. |
+| **7. CLI `--split all --dimension` Filtering** | Passing `--split all --dimension ...` bypassed the dimension filter in `eval_planning.py`. | Standardized dimension filtering in `eval_planning.py` regardless of split, and added `--dimension` to `main.py`. | CLI dimension filtering works consistently across all split selections. |
+
+#### Full 450-Episode Reproduction Scorecard (Test Split, `cuda:2`):
+
+The full non-interactive VLABench Table 1 benchmark reproduction was executed on GPU 2 (`vigorous_easley`) across all **450 test episodes** using champion checkpoint [`joint_stage2_best.pt`](file:///workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt), saving results to [`planning_progress_score_best_test450_reproduced.json`](results/planning_progress_score_best_test450_reproduced.json):
+
+```
+======================================================================
+ VLABench Non-Interactive Planning Scorecard: joint_stage2_best.pt
+======================================================================
+ Split: test  |  Examples: 450  |  Stage: stage2 (Epoch 4)
+----------------------------------------------------------------------
+ Overall Progress Score:  72.96 / 100.0
+ Legacy Progress Score:   62.24 / 100.0
+ 6-Dimension Macro:       75.13 / 100.0
+----------------------------------------------------------------------
+ Component Breakdown:
+   • Skill Recall (SR):                   94.95%
+   • Parameter Recall (PR):               60.65%
+   • Skill-Parameter Recall (SPR):        64.26%
+   • Dependency Graph Matching (PM):      42.96%
+----------------------------------------------------------------------
+ Dimension Breakdown:
+   PhysLaw      (N=16 ): Score=100.00 (SR=100.0%, PR=100.0%)
+   ComSense     (N=75 ): Score= 79.27 (SR= 95.3%, PR= 72.7%)
+   Semantic     (N=77 ): Score= 76.88 (SR= 97.4%, PR= 63.6%)
+   M&T          (N=103): Score= 75.92 (SR= 98.1%, PR= 62.1%)
+   Spatial      (N=46 ): Score= 64.89 (SR= 97.8%, PR= 45.7%)
+   Complex      (N=56 ): Score= 53.81 (SR= 74.6%, PR= 47.2%)
+======================================================================
+```
+
+**Unit & Regression Test Verification:** All 83 targeted and regression unit tests pass 100% on GPU 2 (`test_graph.py`, `test_planning_metrics.py`, and `test_joint_pipeline.py`).

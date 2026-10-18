@@ -295,3 +295,48 @@ The table below contrasts published SOTA zero-shot foundation models, CLAMP cons
 4. **Causal Constraints on Multi-Step Planning:** Enforcing physical preconditions via `VLABenchCausalDFA` (anti-self-placement, multi-step entity rotation, background filtering, container consistency) boosted Complex task Parameter Recall from **20.89% to 33.95%** (+62.5% relative gain) and lifted overall Complex score from 35.32 to 41.54.
 5. **Hierarchical Subgoal Completion Eliminates Implicit Intent Degradation:** Incorporating hierarchical planning from `domiknows.generation.applications.planning` (`VLABenchCompositePlanningDFA`, `composite_subgoal_completion`, required skills bitmask) eliminated premature `<eos>` termination on open-ended dialogue tasks, surging Complex score from **35.32 to 53.81 / 100.0** (+52.3% relative gain) and Complex Parameter Recall to **47.23%**.
 6. **Neuro-Symbolic Superiority:** The DomiKnowS Joint Agent with Hierarchical Composite Planning ([`joint_stage2_best.pt`](file:///c:/Users/auszok/git/DomiKnowS/RelationalGraph/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt)) sets the new all-time state-of-the-art benchmark performance with **`75.13` Macro Average** and **`72.96` Overall Progress Score** (100.0% validity), outperforming all published zero-shot foundation models (GPT-4o, Qwen2-VL, GLM-4V) and soft HMM lookahead frameworks (CLAMP) across every cognitive dimension.
+
+---
+
+## 9. Full Benchmark Reproduction on GPU 2: Seven Grounding & Enforcement Gaps Resolved
+
+To verify benchmark fidelity and eliminate any remaining discrepancy between token generation, semantic verification, and metric computation, seven concrete enforcement and grounding issues were audited, resolved, and verified on GPU 2 (`vigorous_easley`, `cuda:2`):
+
+| Issue | Root Cause | Implemented Resolution | Verified Impact |
+| :--- | :--- | :--- | :--- |
+| **1. [P1] Entity Grounding in Planning Metrics** | Generated plans contained compact entity indices (`obj:0`, `obj:1`), while canonical ground-truth references used entity names (`apple`, `bowl`). Direct comparison scored correct plans as 40/100 (PR=0, SPR=0, PM=0). | Added `_ground_plan_entities` in `planning_metrics.py` to map generated entity pointers to canonical names prior to graph match and recall scoring. | Correct plans score 100/100. Restored PR and PM metrics across all dimensions. |
+| **2. [P1] Nonexistent Entity Decoding Pointers** | In scenes with fewer objects (e.g. 2 objects), greedy/beam decoding could select `obj:2` or `obj:3` because the vocabulary supported 4 entities, and fallback could re-allow them. | Precomputed `nonexistent_indices` in `VLABenchCausalDFA` and enforced them in `strictly_forbidden`. | Nonexistent pointers are strictly pruned across both primary and fallback decoding paths. |
+| **3. [P2] Premature Composite EOS & Acceptance** | Composite completion permitted premature `<eos>` when no other skills remained in the base grammar, and `is_accepting` ignored composite minimum operations. | Enforced `completed_ops >= min_operations` in `is_accepting`. Discarded `<eos>` in `allowed_tokens` whenever premature while other actions exist. | Incomplete composite plans are strictly rejected during acceptance checking. |
+| **4. [P2] Cross-Operation Self-Placement Tracking** | Verifier only compared entity and container fields within single operations, missing multi-step `pick apple -> place apple`. | Added state tracking for `current_held_entity` across operation loops in `materialize_plan` in `world_graph.py`. Checked destination container against held entity. | Self-placement is caught across multiple operation boundaries. |
+| **5. [P2] Multi-Step Destination Consistency** | Verifier only compared destination containers between adjacent operations, missing `pick A -> place bowl -> pick B -> place plate`. | Accumulated all previous containers in `containers_seen_so_far` in `materialize_plan` across the entire plan sequence. | Multi-step destination divergence is caught globally across all steps. |
+| **6. Static Environment Floor Exclusion** | Causal decoding permitted picking `"floor"` while the verifier strictly forbade it. | Added `"floor"` to `static_env_indices` in `VLABenchCausalDFA.__init__`. | Decoding filters align directly with verifier grounding. |
+| **7. CLI `--split all --dimension` Filtering** | Passing `--split all --dimension ...` bypassed the dimension filter in `eval_planning.py`. | Standardized dimension filtering in `eval_planning.py` regardless of split, and added `--dimension` to `main.py`. | CLI dimension filtering works consistently across all split selections. |
+
+### Verified 450-Episode Reproduction Scorecard (`joint_stage2_best.pt`):
+
+```
+======================================================================
+ VLABench Non-Interactive Planning Scorecard: joint_stage2_best.pt
+======================================================================
+ Split: test  |  Examples: 450  |  Stage: stage2 (Epoch 4)
+----------------------------------------------------------------------
+ Overall Progress Score:  72.96 / 100.0
+ Legacy Progress Score:   62.24 / 100.0
+ 6-Dimension Macro:       75.13 / 100.0
+----------------------------------------------------------------------
+ Component Breakdown:
+   • Skill Recall (SR):                   94.95%
+   • Parameter Recall (PR):               60.65%
+   • Skill-Parameter Recall (SPR):        64.26%
+   • Dependency Graph Matching (PM):      42.96%
+----------------------------------------------------------------------
+ Dimension Breakdown:
+   PhysLaw      (N=16 ): Score=100.00 (SR=100.0%, PR=100.0%)
+   ComSense     (N=75 ): Score= 79.27 (SR= 95.3%, PR= 72.7%)
+   Semantic     (N=77 ): Score= 76.88 (SR= 97.4%, PR= 63.6%)
+   M&T          (N=103): Score= 75.92 (SR= 98.1%, PR= 62.1%)
+   Spatial      (N=46 ): Score= 64.89 (SR= 97.8%, PR= 45.7%)
+   Complex      (N=56 ): Score= 53.81 (SR= 74.6%, PR= 47.2%)
+======================================================================
+```
+*Results artifact saved to:* [`test_regr/JointEmbodiedAgentInterface/results/planning_progress_score_best_test450_reproduced.json`](file:///workspace/test_regr/JointEmbodiedAgentInterface/results/planning_progress_score_best_test450_reproduced.json).

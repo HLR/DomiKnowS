@@ -1,0 +1,2785 @@
+{
+  "timestamp": "2026-10-03 04:25:14",
+  "checkpoint": "test_regr/JointEmbodiedAgentInterface/checkpoints/full_20260927_011044/joint_stage2_epoch_004.pt",
+  "device": "cuda:0",
+  "tasks": [
+    "select_mahjong",
+    "select_poker",
+    "select_book",
+    "select_fruit",
+    "add_condiment"
+  ],
+  "rollouts_per_task": 1,
+  "baseline_224": {
+    "return": 0.014616515524875986,
+    "positive_return_rate": 0.2,
+    "success_rate": 0.0,
+    "valid_rate": 0.8,
+    "steps": 334.2,
+    "episodes": 5,
+    "successful_task_count": 0,
+    "ik_failures": 550,
+    "ik_recoveries": 211,
+    "assist_steps": 0,
+    "assisted_episode_rate": 0.0,
+    "unassisted_success_rate": 0.0,
+    "ik_truncation_rate": 0.0,
+    "execution_complete_rate": 0.8,
+    "per_task": {
+      "add_condiment": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.0,
+        "positive_return_rate": 0.0,
+        "steps": 400.0,
+        "ik_failures": 189,
+        "ik_recoveries": 72,
+        "ik_recovery_rate": 0.38095238095238093,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.0,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_book": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.0,
+        "positive_return_rate": 0.0,
+        "steps": 400.0,
+        "ik_failures": 19,
+        "ik_recoveries": 10,
+        "ik_recovery_rate": 0.5263157894736842,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.0,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_fruit": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.0,
+        "positive_return_rate": 0.0,
+        "steps": 400.0,
+        "ik_failures": 32,
+        "ik_recoveries": 16,
+        "ik_recovery_rate": 0.5,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.0,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_mahjong": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 0.0,
+        "return": 0.0,
+        "positive_return_rate": 0.0,
+        "steps": 71.0,
+        "ik_failures": 0,
+        "ik_recoveries": 0,
+        "ik_recovery_rate": 0.0,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 0.0,
+        "progress": 0.8974055916923122,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_poker": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.07308257762437993,
+        "positive_return_rate": 1.0,
+        "steps": 400.0,
+        "ik_failures": 310,
+        "ik_recoveries": 113,
+        "ik_recovery_rate": 0.36451612903225805,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.29233031049751973,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      }
+    },
+    "evaluation_seed": 100000,
+    "episode_diagnostics": [
+      {
+        "task": "select_mahjong",
+        "termination_reason": "physics_failure",
+        "steps": 71,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.8974055916923122,
+          "targets": {
+            "5_pin": {
+              "samples": 72,
+              "unavailable": 0,
+              "initial_m": 0.4329175959665421,
+              "final_m": 0.044414924604174066,
+              "final_position": [
+                -0.027630723769061876,
+                0.03063719178658017,
+                0.7836761285651096
+              ],
+              "minimum_m": 0.04166012680568026,
+              "grasp_position": [
+                -0.017376880696410087,
+                0.032373608302219886,
+                0.7864767641939704
+              ],
+              "grasp_final_m": 0.054237224594041816,
+              "grasp_minimum_m": 0.04673233213981445,
+              "improvement_m": 0.38850267136236805
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 0.6569238921499038,
+          "observations": 72,
+          "observed_open": 0,
+          "observed_gripper_transitions": 0,
+          "commands": 71,
+          "commanded_open": 71,
+          "commanded_gripper_transitions": 1,
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144274273768
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188811667
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272055
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "error_type": "PhysicsError",
+          "error_message": "Physics state is invalid. Warning(s) raised: mjWARN_BADQACC",
+          "failure_phase": "rollout",
+          "final_progress": 0.8974055916923122,
+          "final_intention": 1.0
+        }
+      },
+      {
+        "task": "select_poker",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.29233031049751973,
+          "targets": {
+            "4_of_clubs": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.4852154692323518,
+              "final_m": 0.3433722804534587,
+              "final_position": [
+                -0.06609801916439646,
+                0.12285155514425754,
+                0.830998938320637
+              ],
+              "minimum_m": 0.2625155821665755,
+              "grasp_position": [
+                -0.06609801913963648,
+                0.12285155540862869,
+                0.850998938320637
+              ],
+              "grasp_final_m": 0.33398803607102645,
+              "grasp_minimum_m": 0.2632099337693101,
+              "improvement_m": 0.14184318877889313
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 2.783127423573439,
+          "observations": 401,
+          "observed_open": 246,
+          "observed_gripper_transitions": 13,
+          "commands": 400,
+          "commanded_open": 155,
+          "commanded_gripper_transitions": 16,
+          "task_contract": {
+            "task": "select_poker",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "lift"
+            ],
+            "target_attributes": [
+              "target_entity"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the requested poker item and lift it."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144274337382
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188811733
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272063
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.29233031049751973,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      },
+      {
+        "task": "select_book",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.0,
+          "targets": {
+            "data_visualization": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.43364810229411394,
+              "final_m": 0.9001926977659707,
+              "final_position": [
+                0.09854529563622119,
+                0.2521038593914651,
+                1.2092943969309802
+              ],
+              "minimum_m": 0.19882149908787894,
+              "grasp_position": [
+                0.09854405491238609,
+                0.18710385940560037,
+                1.209293850862631
+              ],
+              "grasp_final_m": 0.8659221624573749,
+              "grasp_minimum_m": 0.19180251214339541,
+              "improvement_m": -0.4665445954718567
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 2.6902780857748647,
+          "observations": 401,
+          "observed_open": 323,
+          "observed_gripper_transitions": 1,
+          "commands": 400,
+          "commanded_open": 81,
+          "commanded_gripper_transitions": 4,
+          "task_contract": {
+            "task": "select_book",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "pull"
+            ],
+            "target_attributes": [
+              "target_entity"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the book and pull it clear of the shelf."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.0041731442704362135
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188814237
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272055
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.0,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      },
+      {
+        "task": "select_fruit",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.0,
+          "targets": {
+            "orange": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.500191470219555,
+              "final_m": 0.5966636196209194,
+              "final_position": [
+                0.2679045693460403,
+                -0.18405839521665013,
+                0.7895367580114666
+              ],
+              "minimum_m": 0.4655134302781642,
+              "grasp_position": [
+                0.2679045693460403,
+                -0.18405839521665013,
+                0.7895367580114666
+              ],
+              "grasp_final_m": 0.5966636196209194,
+              "grasp_minimum_m": 0.4655134302781642,
+              "improvement_m": -0.0964721494013644
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 2.9648979659547017,
+          "observations": 401,
+          "observed_open": 198,
+          "observed_gripper_transitions": 11,
+          "commands": 400,
+          "commanded_open": 203,
+          "commanded_gripper_transitions": 14,
+          "task_contract": {
+            "task": "select_fruit",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "place"
+            ],
+            "target_attributes": [
+              "target_entity",
+              "target_container"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the requested fruit and place it in the target."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.003921568859368563,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144274100605
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188811733
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272044
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.0,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      },
+      {
+        "task": "add_condiment",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.0,
+          "targets": {
+            "salt": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.44448666601513714,
+              "final_m": 0.8832444020081833,
+              "final_position": [
+                0.1560533556324515,
+                -0.13265868080130844,
+                0.7972458325129838
+              ],
+              "minimum_m": 0.3327778680847015,
+              "grasp_position": [
+                0.1560533556324515,
+                -0.13265868080130844,
+                0.7972458325129838
+              ],
+              "grasp_final_m": 0.8832444020081833,
+              "grasp_minimum_m": 0.3327778680847015,
+              "improvement_m": -0.4387577359930462
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 1.7040708093433286,
+          "observations": 401,
+          "observed_open": 0,
+          "observed_gripper_transitions": 0,
+          "commands": 400,
+          "commanded_open": 400,
+          "commanded_gripper_transitions": 1,
+          "task_contract": {
+            "task": "add_condiment",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "pour"
+            ],
+            "target_attributes": [
+              "target_entity",
+              "target_container"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the condiment and pour it into the target container."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144386786835
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.2605630818878269
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328275776
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.0,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      }
+    ],
+    "elapsed_seconds": 1783.1184585094452
+  },
+  "upgraded_384": {
+    "return": 0.07726601810901436,
+    "positive_return_rate": 0.4,
+    "success_rate": 0.0,
+    "valid_rate": 1.0,
+    "steps": 400.0,
+    "episodes": 5,
+    "successful_task_count": 0,
+    "ik_failures": 795,
+    "ik_recoveries": 299,
+    "assist_steps": 0,
+    "assisted_episode_rate": 0.0,
+    "unassisted_success_rate": 0.0,
+    "ik_truncation_rate": 0.0,
+    "execution_complete_rate": 1.0,
+    "per_task": {
+      "add_condiment": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.0,
+        "positive_return_rate": 0.0,
+        "steps": 400.0,
+        "ik_failures": 274,
+        "ik_recoveries": 97,
+        "ik_recovery_rate": 0.354014598540146,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.0,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_book": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.011330090545071805,
+        "positive_return_rate": 1.0,
+        "steps": 400.0,
+        "ik_failures": 0,
+        "ik_recoveries": 0,
+        "ik_recovery_rate": 0.0,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.04532036218028722,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_fruit": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.0,
+        "positive_return_rate": 0.0,
+        "steps": 400.0,
+        "ik_failures": 115,
+        "ik_recoveries": 55,
+        "ik_recovery_rate": 0.4782608695652174,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.0,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_mahjong": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.375,
+        "positive_return_rate": 1.0,
+        "steps": 400.0,
+        "ik_failures": 87,
+        "ik_recoveries": 33,
+        "ik_recovery_rate": 0.3793103448275862,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.5,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      },
+      "select_poker": {
+        "episodes": 1,
+        "successes": 0,
+        "success_rate": 0.0,
+        "valid_rate": 1.0,
+        "return": 0.0,
+        "positive_return_rate": 0.0,
+        "steps": 400.0,
+        "ik_failures": 319,
+        "ik_recoveries": 114,
+        "ik_recovery_rate": 0.3573667711598746,
+        "ik_truncation_rate": 0.0,
+        "execution_complete_rate": 1.0,
+        "progress": 0.0,
+        "assist_steps": 0,
+        "assisted_episode_rate": 0.0,
+        "unassisted_success_rate": 0.0
+      }
+    },
+    "evaluation_seed": 100000,
+    "episode_diagnostics": [
+      {
+        "task": "select_mahjong",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.20071592197229718,
+          "targets": {
+            "5_pin": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.4329175959665421,
+              "final_m": 0.3460241415540872,
+              "final_position": [
+                -0.005016965044447625,
+                -0.009493345322305842,
+                0.7720534223465632
+              ],
+              "minimum_m": 0.04917386052479528,
+              "grasp_position": [
+                0.00340322688223955,
+                -0.004117282720544414,
+                0.7680287088387847
+              ],
+              "grasp_final_m": 0.3394070518606645,
+              "grasp_minimum_m": 0.050896057730897226,
+              "improvement_m": 0.08689345441245494
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 3.001676319239926,
+          "observations": 401,
+          "observed_open": 290,
+          "observed_gripper_transitions": 7,
+          "commands": 400,
+          "commanded_open": 91,
+          "commanded_gripper_transitions": 18,
+          "task_contract": {
+            "task": "select_mahjong",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "place"
+            ],
+            "target_attributes": [
+              "target_entity",
+              "target_container"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the requested mahjong tile and place it in the target."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144274273768
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188811667
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272055
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.5,
+          "initial_intention": 0.0,
+          "final_intention": 1.0,
+          "progress_source": "upstream",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      },
+      {
+        "task": "select_poker",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.0,
+          "targets": {
+            "4_of_clubs": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.4852154692323518,
+              "final_m": 0.5227632309751887,
+              "final_position": [
+                -0.06596569397870976,
+                0.12285760463198461,
+                0.830998912387855
+              ],
+              "minimum_m": 0.3161337133454889,
+              "grasp_position": [
+                -0.0659656927294721,
+                0.12285760429851021,
+                0.8509989123878549
+              ],
+              "grasp_final_m": 0.5175137835866391,
+              "grasp_minimum_m": 0.30495565231745275,
+              "improvement_m": -0.037547761742836916
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 2.9210159761021446,
+          "observations": 401,
+          "observed_open": 310,
+          "observed_gripper_transitions": 12,
+          "commands": 400,
+          "commanded_open": 90,
+          "commanded_gripper_transitions": 13,
+          "task_contract": {
+            "task": "select_poker",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "lift"
+            ],
+            "target_attributes": [
+              "target_entity"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the requested poker item and lift it."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144274337382
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188811733
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272063
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.0,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      },
+      {
+        "task": "select_book",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.04532036218028722,
+          "targets": {
+            "data_visualization": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.43364810229411394,
+              "final_m": 0.41399501323935045,
+              "final_position": [
+                0.09854090440136977,
+                0.252100042537215,
+                1.209293354545215
+              ],
+              "minimum_m": 0.2310889526604202,
+              "grasp_position": [
+                0.09854290191504096,
+                0.18710004256801982,
+                1.2092932338178368
+              ],
+              "grasp_final_m": 0.380830492442799,
+              "grasp_minimum_m": 0.19404888210252716,
+              "improvement_m": 0.019653089054763484
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 2.173556415042623,
+          "observations": 401,
+          "observed_open": 188,
+          "observed_gripper_transitions": 3,
+          "commands": 400,
+          "commanded_open": 212,
+          "commanded_gripper_transitions": 4,
+          "task_contract": {
+            "task": "select_book",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "pull"
+            ],
+            "target_attributes": [
+              "target_entity"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the book and pull it clear of the shelf."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.0041731442704362135
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188814237
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272055
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.04532036218028722,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      },
+      {
+        "task": "select_fruit",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.0,
+          "targets": {
+            "orange": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.500191470219555,
+              "final_m": 0.6765472461916298,
+              "final_position": [
+                0.26804143753967935,
+                -0.18414432564358177,
+                0.7895388301787402
+              ],
+              "minimum_m": 0.47969502812452197,
+              "grasp_position": [
+                0.26804143753967935,
+                -0.18414432564358177,
+                0.7895388301787402
+              ],
+              "grasp_final_m": 0.6765472461916298,
+              "grasp_minimum_m": 0.47969502812452197,
+              "improvement_m": -0.17635577597207475
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 2.700664767070385,
+          "observations": 401,
+          "observed_open": 215,
+          "observed_gripper_transitions": 6,
+          "commands": 400,
+          "commanded_open": 186,
+          "commanded_gripper_transitions": 9,
+          "task_contract": {
+            "task": "select_fruit",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "place"
+            ],
+            "target_attributes": [
+              "target_entity",
+              "target_container"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the requested fruit and place it in the target."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.003921568859368563,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144274100605
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.26056308188811733
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328272044
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.0,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      },
+      {
+        "task": "add_condiment",
+        "termination_reason": "max_steps",
+        "steps": 400,
+        "diagnostics": {
+          "events": {},
+          "target_distance_reference": "world EE to task target entity origin; not grasp distance",
+          "distance_progress": 0.0,
+          "targets": {
+            "salt": {
+              "samples": 401,
+              "unavailable": 0,
+              "initial_m": 0.44448666601513714,
+              "final_m": 0.8826924317184113,
+              "final_position": [
+                0.15606137313963503,
+                -0.13265328527002887,
+                0.7972458531957114
+              ],
+              "minimum_m": 0.33312008039750673,
+              "grasp_position": [
+                0.15606137313963503,
+                -0.13265328527002887,
+                0.7972458531957114
+              ],
+              "grasp_final_m": 0.8826924317184113,
+              "grasp_minimum_m": 0.33312008039750673,
+              "improvement_m": -0.43820576570327413
+            }
+          },
+          "target_status": "available",
+          "ee_path_length_m": 1.7305000167048488,
+          "observations": 401,
+          "observed_open": 0,
+          "observed_gripper_transitions": 0,
+          "commands": 400,
+          "commanded_open": 400,
+          "commanded_gripper_transitions": 1,
+          "task_contract": {
+            "task": "add_condiment",
+            "family": "primitive",
+            "skill_sequence": [
+              "pick",
+              "pour"
+            ],
+            "target_attributes": [
+              "target_entity",
+              "target_container"
+            ],
+            "success_predicate": "task.should_terminate_episode(physics)",
+            "progress_signals": [
+              "get_task_progress",
+              "get_intention_score",
+              "target_distance"
+            ],
+            "notes": "Pick the condiment and pour it into the target container."
+          },
+          "cameras": {
+            "status": "unverified",
+            "mapping_status": "configured",
+            "dataset_keys": [
+              "image",
+              "second_image",
+              "wrist_image"
+            ],
+            "selected_indices": [
+              0,
+              1,
+              3
+            ],
+            "selected_names": [
+              "right",
+              "left",
+              "franka/Franka_wrist_cam"
+            ],
+            "all_live_names": [
+              "right",
+              "left",
+              "forward",
+              "franka/Franka_wrist_cam"
+            ],
+            "rgb_range": [
+              0.0,
+              1.0
+            ],
+            "rgb_shape": [
+              4,
+              3,
+              480,
+              480
+            ],
+            "views": [
+              {
+                "slot": 0,
+                "live_index": 0,
+                "live_name": "right",
+                "dataset_key": "image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    0.13381387467676192,
+                    -0.6673592800390178,
+                    0.775
+                  ],
+                  [
+                    0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    -5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 1,
+                "live_index": 1,
+                "live_name": "left",
+                "dataset_key": "second_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7326154777847623,
+                    -0.13381387467676192,
+                    0.6673592800390178,
+                    -0.775
+                  ],
+                  [
+                    -0.6806427563048065,
+                    -0.1440316742115515,
+                    0.718317697898091,
+                    -0.856
+                  ],
+                  [
+                    5.551115123125783e-17,
+                    -0.9804839232582088,
+                    -0.1965992783104522,
+                    1.209
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "slot": 2,
+                "live_index": 3,
+                "live_name": "franka/Franka_wrist_cam",
+                "dataset_key": "wrist_image",
+                "intrinsic": [
+                  [
+                    579.4112549695428,
+                    0.0,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    579.4112549695428,
+                    240.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "extrinsic": [
+                  [
+                    0.7217597366668246,
+                    0.5964104302233918,
+                    0.35122283702427753,
+                    -0.004173144386786835
+                  ],
+                  [
+                    0.6918843949970518,
+                    -0.6078086316692252,
+                    -0.3896981539960708,
+                    -0.2605630818878269
+                  ],
+                  [
+                    -0.0189437716993488,
+                    0.5242740371114427,
+                    -0.8513388676224468,
+                    1.3672283328275776
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ],
+            "mapping_source": "dataset-alias"
+          },
+          "initial_progress": 0.0,
+          "final_progress": 0.0,
+          "initial_intention": 0.0,
+          "final_intention": 0.0,
+          "progress_source": "target_distance",
+          "pick_assist_steps": 0,
+          "grasp_assist_steps": 0,
+          "pull_assist_steps": 0,
+          "pour_assist_steps": 0,
+          "place_assist_steps": 0,
+          "insert_assist_steps": 0,
+          "lift_assist_steps": 0,
+          "press_assist_steps": 0,
+          "curriculum_alpha": 0.0
+        }
+      }
+    ],
+    "elapsed_seconds": 2209.805732727051
+  }
+}

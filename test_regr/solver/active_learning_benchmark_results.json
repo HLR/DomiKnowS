@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "backend": "tnorm:P",
+  "seeds": 3,
+  "pool_size": 12,
+  "test_size": 48,
+  "total_ms": 174664.82589999214,
+  "rows": [
+    {
+      "seed": 0,
+      "strategy": "random",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.4270833432674408,
+      "example_accuracy": 0.1875,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 0,
+      "strategy": "random",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.6458333134651184,
+      "example_accuracy": 0.5208333134651184,
+      "constraint_satisfaction": 0.9583333134651184
+    },
+    {
+      "seed": 0,
+      "strategy": "random",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.6458333134651184,
+      "example_accuracy": 0.5208333134651184,
+      "constraint_satisfaction": 0.9583333134651184
+    },
+    {
+      "seed": 1,
+      "strategy": "random",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6458333134651184,
+      "example_accuracy": 0.3125,
+      "constraint_satisfaction": 0.875
+    },
+    {
+      "seed": 1,
+      "strategy": "random",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.7604166865348816,
+      "example_accuracy": 0.5416666865348816,
+      "constraint_satisfaction": 0.8541666865348816
+    },
+    {
+      "seed": 1,
+      "strategy": "random",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.71875,
+      "example_accuracy": 0.5625,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 2,
+      "strategy": "random",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6041666865348816,
+      "example_accuracy": 0.4375,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 2,
+      "strategy": "random",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.5729166865348816,
+      "example_accuracy": 0.1666666716337204,
+      "constraint_satisfaction": 0.7291666865348816
+    },
+    {
+      "seed": 2,
+      "strategy": "random",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.8958333134651184,
+      "example_accuracy": 0.8125,
+      "constraint_satisfaction": 0.9583333134651184
+    },
+    {
+      "seed": 0,
+      "strategy": "uncertainty",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.4270833432674408,
+      "example_accuracy": 0.1875,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 0,
+      "strategy": "uncertainty",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.5104166865348816,
+      "example_accuracy": 0.1666666716337204,
+      "constraint_satisfaction": 0.8333333134651184
+    },
+    {
+      "seed": 0,
+      "strategy": "uncertainty",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.7395833134651184,
+      "example_accuracy": 0.4791666567325592,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 1,
+      "strategy": "uncertainty",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6458333134651184,
+      "example_accuracy": 0.3125,
+      "constraint_satisfaction": 0.875
+    },
+    {
+      "seed": 1,
+      "strategy": "uncertainty",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.7708333134651184,
+      "example_accuracy": 0.5625,
+      "constraint_satisfaction": 0.9791666865348816
+    },
+    {
+      "seed": 1,
+      "strategy": "uncertainty",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.71875,
+      "example_accuracy": 0.4375,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 2,
+      "strategy": "uncertainty",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6041666865348816,
+      "example_accuracy": 0.4375,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 2,
+      "strategy": "uncertainty",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.6666666865348816,
+      "example_accuracy": 0.5625,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 2,
+      "strategy": "uncertainty",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.8854166865348816,
+      "example_accuracy": 0.7708333134651184,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 0,
+      "strategy": "weighted",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.4270833432674408,
+      "example_accuracy": 0.1875,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 0,
+      "strategy": "weighted",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.8020833134651184,
+      "example_accuracy": 0.6041666865348816,
+      "constraint_satisfaction": 0.9791666865348816
+    },
+    {
+      "seed": 0,
+      "strategy": "weighted",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.8020833134651184,
+      "example_accuracy": 0.6458333134651184,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 1,
+      "strategy": "weighted",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6458333134651184,
+      "example_accuracy": 0.3125,
+      "constraint_satisfaction": 0.875
+    },
+    {
+      "seed": 1,
+      "strategy": "weighted",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.75,
+      "example_accuracy": 0.5416666865348816,
+      "constraint_satisfaction": 0.9791666865348816
+    },
+    {
+      "seed": 1,
+      "strategy": "weighted",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.8020833134651184,
+      "example_accuracy": 0.6041666865348816,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 2,
+      "strategy": "weighted",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6041666865348816,
+      "example_accuracy": 0.4375,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 2,
+      "strategy": "weighted",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.7916666865348816,
+      "example_accuracy": 0.6875,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 2,
+      "strategy": "weighted",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.9375,
+      "example_accuracy": 0.875,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 0,
+      "strategy": "weighted_diverse",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.4270833432674408,
+      "example_accuracy": 0.1875,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 0,
+      "strategy": "weighted_diverse",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.8333333134651184,
+      "example_accuracy": 0.7291666865348816,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 0,
+      "strategy": "weighted_diverse",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.8541666865348816,
+      "example_accuracy": 0.7083333134651184,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 1,
+      "strategy": "weighted_diverse",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6458333134651184,
+      "example_accuracy": 0.3125,
+      "constraint_satisfaction": 0.875
+    },
+    {
+      "seed": 1,
+      "strategy": "weighted_diverse",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.6458333134651184,
+      "example_accuracy": 0.4166666567325592,
+      "constraint_satisfaction": 0.8541666865348816
+    },
+    {
+      "seed": 1,
+      "strategy": "weighted_diverse",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.96875,
+      "example_accuracy": 0.9375,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 2,
+      "strategy": "weighted_diverse",
+      "round": 0,
+      "annotation_budget": 0,
+      "label_accuracy": 0.6041666865348816,
+      "example_accuracy": 0.4375,
+      "constraint_satisfaction": 0.8958333134651184
+    },
+    {
+      "seed": 2,
+      "strategy": "weighted_diverse",
+      "round": 1,
+      "annotation_budget": 2,
+      "label_accuracy": 0.8541666865348816,
+      "example_accuracy": 0.75,
+      "constraint_satisfaction": 1.0
+    },
+    {
+      "seed": 2,
+      "strategy": "weighted_diverse",
+      "round": 2,
+      "annotation_budget": 4,
+      "label_accuracy": 0.8958333134651184,
+      "example_accuracy": 0.7916666865348816,
+      "constraint_satisfaction": 1.0
+    }
+  ],
+  "summary": [
+    {
+      "strategy": "random",
+      "annotation_budget": 0,
+      "label_accuracy": {
+        "mean": 0.559027781089147,
+        "std": 0.11615088443055628
+      },
+      "example_accuracy": {
+        "mean": 0.3125,
+        "std": 0.125
+      },
+      "constraint_satisfaction": {
+        "mean": 0.8888888756434122,
+        "std": 0.012028119137197969
+      }
+    },
+    {
+      "strategy": "random",
+      "annotation_budget": 2,
+      "label_accuracy": {
+        "mean": 0.6597222288449606,
+        "std": 0.09451845839740146
+      },
+      "example_accuracy": {
+        "mean": 0.4097222238779068,
+        "std": 0.2107498718052061
+      },
+      "constraint_satisfaction": {
+        "mean": 0.8472222288449606,
+        "std": 0.11474103382879602
+      }
+    },
+    {
+      "strategy": "random",
+      "annotation_budget": 4,
+      "label_accuracy": {
+        "mean": 0.7534722089767456,
+        "std": 0.1285660291335491
+      },
+      "example_accuracy": {
+        "mean": 0.6319444378217062,
+        "std": 0.157747461047203
+      },
+      "constraint_satisfaction": {
+        "mean": 0.9722222089767456,
+        "std": 0.024056272687153643
+      }
+    },
+    {
+      "strategy": "uncertainty",
+      "annotation_budget": 0,
+      "label_accuracy": {
+        "mean": 0.559027781089147,
+        "std": 0.11615088443055628
+      },
+      "example_accuracy": {
+        "mean": 0.3125,
+        "std": 0.125
+      },
+      "constraint_satisfaction": {
+        "mean": 0.8888888756434122,
+        "std": 0.012028119137197969
+      }
+    },
+    {
+      "strategy": "uncertainty",
+      "annotation_budget": 2,
+      "label_accuracy": {
+        "mean": 0.6493055621782938,
+        "std": 0.13107349607996352
+      },
+      "example_accuracy": {
+        "mean": 0.4305555572112401,
+        "std": 0.22853447868649707
+      },
+      "constraint_satisfaction": {
+        "mean": 0.9375,
+        "std": 0.09081041061038202
+      }
+    },
+    {
+      "strategy": "uncertainty",
+      "annotation_budget": 4,
+      "label_accuracy": {
+        "mean": 0.78125,
+        "std": 0.09081041061038202
+      },
+      "example_accuracy": {
+        "mean": 0.5624999900658926,
+        "std": 0.18162078019803257
+      },
+      "constraint_satisfaction": {
+        "mean": 1.0,
+        "std": 0.0
+      }
+    },
+    {
+      "strategy": "weighted",
+      "annotation_budget": 0,
+      "label_accuracy": {
+        "mean": 0.559027781089147,
+        "std": 0.11615088443055628
+      },
+      "example_accuracy": {
+        "mean": 0.3125,
+        "std": 0.125
+      },
+      "constraint_satisfaction": {
+        "mean": 0.8888888756434122,
+        "std": 0.012028119137197969
+      }
+    },
+    {
+      "strategy": "weighted",
+      "annotation_budget": 2,
+      "label_accuracy": {
+        "mean": 0.78125,
+        "std": 0.027559905735523367
+      },
+      "example_accuracy": {
+        "mean": 0.6111111243565878,
+        "std": 0.07316425180064735
+      },
+      "constraint_satisfaction": {
+        "mean": 0.9861111243565878,
+        "std": 0.012028119137197969
+      }
+    },
+    {
+      "strategy": "weighted",
+      "annotation_budget": 4,
+      "label_accuracy": {
+        "mean": 0.8472222089767456,
+        "std": 0.07818286042368106
+      },
+      "example_accuracy": {
+        "mean": 0.7083333333333334,
+        "std": 0.14583333049501823
+      },
+      "constraint_satisfaction": {
+        "mean": 1.0,
+        "std": 0.0
+      }
+    },
+    {
+      "strategy": "weighted_diverse",
+      "annotation_budget": 0,
+      "label_accuracy": {
+        "mean": 0.559027781089147,
+        "std": 0.11615088443055628
+      },
+      "example_accuracy": {
+        "mean": 0.3125,
+        "std": 0.125
+      },
+      "constraint_satisfaction": {
+        "mean": 0.8888888756434122,
+        "std": 0.012028119137197969
+      }
+    },
+    {
+      "strategy": "weighted_diverse",
+      "annotation_budget": 2,
+      "label_accuracy": {
+        "mean": 0.7777777711550394,
+        "std": 0.11474106629573176
+      },
+      "example_accuracy": {
+        "mean": 0.6319444477558136,
+        "std": 0.18672681172872033
+      },
+      "constraint_satisfaction": {
+        "mean": 0.9513888955116272,
+        "std": 0.0841969027859012
+      }
+    },
+    {
+      "strategy": "weighted_diverse",
+      "annotation_budget": 4,
+      "label_accuracy": {
+        "mean": 0.90625,
+        "std": 0.057997538309275544
+      },
+      "example_accuracy": {
+        "mean": 0.8125,
+        "std": 0.11599509802916709
+      },
+      "constraint_satisfaction": {
+        "mean": 1.0,
+        "std": 0.0
+      }
+    }
+  ],
+  "limitation": "Small synthetic annotation-loop smoke benchmark; no production-gain claim."
+}

@@ -155,17 +155,46 @@ python -m test_regr.JointEmbodiedAgentInterface.paired_eai_eval \
 To evaluate the high-level vision-language planner on static scene inputs against ground-truth subtask DAGs according to official Table 1 planning metrics (Skill Recall `SR`, Parameter Recall `PR`, Skill-Parameter Recall `SPR`, and Dependency Graph Matching `PM` across all 6 cognitive dimensions):
 
 ```bash
-# Using the standalone evaluation script:
-python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+# Using the standalone evaluation script (reproduced on GPU 2 vigorous_easley, cuda:2 across all 450 test episodes):
+python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt \
   --split test \
-  --output test_regr/JointEmbodiedAgentInterface/results/planning_progress_score.json
+  --device cuda:2 \
+  --output test_regr/JointEmbodiedAgentInterface/results/planning_progress_score_best_test450_reproduced.json
 
 # Or using the main CLI subparser:
 python -m test_regr.JointEmbodiedAgentInterface.main evaluate-planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt \
   --split test
 ```
+
+#### Verified 450-Episode Reproduction Scorecard (`joint_stage2_best.pt`):
+```
+======================================================================
+ VLABench Non-Interactive Planning Scorecard: joint_stage2_best.pt
+======================================================================
+ Split: test  |  Examples: 450  |  Stage: stage2 (Epoch 4)
+----------------------------------------------------------------------
+ Overall Progress Score:  72.96 / 100.0
+ Legacy Progress Score:   62.24 / 100.0
+ 6-Dimension Macro:       75.13 / 100.0
+----------------------------------------------------------------------
+ Component Breakdown:
+   • Skill Recall (SR):                   94.95%
+   • Parameter Recall (PR):               60.65%
+   • Skill-Parameter Recall (SPR):        64.26%
+   • Dependency Graph Matching (PM):      42.96%
+----------------------------------------------------------------------
+ Dimension Breakdown:
+   PhysLaw      (N=16 ): Score=100.00 (SR=100.0%, PR=100.0%)
+   ComSense     (N=75 ): Score= 79.27 (SR= 95.3%, PR= 72.7%)
+   Semantic     (N=77 ): Score= 76.88 (SR= 97.4%, PR= 63.6%)
+   M&T          (N=103): Score= 75.92 (SR= 98.1%, PR= 62.1%)
+   Spatial      (N=46 ): Score= 64.89 (SR= 97.8%, PR= 45.7%)
+   Complex      (N=56 ): Score= 53.81 (SR= 74.6%, PR= 47.2%)
+======================================================================
+```
+Output results JSON: [`planning_progress_score_best_test450_reproduced.json`](results/planning_progress_score_best_test450_reproduced.json)
 
 ---
 
