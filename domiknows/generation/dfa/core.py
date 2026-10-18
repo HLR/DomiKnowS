@@ -491,3 +491,24 @@ def complement_dfa(dfa: DFA) -> DFA:
         accepting_states=frozenset(accepting),
         dead_states=frozenset(),
     )
+
+
+def with_initial_completion(dfa: DFA, symbol: Symbol, *, enabled: bool = True) -> DFA:
+    """Set completion on the first transition, preserving later grammar loops."""
+    start = ("initial_completion_start", dfa.start_state)
+    while start in dfa.states:
+        start = ("initial_completion_start", start)
+    transitions = dict(dfa.transitions)
+    for token in dfa.alphabet - {symbol}:
+        successor = dfa.step(dfa.start_state, token)
+        if successor is not None:
+            transitions[start, token] = successor
+    states, accepting = dfa.states | {start}, dfa.accepting_states
+    if enabled:
+        terminal = ("initial_completion", start)
+        while terminal in states:
+            terminal = ("initial_completion", terminal)
+        states = states | {terminal}
+        accepting = accepting | {terminal}
+        transitions[start, symbol] = terminal
+    return DFA(states, dfa.alphabet | {symbol}, transitions, start, accepting, dfa.dead_states)

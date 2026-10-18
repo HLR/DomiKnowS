@@ -3,6 +3,23 @@
 from importlib import import_module
 
 _EXPORTS = {
+    "ProductiveDFA": ".productive",
+    "SemanticSearchLimitExceeded": ".productive",
+    "PredicateCompilationCoverage": ".predicate_monitor",
+    "find_predicate_monitor": ".predicate_monitor",
+    "require_bound_predicate_dfa": ".predicate_monitor",
+    "CompiledPredicateConstraint": ".predicate_monitor",
+    "PredicateBinding": ".predicate_monitor",
+    "PredicateConstrainedDFA": ".predicate_monitor",
+    "PredicateConstraintCompilationError": ".predicate_monitor",
+    "PredicateGroundingLimitExceeded": ".predicate_monitor",
+    "PredicateConstraintProgram": ".predicate_monitor",
+    "PredicateEvent": ".predicate_monitor",
+    "PredicateMonitorAdapter": ".predicate_monitor",
+    "PredicateMonitorDFA": ".predicate_monitor",
+    "PredicateMonitorState": ".predicate_monitor",
+    "SemanticTransition": ".predicate_monitor",
+    "compile_predicate_constraints": ".predicate_monitor",
     "ConstrainedGenerationResult": ".decoder",
     "ComposedRuntimeDFA": ".runtime",
     "BoundSemanticDFA": ".semantic",

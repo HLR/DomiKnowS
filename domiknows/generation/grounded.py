@@ -1,0 +1,301 @@
+"""Immutable, open-world planning facts and checks, independent of any benchmark.
+
+Adapters supply action meanings. This module never guesses observations from
+reference trajectories, entity names, or a desired answer.
+"""
+from dataclasses import dataclass, field, replace
+from typing import Mapping
+
+FAMILIES = ("destination", "holding", "capacity", "affordance", "compatibility",
+            "milestone_order", "goal_completion", "preservation")
+
+
+@dataclass(frozen=True)
+class FactState:
+    positive: frozenset = frozenset()
+    negative: frozenset = frozenset()
+
+    def __post_init__(self):
+        if self.positive & self.negative:
+            raise ValueError("contradictory positive and negative planning facts")
+
+    def truth(self, fact):
+        fact = tuple(fact)
+        return True if fact in self.positive else False if fact in self.negative else None
+
+    def update(self, positive=(), negative=()):
+        yes, no = frozenset(map(tuple, positive)), frozenset(map(tuple, negative))
+        if yes & no:
+            raise ValueError("contradictory declared action effects")
+        return FactState((self.positive - no) | yes, (self.negative - yes) | no)
+
+
+@dataclass(frozen=True)
+class GroundedState:
+    facts: FactState = FactState()
+    holdings: tuple = ()  # Presence of (hand, None) means known empty.
+    milestones: frozenset = frozenset()
+
+
+@dataclass(frozen=True)
+class Operation:
+    action: str
+    subject: str | None = None
+    destination: str | None = None
+    hand: str = "right"
+    grasp: bool = False
+    requires_held: bool = False
+    release: bool = False
+    affordances: tuple = ()  # (entity, property) requirements
+    writes: tuple = ()
+    relation: str | None = None
+    idempotent: bool = False
+    preconditions: tuple = ()
+    container_required: bool = False
+
+
+@dataclass(frozen=True)
+class Check:
+    family: str
+    applicable: bool = False
+    satisfied: bool | None = None
+    missing: tuple = ()
+
+    @property
+    def status(self):
+        if not self.applicable:
+            return "not_applicable"
+        if self.satisfied is False:
+            return "violated"
+        if self.missing:
+            return "partial" if self.satisfied is True else "unavailable"
+        return "checked" if self.satisfied is not None else "unavailable"
+
+
+def observations(checks):
+    values = {}
+    for check in checks:
+        # Unknowns are disclosed separately; they are not observations of truth.
+        values[check.family + "__applicable"] = check.applicable and check.satisfied is not None
+        values[check.family + "__satisfied"] = check.satisfied is not False
+    return values
+
+
+def report(checks):
+    rows = [{"family": c.family, "status": c.status, "missing": list(c.missing)} for c in checks]
+    return {"checks": rows, "fully_grounded": not any(c.applicable and (c.satisfied is None or c.missing) for c in checks),
+            "violations": sum(c.applicable and c.satisfied is False for c in checks)}
+
+
+def combined(family, values, *, applicable=True, missing=()):
+    if not applicable:
+        return Check(family)
+    values = tuple(values)
+    unknown = tuple(missing) + tuple("observation" for value in values if value is None)
+    satisfied = False if False in values else True if True in values else None
+    return Check(family, applicable, satisfied, unknown)
+
+
+@dataclass(frozen=True)
+class PlanningFacts:
+    initial: GroundedState = GroundedState()
+    properties: tuple = ()
+    capacities: tuple = ()
+    destinations: tuple = ()
+    default_destination: str | None = None
+    compatibility: tuple = ()
+    goals: FactState = FactState()
+    preserve: FactState = FactState()
+    protected: frozenset = frozenset()
+    milestones: tuple = ()
+    effects: tuple = ()
+    completed_skill_prefix: tuple = ()
+    supplied: bool = False
+
+    @classmethod
+    def parse(cls, raw=None, *, entities=(), resolve=None, default_destination=None, constants=()):
+        if isinstance(raw, cls):
+            return raw
+        if raw is not None and not isinstance(raw, Mapping):
+            raise ValueError("planning_facts must be an object")
+        raw = raw or {}
+        known = set(entities)
+        role_constants = set(constants) | set((raw.get("initial_state") or {}).get("held", ())) | set(raw.get("capacities", ()))
+        def entity(value):
+            if resolve is not None:
+                return resolve(value)
+            value = str(value)
+            if value not in known:
+                raise ValueError(f"planning entity {value!r} is absent from the current scene")
+            return value
+        def fact(value, *, template=False):
+            if not isinstance(value, (tuple, list)) or not value or not isinstance(value[0], str):
+                raise ValueError("a planning fact must be [predicate, entity, ...]")
+            if template and any(str(arg).startswith("$") and str(arg) not in {"$subject", "$destination", "$hand"} for arg in value[1:]):
+                raise ValueError("unknown effect placeholder")
+            return (value[0], *(str(arg) if str(arg) in role_constants or (template and str(arg).startswith("$"))
+                                 else entity(arg) for arg in value[1:]))
+        def facts(value):
+            value = value or {}
+            return FactState(frozenset(fact(x) for x in value.get("positive", ())),
+                             frozenset(fact(x) for x in value.get("negative", ())))
+        initial = raw.get("initial_state") or {}
+        holdings = tuple(sorted((str(hand), None if obj is None else entity(obj))
+                                for hand, obj in initial.get("held", {}).items()))
+        capacities = tuple(sorted((str(hand), count) for hand, count in raw.get("capacities", {}).items()))
+        if any(isinstance(count, bool) or not isinstance(count, int) or count not in (0, 1) for _, count in capacities):
+            raise ValueError("hand capacities must be 0 or 1")
+        properties = []
+        for obj, values in raw.get("entity_properties", {}).items():
+            for name, value in values.items():
+                if not isinstance(value, bool):
+                    raise ValueError("entity capabilities must be Boolean")
+                properties.append((entity(obj), str(name), value))
+        compatibility = []
+        for item in raw.get("compatibility", ()):
+            if not isinstance(item.get("allowed"), bool):
+                raise ValueError("compatibility.allowed must be Boolean")
+            compatibility.append((entity(item["subject"]), entity(item["destination"]), item["allowed"]))
+        if len({(s,d) for s,d,_ in compatibility}) != len(compatibility):
+            raise ValueError("duplicate compatibility observation")
+        milestones = []
+        for item in raw.get("milestones", ()):
+            milestones.append((str(item["name"]), str(item["action"]),
+                               entity(item["subject"]) if item.get("subject") is not None else None,
+                               entity(item["destination"]) if item.get("destination") is not None else None,
+                               tuple(item.get("requires", ())), bool(item.get("required", True))))
+        names = {x[0] for x in milestones}
+        if len(names) != len(milestones) or any(set(x[4]) - names for x in milestones):
+            raise ValueError("milestones need unique names and declared predecessors")
+        # Reject cycles instead of turning them into an inexplicable dead end.
+        pending = {x[0]: set(x[4]) for x in milestones}
+        seen = set()
+        while pending:
+            ready = {name for name, parents in pending.items() if parents <= seen}
+            if not ready:
+                raise ValueError("cyclic milestone requirements")
+            seen |= ready
+            pending = {name: parents for name, parents in pending.items() if name not in ready}
+        completed = frozenset(initial.get("milestones", ()))
+        if completed - names:
+            raise ValueError("unknown completed milestone")
+        if any(name in completed and not set(parents) <= completed for name, _, _, _, parents, _ in milestones):
+            raise ValueError("completed milestone is missing its declared predecessor progress")
+        effects = []
+        for action, effect in raw.get("effects", {}).items():
+            effects.append((str(action), tuple(fact(x, template=True) for x in effect.get("positive", ())),
+                            tuple(fact(x, template=True) for x in effect.get("negative", ())),
+                            tuple(map(str, effect.get("release_hands", ())))))
+        if any(set(additions) & set(removals) for _, additions, removals, _ in effects):
+            raise ValueError("contradictory declared action effects")
+        return cls(GroundedState(facts(initial), holdings, completed), tuple(sorted(properties)), capacities,
+                   tuple(sorted((entity(s), entity(d)) for s,d in raw.get("destinations", {}).items())),
+                   entity(default_destination) if default_destination is not None else None,
+                   tuple(compatibility), facts(raw.get("goals")), facts(raw.get("preserve")),
+                   frozenset(entity(x) for x in raw.get("protected_entities", ())), tuple(milestones), tuple(effects),
+                   tuple(raw.get("completed_skill_prefix", ())), bool(raw) or default_destination is not None)
+
+    def completion(self, state):
+        values = [state.facts.truth(f) for f in self.goals.positive]
+        values += [None if state.facts.truth(f) is None else not state.facts.truth(f) for f in self.goals.negative]
+        required = {m[0] for m in self.milestones if m[5]}
+        values += [name in state.milestones for name in required]
+        return combined("goal_completion", values, applicable=bool(values))
+
+    def evaluate(self, state, op, *, positive=(), negative=(), clear_relations=(), holding_fact=None):
+        """Source checks followed by symbolic effects and invariant checks."""
+        holdings = dict(state.holdings)
+        held = holdings.get(op.hand)
+        hand_known = op.hand in holdings
+        subject = op.subject if op.subject is not None else held
+        expected = dict(self.destinations).get(subject, self.default_destination)
+        checks = [combined("destination", [op.destination == expected] if expected is not None else [None],
+                           applicable=op.destination is not None)]
+        checks.append(combined("holding", [True if op.idempotent else
+                                           (held is not None and (op.subject is None or held == op.subject)) if hand_known else None],
+                               applicable=op.requires_held))
+        capacity = dict(self.capacities).get(op.hand)
+        checks.append(combined("capacity", [False if capacity == 0 or (capacity is not None and hand_known and held is not None and held != subject) else
+                                           capacity > 0 if capacity is not None and hand_known else None], applicable=op.grasp))
+        properties = {(s,k): v for s,k,v in self.properties}
+        checks.append(combined("affordance", [properties.get(pair) for pair in op.affordances] + [state.facts.truth(f) for f in op.preconditions], applicable=bool(op.affordances or op.preconditions)))
+        pairs = {(s,d): v for s,d,v in self.compatibility}
+        checks.append(combined("compatibility", [pairs.get((subject, op.destination))] + ([properties.get((op.destination,"container"))] if op.container_required else []),
+                               applicable=op.destination is not None))
+        matched = [m for m in self.milestones if m[1] == op.action and (m[2] is None or m[2] == subject)
+                   and (m[3] is None or m[3] == op.destination)]
+        checks.append(combined("milestone_order", [set(m[4]) <= state.milestones for m in matched], applicable=bool(matched)))
+        yes, no = set(map(tuple, positive)), set(map(tuple, negative))
+        # Functional spatial updates invalidate known/required alternative locations.
+        candidates = state.facts.positive | self.goals.positive | self.goals.negative | self.preserve.positive | self.preserve.negative
+        for relation, obj in clear_relations:
+            no.update(f for f in candidates if len(f) >= 2 and f[:2] == (relation, obj) and f not in yes)
+        if op.grasp and subject is not None:
+            holdings[op.hand] = subject
+        elif op.release and hand_known:
+            holdings[op.hand] = None
+        bindings = {"$subject": subject, "$destination": op.destination, "$hand": op.hand}
+        missing_effects = []
+        for action, additions, removals, released in self.effects:
+            if action != op.action:
+                continue
+            for source, target in ((additions, yes), (removals, no)):
+                for f in source:
+                    instantiated = tuple(bindings.get(x, x) for x in f)
+                    if None in instantiated:
+                        missing_effects.append("effect argument")
+                    else:
+                        (no if target is yes else yes).discard(instantiated)
+                        target.add(instantiated)
+            for hand in released:
+                holdings[hand] = None
+        if holding_fact is not None:
+            for hand, obj in holdings.items():
+                old = dict(state.holdings).get(hand)
+                if old is not None and old != obj:
+                    no.add(holding_fact(hand, old))
+                if obj is not None:
+                    yes.add(holding_fact(hand, obj))
+                for fact in candidates:
+                    if len(fact) > 1 and fact == holding_fact(hand, fact[-1]) and fact[-1] != obj:
+                        no.add(fact)
+            no.difference_update(yes)
+        next_facts = state.facts.update(yes, no)
+        done = state.milestones | {m[0] for m in matched if set(m[4]) <= state.milestones}
+        successor = GroundedState(next_facts, tuple(sorted(holdings.items())), frozenset(done))
+        changed_subjects = {f[1] for f in yes if len(f) > 1 and state.facts.truth(f) is not True}
+        changed_subjects.update(f[1] for f in no if len(f) > 1 and state.facts.truth(f) is not False)
+        protected = [False for entity in set(op.writes) | changed_subjects if entity in self.protected]
+        protected += [next_facts.truth(f) for f in self.preserve.positive]
+        protected += [None if next_facts.truth(f) is None else not next_facts.truth(f) for f in self.preserve.negative]
+        if self.protected and not protected:
+            protected = [True]
+        if self.protected and op.requires_held and subject is None:
+            missing_effects.append("unknown manipulated entity")
+        checks.append(combined("preservation", protected, applicable=bool(self.protected or self.preserve.positive or self.preserve.negative),
+                               missing=missing_effects))
+        if missing_effects:
+            checks.append(Check("effects", True, None, tuple(missing_effects)))
+        return successor, tuple(checks)
+
+
+def declare_predicates(operation, episode, *, active=True):
+    """Create unary LC observations; the generic compiler owns enforcement."""
+    from domiknows.graph.logicalConstrain import andL, ifL
+    concepts = {}
+    for family in FAMILIES:
+        parent = episode if family == "goal_completion" else operation
+        for suffix in ("applicable", "satisfied"):
+            key = family + "__" + suffix
+            concepts[key] = parent(name=parent.name + "__grounded__" + key)
+        if active:
+            ifL(andL(parent("x"), concepts[family+"__applicable"]("x")),
+                concepts[family+"__satisfied"]("x"), name="grounded__"+family)
+    return concepts
+
+
+def predicate_bindings(concepts):
+    from .dfa.predicate_monitor import PredicateBinding
+    return [PredicateBinding(concept, key, "episode" if key.startswith("goal_completion__") else "operation",
+                             "completion" if key.startswith("goal_completion__") else "immediate")
+            for key, concept in concepts.items()]

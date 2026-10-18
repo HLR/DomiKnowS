@@ -36,6 +36,168 @@ when a Boolean condition or an expected value is available. The request-bound
 path requires the relevant attributes, bindings, truth values, or scores from
 the caller; it does not infer arbitrary graph relationships automatically.
 
+## Incremental predicates supplied by an application
+
+Use `compile_predicate_constraints(graph, bindings)` when an application already
+computes Boolean predicates from its own evolving state. This is a separate
+adapter to the same decoder surface: it does not require token-position
+DataNodes or a `GenerationBundle`.
+
+The generic compiler in `predicate_monitor.py` owns LC parsing, Boolean
+evaluation, binding validation, and lazy composition with a grammar. A domain
+adapter owns state transitions, symbol interpretation, predicate valuations,
+and its acceptance condition. The core has no action names, vocabulary layout,
+scene assumptions, or designated EOS symbol.
+
+```python
+from domiknows.generation import (
+    PredicateBinding, PredicateConstrainedDFA, compile_predicate_constraints,
+)
+
+program = compile_predicate_constraints(policy_graph, [
+    PredicateBinding(needs_review, "needs_review", "publication"),
+    PredicateBinding(approved, "approved", "publication"),
+])
+compiled = PredicateConstrainedDFA.from_dfa(grammar, program)
+decoder_dfa = compiled.bind(document_adapter)
+```
+
+An adapter implements `PredicateMonitorAdapter`:
+
+- `start_state`: immutable, hashable request state.
+- `step(state, symbol)`: returns `SemanticTransition(new_state, events)` or
+  `None` for rejection. Each `PredicateEvent(domain, values, phase)` provides
+  complete Boolean values for the rules being evaluated at that point.
+- `is_accepting(state)`: the application's structural acceptance condition.
+- `acceptance_events(state)`: valuations that must hold in an accepting state.
+
+Supported Boolean LCs are `ifL`, `notL`, `andL`, `orL`, `nandL`, `norL`,
+`xorL` (odd parity), `equivalenceL`/`iffL` (all operands agree), and `forAllL`
+(universal implication). `notL` is unary; `ifL` and `forAllL` are binary.
+`atMostL`, `atLeastL`, `exactL`, and `existsL` count true operand groundings.
+Each rule belongs to one event domain. Predicate concepts are registered by identity;
+constraint names are diagnostic labels. Unsupported head constraints fail
+compilation by name. Missing or non-Boolean observations raise
+`MissingSemanticBinding` rather than being treated as satisfied.
+
+Single-variable adapters can continue using `{predicate_name: bool}` values:
+these describe one implicit grounding. Multiple variables require explicit
+finite domains and tuple-keyed observations; a flat value is never broadcast
+over different entities:
+
+```python
+from domiknows.graph import Concept, Graph
+from domiknows.graph.logicalConstrain import ifL
+from domiknows.generation import PredicateEvent
+
+with Graph("link_policy") as graph:
+    entity = Concept(name="entity")
+    link = Concept(name="link")
+    link.has_a(source=entity, target=entity)
+    approved = entity(name="approved")
+    ifL(link("source", "target"), approved("target"), name="approved_target")
+
+program = compile_predicate_constraints(graph, [
+    PredicateBinding(link, "link", "publication"),
+    PredicateBinding(approved, "approved", "publication"),
+])
+event = PredicateEvent("publication", {
+    ("link", "robot", "document"): True,
+    ("approved", "document"): False,
+}, variable_domains={"source": ("robot",), "target": ("document",)})
+assert not program.check(event)
+```
+
+Free variables are universally evaluated over their Cartesian product. Reusing
+a variable joins on the same entity. Direct relation arguments and the exact
+role projections produced by DomiKnowS graph validation are supported; arbitrary
+DataNode paths and joins without recoverable variable mappings remain unsupported.
+Domains must be finite tuples, lists, sets, frozensets, or ranges containing
+distinct hashable identities. Supply every referenced variable's domain, even
+when empty. A universally quantified empty domain is vacuously true; an empty
+count is zero. Omitted tuples are unknown bindings and raise an error, including
+when the antecedent is false or an earlier grounding already violates the rule.
+
+For a count operand, variables not occurring outside the count are locally
+quantified. Thus head `exactL(approved("x"), limit=2)` counts all approved
+entities in that event. In `ifL(request("x"), exactL(approved("x"),
+eligible("y"), limit=2))`, `x` remains the outer variable and only `y` is
+quantified inside the count. Counts sum operand truths independently:
+`exactL(a("x"), b("y"), limit=2)` sums the number of true `a` and `b`
+groundings, without duplicating counts through a Cartesian product. To count
+matching pairs, supply a compound operand such as `andL(a("x"), b("y"))`.
+Each event supplies a complete snapshot; the program does not accumulate
+observations from earlier events. Accumulated `*AL` counts, value/filter LCs,
+multiclass atoms, and arbitrary graph traversal still fail compilation.
+
+`compile_predicate_constraints(..., max_groundings=10000)` limits predicate
+evaluations per rule/event, including repeated atoms. Oversized domains or an
+exhausted budget raise `PredicateGroundingLimitExceeded`; satisfaction remains
+unknown rather than becoming an approximate rejection. This is independent of
+the monitor's DFA reachability budget below.
+
+The default predicate phase is `immediate`. A binding can declare an
+application-defined deferred phase, such as `seal` for a document signature.
+Rules containing that predicate execute in that phase. The adapter must emit
+the corresponding event when that entity is finalized; immediate predicates
+needed by the deferred formula must be included then too. Distinct deferred
+phases cannot be mixed in one formula. Domains with no emitted instances are
+vacuous, so supplying the correct event lifecycle is part of the adapter's
+semantic contract.
+
+Compilation snapshots active head LCs in the selected graph and descendant
+subgraphs. `program.coverage` lists compiled and inactive head constraints; an
+unsupported active head aborts compilation by name. Ancestors and siblings are
+outside this scope. Recompile after editing the graph and
+bind a new adapter for each request. The unbound `PredicateConstrainedDFA`
+recognizes the grammar only; use its bound monitor for semantic enforcement.
+The monitor rejects violating transitions and never restores forbidden
+symbols. With `remaining_steps` supplied, it keeps a candidate only if an
+accepting semantic completion is reachable within that many additional
+transitions after the candidate. Termination tokens count as transitions, so a
+valid final token can be emitted with `remaining_steps=0`. Omitting the budget
+checks immediate transitions only.
+
+Bind the semantic monitor before adding task-specific runtime wrappers, and
+retain that complete policy for replay of sampled trajectories. Context-free
+decoders that receive encoded model tensors should call
+`require_bound_predicate_dfa(policy)` before decoding; it rejects an unbound
+program with active semantic rules. `find_predicate_monitor(policy)` locates a
+monitor beneath wrappers exposing `base_dfa`, so callers can avoid double
+binding while preserving outer restrictions. Plain grammars and programs with
+no semantic rules remain usable without binding. Scene-dependent policies
+must not be cached by entity count or temporary context-object identity.
+
+For lookahead across additional outer restrictions, wrap the fully composed
+policy in `ProductiveDFA(policy)`. This generic view includes task wrappers in
+its reachability queries and should also be retained for replay. Both wrappers
+expose `can_reach_accepting(state, max_steps=...)`, requiring a finite budget.
+The iterative search memoizes exact answers and has a separate computational
+cap of 10,000 state expansions per query. Set `max_state_expansions` when
+binding a generic compiled DFA or constructing `ProductiveDFA` to change it.
+Exceeding this cap raises `SemanticSearchLimitExceeded`: feasibility remains
+unknown, no approximate rejection is cached, and no hard rule is relaxed.
+
+`test_regr/generation/test_predicate_monitor.py` provides a complete document
+workflow adapter. VLABench's adapter lives in
+`test_regr/VLABenchAgentInterface/constraint_compiler.py`; its skill parsing and
+world-state predicates remain outside the generic package.
+
+`test_regr/generation/constraint_equivalence.py` is a reusable test audit for
+any finite-alphabet grammar, bound monitor, and independent acceptance oracle.
+It enumerates syntactic paths using `step`, so semantic masking cannot hide
+counterexamples, and compares acceptance plus next-token masks at every budget
+within the selected finite horizon. Terminal symbols stop enumeration; padding
+past termination is outside this audit.
+
+`test_regr/VLABenchAgentInterface/test_constraint_equivalence.py` applies it to
+small scenes and completed-plan DataNode verification, alongside explicit
+semantic examples and rule deactivation/addition checks. These bounded tests
+establish agreement for the enumerated scenes and horizons, not an unbounded
+equivalence proof. Task sequence, initial-target, and press-applicability rules are world LCs
+and use the same monitor and completed-plan verification as physical rules.
+
+
 ---
 
 # 1. Vocabulary Defines the DFA Alphabet
@@ -806,3 +968,35 @@ The resulting system is therefore best viewed as a graph-constrained weighted au
                 v                               v
         Graph-Aware HMM                  Spectral Automaton
 ```
+
+
+The standalone and joint embodied planners use `dfa.stop_policy.StopPolicy`
+for termination too. Supply `stop_policy=StopPolicy(max_steps=7)` or the legacy
+`max_steps=7`, never both. Timeouts, external cancellation callbacks, EOS,
+accepting-state stops, and stagnant-state limits use the shared helpers.
+Cancellation before acceptance raises an error instead of returning a partial
+plan. Compact planner progress reports generated labels and no prompt tokens.
+
+`remaining_steps_for(policy, step_index)` supplies the number of transitions
+available **after** the candidate token to every DFA view; zero permits a final
+accepting token. HMM lookahead uses `remaining_tokens_for` for its inclusive
+horizon and converts at the DFA boundary. Replay reuses the same finite budget,
+DFA masks, and token termination rules; it does not rerun collection wall-clock
+or external cancellation checks during gradient computation.
+
+
+VLABench task facts are explicit request data: `task` selects a declared task
+contract, `task_skill_sequence` can supply a known-skill sequence, and
+`task_target_entity` supplies a scene entity name or pointer. The task adapter
+emits Boolean observations; `task_skill_sequence`, `task_initial_target`, and
+`task_sequence_completion` logical constraints decide their legality. Press
+applicability is declared by `press_requires_button_target`. Deactivating these
+rules removes their restrictions after recompilation. A button's presence and
+density/friction keywords do not select a task goal or answer.
+
+Composite task declarations live in
+`test_regr/VLABenchAgentInterface/task_policy.py`. Completed-plan verification
+accepts `task_context=...`, or `policy=...` to reuse the exact bound requirements
+from collection. Online sampling retains this same policy for gradient replay.
+The handwritten contextual/causal/composite/task-pattern DFA implementations,
+separate pointer filter, and automatic button-plan fallback have been removed.
