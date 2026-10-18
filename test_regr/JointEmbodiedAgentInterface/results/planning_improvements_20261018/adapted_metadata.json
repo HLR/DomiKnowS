@@ -1,0 +1,792 @@
+{
+  "checkpoint": "/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z/adaptation/planner_best.pt",
+  "detailed_metrics": {
+    "complex_grounding_reports": [
+      {
+        "episode_id": "Complex/book_rearrange/example22",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example27",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example73",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example65",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/take_chemistry_experiment/example65",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example77",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example63",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/take_chemistry_experiment/example77",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example49",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example47",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example27",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example51",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example89",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example49",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example86",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example69",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example47",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example49",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example20",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example28",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example73",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example78",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example5",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/take_chemistry_experiment/example0",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example52",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example92",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example86",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example26",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example74",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example83",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example9",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example70",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example10",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/take_chemistry_experiment/example52",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example95",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example14",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example84",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example91",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example55",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example36",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example23",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example73",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example95",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example20",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example43",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example56",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example98",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/take_chemistry_experiment/example39",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/take_chemistry_experiment/example72",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example33",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example29",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example42",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example75",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example44",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/take_chemistry_experiment/example48",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/cook_dishes/example2",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      }
+    ],
+    "entity_match": 0.48462962962962963,
+    "exact_graph_match": 0.3092592592592593,
+    "examples": 450,
+    "generation_errors": [],
+    "generation_failures": 0,
+    "grounding_coverage": {
+      "affordance": {
+        "checked": 46,
+        "not_applicable": 689,
+        "unavailable": 716
+      },
+      "capacity": {
+        "not_applicable": 801,
+        "unavailable": 650
+      },
+      "compatibility": {
+        "not_applicable": 995,
+        "unavailable": 456
+      },
+      "destination": {
+        "checked": 161,
+        "not_applicable": 995,
+        "unavailable": 295
+      },
+      "goal_completion": {
+        "checked": 45,
+        "not_applicable": 405
+      },
+      "holding": {
+        "checked": 606,
+        "not_applicable": 845
+      },
+      "milestone_order": {
+        "checked": 212,
+        "not_applicable": 1239
+      },
+      "preservation": {
+        "not_applicable": 1451
+      },
+      "selection": {
+        "checked": 46,
+        "unavailable": 141
+      }
+    },
+    "observation_profiles": {
+      "reflection_unavailable_v1": 14,
+      "scene_metadata_physics_v1": 46,
+      "unspecified": 390
+    },
+    "observation_reports": [
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example41",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example92",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example39",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example73",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example0",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example31",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example90",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example75",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example91",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example71",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example57",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example26",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example79",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example85",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      }
+    ],
+    "planning_metrics": {
+      "Macro": 68.88299721778286,
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2",
+      "dimensions": {
+        "ComSense": {
+          "PM": 10.714285714285714,
+          "PR": 47.023809523809526,
+          "SPR": 54.76190476190476,
+          "SR": 95.83333333333333,
+          "examples": 84,
+          "legacy_score": 57.142857142857146,
+          "score": 63.69047619047619
+        },
+        "Complex": {
+          "PM": 73.51190476190474,
+          "PR": 84.97023809523809,
+          "SPR": 84.97023809523809,
+          "SR": 94.94047619047618,
+          "examples": 56,
+          "legacy_score": 71.96428571428572,
+          "score": 87.8125
+        },
+        "M&T": {
+          "PM": 17.699115044247787,
+          "PR": 29.20353982300885,
+          "SPR": 46.902654867256636,
+          "SR": 100.0,
+          "examples": 113,
+          "legacy_score": 51.68141592920354,
+          "score": 58.14159292035398
+        },
+        "PhysLaw": {
+          "PM": 83.33333333333333,
+          "PR": 83.33333333333333,
+          "SPR": 83.33333333333333,
+          "SR": 100.0,
+          "examples": 60,
+          "legacy_score": 73.33333333333333,
+          "score": 90.0
+        },
+        "Semantic": {
+          "PM": 17.857142857142858,
+          "PR": 39.88095238095238,
+          "SPR": 51.785714285714285,
+          "SR": 95.23809523809524,
+          "examples": 84,
+          "legacy_score": 54.04761904761905,
+          "score": 61.01190476190476
+        },
+        "Spatial": {
+          "PM": 7.547169811320755,
+          "PR": 27.358490566037737,
+          "SPR": 39.62264150943396,
+          "SR": 92.45283018867924,
+          "examples": 53,
+          "legacy_score": 47.924528301886795,
+          "score": 52.64150943396226
+        }
+      },
+      "examples": 450,
+      "legacy_Macro": 59.349006578197596,
+      "overall": {
+        "PM": 30.925925925925924,
+        "PR": 48.46296296296297,
+        "SPR": 58.018518518518526,
+        "SR": 96.81481481481482,
+        "legacy_score": 58.111111111111114,
+        "score": 67.00555555555556
+      },
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "unknown_task_count": 0
+    },
+    "reward": 0.6700555555555543,
+    "semantic_search_limit_failures": 0,
+    "skill_match": 0.9681481481481481,
+    "skill_with_entity_match": 0.5801851851851851,
+    "valid": 1.0
+  },
+  "dimensions": {
+    "ComSense": {
+      "PM": 10.714285714285714,
+      "PR": 47.023809523809526,
+      "SPR": 54.76190476190476,
+      "SR": 95.83333333333333,
+      "examples": 84,
+      "legacy_score": 57.142857142857146,
+      "score": 63.69047619047619
+    },
+    "Complex": {
+      "PM": 73.51190476190474,
+      "PR": 84.97023809523809,
+      "SPR": 84.97023809523809,
+      "SR": 94.94047619047618,
+      "examples": 56,
+      "legacy_score": 71.96428571428572,
+      "score": 87.8125
+    },
+    "M&T": {
+      "PM": 17.699115044247787,
+      "PR": 29.20353982300885,
+      "SPR": 46.902654867256636,
+      "SR": 100.0,
+      "examples": 113,
+      "legacy_score": 51.68141592920354,
+      "score": 58.14159292035398
+    },
+    "PhysLaw": {
+      "PM": 83.33333333333333,
+      "PR": 83.33333333333333,
+      "SPR": 83.33333333333333,
+      "SR": 100.0,
+      "examples": 60,
+      "legacy_score": 73.33333333333333,
+      "score": 90.0
+    },
+    "Semantic": {
+      "PM": 17.857142857142858,
+      "PR": 39.88095238095238,
+      "SPR": 51.785714285714285,
+      "SR": 95.23809523809524,
+      "examples": 84,
+      "legacy_score": 54.04761904761905,
+      "score": 61.01190476190476
+    },
+    "Spatial": {
+      "PM": 7.547169811320755,
+      "PR": 27.358490566037737,
+      "SPR": 39.62264150943396,
+      "SR": 92.45283018867924,
+      "examples": 53,
+      "legacy_score": 47.924528301886795,
+      "score": 52.64150943396226
+    }
+  },
+  "epoch": 0,
+  "examples_evaluated": 450,
+  "generation_failures": 0,
+  "ground_complex": true,
+  "input_probe": "original",
+  "legacy_macro_score": 59.349006578197596,
+  "macro_score": 68.88299721778286,
+  "observation_mode": "metadata-assisted",
+  "overall": {
+    "PM": 30.925925925925924,
+    "PR": 48.46296296296297,
+    "SPR": 58.018518518518526,
+    "SR": 96.81481481481482,
+    "legacy_score": 58.111111111111114,
+    "score": 67.00555555555556
+  },
+  "semantic_search_limit_failures": 0,
+  "split": "test",
+  "stage": "planning_head_adaptation"
+}

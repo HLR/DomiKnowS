@@ -1,0 +1,3831 @@
+{
+  "original": {
+    "reward": 0.6111111111111106,
+    "skill_match": 1.0,
+    "entity_match": 0.35185185185185186,
+    "skill_with_entity_match": 0.35185185185185186,
+    "exact_graph_match": 0.35185185185185186,
+    "valid": 1.0,
+    "examples": 54,
+    "planning_metrics": {
+      "examples": 54,
+      "unknown_task_count": 0,
+      "overall": {
+        "SR": 100.0,
+        "PR": 35.18518518518518,
+        "SPR": 35.18518518518518,
+        "PM": 35.18518518518518,
+        "score": 61.111111111111114,
+        "legacy_score": 54.074074074074076
+      },
+      "dimensions": {
+        "M&T": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Spatial": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "ComSense": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Semantic": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "PhysLaw": {
+          "examples": 54,
+          "SR": 100.0,
+          "PR": 35.18518518518518,
+          "SPR": 35.18518518518518,
+          "PM": 35.18518518518518,
+          "score": 61.111111111111114,
+          "legacy_score": 54.074074074074076
+        },
+        "Complex": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        }
+      },
+      "Macro": null,
+      "legacy_Macro": null,
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2"
+    },
+    "generation_failures": 0,
+    "semantic_search_limit_failures": 0,
+    "generation_errors": [],
+    "grounding_coverage": {
+      "destination": {
+        "not_applicable": 54
+      },
+      "holding": {
+        "not_applicable": 54
+      },
+      "capacity": {
+        "not_applicable": 54
+      },
+      "affordance": {
+        "unavailable": 54
+      },
+      "selection": {
+        "unavailable": 54
+      },
+      "compatibility": {
+        "not_applicable": 54
+      },
+      "milestone_order": {
+        "not_applicable": 54
+      },
+      "preservation": {
+        "not_applicable": 54
+      },
+      "goal_completion": {
+        "not_applicable": 54
+      }
+    },
+    "observation_profiles": {
+      "visual_qa_v1": 54
+    },
+    "observation_reports": [
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example55",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example2",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example21",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example58",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example7",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example83",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example5",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example76",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example46",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example41",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example99",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example32",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example29",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example67",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example11",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example56",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example17",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example25",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example62",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example31",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example76",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example88",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example82",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example18",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example47",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example49",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example71",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example65",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example17",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example38",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example22",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example19",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example30",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example52",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example82",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example44",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example72",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example41",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example12",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example61",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example92",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example29",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example2",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example7",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example19",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example17",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example43",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example9",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example4",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example84",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example88",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example60",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example80",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example11",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      }
+    ]
+  },
+  "permuted-entities": {
+    "reward": 0.6222222222222219,
+    "skill_match": 1.0,
+    "entity_match": 0.37037037037037035,
+    "skill_with_entity_match": 0.37037037037037035,
+    "exact_graph_match": 0.37037037037037035,
+    "valid": 1.0,
+    "examples": 54,
+    "planning_metrics": {
+      "examples": 54,
+      "unknown_task_count": 0,
+      "overall": {
+        "SR": 100.0,
+        "PR": 37.03703703703704,
+        "SPR": 37.03703703703704,
+        "PM": 37.03703703703704,
+        "score": 62.22222222222222,
+        "legacy_score": 54.81481481481482
+      },
+      "dimensions": {
+        "M&T": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Spatial": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "ComSense": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Semantic": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "PhysLaw": {
+          "examples": 54,
+          "SR": 100.0,
+          "PR": 37.03703703703704,
+          "SPR": 37.03703703703704,
+          "PM": 37.03703703703704,
+          "score": 62.22222222222222,
+          "legacy_score": 54.81481481481482
+        },
+        "Complex": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        }
+      },
+      "Macro": null,
+      "legacy_Macro": null,
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2"
+    },
+    "generation_failures": 0,
+    "semantic_search_limit_failures": 0,
+    "generation_errors": [],
+    "grounding_coverage": {
+      "destination": {
+        "not_applicable": 54
+      },
+      "holding": {
+        "not_applicable": 54
+      },
+      "capacity": {
+        "not_applicable": 54
+      },
+      "affordance": {
+        "unavailable": 54
+      },
+      "selection": {
+        "unavailable": 54
+      },
+      "compatibility": {
+        "not_applicable": 54
+      },
+      "milestone_order": {
+        "not_applicable": 54
+      },
+      "preservation": {
+        "not_applicable": 54
+      },
+      "goal_completion": {
+        "not_applicable": 54
+      }
+    },
+    "observation_profiles": {
+      "visual_qa_v1": 54
+    },
+    "observation_reports": []
+  },
+  "no-images": {
+    "reward": 0.6444444444444442,
+    "skill_match": 1.0,
+    "entity_match": 0.4074074074074074,
+    "skill_with_entity_match": 0.4074074074074074,
+    "exact_graph_match": 0.4074074074074074,
+    "valid": 1.0,
+    "examples": 54,
+    "planning_metrics": {
+      "examples": 54,
+      "unknown_task_count": 0,
+      "overall": {
+        "SR": 100.0,
+        "PR": 40.74074074074074,
+        "SPR": 40.74074074074074,
+        "PM": 40.74074074074074,
+        "score": 64.44444444444444,
+        "legacy_score": 56.2962962962963
+      },
+      "dimensions": {
+        "M&T": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Spatial": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "ComSense": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Semantic": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "PhysLaw": {
+          "examples": 54,
+          "SR": 100.0,
+          "PR": 40.74074074074074,
+          "SPR": 40.74074074074074,
+          "PM": 40.74074074074074,
+          "score": 64.44444444444444,
+          "legacy_score": 56.2962962962963
+        },
+        "Complex": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        }
+      },
+      "Macro": null,
+      "legacy_Macro": null,
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2"
+    },
+    "generation_failures": 0,
+    "semantic_search_limit_failures": 0,
+    "generation_errors": [],
+    "grounding_coverage": {
+      "destination": {
+        "not_applicable": 54
+      },
+      "holding": {
+        "not_applicable": 54
+      },
+      "capacity": {
+        "not_applicable": 54
+      },
+      "affordance": {
+        "unavailable": 54
+      },
+      "selection": {
+        "unavailable": 54
+      },
+      "compatibility": {
+        "not_applicable": 54
+      },
+      "milestone_order": {
+        "not_applicable": 54
+      },
+      "preservation": {
+        "not_applicable": 54
+      },
+      "goal_completion": {
+        "not_applicable": 54
+      }
+    },
+    "observation_profiles": {
+      "visual_qa_v1": 54
+    },
+    "observation_reports": [
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example55",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example2",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example21",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example58",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example7",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example83",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example5",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example76",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example46",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example41",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example99",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example32",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example29",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example67",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example11",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example56",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example17",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example25",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example62",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example31",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example76",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example88",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example82",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example18",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example47",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example49",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example71",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example65",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example17",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example38",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example22",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example19",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example30",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example52",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example82",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example44",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example72",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example41",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example12",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example61",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example92",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example29",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example2",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example7",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example19",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example17",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example43",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example9",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example4",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example84",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example88",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example60",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example80",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example11",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      }
+    ]
+  },
+  "shuffled-images": {
+    "reward": 0.6222222222222219,
+    "skill_match": 1.0,
+    "entity_match": 0.37037037037037035,
+    "skill_with_entity_match": 0.37037037037037035,
+    "exact_graph_match": 0.37037037037037035,
+    "valid": 1.0,
+    "examples": 54,
+    "planning_metrics": {
+      "examples": 54,
+      "unknown_task_count": 0,
+      "overall": {
+        "SR": 100.0,
+        "PR": 37.03703703703704,
+        "SPR": 37.03703703703704,
+        "PM": 37.03703703703704,
+        "score": 62.22222222222222,
+        "legacy_score": 54.81481481481482
+      },
+      "dimensions": {
+        "M&T": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Spatial": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "ComSense": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Semantic": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "PhysLaw": {
+          "examples": 54,
+          "SR": 100.0,
+          "PR": 37.03703703703704,
+          "SPR": 37.03703703703704,
+          "PM": 37.03703703703704,
+          "score": 62.22222222222222,
+          "legacy_score": 54.81481481481482
+        },
+        "Complex": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        }
+      },
+      "Macro": null,
+      "legacy_Macro": null,
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2"
+    },
+    "generation_failures": 0,
+    "semantic_search_limit_failures": 0,
+    "generation_errors": [],
+    "grounding_coverage": {
+      "destination": {
+        "not_applicable": 54
+      },
+      "holding": {
+        "not_applicable": 54
+      },
+      "capacity": {
+        "not_applicable": 54
+      },
+      "affordance": {
+        "unavailable": 54
+      },
+      "selection": {
+        "unavailable": 54
+      },
+      "compatibility": {
+        "not_applicable": 54
+      },
+      "milestone_order": {
+        "not_applicable": 54
+      },
+      "preservation": {
+        "not_applicable": 54
+      },
+      "goal_completion": {
+        "not_applicable": 54
+      }
+    },
+    "observation_profiles": {
+      "visual_qa_v1": 54
+    },
+    "observation_reports": [
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example55",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example2",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example21",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example58",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example7",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example83",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example5",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example76",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example46",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example41",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example99",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example32",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example29",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example67",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example11",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example56",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example17",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example25",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example62",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example31",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example76",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example88",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example82",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example18",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example47",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example49",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example71",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example65",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example17",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example38",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example22",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example19",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example30",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example52",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example82",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example44",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example72",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example41",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example12",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example61",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example92",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example29",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example2",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example7",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example19",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example17",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example43",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example9",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example4",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example84",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example88",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example60",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example80",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example11",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      }
+    ]
+  },
+  "shuffled-instructions": {
+    "reward": 0.6111111111111105,
+    "skill_match": 1.0,
+    "entity_match": 0.35185185185185186,
+    "skill_with_entity_match": 0.35185185185185186,
+    "exact_graph_match": 0.35185185185185186,
+    "valid": 1.0,
+    "examples": 54,
+    "planning_metrics": {
+      "examples": 54,
+      "unknown_task_count": 0,
+      "overall": {
+        "SR": 100.0,
+        "PR": 35.18518518518518,
+        "SPR": 35.18518518518518,
+        "PM": 35.18518518518518,
+        "score": 61.111111111111114,
+        "legacy_score": 54.074074074074076
+      },
+      "dimensions": {
+        "M&T": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Spatial": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "ComSense": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "Semantic": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        },
+        "PhysLaw": {
+          "examples": 54,
+          "SR": 100.0,
+          "PR": 35.18518518518518,
+          "SPR": 35.18518518518518,
+          "PM": 35.18518518518518,
+          "score": 61.111111111111114,
+          "legacy_score": 54.074074074074076
+        },
+        "Complex": {
+          "examples": 0,
+          "SR": null,
+          "PR": null,
+          "SPR": null,
+          "PM": null,
+          "score": null,
+          "legacy_score": null
+        }
+      },
+      "Macro": null,
+      "legacy_Macro": null,
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2"
+    },
+    "generation_failures": 0,
+    "semantic_search_limit_failures": 0,
+    "generation_errors": [],
+    "grounding_coverage": {
+      "destination": {
+        "not_applicable": 54
+      },
+      "holding": {
+        "not_applicable": 54
+      },
+      "capacity": {
+        "not_applicable": 54
+      },
+      "affordance": {
+        "unavailable": 54
+      },
+      "selection": {
+        "unavailable": 54
+      },
+      "compatibility": {
+        "not_applicable": 54
+      },
+      "milestone_order": {
+        "not_applicable": 54
+      },
+      "preservation": {
+        "not_applicable": 54
+      },
+      "goal_completion": {
+        "not_applicable": 54
+      }
+    },
+    "observation_profiles": {
+      "visual_qa_v1": 54
+    },
+    "observation_reports": [
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example55",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example2",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example21",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example58",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example7",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example83",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example5",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example76",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example46",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example41",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example99",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example32",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example29",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example67",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example11",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example56",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example17",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example25",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example62",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example31",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example76",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example88",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example82",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example18",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example47",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example49",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example71",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example65",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example17",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example38",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example22",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example19",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example30",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example52",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example82",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example44",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example72",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example41",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example12",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example61",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example92",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example29",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example2",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example7",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example19",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example17",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example43",
+        "property": "magnetism_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example9",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/thermal_expansion_qa/example4",
+        "property": "thermal_expansion_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example84",
+        "property": "density_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example88",
+        "property": "speed_of_sound_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/friction_qa/example60",
+        "property": "friction_qa:visual_property",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example80",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example11",
+        "property": "reflectance_fraction",
+        "sources": [],
+        "status": "unavailable",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "prediction_source": "vlm_visual"
+      }
+    ]
+  }
+}

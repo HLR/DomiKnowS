@@ -1,0 +1,120 @@
+{
+  "command": [
+    "/opt/dominows/venv/bin/python",
+    "-m",
+    "test_regr.JointEmbodiedAgentInterface.eval_planning",
+    "--checkpoint",
+    "test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt",
+    "--split",
+    "test",
+    "--observation-mode",
+    "visual",
+    "--seed",
+    "42",
+    "--output",
+    "/workspace/test_regr/JointEmbodiedAgentInterface/results/planning_eval_test_visual.json"
+  ],
+  "executed_command": [
+    "/opt/dominows/venv/bin/python",
+    "-u",
+    "/home/auszok/evaluation_runs/full_test_visual_20261018T164812Z/evaluate_with_trace.py",
+    "--checkpoint",
+    "test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt",
+    "--split",
+    "test",
+    "--observation-mode",
+    "visual",
+    "--seed",
+    "42",
+    "--output",
+    "/workspace/test_regr/JointEmbodiedAgentInterface/results/planning_eval_test_visual.json"
+  ],
+  "physical_gpu": 1,
+  "gpu_uuid": "GPU-df6f7760-5171-3c97-3dc6-dcca88ede043",
+  "base_commit": "cb6ed0263176d6e8a3f411e1182e6c596f71562b",
+  "working_tree_snapshot_sha256": "c597e7470baae082e39f683e56b295a02636e71b824dda80b53ac90b54991ea8",
+  "execution_wrapper_sha256": "f95f55445d26ad06f84b29679f67b37fce26f98543b1e0308b3cad75dc1ed8d5",
+  "checkpoint_target": "/workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt",
+  "observation_mode": "visual",
+  "dimension_mapping_revision": "vlabench-planning-coverage-v2",
+  "density_repair_revision": "density-material-button-v1",
+  "log": "/home/auszok/evaluation_runs/full_test_visual_20261018T164812Z/evaluation.log",
+  "predictions": "/home/auszok/evaluation_runs/full_test_visual_20261018T164812Z/predictions.jsonl",
+  "output": "/workspace/test_regr/JointEmbodiedAgentInterface/results/planning_eval_test_visual.json",
+  "started_utc": "2026-10-18T16:51:57.828897+00:00",
+  "wrapper_pid": 629021,
+  "completion": {
+    "exit_code": 0,
+    "finished_utc": "2026-10-18T17:22:44.656481+00:00"
+  },
+  "evaluation_pid": 629022,
+  "report_sha256": "d857a0c629bd22bd5a5c2c9d7a17ebb56fad4e92b7ea95bd100040bad9695102",
+  "validation": {
+    "unique_episodes": 450,
+    "classified_episodes": 450,
+    "unknown_tasks": 0,
+    "per_episode_scores_match_report": true
+  },
+  "physics_tasks": {
+    "density_qa": {
+      "examples": 11,
+      "correct_button": 6,
+      "PM": 54.54545454545455,
+      "PR": 54.54545454545455,
+      "SPR": 54.54545454545455,
+      "SR": 100.0,
+      "legacy_score": 61.81818181818182,
+      "score": 72.72727272727273
+    },
+    "friction_qa": {
+      "examples": 5,
+      "correct_button": 2,
+      "PM": 40.0,
+      "PR": 40.0,
+      "SPR": 40.0,
+      "SR": 100.0,
+      "legacy_score": 56.0,
+      "score": 64.0
+    },
+    "magnetism_qa": {
+      "examples": 11,
+      "correct_button": 1,
+      "PM": 9.090909090909092,
+      "PR": 9.090909090909092,
+      "SPR": 9.090909090909092,
+      "SR": 100.0,
+      "legacy_score": 43.63636363636363,
+      "score": 45.45454545454545
+    },
+    "reflection_qa": {
+      "examples": 14,
+      "correct_button": 2,
+      "PM": 14.285714285714286,
+      "PR": 14.285714285714286,
+      "SPR": 14.285714285714286,
+      "SR": 100.0,
+      "legacy_score": 45.714285714285715,
+      "score": 48.57142857142857
+    },
+    "speed_of_sound_qa": {
+      "examples": 6,
+      "correct_button": 0,
+      "PM": 0.0,
+      "PR": 0.0,
+      "SPR": 0.0,
+      "SR": 100.0,
+      "legacy_score": 40.0,
+      "score": 40.0
+    },
+    "thermal_expansion_qa": {
+      "examples": 13,
+      "correct_button": 5,
+      "PM": 38.46153846153846,
+      "PR": 38.46153846153846,
+      "SPR": 38.46153846153846,
+      "SR": 100.0,
+      "legacy_score": 55.38461538461539,
+      "score": 63.07692307692308
+    }
+  }
+}

@@ -1,0 +1,589 @@
+{
+  "server": "gpu2.ihmc.us",
+  "base_commit": "cb6ed0263176d6e8a3f411e1182e6c596f71562b",
+  "previous_visual": {
+    "overall": {
+      "PM": 39.46296296296297,
+      "PR": 59.66975308641975,
+      "SPR": 64.22530864197532,
+      "SR": 96.21604938271611,
+      "legacy_score": 62.3543209876543,
+      "score": 72.72314814814816
+    },
+    "macro": 70.92777619584318,
+    "dimensions": {
+      "ComSense": {
+        "PM": 57.142857142857146,
+        "PR": 79.16666666666667,
+        "SPR": 79.16666666666667,
+        "SR": 95.83333333333333,
+        "examples": 84,
+        "legacy_score": 70.0,
+        "score": 83.63095238095238
+      },
+      "Complex": {
+        "PM": 1.0416666666666667,
+        "PR": 44.667658730158735,
+        "SPR": 44.667658730158735,
+        "SR": 79.41468253968252,
+        "examples": 56,
+        "legacy_score": 49.63293650793653,
+        "score": 54.20386904761906
+      },
+      "M&T": {
+        "PM": 38.93805309734513,
+        "PR": 58.849557522123895,
+        "SPR": 69.02654867256638,
+        "SR": 100.0,
+        "examples": 113,
+        "legacy_score": 63.53982300884956,
+        "score": 74.33628318584071
+      },
+      "PhysLaw": {
+        "PM": 26.666666666666668,
+        "PR": 26.666666666666668,
+        "SPR": 26.666666666666668,
+        "SR": 100.0,
+        "examples": 60,
+        "legacy_score": 50.666666666666664,
+        "score": 56.0
+      },
+      "Semantic": {
+        "PM": 61.904761904761905,
+        "PR": 72.61904761904762,
+        "SPR": 79.16666666666667,
+        "SR": 98.80952380952381,
+        "examples": 84,
+        "legacy_score": 68.57142857142857,
+        "score": 82.67857142857143
+      },
+      "Spatial": {
+        "PM": 32.075471698113205,
+        "PR": 63.20754716981132,
+        "SPR": 69.81132075471699,
+        "SR": 98.11320754716981,
+        "examples": 53,
+        "legacy_score": 64.52830188679245,
+        "score": 74.71698113207547
+      }
+    }
+  },
+  "runs": {
+    "representation": {
+      "overall": {
+        "PM": 42.92592592592593,
+        "PR": 62.59382716049382,
+        "SPR": 66.2851851851852,
+        "SR": 96.2882716049383,
+        "legacy_score": 63.55283950617282,
+        "score": 74.47395061728398
+      },
+      "macro": 72.33781838021382,
+      "dimensions": {
+        "ComSense": {
+          "PM": 47.61904761904762,
+          "PR": 75.0,
+          "SPR": 74.4047619047619,
+          "SR": 98.80952380952381,
+          "examples": 84,
+          "legacy_score": 69.52380952380952,
+          "score": 81.72619047619048
+        },
+        "Complex": {
+          "PM": 3.8690476190476195,
+          "PR": 45.843253968253975,
+          "SPR": 46.93452380952381,
+          "SR": 78.20932539682539,
+          "examples": 56,
+          "legacy_score": 49.62103174603176,
+          "score": 54.70138888888889
+        },
+        "M&T": {
+          "PM": 54.86725663716814,
+          "PR": 65.04424778761062,
+          "SPR": 73.89380530973452,
+          "SR": 100.0,
+          "examples": 113,
+          "legacy_score": 66.01769911504425,
+          "score": 78.89380530973452
+        },
+        "PhysLaw": {
+          "PM": 35.0,
+          "PR": 35.0,
+          "SPR": 35.0,
+          "SR": 100.0,
+          "examples": 60,
+          "legacy_score": 54.0,
+          "score": 61.0
+        },
+        "Semantic": {
+          "PM": 61.904761904761905,
+          "PR": 80.35714285714286,
+          "SPR": 83.92857142857143,
+          "SR": 97.02380952380952,
+          "examples": 84,
+          "legacy_score": 70.95238095238095,
+          "score": 85.53571428571429
+        },
+        "Spatial": {
+          "PM": 30.18867924528302,
+          "PR": 58.490566037735846,
+          "SPR": 65.09433962264151,
+          "SR": 98.11320754716981,
+          "examples": 53,
+          "legacy_score": 62.64150943396226,
+          "score": 72.16981132075472
+        }
+      },
+      "examples": 450,
+      "generation_failures": 0,
+      "physical_gpu": 4,
+      "pid": 638900,
+      "started_utc": "2026-10-18T17:49:24.984861+00:00",
+      "finished_utc": "2026-10-18T18:13:04.130818+00:00",
+      "observation_mode": "visual"
+    },
+    "grounded_visual": {
+      "overall": {
+        "PM": 51.70370370370371,
+        "PR": 67.48148148148148,
+        "SPR": 71.03703703703704,
+        "SR": 98.17592592592592,
+        "legacy_score": 66.26296296296297,
+        "score": 78.53703703703704
+      },
+      "macro": 77.77945197809741,
+      "dimensions": {
+        "ComSense": {
+          "PM": 47.61904761904762,
+          "PR": 75.0,
+          "SPR": 74.4047619047619,
+          "SR": 98.80952380952381,
+          "examples": 84,
+          "legacy_score": 69.52380952380952,
+          "score": 81.72619047619048
+        },
+        "Complex": {
+          "PM": 74.40476190476191,
+          "PR": 85.11904761904762,
+          "SPR": 85.11904761904762,
+          "SR": 93.37797619047618,
+          "examples": 56,
+          "legacy_score": 71.39880952380952,
+          "score": 87.35119047619048
+        },
+        "M&T": {
+          "PM": 54.86725663716814,
+          "PR": 65.04424778761062,
+          "SPR": 73.89380530973452,
+          "SR": 100.0,
+          "examples": 113,
+          "legacy_score": 66.01769911504425,
+          "score": 78.89380530973452
+        },
+        "PhysLaw": {
+          "PM": 35.0,
+          "PR": 35.0,
+          "SPR": 35.0,
+          "SR": 100.0,
+          "examples": 60,
+          "legacy_score": 54.0,
+          "score": 61.0
+        },
+        "Semantic": {
+          "PM": 61.904761904761905,
+          "PR": 80.35714285714286,
+          "SPR": 83.92857142857143,
+          "SR": 97.02380952380952,
+          "examples": 84,
+          "legacy_score": 70.95238095238095,
+          "score": 85.53571428571429
+        },
+        "Spatial": {
+          "PM": 30.18867924528302,
+          "PR": 58.490566037735846,
+          "SPR": 65.09433962264151,
+          "SR": 98.11320754716981,
+          "examples": 53,
+          "legacy_score": 62.64150943396226,
+          "score": 72.16981132075472
+        }
+      },
+      "examples": 450,
+      "generation_failures": 0,
+      "physical_gpu": 5,
+      "pid": 638899,
+      "started_utc": "2026-10-18T17:49:24.984792+00:00",
+      "finished_utc": "2026-10-18T18:12:23.525808+00:00",
+      "observation_mode": "visual"
+    },
+    "grounded_metadata": {
+      "overall": {
+        "PM": 58.59259259259259,
+        "PR": 74.37037037037037,
+        "SPR": 77.92592592592592,
+        "SR": 98.17592592592592,
+        "legacy_score": 69.01851851851852,
+        "score": 82.67037037037036
+      },
+      "macro": 82.94611864476408,
+      "dimensions": {
+        "ComSense": {
+          "PM": 47.61904761904762,
+          "PR": 75.0,
+          "SPR": 74.4047619047619,
+          "SR": 98.80952380952381,
+          "examples": 84,
+          "legacy_score": 69.52380952380952,
+          "score": 81.72619047619048
+        },
+        "Complex": {
+          "PM": 74.40476190476191,
+          "PR": 85.11904761904762,
+          "SPR": 85.11904761904762,
+          "SR": 93.37797619047618,
+          "examples": 56,
+          "legacy_score": 71.39880952380952,
+          "score": 87.35119047619048
+        },
+        "M&T": {
+          "PM": 54.86725663716814,
+          "PR": 65.04424778761062,
+          "SPR": 73.89380530973452,
+          "SR": 100.0,
+          "examples": 113,
+          "legacy_score": 66.01769911504425,
+          "score": 78.89380530973452
+        },
+        "PhysLaw": {
+          "PM": 86.66666666666667,
+          "PR": 86.66666666666667,
+          "SPR": 86.66666666666667,
+          "SR": 100.0,
+          "examples": 60,
+          "legacy_score": 74.66666666666667,
+          "score": 92.0
+        },
+        "Semantic": {
+          "PM": 61.904761904761905,
+          "PR": 80.35714285714286,
+          "SPR": 83.92857142857143,
+          "SR": 97.02380952380952,
+          "examples": 84,
+          "legacy_score": 70.95238095238095,
+          "score": 85.53571428571429
+        },
+        "Spatial": {
+          "PM": 30.18867924528302,
+          "PR": 58.490566037735846,
+          "SPR": 65.09433962264151,
+          "SR": 98.11320754716981,
+          "examples": 53,
+          "legacy_score": 62.64150943396226,
+          "score": 72.16981132075472
+        }
+      },
+      "examples": 450,
+      "generation_failures": 0,
+      "physical_gpu": 6,
+      "pid": 638901,
+      "started_utc": "2026-10-18T17:49:24.985550+00:00",
+      "finished_utc": "2026-10-18T18:12:23.864044+00:00",
+      "observation_mode": "metadata-assisted"
+    },
+    "adapted_visual": {
+      "overall": {
+        "PM": 25.59259259259259,
+        "PR": 43.129629629629626,
+        "SPR": 52.68518518518519,
+        "SR": 96.81481481481482,
+        "legacy_score": 55.977777777777774,
+        "score": 63.80555555555556
+      },
+      "macro": 64.88299721778286,
+      "dimensions": {
+        "ComSense": {
+          "PM": 10.714285714285714,
+          "PR": 47.023809523809526,
+          "SPR": 54.76190476190476,
+          "SR": 95.83333333333333,
+          "examples": 84,
+          "legacy_score": 57.142857142857146,
+          "score": 63.69047619047619
+        },
+        "Complex": {
+          "PM": 73.51190476190474,
+          "PR": 84.97023809523809,
+          "SPR": 84.97023809523809,
+          "SR": 94.94047619047618,
+          "examples": 56,
+          "legacy_score": 71.96428571428572,
+          "score": 87.8125
+        },
+        "M&T": {
+          "PM": 17.699115044247787,
+          "PR": 29.20353982300885,
+          "SPR": 46.902654867256636,
+          "SR": 100.0,
+          "examples": 113,
+          "legacy_score": 51.68141592920354,
+          "score": 58.14159292035398
+        },
+        "PhysLaw": {
+          "PM": 43.333333333333336,
+          "PR": 43.333333333333336,
+          "SPR": 43.333333333333336,
+          "SR": 100.0,
+          "examples": 60,
+          "legacy_score": 57.333333333333336,
+          "score": 66.0
+        },
+        "Semantic": {
+          "PM": 17.857142857142858,
+          "PR": 39.88095238095238,
+          "SPR": 51.785714285714285,
+          "SR": 95.23809523809524,
+          "examples": 84,
+          "legacy_score": 54.04761904761905,
+          "score": 61.01190476190476
+        },
+        "Spatial": {
+          "PM": 7.547169811320755,
+          "PR": 27.358490566037737,
+          "SPR": 39.62264150943396,
+          "SR": 92.45283018867924,
+          "examples": 53,
+          "legacy_score": 47.924528301886795,
+          "score": 52.64150943396226
+        }
+      },
+      "examples": 450,
+      "generation_failures": 0,
+      "physical_gpu": 1,
+      "pid": 645940,
+      "started_utc": "2026-10-18T18:11:55.793665+00:00",
+      "finished_utc": "2026-10-18T18:32:54.592611+00:00",
+      "observation_mode": "visual"
+    },
+    "adapted_metadata": {
+      "overall": {
+        "PM": 30.925925925925924,
+        "PR": 48.46296296296297,
+        "SPR": 58.018518518518526,
+        "SR": 96.81481481481482,
+        "legacy_score": 58.111111111111114,
+        "score": 67.00555555555556
+      },
+      "macro": 68.88299721778286,
+      "dimensions": {
+        "ComSense": {
+          "PM": 10.714285714285714,
+          "PR": 47.023809523809526,
+          "SPR": 54.76190476190476,
+          "SR": 95.83333333333333,
+          "examples": 84,
+          "legacy_score": 57.142857142857146,
+          "score": 63.69047619047619
+        },
+        "Complex": {
+          "PM": 73.51190476190474,
+          "PR": 84.97023809523809,
+          "SPR": 84.97023809523809,
+          "SR": 94.94047619047618,
+          "examples": 56,
+          "legacy_score": 71.96428571428572,
+          "score": 87.8125
+        },
+        "M&T": {
+          "PM": 17.699115044247787,
+          "PR": 29.20353982300885,
+          "SPR": 46.902654867256636,
+          "SR": 100.0,
+          "examples": 113,
+          "legacy_score": 51.68141592920354,
+          "score": 58.14159292035398
+        },
+        "PhysLaw": {
+          "PM": 83.33333333333333,
+          "PR": 83.33333333333333,
+          "SPR": 83.33333333333333,
+          "SR": 100.0,
+          "examples": 60,
+          "legacy_score": 73.33333333333333,
+          "score": 90.0
+        },
+        "Semantic": {
+          "PM": 17.857142857142858,
+          "PR": 39.88095238095238,
+          "SPR": 51.785714285714285,
+          "SR": 95.23809523809524,
+          "examples": 84,
+          "legacy_score": 54.04761904761905,
+          "score": 61.01190476190476
+        },
+        "Spatial": {
+          "PM": 7.547169811320755,
+          "PR": 27.358490566037737,
+          "SPR": 39.62264150943396,
+          "SR": 92.45283018867924,
+          "examples": 53,
+          "legacy_score": 47.924528301886795,
+          "score": 52.64150943396226
+        }
+      },
+      "examples": 450,
+      "generation_failures": 0,
+      "physical_gpu": 3,
+      "pid": 645941,
+      "started_utc": "2026-10-18T18:11:55.794729+00:00",
+      "finished_utc": "2026-10-18T18:32:55.129982+00:00",
+      "observation_mode": "metadata-assisted"
+    }
+  },
+  "selection": {
+    "recommended_weights": "original joint_stage2_best.pt with the updated grounded policy",
+    "prototype_checkpoint": "/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z/adaptation/planner_best.pt",
+    "prototype_best_loss_epoch": 0,
+    "prototype_promoted": false,
+    "retention_evidence_split": "validation",
+    "validation_qa_examples": 54,
+    "baseline_validation_qa_accuracy": 40.74074074074074,
+    "candidate_validation_qa_accuracy": 35.18518518518518,
+    "baseline_validation_physlaw_score": 64.44444444444444,
+    "candidate_validation_physlaw_score": 61.111111111111114,
+    "retention_eligible": false,
+    "test_used_for_selection": false,
+    "reason": "Generated PhysLaw validation score regressed; retain the original champion.",
+    "future_workflow_selection": "generated_validation_macro_with_retention_v1"
+  },
+  "verification": {
+    "unique_episodes": 450,
+    "replayed_acceptance": 450,
+    "independent_verification": 450,
+    "scores_match_report": true,
+    "tasks": {
+      "book_rearrange": {
+        "examples": 17,
+        "PM": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "SR": 100.0,
+        "legacy_score": 80.0,
+        "score": 100.0
+      },
+      "cook_dishes": {
+        "examples": 11,
+        "PM": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "SR": 100.0,
+        "legacy_score": 80.0,
+        "score": 100.0
+      },
+      "density_qa": {
+        "examples": 11,
+        "PM": 54.54545454545455,
+        "PR": 54.54545454545455,
+        "SPR": 54.54545454545455,
+        "SR": 100.0,
+        "legacy_score": 61.81818181818182,
+        "score": 72.72727272727273
+      },
+      "friction_qa": {
+        "examples": 5,
+        "PM": 60.0,
+        "PR": 60.0,
+        "SPR": 60.0,
+        "SR": 100.0,
+        "legacy_score": 64.0,
+        "score": 76.0
+      },
+      "hammer_nail_and_hang_picture": {
+        "examples": 10,
+        "PM": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "SR": 100.0,
+        "legacy_score": 80.0,
+        "score": 100.0
+      },
+      "magnetism_qa": {
+        "examples": 11,
+        "PM": 9.090909090909092,
+        "PR": 9.090909090909092,
+        "SPR": 9.090909090909092,
+        "SR": 100.0,
+        "legacy_score": 43.63636363636363,
+        "score": 45.45454545454545
+      },
+      "reflection_qa": {
+        "examples": 14,
+        "PM": 42.857142857142854,
+        "PR": 42.857142857142854,
+        "SPR": 42.857142857142854,
+        "SR": 100.0,
+        "legacy_score": 57.142857142857146,
+        "score": 65.71428571428571
+      },
+      "speed_of_sound_qa": {
+        "examples": 6,
+        "PM": 16.666666666666668,
+        "PR": 16.666666666666668,
+        "SPR": 16.666666666666668,
+        "SR": 100.0,
+        "legacy_score": 46.666666666666664,
+        "score": 50.0
+      },
+      "take_chemistry_experiment": {
+        "examples": 7,
+        "PM": 52.38095238095239,
+        "PR": 95.23809523809523,
+        "SPR": 95.23809523809523,
+        "SR": 95.23809523809523,
+        "legacy_score": 76.19047619047619,
+        "score": 90.95238095238095
+      },
+      "texas_holdem": {
+        "examples": 11,
+        "PM": 0.0,
+        "PR": 27.272727272727273,
+        "SPR": 27.272727272727273,
+        "SR": 69.31818181818181,
+        "legacy_score": 38.63636363636363,
+        "score": 41.36363636363637
+      },
+      "thermal_expansion_qa": {
+        "examples": 13,
+        "PM": 30.76923076923077,
+        "PR": 30.76923076923077,
+        "SPR": 30.76923076923077,
+        "SR": 100.0,
+        "legacy_score": 52.30769230769231,
+        "score": 58.46153846153846
+      }
+    }
+  },
+  "dataset": {
+    "dataset": "VLABench/vlm_evaluation_v1.0",
+    "upstream_revision": "b432f0c69ec0731935ff49a916d460936a000624",
+    "density_label_repair_revision": "density-material-button-v1",
+    "examples": 4500,
+    "split_seed": 42,
+    "annotation_manifest_sha256": "3594fb35b9c7e6409fcbbc56a71ccb125654ef4171861f1774132eb7383fae15",
+    "image_content_hashes_included": false,
+    "split_counts": {
+      "train": 3600,
+      "validation": 450,
+      "test": 450
+    },
+    "full_manifest": "/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z/dataset_manifest.json"
+  },
+  "local_regressions": {
+    "passed": 670,
+    "failed": 13,
+    "skipped": 1,
+    "all_failures_reproduced_before_changes": true
+  },
+  "simulator_execution_measured": false,
+  "remote_run_directory": "/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z"
+}

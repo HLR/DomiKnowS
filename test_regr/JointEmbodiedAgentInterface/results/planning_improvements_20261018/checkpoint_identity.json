@@ -1,0 +1,12 @@
+{
+  "champion": {
+    "path": "/workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt",
+    "bytes": 1478685061,
+    "sha256": "d30dd9d52d719cc537b44aaca8b9044ebefc908366190242f1bba7991a9317a7"
+  },
+  "prototype": {
+    "path": "/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z/adaptation/planner_best.pt",
+    "bytes": 1090867895,
+    "sha256": "c99ee117eb984b3688b876c4d623f9b73a4fed2bcb1e8f25dc29d06f2d7f6cd7"
+  }
+}

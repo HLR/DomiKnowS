@@ -147,7 +147,7 @@ root = materialize_plan(
 evaluation = verify_plan_constraints(root, runtime.world_bundle)
 ```
 
-A button's presence does not force the whole plan into `press -> button -> EOS`. Known `density_qa` and `friction_qa` task identifiers (including episode metadata) select a press sequence through `QA_TASK_PATTERNS`; these planning-only aliases do not add controller primitives or change checkpoint token/schema checksums. Instruction keywords alone do not choose an answer button. Explicit target facts or grounded numeric selection requirements can constrain the option.
+A button's presence does not force the whole plan into `press -> button -> EOS`. Known density, friction, magnetism, reflection, sound-speed, and thermal-expansion QA task identifiers (including episode metadata) select a press sequence through `QA_TASK_PATTERNS`; these planning-only aliases do not add controller primitives or change checkpoint token/schema checksums. Instruction keywords alone do not choose an answer button. Explicit target facts or grounded numeric selection requirements can constrain the option.
 
 Deactivating a task LC removes that rule's contribution after recompilation, without editing the decoder. Other active LCs and the grammar can still reject a sequence. Compiled policies are snapshots: graph edits require recompilation and a new binding; an existing collected policy retains its original program.
 
@@ -155,9 +155,9 @@ Deactivating a task LC removes that rule's contribution after recompilation, wit
 
 `no_redundant_repeated_picks` now reads the whole-plan `visited_picks` set rather than only the previous action. Named and numeric pointers are resolved before comparison, so `pick obj:0 -> place bowl -> pick apple` is rejected when pointer 0 denotes apple. Distinct objects remain selectable. The LC, rather than a handwritten token mask, controls both completed-plan verification and decoding; deactivation permits intentional revisits, and compiled programs retain their original activation snapshot.
 
-The two QA aliases require `press` through the existing `task_skill_sequence` and `task_sequence_completion` LCs. They remain separate from the ten controller primitive contracts so existing checkpoint vocabularies retain their token IDs and schema checksums. This fixes action shape without hardcoding an answer index.
+All six QA aliases require `press` through the existing `task_skill_sequence` and `task_sequence_completion` LCs. They remain separate from the ten controller primitive contracts so existing checkpoint vocabularies retain their token IDs and schema checksums. This fixes action shape without hardcoding an answer index.
 
-Generic `SelectionRequirement` in `domiknows/generation/grounded.py` evaluates explicit `planning_facts.selections`. It supports `min`, `max`, `below`, and `above` over finite observed scores, targeting an operation's subject or destination. Ranking ties admit every tied optimum. Threshold criteria require an exposed threshold. Observations must refer to declared scene candidates and use a common property/unit; Boolean, nonfinite, contradictory alias, and unresolved-entity inputs are rejected.
+Generic `SelectionRequirement` in `domiknows/generation/grounded.py` evaluates explicit `planning_facts.selections`. It supports `min`, `max`, `below`, `above`, and `rank` over finite supplied scores, targeting an operation's subject or destination. `rank` is a zero-based ascending order statistic, counting candidates including ties: with scores `[1, 1, 3]`, ranks 0 and 1 both admit either candidate scored 1. Min/max ties admit every tied optimum. Rank values must be integers within the explicitly declared candidate universe; known values that make the requested rank impossible reject a candidate even when other scores are missing. Threshold criteria require an exposed threshold. Observations must refer to declared scene candidates and use a common property/unit; Boolean, nonfinite, contradictory alias, and unresolved-entity inputs are rejected.
 
 The complete candidate universe must be declared explicitly; score keys alone do not establish it. Missing scores can be omitted or set to `None`. Evaluation aggregates per-check grounding statuses in `detailed_metrics.grounding_coverage`, including `selection` checked/unavailable/partial/violated counts, so missing observations remain visible in the benchmark JSON.
 
@@ -178,7 +178,7 @@ context = {
 # The admissible target is button0 (pointer 1), based on observations, not its label.
 ```
 
-A friction question can similarly supply `property="observed_slide_time"`, `criterion="min"`, and observed option times. Floating can use `criterion="below"` with measured object densities and an explicit fluid-density threshold. The generic evaluator does not infer slide speed from shape names, assume button order encodes density, or read reference plans, hidden success conditions, or prepared reference state. Observation adapters must expose option bindings and measurements; the planning loader currently consumes these only from explicit `planning_facts` annotations.
+A friction question can similarly supply `property="observed_slide_time"`, `criterion="min"`, and observed option times. Floating can use `criterion="below"` with measured object densities and an explicit fluid-density threshold. The generic evaluator does not infer slide speed from shape names, assume button order encodes density, or read reference plans, hidden success conditions, or prepared reference state. The planning loader accepts explicit `planning_facts` annotations and supplies the scene-metadata adapter described below. Explicit press-selection annotations take precedence over automatic metadata models.
 
 Eligibility is an action-target precondition enforced by the existing `grounded__affordance` LC in VLABench and EAI. Detailed `selection` diagnostic rows explain its grounding; they are not extra head LCs. Known losing options remain forbidden even when another option's score is missing. An unproven winner remains unavailable/partial. QA requests without observations get an explicit unavailable selection check, while their press sequence is still enforced. The default head counts therefore remain 41 (VLABench) and 62 (joint EAI).
 
@@ -432,3 +432,362 @@ model, not a measurement of physical density. Existing scorecards were not
 modified or reevaluated. Historical comparisons require the same repaired label
 revision and dimension mapping for every run. See the README's density repair
 section for the audit/apply commands and backup semantics.
+
+
+### Scene-metadata physics grounding (steps 1–3)
+
+In `metadata-assisted` mode, `physics_grounding.py` converts input instructions and scene components into
+`planning_facts.selections`. It receives no output plan or success conditions.
+Nested button/object relationships are used directly; flattened components use
+unique nearest planar associations within 0.25 scene units, with a 2x distance
+margin. Missing, duplicate, or ambiguous associations remain unknown. Candidate
+button IDs and component order never encode a preferred answer.
+
+The adapter declares qualitative ordinal models separately from measured values:
+
+| Task | Property model | Comparisons |
+|---|---|---|
+| Density | wood < rubber < water < glass < stone < metal | min, max, middle rank, below water |
+| Sound speed | rubber < water < wood < stone < glass < metal | min, max, middle rank |
+| Thermal expansion | glass < wood < stone < metal < rubber | least, most, middle rank; benchmark heat/cool model |
+| Magnetism | benchmark metal=1, known other materials=0 | magnetic=max, non-magnetic=min |
+| Friction | benchmark slide cost sphere=0, cylinder=1, box=2 | fastest=min, slowest=max, second-fastest rank=1 |
+| Reflection | explicitly bound reflectance fractions from saved metadata or an input observation file | min, max, middle rank; missing observations stay unknown |
+
+These are public VLABench model abstractions, not universal physical laws or
+measured coefficients. Unrecognized materials/shapes and unsupported comparisons
+remain unavailable. Reflection image estimation is not implemented. Reflectance export and explicit
+observation ingestion are described below. Existing annotated measurements override automatic models.
+
+Dataset examples and reward items expose `planning_observation_profile`.
+Automatically adapted QA examples use `scene_metadata_physics_v1`; explicit
+press-selection annotations use `declared_planning_facts`. Evaluation aggregates
+these in `detailed_metrics.observation_profiles`. This makes the metadata-assisted
+input contract distinguishable from an image-only experiment. No new head LC or
+decoder-specific mask was added: task shape uses the existing sequence LCs and
+selection eligibility uses `grounded__affordance`. The generic rank comparison
+also works for EAI without changing hand semantics.
+
+Example of a reusable rank requirement (middle candidate among three):
+
+```python
+planning_facts = {"selections": [{
+    "action": "press", "argument": "subject",
+    "property": "density_qa:qualitative_model_v1",
+    "candidates": ["button2", "button0", "button1"],
+    "scores": {"button2": 0, "button0": 4, "button1": 5},
+    "criterion": "rank", "rank": 1,
+}]}
+```
+
+A read-only CPU audit of the repaired gpu2 seed-42 test split grounded 46/60
+PhysLaw episodes: density 11, friction 5, magnetism 11, sound speed 6, thermal
+expansion 13. All 46 agreed with references after predictions were derived from
+scene inputs; reflection's 14 episodes retained unavailable scores. This is an
+input/label consistency check, not a new GPU checkpoint score. Focused runs
+passed 167 generic/QA tests and 186 integration/EAI/joint/metric tests (overlapping
+suites). They include independent order-statistic enumeration with ties,
+unknown-score violations, shuffled options, gold-label isolation, LC deactivation,
+fresh request binding, and sampling/replay log-probability agreement.
+
+Reproduce the key new checks with:
+
+```bash
+python -m pytest test_regr/generation/test_selection_requirements.py \
+  test_regr/VLABenchAgentInterface/test_physics_grounding.py \
+  test_regr/VLABenchAgentInterface/test_qa_and_pick_history.py \
+  test_regr/VLABenchAgentInterface/test_decoding_integration.py \
+  test_regr/EmbodiedAgentInterface/test_grounded_constraints.py -q
+```
+
+Broader validation for these steps: `python -m pytest test_regr/generation test_regr/VLABenchAgentInterface -q` recorded **1166 passed, 14 failed, 1 skipped**. All 14 failing nodes reproduced against the pre-change commit `cb6ed026` in an isolated source snapshot. They concern the trace-log path, two assistance assertions, native CLI stdout, a rollout default, and nine controller API/numerical assertions. No new broader-suite failure was found. Two follow-up observation-profile propagation assertions also passed.
+
+
+### Reflection: explicit observations and missing-data reporting
+
+The old `Mirrors` entity inherited `Entity.save()`, which saves pose and class
+but omits reflectance. The reflection generator also discarded the explicit
+button-to-mirror bindings from its exported scene. The upstream source notes a
+MuJoCo reflection rendering limitation; image brightness is not treated as a
+calibrated reflectance observation.
+
+`preserve_reflection_observations.py` patches the upstream generator to attach
+`option_buttons` alongside its shuffled reflectance vector. `Mirrors.save()`
+then preserves those bindings and the numeric MJCF material reflectance values.
+These are simulator material metadata, not an image-derived estimate. The
+adapter requires both arrays; a reflectance vector alone never implies that
+array position corresponds to a button number. Nested and flattened Mirrors
+components are supported. Existing unbound snapshots are not relabeled.
+
+For existing episodes, independently obtained observations can be supplied in
+`input/property_observations.json`:
+
+```json
+{
+  "version": 1,
+  "source": "reflectometer",
+  "observations": [
+    {"entity": "button2", "property": "reflectance", "unit": "fraction", "value": 0.55},
+    {"entity": "button0", "property": "reflectance", "unit": "fraction", "value": 0.90},
+    {"entity": "button1", "property": "reflectance", "unit": "fraction", "value": 0.20}
+  ]
+}
+```
+
+The generic immutable `PropertyObservations` parser validates schema version,
+source, explicit entity references, duplicate records, units, and finite numeric
+values. The reflection adapter additionally enforces fractions in [0, 1]. Null
+or omitted candidate values remain unknown. Conflicting supplied and saved
+values are rejected; observations cannot silently overwrite one another.
+Explicit `planning_facts.selections` retain their existing precedence in metadata-assisted mode.
+
+Metadata-assisted reflection requests use `reflection_observations_v1` when an observation source
+is supplied and `reflection_unavailable_v1` otherwise. Property availability is
+reported separately as `observed`, `partial`, or `unavailable`, including missing
+candidate names, source names, and reasons such as an omitted reflectance field
+or missing `option_buttons` binding. This report travels in
+`planning_facts.observation_report` and appears with episode IDs in
+`detailed_metrics.observation_reports`. Selection checks still disclose unknown
+scores and reject known losing candidates through the existing LCs, even with
+partial observations. Property availability does not assert full physical
+verification or simulator success.
+
+Dry-run and apply commands for a VLABench installation:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.preserve_reflection_observations \
+  --upstream-root /opt/dominows/VLABench
+# To apply, append --apply --backup-dir /path/outside/source/new-backup-directory
+```
+
+On gpu2, exporter revision `reflection-observation-export-v1` patched the two
+upstream source files, with originals, hashes and diffs backed up at
+`/home/auszok/reflection_observation_exports/20261018T161826Z`. All 500 files in
+the existing 100-episode reflection collection retained their hashes. All 100
+snapshots lack the required export fields, including the 14 test episodes;
+their missing values were not reconstructed from reference targets. Newly
+loaded generators preserve the fields for future episodes.
+
+Validation: 318 focused tests passed across numeric observations, rank selection,
+reflection and other QA grounding, masks, completed-plan checks, replay,
+metrics, EAI and joint integration. Actual upstream generator/build/save/reload
+methods passed all 18 position/target combinations using pure dependency stubs;
+real `dm_control.mjcf` material readback also passed. No simulator rollout or new
+checkpoint benchmark was run. The earlier broader 1166-pass run and its 14
+baseline-reproduced failures remain separate evidence for steps 1-3.
+
+```bash
+python -m pytest test_regr/generation/test_property_observations.py \
+  test_regr/VLABenchAgentInterface/test_reflection_observations.py \
+  test_regr/VLABenchAgentInterface/test_physics_grounding.py -q
+```
+
+
+### Default visual evaluation versus metadata-assisted verification
+
+The default dataset and evaluation observation mode is now `visual`.
+`load_planning_examples` and `load_scene_planning_examples` accept an explicit
+`observation_mode`; standalone and joint evaluation CLIs expose the same
+`--observation-mode {visual,metadata-assisted}` switch. Both the joint test-split
+preparation path and the all-split loading path propagate the choice. Joint
+reports and standalone CLI reports record the requested mode, while detailed
+metrics count effective observation profiles.
+
+In visual mode, all six QA task contracts still require `press` and a valid
+button. The VLM chooses the button from its visual/context representation.
+`visual_qa_v1` supplies no symbolic property scores. QA physical-property
+annotations, saved reflectance, input property sidecars, goal/target annotations,
+and reference-derived entity additions cannot restrict that choice. The loader
+uses only scene entity identifiers for the QA entity table. The mode concerns
+QA property selection; the existing scene/entity and structural task interfaces
+remain part of the input contract.
+
+Every prediction remains in SR/PR/SPR/PM and dimension denominators. The saved
+reference answer is used for scoring after generation. `selection: unavailable`
+and the observation report identify a lack of symbolic property verification,
+not an unscorable episode or an automatic generation failure. In particular,
+the original 14 reflection test episodes need no regeneration or numeric
+reflectance recovery for standard reference-based benchmark evaluation.
+
+Metadata-assisted mode explicitly enables the preceding material/shape models,
+annotated selections and reflection observation sources. Its results must be
+reported separately from visual property-choice results. Direct APIs that are
+supplied explicit planning facts continue to enforce them; the dataset profile
+controls which QA facts are admitted as inputs. Native frozen-VLM CLI evaluation
+accepts visual mode only because it does not use the graph's property constraints.
+
+Tests cover all 14 ungrounded reflection predictions being scored, independent
+reference labels, all candidate buttons remaining available in visual mode,
+metadata-assisted masks selecting the grounded option, ignored sidecars/targets,
+reference-independent entity tables, standalone/joint CLI forwarding and report
+provenance. A read-only audit of gpu2's actual dataset retained all 450 test
+examples in both modes, including 60 PhysLaw and 14 reflection episodes. The first full visual GPU result is recorded in the following section.
+
+Current mode validation: **326 focused tests passed**, including CLI forwarding for both modes, joint test/all split paths, raw reference scoring of all 14 reflection predictions, rank/observation parsing, reflection/other QA grounding, decoding/replay, EAI and joint integration. A separate native/decoding compatibility run recorded 95 passed and the previously baseline-reproduced native CLI stdout/JSON failure.
+
+### Complex representation and planner adaptation (2026-10-18)
+
+The first full visual-mode GPU run evaluated all 450 episodes, including all 60
+PhysLaw and 14 reflection cases, with zero generation/search failures. Overall
+was 72.7231, macro 70.9278, Complex 54.2039, and PhysLaw 56.0. All 60 PhysLaw
+predictions selected button0. Forty of 56 Complex predictions reached the old
+eight-operation limit; 17 book and seven chemistry references have nine
+operations. These results motivate the following changes, rather than imply
+that the new adaptation has already improved scores.
+
+The operation default is now 12. The generic `BoundedPatternLanguage` in
+`domiknows/generation/dfa/pattern_language.py` represents bounded concatenations
+without enumerating all sentences. `StopPolicy`, productive token masks, strict
+acceptance, and explicit search-limit errors remain in use. The token budget is
+derived from the operation budget. Explicit smaller budgets remain supported.
+
+`push` accepts an optional `target_container_name`. The world declares the role;
+the vocabulary, codec, grammar, monitor, schema verifier, and completed-plan
+validation all support it. Omitting it remains legal for existing movement
+tasks. A targeted push declares the symbolic `pushed_to(subject,destination)`
+effect, which does not prove simulator contact or successful nail insertion.
+Controller skill IDs and motor contracts remain unchanged. Compact planning
+contracts for `select_drink` and `select_toy` omit simulator lift movements only
+when the request declares `planning_interface="compact"`.
+
+`complex_grounding.py` supplies facts to the existing compiled selection,
+destination, milestone-order, and goal-completion LCs:
+
+| Task | Exposed grounding | Requirements |
+|---|---|---|
+| cook_dishes | Instruction-named recipe, public recipe catalog, visible ingredient and plate names | Required ingredients at the plate; eligible ingredient picks; matching destinations |
+| book_rearrange | Visible book chronological keys, shelf, requested direction | Ordered pick/push milestones, every book targeted at the shelf, complete pick/push/pull cycles |
+| take_chemistry_experiment | Explicit solution mentions, visible reagent vessels, flask and table | Required transfers and returns; pick/pour/place cycle; reusable reagent vessels; no amounts or extra transfers inferred |
+| hammer_nail_and_hang_picture | Instruction-selected painting and unique visible hammer, nail and counter | Grasp tool, push nail with tool, return tool, grasp painting, push painting to nail |
+| texas_holdem | Visible cards | Winning-hand grounding remains unavailable; no hidden winning-hand condition is imported |
+
+Recipe source: `OpenMOSS/VLABench`,
+`VLABench/configs/task_related/recipe.json`. Book ordering and tool-use contracts
+come from its public composite task definitions. Ambiguous/missing input
+grounding is reported, not replaced by a reference-derived answer. Scene entity
+tables for every task now exclude condition traversal and reference-plan
+additions. Numeric references remain labels for scoring, never decoder facts.
+
+Generic `PlanningFacts` also supports action-specific destinations, for example:
+
+```json
+{"action_destinations": [
+  {"action": "pour", "subject": "NaCl", "destination": "flask"},
+  {"action": "place", "subject": "NaCl", "destination": "table"}
+], "reusable_entities": ["NaCl"], "skill_cycle": ["pick", "pour", "place"]}
+```
+
+Action-specific requirements take precedence over object-wide/global
+destinations. Repeated matching actions advance only milestones enabled in the
+source state; a single action cannot complete its own successor milestone.
+Declared reusable entities can be picked again without disabling the LC that
+rejects redundant picks for other entities. Skill cycles and exact declared
+sequences are evaluated through the existing task-skill/completion LCs.
+
+The domain checksum changes. Exact checkpoint resume continues to reject drift.
+Joint evaluation provides explicit `--allow-planning-schema-migration` for the
+audited old schema: label meanings, EAI, model and controller compatibility must
+still match; the operation budget cannot decrease. Planner optimizer state is
+not restored during this warm start. New checkpoints use the current schema.
+
+`--decision-trace path.jsonl` records unmasked logits, productive allowed tokens,
+their probabilities and chosen token without changing decoding.
+`--input-probe` supports entity permutations, missing/shuffled images, and
+shuffled instructions. Non-original probes are diagnostics, not benchmark scores.
+The prompt no longer guesses button/object bindings from entity-list adjacency.
+
+`JointEmbodiedAgentInterface.finetune_planning` adapts the VLABench label head
+with task-balanced sampling (75% Complex/PhysLaw), consistent entity/pointer
+permutations, and double weight for pointer-token losses. It uses the existing
+training split and selects checkpoints by generated full-validation macro score,
+requiring retention of overall and every measured dimension score and generation
+failure count. The original model is the fallback when no candidate qualifies.
+The domain-independent retention predicate is in
+`domiknows/generation/validation.py`. Teacher-forced validation loss remains a
+diagnostic, not a promotion criterion. Qwen/LoRA, EAI
+and controller parameters are frozen and checked by SHA256 at each epoch.
+Epoch checkpoints include optimizer and sampler state for resumption; test
+references never select the checkpoint. Visual and metadata-assisted evaluation
+remain separate input contracts.
+
+Reproducible checks:
+
+```bash
+python -m pytest -q test_regr/VLABenchAgentInterface/test_complex_improvements.py \
+  test_regr/JointEmbodiedAgentInterface/test_planning_adaptation.py
+python -m test_regr.VLABenchAgentInterface.audit_planning \
+  --planning-dir test_regr/VLABenchAgentInterface/data/planning --output audit.json
+python -m test_regr.JointEmbodiedAgentInterface.finetune_planning \
+  --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
+  --split validation --epochs 3 --samples-per-epoch 512 --output checkpoints/planning_adaptation
+```
+
+The read-only server audit passed all 4,500 reference plans with zero schema,
+round-trip, budget, or bound-constraint issues. Tests independently enumerate a
+bounded pattern language, check optional push decoding against completed-plan
+verification, reject wrong book order and tool milestones, and cover pointer
+permutations, trace observations, checkpoint migration and seeded balancing.
+Controlled server runs compare representation-only, grounded visual,
+metadata-assisted, and adapted-head conditions; measured results are recorded
+with their run provenance rather than inferred from passing tests.
+
+### Completed server comparisons (2026-10-18)
+
+Every condition below evaluated the same corrected 450-episode test split,
+with all six dimensions represented and zero generation/search-limit failures.
+The original champion weights are retained as the recommended model.
+
+| Condition | Overall | Macro | Complex | PhysLaw |
+|---|---:|---:|---:|---:|
+| Previous full visual run | 72.72 | 70.93 | 54.20 | 56.00 |
+| Representation/input repairs, automatic Complex grounding disabled | 74.47 | 72.34 | 54.70 | 61.00 |
+| Grounded Complex, visual QA | **78.54** | **77.78** | **87.35** | **61.00** |
+| Grounded Complex, metadata-assisted QA | **82.67** | **82.95** | **87.35** | **92.00** |
+| Experimental adapted head, visual QA (rejected) | 63.81 | 64.88 | 87.81 | 66.00 |
+| Experimental adapted head, metadata-assisted QA (rejected) | 67.01 | 68.88 | 87.81 | 90.00 |
+
+Visual mode here describes QA property choice within the scene/entity interface;
+Complex grounding additionally uses exposed instructions and public task
+knowledge. It is not a claim of raw-image-only planning. Metadata-assisted QA
+uses additional property facts and remains a distinct input contract.
+Visual QA answered 21/60 buttons correctly; metadata assistance answered 52/60.
+All 14 reflection cases were scored; six were correct with the retained model.
+
+The retained grounded visual model scored 100 on book rearrangement (17 cases),
+cooking (11), and hammer/picture tasks (10); chemistry scored 90.95 (7).
+Texas hold'em remains weak at 41.36 (11), with its winning-hand predicate
+explicitly unavailable in the adapter. Relative to the previous visual run,
+ComSense declined 1.90 and Spatial 2.55 points; M&T and Semantic improved.
+
+The three-epoch head-only prototype sampled 512 training examples per epoch.
+Its original loss-based selection chose epoch 0 (validation loss 2.4726), but
+generated validation QA accuracy declined from 40.74% to 35.19% on all 54
+validation PhysLaw episodes. It was not promoted, before considering test
+performance. This observed failure motivated the generated-validation retention
+gate now used by the training workflow. The champion symlink and its weights
+were never overwritten. Prototype checkpoints retain their original provenance.
+
+The final schema also rejects a targeted push toward its own held object through
+the existing anti-self-placement LC. Replaying the retained visual run against
+the final policy verified all 4,641 token decisions: every chosen token remained
+productive and was the same argmax of the recorded neural logits. All 450 plans
+also passed independent completed-plan verification, and rescoring their saved
+predictions exactly reproduced the aggregate report. This establishes declared
+symbolic compliance; simulator execution was not measured.
+
+The final-source read-only audit again passed all 4,500 references. Broader local
+regressions recorded 670 passed, 13 failed and one skipped; every failing node
+matches the separately reproduced pre-change baseline. Additional focused
+tests cover final role guards and generated-validation retention, including
+refusing a candidate whose overall score improves while one dimension regresses.
+
+Reports, validation probes, source manifests, data identity and checkpoint
+selection are saved under
+`test_regr/JointEmbodiedAgentInterface/results/planning_improvements_20261018/`.
+The remote run directory is
+`/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z/`.
+Its dataset manifest hashes all 13,500 annotation/config/instruction files and
+records split identities; image-content hashes are not included. Source
+snapshots distinguish the initial experiment, candidate evaluation and final
+policy replay. The old prototype training selection protocol is not retroactively
+relabeled as the hardened retention protocol.

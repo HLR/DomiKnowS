@@ -1,0 +1,774 @@
+{
+  "protocol": "Original unmodified density labels from hash-verified pre-repair backups; all other labels unchanged.",
+  "condition": "retained champion, grounded Complex planning, visual QA",
+  "generation_rerun": false,
+  "examples": 450,
+  "generation_failures": 0,
+  "semantic_search_limit_failures": 0,
+  "predictions_sha256": "0d4f2a72695160f18560b32474fdaddf825cc94d7f67965f92a77cc4628dd1cd",
+  "repair_manifest_sha256": "b7a1805c016ad752f22774edbe955249cad32c4f7ccbd533fa7a81e60119a8c1",
+  "changed_test_references": 9,
+  "corrected_label_score_reproduced": true,
+  "original_labels": {
+    "examples": 450,
+    "unknown_task_count": 0,
+    "overall": {
+      "SR": 98.17592592592592,
+      "PR": 66.59259259259258,
+      "SPR": 70.14814814814814,
+      "PM": 50.81481481481482,
+      "score": 78.00370370370369,
+      "legacy_score": 65.90740740740742
+    },
+    "dimensions": {
+      "M&T": {
+        "examples": 113,
+        "SR": 100.0,
+        "PR": 65.04424778761062,
+        "SPR": 73.89380530973452,
+        "PM": 54.86725663716814,
+        "score": 78.89380530973452,
+        "legacy_score": 66.01769911504425
+      },
+      "Spatial": {
+        "examples": 53,
+        "SR": 98.11320754716981,
+        "PR": 58.490566037735846,
+        "SPR": 65.09433962264151,
+        "PM": 30.18867924528302,
+        "score": 72.16981132075472,
+        "legacy_score": 62.64150943396226
+      },
+      "ComSense": {
+        "examples": 84,
+        "SR": 98.80952380952381,
+        "PR": 75.0,
+        "SPR": 74.4047619047619,
+        "PM": 47.61904761904762,
+        "score": 81.72619047619048,
+        "legacy_score": 69.52380952380952
+      },
+      "Semantic": {
+        "examples": 84,
+        "SR": 97.02380952380952,
+        "PR": 80.35714285714286,
+        "SPR": 83.92857142857143,
+        "PM": 61.904761904761905,
+        "score": 85.53571428571429,
+        "legacy_score": 70.95238095238095
+      },
+      "PhysLaw": {
+        "examples": 60,
+        "SR": 100.0,
+        "PR": 28.333333333333332,
+        "SPR": 28.333333333333332,
+        "PM": 28.333333333333332,
+        "score": 57.0,
+        "legacy_score": 51.333333333333336
+      },
+      "Complex": {
+        "examples": 56,
+        "SR": 93.37797619047618,
+        "PR": 85.11904761904762,
+        "SPR": 85.11904761904762,
+        "PM": 74.40476190476191,
+        "score": 87.35119047619048,
+        "legacy_score": 71.39880952380952
+      }
+    },
+    "Macro": 77.11278531143076,
+    "legacy_Macro": 65.31125698038997,
+    "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+    "dimension_mapping_revision": "vlabench-planning-coverage-v2"
+  },
+  "corrected_labels": {
+    "examples": 450,
+    "unknown_task_count": 0,
+    "overall": {
+      "SR": 98.17592592592592,
+      "PR": 67.48148148148148,
+      "SPR": 71.03703703703704,
+      "PM": 51.70370370370371,
+      "score": 78.53703703703704,
+      "legacy_score": 66.26296296296297
+    },
+    "dimensions": {
+      "M&T": {
+        "examples": 113,
+        "SR": 100.0,
+        "PR": 65.04424778761062,
+        "SPR": 73.89380530973452,
+        "PM": 54.86725663716814,
+        "score": 78.89380530973452,
+        "legacy_score": 66.01769911504425
+      },
+      "Spatial": {
+        "examples": 53,
+        "SR": 98.11320754716981,
+        "PR": 58.490566037735846,
+        "SPR": 65.09433962264151,
+        "PM": 30.18867924528302,
+        "score": 72.16981132075472,
+        "legacy_score": 62.64150943396226
+      },
+      "ComSense": {
+        "examples": 84,
+        "SR": 98.80952380952381,
+        "PR": 75.0,
+        "SPR": 74.4047619047619,
+        "PM": 47.61904761904762,
+        "score": 81.72619047619048,
+        "legacy_score": 69.52380952380952
+      },
+      "Semantic": {
+        "examples": 84,
+        "SR": 97.02380952380952,
+        "PR": 80.35714285714286,
+        "SPR": 83.92857142857143,
+        "PM": 61.904761904761905,
+        "score": 85.53571428571429,
+        "legacy_score": 70.95238095238095
+      },
+      "PhysLaw": {
+        "examples": 60,
+        "SR": 100.0,
+        "PR": 35.0,
+        "SPR": 35.0,
+        "PM": 35.0,
+        "score": 61.0,
+        "legacy_score": 54.0
+      },
+      "Complex": {
+        "examples": 56,
+        "SR": 93.37797619047618,
+        "PR": 85.11904761904762,
+        "SPR": 85.11904761904762,
+        "PM": 74.40476190476191,
+        "score": 87.35119047619048,
+        "legacy_score": 71.39880952380952
+      }
+    },
+    "Macro": 77.77945197809741,
+    "legacy_Macro": 65.75570142483441,
+    "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+    "dimension_mapping_revision": "vlabench-planning-coverage-v2"
+  },
+  "affected_episodes": [
+    {
+      "episode_id": "PhysicsLaw/density_qa/example49",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 5
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 3
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example87",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 3
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example83",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 3
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example37",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 5
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example82",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 5
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 3
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example19",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 5
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example79",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 1
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 5
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example8",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 3
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 5
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example57",
+      "prediction": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_reference": {
+        "skill_sequence": [
+          {
+            "name": "press",
+            "params": {
+              "target_entity_name": 5
+            }
+          }
+        ]
+      },
+      "corrected_reference": [
+        {
+          "name": "press",
+          "params": {
+            "target_entity_name": 1
+          }
+        }
+      ],
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    }
+  ],
+  "density_episodes": [
+    {
+      "episode_id": "PhysicsLaw/density_qa/example49",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example87",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example83",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example69",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example37",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example82",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example19",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example79",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example78",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example8",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      }
+    },
+    {
+      "episode_id": "PhysicsLaw/density_qa/example57",
+      "original_scores": {
+        "SR": 100.0,
+        "PR": 0.0,
+        "SPR": 0.0,
+        "PM": 0.0,
+        "score": 40.0,
+        "legacy_score": 40.0
+      },
+      "corrected_scores": {
+        "SR": 100.0,
+        "PR": 100.0,
+        "SPR": 100.0,
+        "PM": 100.0,
+        "score": 100.0,
+        "legacy_score": 80.0
+      }
+    }
+  ]
+}

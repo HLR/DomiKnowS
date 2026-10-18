@@ -1,0 +1,16 @@
+{
+  "recommended_weights": "original joint_stage2_best.pt with the updated grounded policy",
+  "prototype_checkpoint": "/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z/adaptation/planner_best.pt",
+  "prototype_best_loss_epoch": 0,
+  "prototype_promoted": false,
+  "retention_evidence_split": "validation",
+  "validation_qa_examples": 54,
+  "baseline_validation_qa_accuracy": 40.74074074074074,
+  "candidate_validation_qa_accuracy": 35.18518518518518,
+  "baseline_validation_physlaw_score": 64.44444444444444,
+  "candidate_validation_physlaw_score": 61.111111111111114,
+  "retention_eligible": false,
+  "test_used_for_selection": false,
+  "reason": "Generated PhysLaw validation score regressed; retain the original champion.",
+  "future_workflow_selection": "generated_validation_macro_with_retention_v1"
+}

@@ -363,3 +363,54 @@ positions and target choices. These are dataset/source validation results;
 no model benchmark was rerun. Historical scorecards retain their original
 labels and must be rescored from saved predictions against the repaired dataset
 before comparisons. Source patching affects newly loaded generator code.
+
+
+## Physics QA observation modes
+
+All six PhysLaw QA task aliases declare a single `press` operation. Evaluation
+uses `--observation-mode visual` by default in standalone and joint CLIs. Visual
+mode leaves the property-based button choice to the VLM, enforces the existing
+structural LCs, and scores every episode against its stored reference answer.
+Missing numeric reflectance does not remove reflection episodes or assign them
+a failure automatically. Symbolic property grounding is reported separately.
+
+For QA episodes, visual mode ignores physical-property metadata, observation
+sidecars, selection annotations, declared goal/target annotations, and reference
+entity-table augmentation. It retains input images, scene entity identifiers,
+the question, and the known QA action contract. This is a visual property-choice
+profile within the existing scene/entity interface, not a claim that all metadata
+has been removed from the entire benchmark pipeline.
+
+Use `--observation-mode metadata-assisted` to enable the qualitative material/
+shape adapters, explicitly annotated selection facts, or reflection observations.
+This is a separate input contract and should use a separate output report.
+The generic selection engine supports min/max, thresholds, and zero-based ranks,
+including ties and unknown-score diagnostics. Enforcement uses the compiled LCs.
+Native `--generation-mode frozen-vlm` evaluation uses visual mode exclusively.
+
+Example for the original static-image checkpoint benchmark:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
+  --split test --observation-mode visual \
+  --allow-planning-schema-migration \
+  --output test_regr/JointEmbodiedAgentInterface/results/planning_eval_test_visual.json
+```
+
+For a separate metadata-assisted graph run, change the mode to
+`metadata-assisted` and choose a different output filename. Reports identify the
+requested `observation_mode` and effective `detailed_metrics.observation_profiles`.
+Visual QA episodes use `visual_qa_v1`, with unavailable symbolic property checks;
+this status describes verification coverage, not answer accuracy. See
+`VLABENCH_LOGICAL_CONSTRAINTS_AND_COMPONENTS.md` for observation schemas,
+source-export repairs, and validation evidence.
+
+Planning now defaults to 12 operations and supports optional push destinations.
+The migration flag above is required when warming the earlier champion into
+this audited schema; exact resume otherwise rejects schema changes. New
+checkpoints load without it. Input-grounded Complex goals use the shared LCs.
+Use `--no-ground-complex` for the representation-only ablation, and
+`--decision-trace decisions.jsonl` for read-only token diagnostics. See
+`test_regr.JointEmbodiedAgentInterface.finetune_planning` for balanced, resumable
+planner-head adaptation with entity-order augmentation and validation selection.

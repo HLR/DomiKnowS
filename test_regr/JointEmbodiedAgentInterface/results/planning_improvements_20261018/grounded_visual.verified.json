@@ -1,0 +1,107 @@
+{
+  "unique_episodes": 450,
+  "replayed_acceptance": 450,
+  "independent_verification": 450,
+  "scores_match_report": true,
+  "tasks": {
+    "book_rearrange": {
+      "examples": 17,
+      "PM": 100.0,
+      "PR": 100.0,
+      "SPR": 100.0,
+      "SR": 100.0,
+      "legacy_score": 80.0,
+      "score": 100.0
+    },
+    "cook_dishes": {
+      "examples": 11,
+      "PM": 100.0,
+      "PR": 100.0,
+      "SPR": 100.0,
+      "SR": 100.0,
+      "legacy_score": 80.0,
+      "score": 100.0
+    },
+    "density_qa": {
+      "examples": 11,
+      "PM": 54.54545454545455,
+      "PR": 54.54545454545455,
+      "SPR": 54.54545454545455,
+      "SR": 100.0,
+      "legacy_score": 61.81818181818182,
+      "score": 72.72727272727273
+    },
+    "friction_qa": {
+      "examples": 5,
+      "PM": 60.0,
+      "PR": 60.0,
+      "SPR": 60.0,
+      "SR": 100.0,
+      "legacy_score": 64.0,
+      "score": 76.0
+    },
+    "hammer_nail_and_hang_picture": {
+      "examples": 10,
+      "PM": 100.0,
+      "PR": 100.0,
+      "SPR": 100.0,
+      "SR": 100.0,
+      "legacy_score": 80.0,
+      "score": 100.0
+    },
+    "magnetism_qa": {
+      "examples": 11,
+      "PM": 9.090909090909092,
+      "PR": 9.090909090909092,
+      "SPR": 9.090909090909092,
+      "SR": 100.0,
+      "legacy_score": 43.63636363636363,
+      "score": 45.45454545454545
+    },
+    "reflection_qa": {
+      "examples": 14,
+      "PM": 42.857142857142854,
+      "PR": 42.857142857142854,
+      "SPR": 42.857142857142854,
+      "SR": 100.0,
+      "legacy_score": 57.142857142857146,
+      "score": 65.71428571428571
+    },
+    "speed_of_sound_qa": {
+      "examples": 6,
+      "PM": 16.666666666666668,
+      "PR": 16.666666666666668,
+      "SPR": 16.666666666666668,
+      "SR": 100.0,
+      "legacy_score": 46.666666666666664,
+      "score": 50.0
+    },
+    "take_chemistry_experiment": {
+      "examples": 7,
+      "PM": 52.38095238095239,
+      "PR": 95.23809523809523,
+      "SPR": 95.23809523809523,
+      "SR": 95.23809523809523,
+      "legacy_score": 76.19047619047619,
+      "score": 90.95238095238095
+    },
+    "texas_holdem": {
+      "examples": 11,
+      "PM": 0.0,
+      "PR": 27.272727272727273,
+      "SPR": 27.272727272727273,
+      "SR": 69.31818181818181,
+      "legacy_score": 38.63636363636363,
+      "score": 41.36363636363637
+    },
+    "thermal_expansion_qa": {
+      "examples": 13,
+      "PM": 30.76923076923077,
+      "PR": 30.76923076923077,
+      "SPR": 30.76923076923077,
+      "SR": 100.0,
+      "legacy_score": 52.30769230769231,
+      "score": 58.46153846153846
+    }
+  }
+}

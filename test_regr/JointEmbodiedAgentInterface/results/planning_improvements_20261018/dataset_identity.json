@@ -1,0 +1,15 @@
+{
+  "dataset": "VLABench/vlm_evaluation_v1.0",
+  "upstream_revision": "b432f0c69ec0731935ff49a916d460936a000624",
+  "density_label_repair_revision": "density-material-button-v1",
+  "examples": 4500,
+  "split_seed": 42,
+  "annotation_manifest_sha256": "3594fb35b9c7e6409fcbbc56a71ccb125654ef4171861f1774132eb7383fae15",
+  "image_content_hashes_included": false,
+  "split_counts": {
+    "train": 3600,
+    "validation": 450,
+    "test": 450
+  },
+  "full_manifest": "/home/auszok/evaluation_runs/planning_improvements_20261018T174007Z/dataset_manifest.json"
+}

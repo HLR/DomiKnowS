@@ -1,0 +1,432 @@
+{
+  "checkpoint": "/workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt",
+  "detailed_metrics": {
+    "entity_match": 0.7437037037037038,
+    "exact_graph_match": 0.585925925925926,
+    "examples": 450,
+    "generation_errors": [],
+    "generation_failures": 0,
+    "grounding_coverage": {
+      "affordance": {
+        "checked": 46,
+        "not_applicable": 744,
+        "unavailable": 845
+      },
+      "capacity": {
+        "not_applicable": 891,
+        "unavailable": 744
+      },
+      "compatibility": {
+        "not_applicable": 1161,
+        "unavailable": 474
+      },
+      "destination": {
+        "checked": 163,
+        "not_applicable": 1161,
+        "unavailable": 311
+      },
+      "goal_completion": {
+        "checked": 45,
+        "not_applicable": 405
+      },
+      "holding": {
+        "checked": 692,
+        "not_applicable": 943
+      },
+      "milestone_order": {
+        "checked": 212,
+        "not_applicable": 1423
+      },
+      "preservation": {
+        "not_applicable": 1635
+      },
+      "selection": {
+        "checked": 46,
+        "unavailable": 142
+      }
+    },
+    "observation_profiles": {
+      "reflection_unavailable_v1": 14,
+      "scene_metadata_physics_v1": 46,
+      "unspecified": 390
+    },
+    "observation_reports": [
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example41",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example92",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example39",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example73",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example0",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example31",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example90",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example75",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example91",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example71",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example57",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example26",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example79",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example85",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "property": "reflectance",
+        "reasons": [
+          "saved Mirrors component omits explicit option_buttons binding",
+          "saved Mirrors component omits reflectance"
+        ],
+        "sources": [],
+        "status": "unavailable",
+        "unit": "fraction"
+      }
+    ],
+    "planning_metrics": {
+      "Macro": 82.94611864476408,
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2",
+      "dimensions": {
+        "ComSense": {
+          "PM": 47.61904761904762,
+          "PR": 75.0,
+          "SPR": 74.4047619047619,
+          "SR": 98.80952380952381,
+          "examples": 84,
+          "legacy_score": 69.52380952380952,
+          "score": 81.72619047619048
+        },
+        "Complex": {
+          "PM": 74.40476190476191,
+          "PR": 85.11904761904762,
+          "SPR": 85.11904761904762,
+          "SR": 93.37797619047618,
+          "examples": 56,
+          "legacy_score": 71.39880952380952,
+          "score": 87.35119047619048
+        },
+        "M&T": {
+          "PM": 54.86725663716814,
+          "PR": 65.04424778761062,
+          "SPR": 73.89380530973452,
+          "SR": 100.0,
+          "examples": 113,
+          "legacy_score": 66.01769911504425,
+          "score": 78.89380530973452
+        },
+        "PhysLaw": {
+          "PM": 86.66666666666667,
+          "PR": 86.66666666666667,
+          "SPR": 86.66666666666667,
+          "SR": 100.0,
+          "examples": 60,
+          "legacy_score": 74.66666666666667,
+          "score": 92.0
+        },
+        "Semantic": {
+          "PM": 61.904761904761905,
+          "PR": 80.35714285714286,
+          "SPR": 83.92857142857143,
+          "SR": 97.02380952380952,
+          "examples": 84,
+          "legacy_score": 70.95238095238095,
+          "score": 85.53571428571429
+        },
+        "Spatial": {
+          "PM": 30.18867924528302,
+          "PR": 58.490566037735846,
+          "SPR": 65.09433962264151,
+          "SR": 98.11320754716981,
+          "examples": 53,
+          "legacy_score": 62.64150943396226,
+          "score": 72.16981132075472
+        }
+      },
+      "examples": 450,
+      "legacy_Macro": 69.20014586927887,
+      "overall": {
+        "PM": 58.59259259259259,
+        "PR": 74.37037037037037,
+        "SPR": 77.92592592592592,
+        "SR": 98.17592592592592,
+        "legacy_score": 69.01851851851852,
+        "score": 82.67037037037036
+      },
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "unknown_task_count": 0
+    },
+    "reward": 0.8267037037037017,
+    "semantic_search_limit_failures": 0,
+    "skill_match": 0.9817592592592592,
+    "skill_with_entity_match": 0.7792592592592593,
+    "valid": 1.0
+  },
+  "dimensions": {
+    "ComSense": {
+      "PM": 47.61904761904762,
+      "PR": 75.0,
+      "SPR": 74.4047619047619,
+      "SR": 98.80952380952381,
+      "examples": 84,
+      "legacy_score": 69.52380952380952,
+      "score": 81.72619047619048
+    },
+    "Complex": {
+      "PM": 74.40476190476191,
+      "PR": 85.11904761904762,
+      "SPR": 85.11904761904762,
+      "SR": 93.37797619047618,
+      "examples": 56,
+      "legacy_score": 71.39880952380952,
+      "score": 87.35119047619048
+    },
+    "M&T": {
+      "PM": 54.86725663716814,
+      "PR": 65.04424778761062,
+      "SPR": 73.89380530973452,
+      "SR": 100.0,
+      "examples": 113,
+      "legacy_score": 66.01769911504425,
+      "score": 78.89380530973452
+    },
+    "PhysLaw": {
+      "PM": 86.66666666666667,
+      "PR": 86.66666666666667,
+      "SPR": 86.66666666666667,
+      "SR": 100.0,
+      "examples": 60,
+      "legacy_score": 74.66666666666667,
+      "score": 92.0
+    },
+    "Semantic": {
+      "PM": 61.904761904761905,
+      "PR": 80.35714285714286,
+      "SPR": 83.92857142857143,
+      "SR": 97.02380952380952,
+      "examples": 84,
+      "legacy_score": 70.95238095238095,
+      "score": 85.53571428571429
+    },
+    "Spatial": {
+      "PM": 30.18867924528302,
+      "PR": 58.490566037735846,
+      "SPR": 65.09433962264151,
+      "SR": 98.11320754716981,
+      "examples": 53,
+      "legacy_score": 62.64150943396226,
+      "score": 72.16981132075472
+    }
+  },
+  "epoch": 4,
+  "examples_evaluated": 450,
+  "generation_failures": 0,
+  "ground_complex": true,
+  "input_probe": "original",
+  "legacy_macro_score": 69.20014586927887,
+  "macro_score": 82.94611864476408,
+  "observation_mode": "metadata-assisted",
+  "overall": {
+    "PM": 58.59259259259259,
+    "PR": 74.37037037037037,
+    "SPR": 77.92592592592592,
+    "SR": 98.17592592592592,
+    "legacy_score": 69.01851851851852,
+    "score": 82.67037037037036
+  },
+  "semantic_search_limit_failures": 0,
+  "split": "test",
+  "stage": "stage2"
+}
