@@ -4,7 +4,8 @@ import json
 import pytest
 
 from .repair_density_labels import (
-    DENSITY_ORDER, episode_repair, generator_repair, migrate, scene_answer,
+    DENSITY_ORDER, episode_repair, generator_repair, migrate, restore, scene_answer,
+    updated_density_examples,
 )
 
 
@@ -121,3 +122,47 @@ def load_objects():
     assert generator_repair(repaired) == repaired
     with pytest.raises(ValueError, match="unrecognized"):
         generator_repair("unknown source")
+
+
+def test_restore_roundtrip_is_exact_and_idempotent(tmp_path):
+    root = tmp_path / "data"
+    episode = write_episode(root)
+    originals = {p: p.read_bytes() for p in episode.rglob("*") if p.is_file()}
+    backup = tmp_path / "backup"
+    migrate(root, backup_dir=backup, apply=True)
+    assert restore(root, backup)["changed_files"] == 2
+    assert json.loads((episode / "output/operation_sequence.json").read_text())["skill_sequence"][0]["params"]["target_entity_name"] == 3
+    assert restore(root, backup, apply=True)["changed_files"] == 2
+    assert all(p.read_bytes() == raw for p, raw in originals.items())
+    assert restore(root, backup, apply=True)["changed_files"] == 0
+
+
+@pytest.mark.parametrize("corrupt_backup", [False, True])
+def test_restore_preflights_entire_batch_without_overwriting_edits(tmp_path, corrupt_backup):
+    root = tmp_path / "data"
+    episode = write_episode(root)
+    backup = tmp_path / "backup"
+    migrate(root, backup_dir=backup, apply=True)
+    manifest = json.loads((backup / "manifest.json").read_text())
+    if corrupt_backup:
+        (backup / manifest["files"][-1]["backup"]).write_bytes(b"corrupt")
+    else:
+        (episode / "output/operation_sequence.json").write_bytes(b"independent edit")
+    current = {p: p.read_bytes() for p in episode.rglob("*") if p.is_file()}
+    with pytest.raises(ValueError):
+        restore(root, backup, apply=True)
+    assert all(p.read_bytes() == raw for p, raw in current.items())
+
+
+@pytest.mark.parametrize("mode", ["visual", "metadata-assisted"])
+def test_in_memory_labels_preserve_inputs_and_leave_disk_original(tmp_path, mode):
+    from .dataset import load_planning_examples
+    episode = write_episode(tmp_path)
+    before = {p: p.read_bytes() for p in episode.rglob("*") if p.is_file()}
+    examples = load_planning_examples(tmp_path, observation_mode=mode)
+    updated = updated_density_examples(examples)
+    assert examples[0].operation_sequence[0]["params"]["target_entity_name"] == 5
+    assert updated[0].operation_sequence[0]["params"]["target_entity_name"] == 3
+    from dataclasses import replace
+    assert replace(updated[0], operation_sequence=examples[0].operation_sequence) == examples[0]
+    assert all(p.read_bytes() == raw for p, raw in before.items())

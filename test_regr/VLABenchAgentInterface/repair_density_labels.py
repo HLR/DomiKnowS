@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from dataclasses import replace
 
 
 # Public qualitative model from VLABench's density_qa.py, not measured density.
@@ -174,14 +175,98 @@ def migrate(planning_dir, generator=None, backup_dir=None, apply=False):
     return report
 
 
+def restore(planning_dir, backup_dir, apply=False):
+    """Restore dataset bytes from a migration manifest, retaining generator fixes.
+
+    Validate the complete batch before writing; unrelated edits are never replaced.
+    The supplied planning directory can differ from the original migration root.
+    """
+    root, backup = Path(planning_dir).resolve(), Path(backup_dir).resolve()
+    manifest = json.loads((backup / "manifest.json").read_text())
+    source = Path(manifest["planning_dir"])
+    changes, seen = [], set()
+    for entry in manifest["files"]:
+        try:
+            relative = Path(entry["path"]).relative_to(source)
+        except ValueError:
+            continue  # The upstream generator is not part of the dataset.
+        target = root / relative
+        if not target.resolve().is_relative_to(root):
+            raise ValueError(f"restore target escapes dataset: {target}")
+        if target in seen:
+            raise ValueError(f"duplicate restore target: {target}")
+        seen.add(target)
+        saved = (backup / entry["backup"]).resolve()
+        if not saved.is_relative_to(backup):
+            raise ValueError("backup path escapes backup directory")
+        original, current = saved.read_bytes(), target.read_bytes()
+        digest = lambda data: hashlib.sha256(data).hexdigest()
+        if digest(original) != entry["before_sha256"]:
+            raise ValueError(f"backup checksum mismatch: {saved}")
+        if digest(current) == entry["before_sha256"]:
+            continue
+        if digest(current) != entry["after_sha256"]:
+            raise ValueError(f"file changed since repair; refusing restore: {target}")
+        changes.append((target, current, original))
+    if not seen:
+        raise ValueError("manifest contains no dataset files")
+    written = []
+    if apply:
+        try:
+            for target, current, original in changes:
+                if target.read_bytes() != current:
+                    raise ValueError(f"file changed during restore: {target}")
+                temporary = target.with_name(target.name + ".density-restore.tmp")
+                temporary.write_bytes(original)
+                temporary.replace(target)
+                written.append((target, current, original))
+        except Exception:
+            for target, current, original in written:
+                if target.read_bytes() == original:
+                    target.write_bytes(current)
+            raise
+    return {"mode": "restore-original", "planning_dir": str(root),
+            "checked_files": len(seen), "changed_files": len(changes),
+            "applied": apply, "errors": []}
+
+
+def updated_density_examples(examples):
+    """Correct evaluation references in memory; never alter inputs or disk data."""
+    from .graph import canonicalize_plan
+    result = []
+    for example in examples:
+        if example.task != "density_qa":
+            result.append(example)
+            continue
+        if example.env_config_path is None:
+            raise ValueError("density label update requires a scene configuration")
+        _, changes = episode_repair(Path(example.env_config_path).parent.parent)
+        updated = example
+        for path, _, data in changes:
+            if path.parent.name == "output":
+                payload = json.loads(data)
+                updated = replace(example, operation_sequence=tuple(canonicalize_plan(payload["skill_sequence"])))
+        result.append(updated)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--planning-dir", type=Path, required=True)
     parser.add_argument("--generator", type=Path)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--backup-dir", type=Path)
+    parser.add_argument("--restore", action="store_true",
+                        help="restore original dataset bytes using --backup-dir; requires --apply to write")
     args = parser.parse_args()
-    report = migrate(**vars(args))
+    if args.restore:
+        if not args.backup_dir or args.generator:
+            parser.error("--restore requires --backup-dir and cannot use --generator")
+        report = restore(args.planning_dir, args.backup_dir, args.apply)
+    else:
+        options = vars(args).copy()
+        options.pop("restore")
+        report = migrate(**options)
     print(json.dumps(report, indent=2))
     return bool(report["errors"])
 

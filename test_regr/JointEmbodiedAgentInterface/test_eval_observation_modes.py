@@ -8,7 +8,8 @@ from . import eval_planning
 
 
 @pytest.mark.parametrize('mode', ['visual','metadata-assisted'])
-def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize('updated', [False, True])
+def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypatch, mode, updated):
     checkpoint = tmp_path/'checkpoint.pt'
     checkpoint.write_bytes(b'fixture')
     output = tmp_path/'metrics.json'
@@ -16,6 +17,13 @@ def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypa
         '--checkpoint',str(checkpoint),'--device','cpu','--split','all',
         '--output',str(output),'--observation-mode',mode,
     ])
+    args.updated_data = updated
+    from test_regr.VLABenchAgentInterface import repair_density_labels
+    calls = []
+    def update(selected):
+        calls.append(selected)
+        return selected
+    monkeypatch.setattr(repair_density_labels, 'updated_density_examples', update)
     assert eval_planning.build_eval_parser().parse_args(['--checkpoint',str(checkpoint)]).observation_mode == 'visual'
     examples = [SimpleNamespace(task='reflection_qa',dimension='PhysLaw')]
     seen = []
@@ -38,14 +46,25 @@ def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypa
     assert seen == [mode]
     assert report['examples_evaluated'] == 1
     assert report['observation_mode'] == json.loads(output.read_text())['observation_mode'] == mode
+    assert report['updated_data'] is updated
+    assert report['reference_labels'] == ('density-material-button-v1' if updated else 'as-stored')
+    assert len(calls) == int(updated)
 
 
 @pytest.mark.parametrize('mode', ['visual','metadata-assisted'])
-def test_joint_test_split_preparation_uses_selected_observation_mode(monkeypatch, mode):
+@pytest.mark.parametrize('updated', [False, True])
+def test_joint_test_split_preparation_uses_selected_observation_mode(monkeypatch, mode, updated):
     from test_regr.EmbodiedAgentInterface import dataset as eai_dataset
     from . import main, world_graph
     args = eval_planning.build_eval_parser().parse_args(['--checkpoint','unused','--observation-mode',mode])
     args.vlabench_planning_dir = 'unused'
+    args.updated_data = updated
+    from test_regr.VLABenchAgentInterface import repair_density_labels
+    calls = []
+    def update(selected):
+        calls.append(selected)
+        return selected
+    monkeypatch.setattr(repair_density_labels, 'updated_density_examples', update)
     monkeypatch.setattr(eai_dataset,'load_eai_dataset',lambda **kwargs:[{'generation_vocab':('<eos>','action')}])
     monkeypatch.setattr(world_graph,'build_joint_world_graph',lambda name:object())
     monkeypatch.setattr(world_graph,'build_joint_runtime',lambda *args,**kwargs:object())
@@ -59,3 +78,11 @@ def test_joint_test_split_preparation_uses_selected_observation_mode(monkeypatch
     _, splits = eval_planning._prepare_eval(args, 'cpu')
     assert seen == [mode]
     assert sum(map(len,splits.values())) == 20 and splits['test']
+    assert len(calls) == int(updated)
+
+
+def test_updated_label_cli_is_opt_in_and_has_explicit_alias():
+    parser = eval_planning.build_eval_parser()
+    assert not parser.parse_args(['--checkpoint','unused']).updated_data
+    assert parser.parse_args(['--checkpoint','unused','--updated-data']).updated_data
+    assert parser.parse_args(['--checkpoint','unused','--updated-labels']).updated_data

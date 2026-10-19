@@ -65,6 +65,8 @@ def build_eval_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--observation-mode", choices=OBSERVATION_MODES, default="visual",
                         help="QA property selection: visual VLM predictions (default) or explicit metadata-assisted constraints")
+    parser.add_argument("--updated-data", "--updated-labels", action="store_true",
+                        help="score against corrected density labels computed in memory; default uses labels stored in --planning-dir")
     parser.add_argument(
         "--limit",
         type=int,
@@ -136,6 +138,16 @@ def build_eval_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _evaluation_examples(args, root):
+    examples = load_planning_examples(root,
+        observation_mode=getattr(args, "observation_mode", "visual"),
+        **({"ground_complex": False} if not getattr(args, "ground_complex", True) else {}))
+    if getattr(args, "updated_data", False):
+        from test_regr.VLABenchAgentInterface.repair_density_labels import updated_density_examples
+        examples = updated_density_examples(examples)
+    return examples
+
+
 def _prepare_eval(args, device):
     from domiknows.generation.dfa.vocabulary import TokenVocabulary
     from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset
@@ -158,9 +170,7 @@ def _prepare_eval(args, device):
     world = build_joint_world_graph("joint_embodied_training")
 
     print(f"[eval-planning] Loading VLABench planning data from {args.vlabench_planning_dir}...", flush=True)
-    vlabench_examples = load_planning_examples(args.vlabench_planning_dir,
-                                             observation_mode=getattr(args, "observation_mode", "visual"),
-                                             **({"ground_complex": False} if not getattr(args, "ground_complex", True) else {}))
+    vlabench_examples = _evaluation_examples(args, args.vlabench_planning_dir)
     if not vlabench_examples:
         raise ValueError("VLABench planning dataset is empty")
     vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
@@ -221,8 +231,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     # Select evaluation examples
     if args.split == "all":
-        examples = load_planning_examples(args.planning_dir, observation_mode=getattr(args, "observation_mode", "visual"),
-                                         **({"ground_complex": False} if not getattr(args, "ground_complex", True) else {}))
+        examples = _evaluation_examples(args, args.planning_dir)
     else:
         examples = vla_splits.get(args.split, [])
 
@@ -269,6 +278,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "epoch": payload.get("epoch"),
         "split": args.split,
         "observation_mode": getattr(args, "observation_mode", "visual"),
+        "reference_labels": "density-material-button-v1" if getattr(args, "updated_data", False) else "as-stored",
+        "updated_data": getattr(args, "updated_data", False),
         "ground_complex": getattr(args, "ground_complex", True),
         "input_probe": getattr(args, "input_probe", "original"),
         "examples_evaluated": len(examples),
@@ -286,6 +297,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     print(f" VLABench Non-Interactive Planning Scorecard: {checkpoint_path.name}")
     print("=" * 70)
     print(f" Split: {args.split}  |  Examples: {len(examples)}  |  Stage: {payload.get('stage')} (Epoch {payload.get('epoch')})")
+    print(f" Reference labels: {report['reference_labels']}  |  Observation mode: {report['observation_mode']}")
     print(f" Generation failures: {metrics.get('generation_failures', 0)}"
           f" (semantic search limit: {metrics.get('semantic_search_limit_failures', 0)})")
     print("-" * 70)
