@@ -791,3 +791,20 @@ records split identities; image-content hashes are not included. Source
 snapshots distinguish the initial experiment, candidate evaluation and final
 policy replay. The old prototype training selection protocol is not retroactively
 relabeled as the hardened retention protocol.
+
+### Selecting original versus corrected reference labels
+
+The default evaluation scores labels as stored on disk. The main gpu2 dataset is
+restored to original labels using the pre-repair manifest. `eval_planning
+--updated-data` (alias `--updated-labels`) derives the density repair from scene
+components and instructions and substitutes reference plans in memory. It never
+feeds these reference plans to decoding or changes input grounding. Visual and
+metadata-assisted modes can each use either scoring protocol. JSON reports
+record `updated_data` and `reference_labels`; `as-stored` does not independently
+certify that a user-supplied dataset has original annotations.
+
+`repair_density_labels --apply --backup-dir NEW_BACKUP` performs a reversible
+on-disk update. `--restore --apply --backup-dir BACKUP` restores dataset files
+byte for byte after preflighting the full manifest. Backup corruption or unrelated
+file edits reject restoration before writes. The corrected upstream generator is
+preserved. Neither operation changes historical evaluation artifacts.

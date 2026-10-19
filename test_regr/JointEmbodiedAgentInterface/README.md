@@ -435,6 +435,63 @@ VLABench checkpoints continue to work with their original CLIs but are not
 joint checkpoints and cannot be resumed directly here. Activation is reset to
 all concepts after restoration.
 
+## Full VLABench planning test
+
+Run from the repository root (`/workspace` inside the gpu2 Docker container).
+The following Bash command evaluates the full 450-episode test split with the
+original labels and visual QA. It assumes the planning dataset has its original
+annotations; the server's main dataset was restored to this state.
+
+```bash
+CUDA_VISIBLE_DEVICES=2 python \
+  -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
+  --planning-dir test_regr/VLABenchAgentInterface/data/planning \
+  --split test \
+  --seed 42 \
+  --device cuda:0 \
+  --allow-planning-schema-migration \
+  --observation-mode visual \
+  --decision-trace test_regr/JointEmbodiedAgentInterface/results/original_labels_visual.decisions.jsonl \
+  --output test_regr/JointEmbodiedAgentInterface/results/original_labels_visual.json
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `CUDA_VISIBLE_DEVICES=2` | Selects physical GPU 2. Choose an available GPU; it is exposed to this Python process as `cuda:0`. |
+| `--checkpoint` | Loads the trained joint checkpoint. Evaluation does not train or overwrite it. |
+| `--planning-dir` | Dataset root containing the dimension/task/episode directories. Default scoring uses the reference labels stored here. |
+| `--split test` | Evaluates the complete test partition. Do not add `--limit` or `--dimension` when reporting the full test. The current 4,500-episode collection yields 450 test episodes. |
+| `--seed 42` | Reproduces the deterministic data partition and seeds generation. Changing it can change which episodes belong to the test split. |
+| `--device cuda:0` | Uses the first GPU visible to the Python process, physical GPU 2 in this command. |
+| `--allow-planning-schema-migration` | Allows the audited compatibility migration from the older champion's planning schema to optional push destinations and the longer operation budget. It does not modify checkpoint weights or bypass arbitrary incompatibilities. Current-schema checkpoints do not need it. |
+| `--observation-mode visual` | Default QA input mode: the VLM chooses physical-property answers from images, instructions, and the existing scene/entity interface. Additional property metadata does not select the answer. Grounded Complex task constraints remain active; this is not an image-only planner. |
+| `--decision-trace` | Optional JSONL output of token logits, allowed tokens, and selected tokens, for diagnostics and replay. It does not change decoding. |
+| `--output` | Saves the aggregate metrics, dimension breakdown, generation failures, observation mode, and label protocol to JSON. Use a different filename for each condition. |
+| `--updated-data` | Optional; computes corrected density scoring labels in memory. Images, instructions, decoder grounding, and disk data remain unchanged. Alias: `--updated-labels`. |
+
+Observation mode and scoring labels are independent. To run another condition,
+change the flags below and use the corresponding output/trace filename stem:
+
+| Scoring labels | Observation flags | Filename stem |
+| --- | --- | --- |
+| Original, as stored | `--observation-mode visual` | `original_labels_visual` |
+| Original, as stored | `--observation-mode metadata-assisted` | `original_labels_metadata_assisted` |
+| Corrected density labels | `--observation-mode visual --updated-data` | `updated_labels_visual` |
+| Corrected density labels | `--observation-mode metadata-assisted --updated-data` | `updated_labels_metadata_assisted` |
+
+Metadata-assisted mode can use extra scene material/shape facts and independently
+supplied property observations to constrain QA answers. Report it separately
+from visual mode when comparing methods with different inputs. Missing facts
+are disclosed; the mode does not create missing reflectance observations.
+
+Without `--updated-data`, the JSON field `reference_labels` is `as-stored`;
+this alone does not certify original labels if a different dataset was supplied.
+With the flag it is `density-material-button-v1`, and `updated_data` is `true`.
+See [original/corrected label migration and restoration](../VLABenchAgentInterface/README.md#original-and-corrected-scoring-labels)
+for reversible on-disk updates. These tests measure non-interactive planning,
+not simulator execution success.
+
 ## Source code map
 
 All non-test source files in this package are listed below.

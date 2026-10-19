@@ -390,6 +390,10 @@ Native `--generation-mode frozen-vlm` evaluation uses visual mode exclusively.
 
 Example for the original static-image checkpoint benchmark:
 
+For the full 450-episode test command, parameter explanations, and the four
+visual/metadata and original/corrected-label combinations, see the
+[joint evaluation README](../JointEmbodiedAgentInterface/README.md#full-vlabench-planning-test).
+
 ```bash
 python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
@@ -414,3 +418,34 @@ Use `--no-ground-complex` for the representation-only ablation, and
 `--decision-trace decisions.jsonl` for read-only token diagnostics. See
 `test_regr.JointEmbodiedAgentInterface.finetune_planning` for balanced, resumable
 planner-head adaptation with entity-order augmentation and validation selection.
+
+### Original and corrected scoring labels
+
+`eval_planning` uses the labels stored in `--planning-dir` by default. The server's
+main planning dataset has been restored to its original density labels. Add
+`--updated-data` (alias `--updated-labels`) to compute corrected density reference
+plans in memory. This changes scoring references only: images, instructions,
+entity tables, decoder facts, and disk files remain unchanged. The option works
+with both `--observation-mode visual` and `--observation-mode metadata-assisted`.
+Reports record `updated_data` and `reference_labels` (`as-stored` or
+`density-material-button-v1`). As-stored labels are only original when the supplied
+dataset itself contains original labels.
+
+For an explicit on-disk migration, audit first, then apply with a new backup:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.repair_density_labels \
+  --planning-dir DATA --apply --backup-dir NEW_BACKUP
+```
+
+Return that dataset to its exact original bytes using the same backup:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.repair_density_labels \
+  --planning-dir DATA --restore --apply --backup-dir NEW_BACKUP
+```
+
+Omit `--apply` to preview either operation. Restoration validates every backup
+and current-file checksum before writing, is idempotent, refuses unrelated edits,
+and leaves the upstream generator fix intact. Existing historical reports retain
+their original label protocol; restoring data does not retroactively change them.
