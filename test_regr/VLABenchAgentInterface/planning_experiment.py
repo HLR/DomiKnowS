@@ -295,6 +295,7 @@ def fit_hmm(args):
             raise ValueError("distillation corpus is incomplete or has mismatched episode IDs")
     if {item["episode_id"] for item in train}.intersection(item["episode_id"] for item in validation):
         raise ValueError("training and validation teacher corpora overlap")
+    max_epochs, patience = getattr(args, "epochs", 10), getattr(args, "patience", 2)
     head = HMMGenerationHead(label_count=args.vocab_size, state_count=128, random_seed=42).to("cuda")
     optimizer = torch.optim.Adam(head.parameters(), lr=1e-3)
     start, best, stale, history = 0, float("inf"), 0, []
@@ -309,7 +310,7 @@ def fit_hmm(args):
         head.load_state_dict(payload["head"])
         optimizer.load_state_dict(payload["optimizer"])
         start, best, stale, history = payload["epoch"], payload["best"], payload["stale"], payload["history"]
-        if stale >= 2 or start >= 10:
+        if stale >= patience or start >= max_epochs:
             return
     def batches(records, shuffle=False, epoch=0):
         indices = list(range(len(records)))
@@ -323,7 +324,7 @@ def fit_hmm(args):
             for i, row in enumerate(rows):
                 labels[i, :len(row)] = torch.tensor(row, device="cuda")
             yield labels, lengths
-    for epoch in range(start, 10):
+    for epoch in range(start, max_epochs):
         head.train()
         for index, (labels, lengths) in enumerate(batches(train, True, epoch)):
             optimizer.zero_grad()
@@ -354,7 +355,7 @@ def fit_hmm(args):
             "best": best, "stale": stale, "history": history, "identity": identity}, temporary)
         os.replace(temporary, resume)
         write_json(output / "history.json", history)
-        if stale >= 2:
+        if stale >= patience:
             break
 
 

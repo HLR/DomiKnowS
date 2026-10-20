@@ -103,6 +103,15 @@ revision pinned in `planning_benchmark.json`:
   of the official table, counted in `unmapped_examples`, and included in the
   `extended_mapping` section.
 - `--limit` or `--tasks` mark the run `standard: false`.
+- `--constraints grammar` adds the DomiKnowS grammar DFA (integer ids below 64, benchmark subtask
+  patterns, at most 16 operations) and no scene information. `--press-question` adds a first yes/no
+  question to the model and restricts the plan to one `press` on "Yes"; its wording was chosen on
+  validation episodes and names the benchmark's question-task topics, so report it as a variant. In
+  the measured run it recognised 127 of 600 question tasks, mostly tasks outside upstream's
+  dim2task, and never chose the right button, so the official score barely moved.
+- `official_hmm.py` samples the frozen model on the benchmark inputs without labels, fits an HMM on the
+  plan tokens and picks a lookahead weight on validation. Sampling and fitting work; decoding with the
+  lookahead is limited by the size of the DFA's state space (see the module docstring).
 
 Evaluations from `evaluate-planner` without `--protocol official` also report an
 `official_mapping` block (upstream-mapped tasks only, upstream dimensions) to help

@@ -90,10 +90,14 @@ class NativePlanDFA:
     """
 
     def __init__(self, token_bytes, eos_id, *, entity_count, max_operations=None,
-                 grammar_profile="benchmark", object_constraints=None):
+                 grammar_profile="benchmark", object_constraints=None, patterns=None):
         self.eos_label = int(eos_id)
         self.grammar_profile = grammar_profile
         self.skill_arguments, self.patterns = native_schema(grammar_profile)
+        if patterns is not None:  # restrict the language to these complete subtask patterns
+            self.patterns = tuple(tuple(pattern) for pattern in patterns)
+            used = {skill for pattern in self.patterns for skill in pattern}
+            self.skill_arguments = {skill: roles for skill, roles in self.skill_arguments.items() if skill in used}
         self.max_operations = max_operations if max_operations is not None else (16 if grammar_profile == "benchmark" else 8)
         if self.max_operations < 1 or entity_count < 0:
             raise ValueError("positive operation budget and nonnegative entity count required")

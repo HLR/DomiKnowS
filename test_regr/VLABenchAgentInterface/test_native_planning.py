@@ -360,3 +360,13 @@ def test_native_diagnostic_rejects_malformed_raw_json_without_affecting_metrics(
     from .native_planning import validate_native_plan
     valid,errors=validate_native_plan(raw,('apple','plate'))
     assert not valid and errors
+
+
+def test_pattern_restricted_language_accepts_only_the_listed_subtasks():
+    tokens = {byte: bytes([byte]) for byte in [9, 10, 13, *range(32, 127)]}
+    dfa = NativePlanDFA(tokens, 133, entity_count=4, patterns=[("press",)], max_operations=1)
+    press = [{"name": "press", "params": {"target_entity_name": 2}}]
+    assert dfa.accepts(labels(press))
+    assert not dfa.accepts(labels(plan()))
+    assert not dfa.accepts(labels(press + press))  # the operation bound allows a single press
+    assert set(dfa.skill_arguments) == {"press"}

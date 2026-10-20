@@ -350,10 +350,40 @@ def make_vlm_generator(planner: Any, max_new_tokens: int = 768) -> Callable[[lis
 
 
 DFA_ENTITY_CAP = 64
+PRESS_MARK = "press-question:"
+# One fixed question, asked once per episode. Three wordings were tried on 60 validation episodes
+# (30 question tasks, 30 others) and this one was kept: it recognised 13 of 30 question tasks with no
+# false positives, against 0 of 30 for a generic description of "choose one object and press its
+# button" and 0 of 30 for a pick-or-press choice. It names the property topics of the benchmark's
+# question tasks, so it encodes benchmark knowledge; the model, not a keyword rule, makes the call.
+PRESS_QUESTION = (
+    "Question: Does the instruction above ask a question about the objects' properties or behaviour "
+    "(such as density, friction, magnetism, reflection, the speed of sound or thermal expansion) that is "
+    "answered by choosing one object and pressing its button? Answer with one word, Yes or No."
+)
+
+
+def prepare_inputs(planner: Any, items: list[list[Any]], prefix: str = ""):
+    """Chat-template a ti-list. Returns ``(inputs, images)``; the caller closes the images."""
+    from PIL import Image
+
+    images, content = [], []
+    for kind, value in items:
+        if kind == "text":
+            content.append({"type": "text", "text": value})
+        else:
+            image = Image.open(value).convert("RGB")
+            images.append(image)
+            content.append({"type": "image", "image": image})
+    text = planner.processor.apply_chat_template([{"role": "user", "content": content}], tokenize=False,
+                                                 add_generation_prompt=True, enable_thinking=False) + prefix
+    inputs = planner.processor(text=[text], images=images, return_tensors="pt").to(next(planner.model.parameters()).device)
+    return inputs, images
 
 
 def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_cap: int = DFA_ENTITY_CAP,
-                               max_operations: int = 16) -> Callable[[list[list[Any]]], str]:
+                               max_operations: int = 16, press_question: bool = False,
+                               hmm: Any = None, weight: float = 0.0, lookahead: int = 50) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
     The DFA enforces the JSON skill language, argument roles, the benchmark subtask
@@ -361,9 +391,13 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     primed with an opening ```json fence and the accepted plan is closed with one, so
     the unchanged official parser applies. A generation the DFA cannot complete within
     the token budget is returned unfenced and counts as a format error.
+
+    ``press_question`` first asks the model :data:`PRESS_QUESTION`. On "Yes" the language is
+    restricted to a single ``press``; otherwise the full grammar applies. The decision is
+    recorded in an HTML comment ahead of the fence. ``hmm`` is an ``(initial, transition,
+    emission)`` tuple whose lookahead, scaled by ``weight``, steers the full grammar.
     """
     import torch
-    from PIL import Image
     from transformers import LogitsProcessorList
 
     try:
@@ -371,34 +405,46 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     except ImportError:  # pragma: no cover - flat-module execution
         from native_planning import NativeConstraintProcessor, NativePlanDFA
 
+    def language(press_only: bool):
+        key = ("official-grammar", entity_cap, 1 if press_only else max_operations, press_only, lookahead)
+        if key not in planner.dfas:
+            planner.dfas[key] = NativePlanDFA(
+                planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=entity_cap,
+                max_operations=1 if press_only else max_operations, grammar_profile="benchmark",
+                patterns=(("press",),) if press_only else None)
+        return key, planner.dfas[key]
+
+    @torch.no_grad()
+    def says_yes(items: list[list[Any]]) -> bool:
+        inputs, images = prepare_inputs(planner, [*items, ["text", PRESS_QUESTION]])
+        try:
+            length = inputs.input_ids.shape[1]
+            answer = planner.model.generate(**inputs, max_new_tokens=4, do_sample=False, use_cache=True)[0, length:]
+            return planner.tokenizer.decode(answer, skip_special_tokens=True).strip().lower().startswith("yes")
+        finally:
+            for image in images:
+                image.close()
+
     @torch.no_grad()
     def generate(items: list[list[Any]]) -> str:
-        key = ("official-grammar", entity_cap, max_operations)
-        dfa = planner.dfas.get(key)
-        if dfa is None:
-            dfa = planner.dfas[key] = NativePlanDFA(
-                planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=entity_cap,
-                max_operations=max_operations, grammar_profile="benchmark")
-        images, content = [], []
+        press_only = press_question and says_yes(items)
+        key, dfa = language(press_only)
+        steered = hmm is not None and weight > 0 and not press_only
+        inputs, images = prepare_inputs(planner, items, prefix="```json\n")
         try:
-            for kind, value in items:
-                if kind == "text":
-                    content.append({"type": "text", "text": value})
-                else:
-                    image = Image.open(value).convert("RGB")
-                    images.append(image)
-                    content.append({"type": "image", "image": image})
-            text = planner.processor.apply_chat_template([{"role": "user", "content": content}],
-                                                         tokenize=False, add_generation_prompt=True,
-                                                         enable_thinking=False) + "```json\n"
-            inputs = planner.processor(text=[text], images=images, return_tensors="pt").to(next(planner.model.parameters()).device)
             length = inputs.input_ids.shape[1]
+            constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=hmm if steered else None,
+                                                   weight=weight if steered else 0, table=planner.tables.get(key),
+                                                   lookahead=lookahead)
             output = planner.model.generate(
                 **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
-                logits_processor=LogitsProcessorList([NativeConstraintProcessor(dfa, length, max_new_tokens)]),
+                logits_processor=LogitsProcessorList([constraint]),
                 eos_token_id=planner.tokenizer.eos_token_id)[0, length:].tolist()
+            if constraint.table is not None:
+                planner.tables[key] = constraint.table
             plan = planner.tokenizer.decode(output, skip_special_tokens=True).strip()
-            return f"```json\n{plan}\n```" if dfa.accepts(output) else plan
+            reply = f"```json\n{plan}\n```" if dfa.accepts(output) else plan
+            return f"<!-- {PRESS_MARK} {'yes' if press_only else 'no'} -->\n{reply}" if press_question else reply
         finally:
             for image in images:
                 image.close()

@@ -908,9 +908,11 @@ def command_evaluate_official(args) -> None:
         raise ValueError("--protocol official uses the dataset's images and instruction only")
     if args.few_shot_num < 0 or args.max_new_tokens <= 0:
         raise ValueError("--few-shot-num must be nonnegative and --max-new-tokens positive")
+    if (args.press_question or args.hmm) and args.constraints != "grammar":
+        raise ValueError("--press-question and --hmm extend the grammar DFA; add --constraints grammar")
     from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
     from test_regr.VLABenchAgentInterface.official_protocol import (
-        DFA_ENTITY_CAP, load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
+        load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
     )
     examples = load_official_examples(args.planning_dir, tasks=args.tasks, limit=args.limit)
     standard = args.limit is None and not args.tasks
@@ -920,14 +922,23 @@ def command_evaluate_official(args) -> None:
     model_label = Path(str(args.planner_model)).name or "model"
     cot_label = "_cot" if args.with_cot else ""
     grammar = args.constraints == "grammar"
-    output_dir = args.official_output_dir or Path("official_vlm_results") / (
-        f"{model_label}_{args.few_shot_num}shot{cot_label}{'_grammar' if grammar else ''}")
-    generate = (make_grammar_dfa_generator(planner, args.max_new_tokens) if grammar
+    hmm, hmm_digest = None, None
+    if args.hmm:
+        from test_regr.VLABenchAgentInterface.official_hmm import load_hmm
+        hmm, hmm_digest = load_hmm(args.hmm, planner)
+    decoding = "greedy"
+    if grammar:
+        from test_regr.VLABenchAgentInterface.official_hmm import decoding_label
+        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "")
+    suffix = ("_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_hmm" if args.hmm else "")
+    output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
+    generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question,
+                                           hmm=hmm, weight=args.hmm_weight) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
         examples, generate, output_dir=output_dir,
         model_name=str(args.planner_model), few_shot_num=args.few_shot_num, with_cot=args.with_cot,
-        seed=args.seed, standard=standard, decoding=f"grammar-dfa:{DFA_ENTITY_CAP}" if grammar else "greedy")
+        seed=args.seed, standard=standard, decoding=decoding)
     _json(summary | {"output_dir": str(output_dir), "load_in_4bit": args.load_in_4bit,
                      "max_new_tokens": args.max_new_tokens})
 
@@ -1372,6 +1383,11 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--constraints", choices=["none", "grammar"], default="none",
                           help="official protocol: grammar adds the DomiKnowS grammar DFA (skills, roles, subtask patterns, "
                                "integer ids); it uses no scene information")
+    evaluate.add_argument("--press-question", action="store_true",
+                          help="official protocol with --constraints grammar: the model first says whether the instruction is a "
+                               "choose-one-and-press question; if so the plan is restricted to one press")
+    evaluate.add_argument("--hmm", help="official protocol with --constraints grammar: label-free HMM checkpoint (best.pt from official_hmm)")
+    evaluate.add_argument("--hmm-weight", type=float, default=1.0, help="lookahead weight used with --hmm")
     evaluate.add_argument("--tasks", nargs="+", help="official protocol: restrict to these tasks (marks the run non-standard)")
     evaluate.add_argument("--official-output-dir", type=Path, help="official protocol: resumable outputs and summary.json")
     evaluate.set_defaults(handler=command_evaluate_planner)

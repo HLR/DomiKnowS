@@ -201,3 +201,39 @@ def test_decoding_is_part_of_the_run_configuration(dataset, tmp_path):
         op.run_official_protocol(examples, generate, output_dir=out, model_name="fake")
     plain = op.run_official_protocol(examples, generate, output_dir=tmp_path / "plain", model_name="fake")
     assert "decoding" not in plain  # runs without the option keep their earlier configuration
+
+
+def test_decoding_labels_identify_the_hmm_and_weight():
+    from test_regr.VLABenchAgentInterface.official_hmm import decoding_label, plan_tokens
+
+    assert decoding_label(None, 1.0) == "grammar-dfa:64"
+    assert decoding_label("abcdef0123456789", 0.0) == "grammar-dfa:64"
+    assert decoding_label("abcdef0123456789", 0.5) == "grammar-dfa:64+hmm:abcdef012345:w0.5"
+
+    class Tokenizer:
+        eos_token_id = 9
+
+        def __call__(self, text, add_special_tokens=False):
+            return type("Encoded", (), {"input_ids": [ord(c) % 7 for c in text]})()
+
+    tokens, error = plan_tokens('[{"name": "press", "params": {}}]\n```\n', Tokenizer())
+    assert error is None and tokens[-1] == 9
+    assert plan_tokens("I would pick the apple", Tokenizer())[0] is None
+    assert plan_tokens("[]", Tokenizer())[0] is None
+
+
+def test_hmm_weight_selection_prefers_the_smaller_weight_on_ties():
+    candidates = [{"weight": 0.5, "validation_mean_total_score": 40.0}, {"weight": 0.1, "validation_mean_total_score": 40.0},
+                  {"weight": 1.0, "validation_mean_total_score": 39.0}]
+    best = max(candidates, key=lambda item: (item["validation_mean_total_score"], -item["weight"]))
+    assert best["weight"] == 0.1
+
+
+def test_teacher_samples_are_rewritten_to_integer_ids_before_hmm_fitting():
+    from test_regr.VLABenchAgentInterface.official_hmm import canonical_plan_text
+
+    text, error = canonical_plan_text('[{"name": "pick", "params": {"target_entity_name": "6"}}]\n```')
+    assert error is None
+    assert json.loads(text) == [{"name": "pick", "params": {"target_entity_name": 6}}]
+    assert '"6"' not in text and text.startswith("[\n    {")
+    assert canonical_plan_text("no plan here")[0] is None
