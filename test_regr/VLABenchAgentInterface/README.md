@@ -281,7 +281,7 @@ and should be treated as a diagnostic rather than an independent baseline.
 Historical graph checkpoints may have been trained with those augmented tables;
 this limitation is recorded without changing their saved weights or decoding.
 
-`run_planning_experiment` orchestrates smoke tests, the three baseline runs,
+`utils/run_planning_experiment.py` (`python -m test_regr.VLABenchAgentInterface.utils.run_planning_experiment`) orchestrates smoke tests, the three baseline runs,
 teacher corpus generation, HMM fitting, validation selection, and final HMM
 evaluation sequentially. Pass `--output`, `--model`, `--planning-dir`,
 `--supervised`, and `--reinforcement`; `--smoke-only` runs the initial model

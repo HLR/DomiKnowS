@@ -511,7 +511,7 @@ button-to-mirror bindings from its exported scene. The upstream source notes a
 MuJoCo reflection rendering limitation; image brightness is not treated as a
 calibrated reflectance observation.
 
-`preserve_reflection_observations.py` patches the upstream generator to attach
+`utils/preserve_reflection_observations.py` patches the upstream generator to attach
 `option_buttons` alongside its shuffled reflectance vector. `Mirrors.save()`
 then preserves those bindings and the numeric MJCF material reflectance values.
 These are simulator material metadata, not an image-derived estimate. The
@@ -555,7 +555,7 @@ verification or simulator success.
 Dry-run and apply commands for a VLABench installation:
 
 ```bash
-python -m test_regr.VLABenchAgentInterface.preserve_reflection_observations \
+python -m test_regr.VLABenchAgentInterface.utils.preserve_reflection_observations \
   --upstream-root /opt/dominows/VLABench
 # To apply, append --apply --backup-dir /path/outside/source/new-backup-directory
 ```
@@ -715,7 +715,7 @@ Reproducible checks:
 ```bash
 python -m pytest -q test_regr/VLABenchAgentInterface/test/test_complex_improvements.py \
   test_regr/JointEmbodiedAgentInterface/test_planning_adaptation.py
-python -m test_regr.VLABenchAgentInterface.audit_planning \
+python -m test_regr.VLABenchAgentInterface.utils.audit_planning \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning --output audit.json
 python -m test_regr.JointEmbodiedAgentInterface.finetune_planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \

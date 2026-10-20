@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 
-from .planning_experiment import write_json, digest
+from ..planning_experiment import write_json, digest
 
 
 def run(args):
