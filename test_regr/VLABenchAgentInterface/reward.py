@@ -32,7 +32,7 @@ try:
         canonicalize_plan,
         validate_plan,
     )
-    from .planning_metrics import _ground_plan_entities
+    from .planning_metrics import _graph as _official_graph, _ground_plan_entities, _precise_match
 except ImportError:
     from graph import tokens_to_plan
     from world_graph import (
@@ -42,7 +42,7 @@ except ImportError:
         canonicalize_plan,
         validate_plan,
     )
-    from planning_metrics import _ground_plan_entities
+    from planning_metrics import _graph as _official_graph, _ground_plan_entities, _precise_match
 
 
 PLANNER_WEIGHTS: Mapping[str, float] = MappingProxyType({
@@ -162,6 +162,28 @@ def _layers(graph: nx.DiGraph) -> dict[str, int]:
 
 
 def _exact_graph_match(reference: Sequence[Mapping[str, Any]], predicted: Sequence[Mapping[str, Any]], dependency: Any) -> float:
+    """Dependency-graph match in [0, 1], using the official PM matcher.
+
+    This equals ``planning_metrics`` PM / 100 whenever the reference has
+    subtasks, so reward-side ``exact_graph_match`` and reported PM agree. A
+    prediction whose dependency graph cannot be built scores 0. Empty references
+    and unusable reference dependencies keep the historical tolerant behaviour.
+    """
+    dependency = "Sequential" if dependency is None else dependency
+    try:
+        reference_graph = _official_graph(reference, dependency)
+    except ValueError:
+        return _legacy_exact_graph_match(reference, predicted, dependency)
+    if len(reference_graph) == 1:
+        return _legacy_exact_graph_match(reference, predicted, dependency)
+    try:
+        predicted_graph = _official_graph(predicted, dependency)
+    except ValueError:
+        return 0.0
+    return _precise_match(reference_graph, predicted_graph) / 100.0
+
+
+def _legacy_exact_graph_match(reference: Sequence[Mapping[str, Any]], predicted: Sequence[Mapping[str, Any]], dependency: Any) -> float:
     reference_graph = _build_graph(reference, dependency)
     predicted_graph = _build_graph(predicted, dependency)
     total = max(0, len(reference_graph) - 1)

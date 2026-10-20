@@ -300,9 +300,19 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     print(f" Reference labels: {report['reference_labels']}  |  Observation mode: {report['observation_mode']}")
     print(f" Generation failures: {metrics.get('generation_failures', 0)}"
           f" (semantic search limit: {metrics.get('semantic_search_limit_failures', 0)})")
+    unknown_tasks = planning_metrics.get("unknown_task_count", 0)
+    if unknown_tasks:
+        print(f" WARNING: {unknown_tasks} examples have tasks outside the dimension mapping; they are in")
+        print("          the overall score but in no dimension, so Macro is not comparable to full-coverage runs.")
     print("-" * 70)
     print(f" Overall Progress Score:  {overall.get('score', 0.0):.2f} / 100.0")
     print(f" Legacy Progress Score:   {overall.get('legacy_score', 0.0):.2f} / 100.0")
+    upstream_view = planning_metrics.get("official_mapping", {})
+    if upstream_view:
+        print(f" Upstream-mapped tasks:   {upstream_view['examples']} examples; legacy_score by dimension "
+              "(upstream total_score; internal split, not the standard protocol):")
+        print("   " + "  ".join(f"{name}={'N/A' if value is None else f'{value:.1f}'}"
+                                for name, value in upstream_view["legacy_total_score_by_dimension"].items()))
     print(f" 6-Dimension Macro:       {macro if macro is not None else 'N/A'}")
     print("-" * 70)
     print(" Component Breakdown:")

@@ -36,6 +36,11 @@ TASK_DIMENSIONS = {
     for dimension, tasks in mapping.items() for task in tasks
 }
 INDEPENDENT_TASKS = frozenset(_CONFIG["seq_independent_task"])
+# Tasks that upstream's own dim2task lists; its scoring script cannot place any other task.
+OFFICIAL_TASK_DIMENSIONS = {
+    task: _LABELS.get(dimension, dimension)
+    for dimension, tasks in _CONFIG["dim2task"].items() for task in tasks
+}
 
 
 def planning_metadata(episode_id: str) -> tuple[str, str | None]:
@@ -229,6 +234,7 @@ class PlanningMetrics:
         self.unknown_tasks = 0
         self.totals = dict.fromkeys(COMPONENTS, 0.0)
         self.dimensions = {dimension: {"examples": 0, **dict.fromkeys(COMPONENTS, 0.0)} for dimension in DIMENSIONS}
+        self.official_dimensions = {dimension: {"examples": 0, **dict.fromkeys(COMPONENTS, 0.0)} for dimension in DIMENSIONS}
 
     def update(self, scores: Mapping[str, float], *, task: str = "", dimension: str | None = None):
         dimension = _LABELS.get(dimension, dimension) if dimension else TASK_DIMENSIONS.get(task)
@@ -243,6 +249,12 @@ class PlanningMetrics:
             item["examples"] += 1
             for key in COMPONENTS:
                 item[key] += scores[key]
+        # Upstream-comparable view: only tasks its dim2task lists, upstream's dimension.
+        if task in OFFICIAL_TASK_DIMENSIONS:
+            item = self.official_dimensions[OFFICIAL_TASK_DIMENSIONS[task]]
+            item["examples"] += 1
+            for key in COMPONENTS:
+                item[key] += scores[key]
 
     def result(self) -> dict[str, Any]:
         dimensions = {
@@ -251,10 +263,25 @@ class PlanningMetrics:
             }} for dimension, item in self.dimensions.items()
         }
         complete = all(item["examples"] for item in dimensions.values())
+        official = {
+            dimension: {"examples": item["examples"], **{
+                key: item[key] / item["examples"] if item["examples"] else None for key in COMPONENTS
+            }} for dimension, item in self.official_dimensions.items()
+        }
         return {
             "examples": self.count, "unknown_task_count": self.unknown_tasks,
+            # Unknown tasks count toward "overall" but no dimension, so Macro and
+            # overall only describe the same examples when this is True.
+            "full_task_coverage": self.count > 0 and self.unknown_tasks == 0,
             "overall": {key: value / self.count if self.count else None for key, value in self.totals.items()},
             "dimensions": dimensions,
+            # Tasks and dimensions as upstream's scripts see them; compare
+            # legacy_score (upstream total_score) of these with published rows.
+            "official_mapping": {
+                "examples": sum(item["examples"] for item in official.values()),
+                "dimensions": official,
+                "legacy_total_score_by_dimension": {d: item["legacy_score"] for d, item in official.items()},
+            },
             "Macro": sum(item["score"] for item in dimensions.values()) / 6 if complete else None,
             "legacy_Macro": sum(item["legacy_score"] for item in dimensions.values()) / 6 if complete else None,
             "source_revision": _CONFIG["source_revision"],

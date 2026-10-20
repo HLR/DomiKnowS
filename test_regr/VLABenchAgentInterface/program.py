@@ -4276,6 +4276,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "success_rate": sum(item.success for item in episodes) / count,
             "success_rate_lower": wilson_lower(sum(item.success for item in episodes), count),
             "success_rate_upper": wilson_upper(sum(item.success for item in episodes), count),
+            # "success_rate" weights tasks by episode count; this weights them equally.
+            "task_macro_success_rate": sum(value["success_rate"] for value in per_task.values()) / len(per_task),
             "valid_rate": sum(item.valid for item in episodes) / count,
             "steps": sum(item.steps for item in episodes) / count,
             "episodes": count,

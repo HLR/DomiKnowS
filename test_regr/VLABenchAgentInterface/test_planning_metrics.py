@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from test_regr.VLABenchAgentInterface.planning_metrics import (
-    BENCHMARK_PATTERNS, DIMENSIONS, PlanningMetrics, planning_metadata,
+    BENCHMARK_PATTERNS, COMPONENTS, DIMENSIONS, PlanningMetrics, TASK_DIMENSIONS, planning_metadata,
     score_planning_metrics,
 )
 from test_regr.VLABenchAgentInterface.dataset import PlanningExample, load_planning_examples
@@ -294,3 +294,36 @@ def test_full_450_episode_task_coverage_keeps_pooled_scores():
         100 * original / total for original, total in
         ((103, 113), (46, 53), (75, 84), (77, 84), (16, 60), (56, 56))
     ) / 6)
+
+
+def test_reward_exact_graph_match_equals_official_pm():
+    from test_regr.VLABenchAgentInterface.reward import _exact_graph_match
+
+    def op(name, entity=None, container=None):
+        params = {key: value for key, value in (("target_entity_name", entity), ("target_container_name", container)) if value is not None}
+        return {"name": name, "params": params}
+
+    reference = [op("pick", "a"), op("place", "a", "x"), op("press", "b")]
+    cases = [
+        reference,
+        [op("pick", "a"), op("place", "a", "x")],
+        [op("press", "b"), op("pick", "a"), op("place", "a", "x")],
+        [op("pick", "c"), op("place", "c", "x"), op("press", "b")],
+    ]
+    for dependency in ("Sequential", "Seq-independent", {1: [2]}):
+        for prediction in cases:
+            pm = score_planning_metrics(prediction, reference, dependency)["PM"]
+            assert _exact_graph_match(reference, prediction, dependency) == pytest.approx(pm / 100.0)
+    # An unbuildable predicted dependency graph scores zero; missing dependency means Sequential.
+    assert _exact_graph_match(reference, [op("pick", "a")], {5: [6]}) == 0.0
+    assert _exact_graph_match(reference, reference, None) == 1.0
+
+
+def test_unknown_tasks_clear_the_full_coverage_flag():
+    scores = dict.fromkeys(COMPONENTS, 50.0)
+    metrics = PlanningMetrics()
+    metrics.update(scores, task="not_a_task")
+    assert metrics.result()["full_task_coverage"] is False
+    known = PlanningMetrics()
+    known.update(scores, task=next(iter(TASK_DIMENSIONS)))
+    assert known.result()["full_task_coverage"] is True
