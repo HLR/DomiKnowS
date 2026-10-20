@@ -62,7 +62,7 @@ Genuinely unknown tasks remain explicitly counted and excluded from dimensions.
 Source: [official scoring helper](https://github.com/OpenMOSS/VLABench/blob/cf588fe60c0c7282174fe979f5913170cfe69017/VLABench/evaluation/utils.py),
 [dimension mapping](https://github.com/OpenMOSS/VLABench/blob/cf588fe60c0c7282174fe979f5913170cfe69017/VLABench/configs/evaluation/dim2task.json),
 and [independent tasks](https://github.com/OpenMOSS/VLABench/blob/cf588fe60c0c7282174fe979f5913170cfe69017/VLABench/configs/evaluation/seq_independent_task.json).
-Run commands from the repository root. Detailed design and diagnostics notes are in [Notes.md](Notes.md).
+Run commands from the repository root. Detailed design and diagnostics notes are in [Notes.md](docs/Notes.md).
 
 ## Standard VLABench VLM-planning protocol
 
@@ -401,7 +401,7 @@ python -m test_regr.VLABenchAgentInterface.main diagnose-controller \
   --output test_regr/VLABenchAgentInterface/checkpoints/diagnostics
 ```
 
-Camera parity requires a held-out replay manifest, camera map, and scene restorer. See [Notes.md](Notes.md) for the required options and interpretation.
+Camera parity requires a held-out replay manifest, camera map, and scene restorer. See [Notes.md](docs/Notes.md) for the required options and interpretation.
 
 
 ## Density QA label repair
@@ -481,7 +481,7 @@ For a separate metadata-assisted graph run, change the mode to
 requested `observation_mode` and effective `detailed_metrics.observation_profiles`.
 Visual QA episodes use `visual_qa_v1`, with unavailable symbolic property checks;
 this status describes verification coverage, not answer accuracy. See
-`VLABENCH_LOGICAL_CONSTRAINTS_AND_COMPONENTS.md` for observation schemas,
+`docs/VLABENCH_LOGICAL_CONSTRAINTS_AND_COMPONENTS.md` for observation schemas,
 source-export repairs, and validation evidence.
 
 Planning now defaults to 12 operations and supports optional push destinations.
