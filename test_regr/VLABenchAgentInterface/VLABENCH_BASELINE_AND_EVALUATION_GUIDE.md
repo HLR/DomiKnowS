@@ -260,6 +260,8 @@ While distilled HMMs provide valid soft guidance, extensive benchmarking in the 
 
 The table below contrasts published SOTA zero-shot foundation models, CLAMP constrained configurations, and DomiKnowS models on the official **VLABench Non-Interactive Planning Benchmark** (All scores on a 0–100 scale; higher is better):
 
+> **Read before comparing.** The published rows are zero-/few-shot VLMs scored on the whole benchmark from images and instruction alone. The DomiKnowS rows are not like for like: the Joint-agent rows are fine-tuned on 80% of the episodes, are scored on the 450-episode seed-42 split, receive scene entity names, and were scored under an older task mapping that left 77 test episodes out of the dimensions. "Overall Progress Score" and "Macro Average" use the four-term score, whereas upstream reports `total_score = 0.4*SR + 0.4*PR`. For a comparable row use `evaluate-planner --protocol official` (see the package README) and compare its `official_total_score_by_dimension`.
+
 | Model / Framework | Configuration / Method | M&T↑ | Spatial↑ | ComSense↑ | Semantic↑ | PhysLaw↑ | Complex↑ | **Macro Average↑** | **Overall Progress Score↑** | **Schema Validity↑** |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Reference SOTA Baselines** (*Zhang et al., 2025*) | | | | | | | | | | |

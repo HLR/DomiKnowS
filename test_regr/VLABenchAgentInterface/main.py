@@ -900,7 +900,41 @@ def command_train_agent(args) -> None:
         })
 
 
+def command_evaluate_official(args) -> None:
+    """Standard VLABench VLM-planning protocol: every episode, official prompt and scoring."""
+    if args.resume_adapter or args.vocab:
+        raise ValueError("--protocol official evaluates a frozen base VLM; omit --resume-adapter and --vocab")
+    if getattr(args, "observation_mode", "visual") != "visual":
+        raise ValueError("--protocol official uses the dataset's images and instruction only")
+    if args.few_shot_num < 0 or args.max_new_tokens <= 0:
+        raise ValueError("--few-shot-num must be nonnegative and --max-new-tokens positive")
+    from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
+    from test_regr.VLABenchAgentInterface.official_protocol import (
+        DFA_ENTITY_CAP, load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
+    )
+    examples = load_official_examples(args.planning_dir, tasks=args.tasks, limit=args.limit)
+    standard = args.limit is None and not args.tasks
+    if not standard:
+        print("[official-vlm] --limit/--tasks select a subset; the report is marked standard=false", flush=True)
+    planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
+    model_label = Path(str(args.planner_model)).name or "model"
+    cot_label = "_cot" if args.with_cot else ""
+    grammar = args.constraints == "grammar"
+    output_dir = args.official_output_dir or Path("official_vlm_results") / (
+        f"{model_label}_{args.few_shot_num}shot{cot_label}{'_grammar' if grammar else ''}")
+    generate = (make_grammar_dfa_generator(planner, args.max_new_tokens) if grammar
+                else make_vlm_generator(planner, args.max_new_tokens))
+    summary = run_official_protocol(
+        examples, generate, output_dir=output_dir,
+        model_name=str(args.planner_model), few_shot_num=args.few_shot_num, with_cot=args.with_cot,
+        seed=args.seed, standard=standard, decoding=f"grammar-dfa:{DFA_ENTITY_CAP}" if grammar else "greedy")
+    _json(summary | {"output_dir": str(output_dir), "load_in_4bit": args.load_in_4bit,
+                     "max_new_tokens": args.max_new_tokens})
+
+
 def command_evaluate_planner(args) -> None:
+    if getattr(args, "protocol", "internal") == "official":
+        return command_evaluate_official(args)
     observation_mode = getattr(args, "observation_mode", "visual")
     if args.generation_mode == "frozen-vlm":
         if observation_mode != "visual":
@@ -1330,6 +1364,16 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--seed", type=int, default=42)
     evaluate.add_argument("--split", choices=["train", "validation", "test", "all"], default="test")
     evaluate.add_argument("--dimension", help="filter evaluation to a specific dimension (e.g. PhysLaw, Complex)")
+    evaluate.add_argument("--protocol", choices=["internal", "official"], default="internal",
+                          help="internal: this repo's seeded split and options; official: standard VLABench VLM protocol "
+                               "(all episodes, official prompt, images and instruction only, frozen VLM)")
+    evaluate.add_argument("--few-shot-num", type=int, default=0, help="official protocol: in-context examples")
+    evaluate.add_argument("--with-cot", action="store_true", help="official protocol: ask for step-by-step analysis")
+    evaluate.add_argument("--constraints", choices=["none", "grammar"], default="none",
+                          help="official protocol: grammar adds the DomiKnowS grammar DFA (skills, roles, subtask patterns, "
+                               "integer ids); it uses no scene information")
+    evaluate.add_argument("--tasks", nargs="+", help="official protocol: restrict to these tasks (marks the run non-standard)")
+    evaluate.add_argument("--official-output-dir", type=Path, help="official protocol: resumable outputs and summary.json")
     evaluate.set_defaults(handler=command_evaluate_planner)
 
     rollout = sub.add_parser("rollout")

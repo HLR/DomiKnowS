@@ -64,6 +64,53 @@ Source: [official scoring helper](https://github.com/OpenMOSS/VLABench/blob/cf58
 and [independent tasks](https://github.com/OpenMOSS/VLABench/blob/cf588fe60c0c7282174fe979f5913170cfe69017/VLABench/configs/evaluation/seq_independent_task.json).
 Run commands from the repository root. Detailed design and diagnostics notes are in [Notes.md](Notes.md).
 
+## Standard VLABench VLM-planning protocol
+
+The results above use this repository's own setup (seed-42 test split, scene
+entity names in the prompt, extended task mapping, optionally corrected labels).
+They are not comparable with published VLM rows. To report standard numbers run:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --protocol official \
+  --planning-dir /path/to/vlm_evaluation_v1.0 --planner-model /path/to/Qwen3-VL-8B-Instruct \
+  --few-shot-num 0 --official-output-dir results/official_qwen3vl_0shot
+```
+
+`--protocol official` follows OpenMOSS/VLABench `scripts/evaluate_vlm.py` at the
+revision pinned in `planning_benchmark.json`:
+
+- **Data:** every episode of every task (45 tasks x 100 = 4,500), taken from a
+  fresh clone of `VLABench/vlm_evaluation_v1.0` with its original labels. There is
+  no train/validation/test split. The summary records a `dataset_fingerprint` of
+  episode ids, instructions and reference files; compare it between runs.
+- **Input:** the unlabeled image, the number-labeled image (`input_mask.png`) and
+  the instruction under the unmodified `official_vlm_prompt_en.txt` (SHA-256 checked
+  at load). Entity names are never given. `--few-shot-num` examples are drawn at
+  random from any task, as upstream does, seeded per episode by `--seed`;
+  `--with-cot` adds the step-by-step line.
+- **Decoding and parsing:** greedy, no grammar or DFA. The answer is the first
+  `json` fence of the reply; anything else is a `format_error` scoring zero. Skill
+  names are compared exactly. Raw replies are kept in `outputs.jsonl`, and a rerun
+  with the same settings resumes where it stopped.
+- **Scoring:** dependencies depend only on the task; the headline is upstream's
+  `total_score` (`0.4*SR + 0.4*PR`, our `legacy_score`; a perfect plan scores 80),
+  averaged per dimension over the episodes. `official_total_score_by_dimension` in
+  `summary.json` is the comparable table. `dimension_mean_of_total_score` is
+  not an upstream quantity.
+- **Mapping:** upstream's `dim2task` lists 41 task names and its script cannot place
+  the other 8 tasks of the released data (800 episodes: the four billiards variants and
+  thermal-expansion, reflection, speed-of-sound and magnetism QA). They are left out
+  of the official table, counted in `unmapped_examples`, and included in the
+  `extended_mapping` section.
+- `--limit` or `--tasks` mark the run `standard: false`.
+
+Evaluations from `evaluate-planner` without `--protocol official` also report an
+`official_mapping` block (upstream-mapped tasks only, upstream dimensions) to help
+orient them, but they remain internal-split results.
+
+Fine-tuned graph planners under this protocol (names-free inputs, all 4,500
+episodes) are not supported yet; report them as a separate held-out track.
+
 ## Measuring a planning baseline
 
 For an unconstrained frozen-VLM planning baseline, generate directly with the
