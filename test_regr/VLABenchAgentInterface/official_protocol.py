@@ -384,7 +384,8 @@ def prepare_inputs(planner: Any, items: list[list[Any]], prefix: str = ""):
 
 def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_cap: int = DFA_ENTITY_CAP,
                                max_operations: int = 16, press_question: bool = False,
-                               hmm: Any = None, weight: float = 0.0) -> Callable[[list[list[Any]]], str]:
+                               hmm: Any = None, weight: float = 0.0,
+                               lookahead_score: str = "joint") -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
     The DFA enforces the JSON skill language, argument roles, the benchmark subtask
@@ -450,7 +451,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
             length = inputs.input_ids.shape[1]
             constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=hmm if steered else None,
                                                    weight=weight if steered else 0,
-                                                   action_lookahead=lookahead_for(key, dfa) if steered else None)
+                                                   action_lookahead=lookahead_for(key, dfa) if steered else None,
+                                                   lookahead_score=lookahead_score)
             output = planner.model.generate(
                 **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
                 logits_processor=LogitsProcessorList([constraint]),

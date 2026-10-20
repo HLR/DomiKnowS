@@ -122,7 +122,9 @@ revision pinned in `planning_benchmark.json`:
   lookahead prefer one-step plans, 2048 states at 0.3 reaches 0.18. Measured result (weight 0.5, chosen
   on validation): 38.02 against 38.24 for the grammar DFA alone over all 4,500 episodes (38.62 against
   38.78 on the held-out test split). The lookahead changed 873 of 265,192 greedy tokens, so treat it as
-  a negative result: the HMM does not see the image or the instruction.
+  a negative result: the HMM does not see the image or the instruction. `lookahead_score="conditional"` is the Ctrl-G form CLAMP uses (the HMM's chance that a valid plan can still be
+  completed); on validation it was worse than the joint score (37.93 at weight 0.5, 33.6 at weight 5, against 38.18
+  without the HMM) because it pushes plans to stop early and loses the long Complex plans.
 
 Evaluations from `evaluate-planner` without `--protocol official` also report an
 `official_mapping` block (upstream-mapped tasks only, upstream dimensions) to help

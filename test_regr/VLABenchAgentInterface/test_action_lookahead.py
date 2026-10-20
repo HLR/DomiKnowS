@@ -69,6 +69,18 @@ def test_action_masses_equal_exhaustive_enumeration_of_plans():
         assert span.action_mass(action, "continue") == pytest.approx(expected - expected_stop, rel=1e-9)
     assert span.mass_of(range(3)) == pytest.approx(sum(sequence_mass(belief, transition, emission, tokens_of(p)) for p in plans), rel=1e-9)
 
+    # Ctrl-G style conditional: valid mass over the HMM mass of the same action text followed by anything.
+    for action in range(3):
+        seen_cont = sequence_mass(belief, transition, emission, opening + cont[action])
+        seen_stop = sequence_mass(belief, transition, emission, opening + stop[action])
+        starting = [plan for plan in plans if plan[0] == action]
+        valid = sum(sequence_mass(belief, transition, emission, tokens_of(plan)) for plan in starting)
+        assert span.conditional([action]) == pytest.approx(valid / (seen_cont + seen_stop), rel=1e-9)
+        assert span.conditional([action], "continue") == pytest.approx(
+            (valid - sum(sequence_mass(belief, transition, emission, tokens_of(p)) for p in starting if len(p) == 1)) / seen_cont, rel=1e-9)
+        assert 0 <= span.conditional([action], "stop") <= 1
+    assert span.conditional([]) == 0.0
+
     # After the first action (group 0 -> state 1) the next span sees only the plans that extend it.
     after = belief
     for token in opening + cont[0]:
@@ -251,9 +263,10 @@ def decomposes(names, patterns):
     return len(names) in reachable
 
 
-def decode(dfa, table, hmm, weight, seed, max_tokens=1200):
+def decode(dfa, table, hmm, weight, seed, max_tokens=1200, score="joint"):
     generator = torch.Generator().manual_seed(seed)
-    processor = NativeConstraintProcessor(dfa, 1, max_tokens, hmm=hmm, weight=weight, action_lookahead=table)
+    processor = NativeConstraintProcessor(dfa, 1, max_tokens, hmm=hmm, weight=weight, action_lookahead=table,
+                                          lookahead_score=score)
     ids = [0]
     for _ in range(max_tokens):
         scores = torch.randn(1, VOCABULARY, generator=generator) * 2
@@ -317,3 +330,13 @@ def test_a_strong_lookahead_changes_decisions_and_counts_them():
         differs += steered != plain
         assert processor.session.stats["scored_steps"] <= processor.session.stats["steps"]
     assert changed > 0 and differs > 0
+
+
+@pytest.mark.parametrize("score", ["joint", "conditional"])
+def test_both_scores_keep_the_legal_token_set(score):
+    dfa = character_dfa()
+    hmm = random_hmm(8, VOCABULARY, seed=7)
+    table = table_for(dfa, hmm)
+    for seed in range(3):
+        labels, _ = decode(dfa, table, hmm, 50.0, seed, score=score)
+        assert dfa.accepts(labels)

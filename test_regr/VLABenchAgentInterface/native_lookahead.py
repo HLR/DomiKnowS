@@ -86,8 +86,8 @@ class DFAActionLookahead:
                                     automaton=ActionAutomaton(0, accepting, successors), max_actions=dfa.max_operations)
         self._tensors = {}
 
-    def session(self, belief: torch.Tensor) -> "LookaheadSession":
-        return LookaheadSession(self, belief)
+    def session(self, belief: torch.Tensor, score: str = "joint") -> "LookaheadSession":
+        return LookaheadSession(self, belief, score)
 
     def label_tensor(self, state, key, groups, device):
         slot = (state, key, str(device))
@@ -99,8 +99,10 @@ class DFAActionLookahead:
 class LookaheadSession:
     """Per-generation state: the HMM belief at the start of the current action and its scores."""
 
-    def __init__(self, table: DFAActionLookahead, belief: torch.Tensor):
-        self.table = table
+    def __init__(self, table: DFAActionLookahead, belief: torch.Tensor, score: str = "joint"):
+        if score not in ("joint", "conditional"):
+            raise ValueError("score must be 'joint' or 'conditional'")
+        self.table, self.score = table, score
         self.span = table.core.span(belief, 0, 0)
         self.pending = None  # (span, action) of an operation closed by a bare brace, awaiting its separator
         self.stats = {"steps": 0, "scored_steps": 0, "changed": 0}
@@ -119,17 +121,20 @@ class LookaheadSession:
         self._node_mass = {}
 
     def _mass(self, key) -> float:
+        """HMM mass of the plans a decision leaves open, or (conditional) the HMM's chance that they are valid."""
         kind = key[0]
+        conditional = self.score == "conditional"
         if kind == "action":
             if key[1] not in self._node_mass:
-                self._node_mass[key[1]] = self.span.mass_of(self.table.dfa.node_actions[key[1]])
+                actions = self.table.dfa.node_actions[key[1]]
+                self._node_mass[key[1]] = self.span.conditional(actions) if conditional else self.span.mass_of(actions)
             return self._node_mass[key[1]]
         if kind == "done":
-            return self.span.action_mass(key[1], key[2])
+            return self.span.conditional([key[1]], key[2]) if conditional else self.span.action_mass(key[1], key[2])
         if self.pending is None:
             return 0.0
         span, action = self.pending
-        return span.action_mass(action, kind)  # "continue" or "stop"
+        return span.conditional([action], kind) if conditional else span.action_mass(action, kind)
 
     def scores(self, state) -> dict:
         """``log`` HMM mass of the plans left open by each decision group of ``state``."""

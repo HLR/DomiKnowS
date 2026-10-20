@@ -348,7 +348,7 @@ class NativeConstraintProcessor:
     """HF logits processor using the repository's CTRL-G success DP and belief update."""
 
     def __init__(self, dfa, prompt_length, max_tokens, *, hmm=None, weight=0, lookahead=50, table=None,
-                 action_lookahead=None):
+                 action_lookahead=None, lookahead_score="joint"):
         """``action_lookahead`` (a ``DFAActionLookahead`` for this DFA) replaces the token-level table:
         the HMM then only ranks tokens the DFA allows, per action, and never removes one."""
         self.dfa, self.prompt_length, self.max_tokens = dfa, prompt_length, max_tokens
@@ -364,7 +364,7 @@ class NativeConstraintProcessor:
             self.initial, self.transition, self.emission = [value.double() for value in hmm]
             self.belief = self.initial.clone()
             if action_lookahead is not None:
-                self.session = action_lookahead.session(self.belief)
+                self.session = action_lookahead.session(self.belief, lookahead_score)
             elif self.table is None:
                 self.table = HMMDFAStaticLookahead(
                     transition=self.transition, emission=self.emission,

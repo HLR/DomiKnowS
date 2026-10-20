@@ -169,9 +169,11 @@ def load_hmm(path: str | Path, planner: Any, device: str = "cuda") -> tuple[Any,
     return tuple(payload[key].to(device) for key in ("initial", "transition", "emission")), digest
 
 
-def decoding_label(hmm_sha256: str | None, weight: float) -> str:
+def decoding_label(hmm_sha256: str | None, weight: float, score: str = "joint") -> str:
     base = f"grammar-dfa:{DFA_ENTITY_CAP}"
-    return base if hmm_sha256 is None or weight <= 0 else f"{base}+hmm-action:{hmm_sha256[:12]}:w{weight:g}"
+    if hmm_sha256 is None or weight <= 0:
+        return base
+    return f"{base}+hmm-action:{hmm_sha256[:12]}:w{weight:g}" + ("" if score == "joint" else f":{score}")
 
 
 def heldout_report(final_scores: str | Path, test_ids: set[str]) -> dict[str, Any]:

@@ -156,6 +156,7 @@ class ActionLookahead:
         self.open = list(open)
         self.cont_trie = TokenTrie(cont)
         self.stop_trie = TokenTrie([list(sequence) + list(close) for sequence in stop])  # the action ends the plan
+        self.stop_open_trie = TokenTrie(stop)  # the action ends the plan, closing tokens not yet counted
         groups_n = max(self.group_count, 1)
         if count:
             cont_total = self.cont_trie.group_sums(operators, groups, groups_n, vector=False)
@@ -190,6 +191,7 @@ class ActionSpan:
     def __init__(self, owner: ActionLookahead, belief: torch.Tensor, state: int, count: int):
         self.owner, self.belief, self.state, self.count = owner, belief, state, int(count)
         self._arrays: tuple[numpy.ndarray, numpy.ndarray] | None = None
+        self._totals_cache: tuple[numpy.ndarray, numpy.ndarray] | None = None
 
     def _masses(self) -> tuple[numpy.ndarray, numpy.ndarray]:
         """``(continue, stop)`` masses per action."""
@@ -214,6 +216,38 @@ class ActionSpan:
                 done = ended.sum(-1) * accepts[owner.group_of]
                 self._arrays = (carry.cpu().numpy(), done.cpu().numpy())
         return self._arrays
+
+    def _totals(self) -> tuple[numpy.ndarray, numpy.ndarray]:
+        """``(continue, stop)`` HMM probability of each action's text, whatever follows (valid or not)."""
+        if self._totals_cache is None:
+            owner = self.owner
+            actions = int(owner.group_of.numel())
+            if not actions:
+                zeros = numpy.zeros(0)
+                self._totals_cache = (zeros, zeros.copy())
+            else:
+                belief = owner.operators.advance(self.belief, owner.open) if self.count == 0 else self.belief
+                carry = owner.cont_trie.leaf_beliefs(belief, owner.operators).sum(-1)
+                stop = owner.stop_open_trie.leaf_beliefs(belief, owner.operators).sum(-1)
+                self._totals_cache = (carry.cpu().numpy(), stop.cpu().numpy())
+        return self._totals_cache
+
+    def conditional(self, actions: Sequence[int], mode: str = "any") -> float:
+        """Ctrl-G's ``P(valid plan | the next action is one of actions)`` under the HMM.
+
+        Numerator: HMM mass of the valid plans that start with those actions. Denominator: HMM mass of
+        those actions followed by anything, so the HMM's own preference for the action cancels and only
+        its belief that a valid plan can still be completed remains.
+        """
+        carry, stop = self._masses()
+        total_carry, total_stop = self._totals()
+        index = list(actions)
+        if not index:
+            return 0.0
+        valid = {"any": carry[index].sum() + stop[index].sum(), "continue": carry[index].sum(), "stop": stop[index].sum()}[mode]
+        seen = {"any": total_carry[index].sum() + total_stop[index].sum(), "continue": total_carry[index].sum(),
+                "stop": total_stop[index].sum()}[mode]
+        return float(valid / seen) if seen > 0 else 0.0
 
     def action_mass(self, action: int, mode: str = "any") -> float:
         """Mass of plans starting with ``action``; ``mode`` restricts what follows it (any/continue/stop)."""
