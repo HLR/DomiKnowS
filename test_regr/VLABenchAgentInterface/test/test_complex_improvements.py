@@ -5,11 +5,11 @@ import torch
 from domiknows.generation.dfa.pattern_language import BoundedPatternLanguage
 from domiknows.generation.decision_trace import decision_record
 from domiknows.generation.grounded import PlanningFacts, Operation
-from .complex_grounding import complex_planning_facts
-from .graph import plan_to_tokens, tokens_to_plan
-from .planning_augmentation import permute_entities
-from .training import build_constraint_runtime
-from .world_graph import validate_plan, materialize_plan, verify_plan_constraints
+from ..complex_grounding import complex_planning_facts
+from ..graph import plan_to_tokens, tokens_to_plan
+from ..planning_augmentation import permute_entities
+from ..training import build_constraint_runtime
+from ..world_graph import validate_plan, materialize_plan, verify_plan_constraints
 
 
 def op(name, destination=None, subject=None):
@@ -32,7 +32,7 @@ def test_compact_language_matches_independent_enumeration():
 
 
 def test_empty_and_epsilon_declared_languages(runtime):
-    from .graph import _domain_dfa
+    from ..graph import _domain_dfa
     for sentences, accepts_empty in ((frozenset(), False), (frozenset({()}), True)):
         dfa = _domain_dfa(runtime.world_bundle, runtime.vocabulary, 12, sentences)
         state = dfa.step(dfa.start_state, runtime.vocabulary.eos_label)
@@ -129,7 +129,7 @@ def test_pointer_permutation_preserves_entity_meaning():
 
 def test_complex_grounding_ignores_references_and_hidden_conditions(tmp_path):
     import json
-    from .dataset import load_planning_examples
+    from ..dataset import load_planning_examples
     episode = tmp_path / "Complex/book_rearrange/example0"
     for name in ("input", "output", "env_config"):
         (episode / name).mkdir(parents=True)

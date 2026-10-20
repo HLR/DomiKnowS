@@ -5,10 +5,10 @@ import pytest
 import torch
 
 from domiknows.generation import MissingSemanticBinding, ProductiveDFA, find_predicate_monitor
-from .graph import bind_vlabench_contextual_dfa
-from .models import QwenVLPlanner
-from .program import PlannerReplayDecision, VLABenchHierarchicalReinforcementProgram, _task_pattern_dfa
-from .training import build_constraint_runtime
+from ..graph import bind_vlabench_contextual_dfa
+from ..models import QwenVLPlanner
+from ..program import PlannerReplayDecision, VLABenchHierarchicalReinforcementProgram, _task_pattern_dfa
+from ..training import build_constraint_runtime
 
 
 class TinyBackbone(torch.nn.Module):
@@ -127,7 +127,7 @@ def test_optional_push_goal_collection_and_replay_agree(setup):
 
 def test_rank_constrained_collection_and_replay_share_policy_and_logprob(setup):
     runtime, planner = setup
-    from .physics_grounding import physics_planning_facts
+    from ..physics_grounding import physics_planning_facts
     components = [{"name": f"button{i}", "class": "Button", "subentities": [
         {"name": f"{material}_sphere", "class": "RandomGeom", "material": material}
     ]} for i, material in enumerate(("wood", "stone", "metal"))]
@@ -177,7 +177,7 @@ def test_standalone_runtime_passes_task_metadata_to_completion_monitor(setup):
 
 
 def test_live_agent_uses_the_bound_policy_for_generation_and_validation(setup):
-    from .agent import HierarchicalVLABenchAgent
+    from ..agent import HierarchicalVLABenchAgent
 
     runtime, planner = setup
     agent = HierarchicalVLABenchAgent(planner, torch.nn.Identity(), runtime)
@@ -188,7 +188,7 @@ def test_live_agent_uses_the_bound_policy_for_generation_and_validation(setup):
 
 
 def test_standalone_evaluation_supplies_a_bound_policy(setup, monkeypatch):
-    from .training import evaluate_planner
+    from ..training import evaluate_planner
 
     runtime, planner = setup
     original = planner.generate_plan
@@ -301,7 +301,7 @@ def test_sampling_and_replay_share_eos_and_stagnation_policy(setup):
 
 
 def test_live_agent_passes_explicit_task_facts_to_generation_and_verification(setup):
-    from .agent import HierarchicalVLABenchAgent
+    from ..agent import HierarchicalVLABenchAgent
     runtime, planner = setup
     agent = HierarchicalVLABenchAgent(planner, torch.nn.Identity(), runtime)
     decision = agent.plan("Move the selected object", (), ("apple", "bowl"), task_context={
@@ -323,7 +323,7 @@ def test_high_level_continuation_preserves_explicit_facts(setup):
 
 
 def test_grounded_noop_stops_agent_without_controller_or_simulator_success(setup, monkeypatch):
-    from . import agent as agent_module
+    from .. import agent as agent_module
     runtime, planner = setup
     agent = agent_module.HierarchicalVLABenchAgent(planner, torch.nn.Identity(), runtime)
     monkeypatch.setattr(agent_module, "numbered_views_from_observation", lambda *a, **k: ((), ("apple", "bowl")))

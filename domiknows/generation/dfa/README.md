@@ -218,7 +218,7 @@ counterexamples, and compares acceptance plus next-token masks at every budget
 within the selected finite horizon. Terminal symbols stop enumeration; padding
 past termination is outside this audit.
 
-`test_regr/VLABenchAgentInterface/test_constraint_equivalence.py` applies it to
+`test_regr/VLABenchAgentInterface/test/test_constraint_equivalence.py` applies it to
 small scenes and completed-plan DataNode verification, alongside explicit
 semantic examples and rule deactivation/addition checks. These bounded tests
 establish agreement for the enumerated scenes and horizons, not an unbounded

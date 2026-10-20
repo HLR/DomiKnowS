@@ -115,7 +115,7 @@ def test_multiple_world_graph_builds_keep_relation_roles_isolated():
 def test_schema_module_is_removed_and_vocabulary_is_world_derived():
     from pathlib import Path
 
-    assert not (Path(__file__).parent / "schema.py").exists()
+    assert not (Path(__file__).parent.parent / "schema.py").exists()
     world = build_vlabench_world_graph("test_vlabench_schema_source")
     vocabulary = PlanVocabulary.from_world(world, max_entities=7)
     assert vocabulary.skill_argument_map == world.skill_arguments
@@ -265,7 +265,7 @@ def test_composite_planning_dfa_enforces_sequence_and_preconditions():
     entities = ("soda", "cooler", "table")
     context = {"task": "cool_drink", "entities": entities, "instruction": "Cool the drink in the cooler"}
     dfa = bind_vlabench_contextual_dfa(base_dfa, vocabulary, context)
-    from .constraint_compiler import WorldConstraintDFA
+    from ..constraint_compiler import WorldConstraintDFA
     assert isinstance(dfa, WorldConstraintDFA)
 
     # 1. Truncated plan without place (only pick cooler, open_door cooler, pick soda) must be rejected
@@ -391,7 +391,7 @@ def test_score_planning_metrics_grounds_entity_indices_against_names():
 
 
 def test_decoding_excludes_nonexistent_entity_pointers_and_floor():
-    from .training import build_constraint_runtime
+    from ..training import build_constraint_runtime
     runtime = build_constraint_runtime(max_entities=4, max_operations=2, name_prefix="compiled_pointer_mask")
     vocab = runtime.vocabulary
     def advance(policy, *tokens):
@@ -410,7 +410,7 @@ def test_decoding_excludes_nonexistent_entity_pointers_and_floor():
 
 
 def test_composite_completion_rejects_premature_eos_and_is_not_accepting():
-    from .training import build_constraint_runtime
+    from ..training import build_constraint_runtime
     runtime = build_constraint_runtime(max_entities=2, max_operations=2, name_prefix="compiled_completion")
     policy = runtime.dfa_for("vlabench", {"entities": ("apple", "bowl"), "task": "cook_dishes"})
     state = policy.start_state

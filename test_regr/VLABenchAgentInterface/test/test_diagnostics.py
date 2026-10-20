@@ -6,17 +6,17 @@ import pytest
 import torch
 from PIL import Image
 
-from .dataset import LeRobotWindowDataset, _video_tensor
-from .diagnostics import ControllerMetrics, RolloutDiagnostics
-from .models import MultiViewController, TinyImageEncoder
-from .observations import (
+from ..dataset import LeRobotWindowDataset, _video_tensor
+from ..diagnostics import ControllerMetrics, RolloutDiagnostics
+from ..models import MultiViewController, TinyImageEncoder
+from ..observations import (
     camera_indices,
     camera_report,
     image_tensor,
     resolve_controller_camera_names,
 )
-from .program import _controller_inputs
-from .replay import compare_cameras, paired_camera_mapping_verified, replay_heldout_demo
+from ..program import _controller_inputs
+from ..replay import compare_cameras, paired_camera_mapping_verified, replay_heldout_demo
 
 
 def test_decoded_byte_pil_and_live_images_have_identical_siglip_inputs():
@@ -299,7 +299,7 @@ def test_replay_refuses_random_reset_as_matched_demonstration(tmp_path):
 
 def test_diagnostic_command_preserves_checkpoint_and_rejects_nonheldout_episode(tmp_path, monkeypatch):
     from torch.utils.data import ConcatDataset, DataLoader, Subset
-    from . import main
+    from .. import main
 
     model = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
     checkpoint = tmp_path / "controller.pt"

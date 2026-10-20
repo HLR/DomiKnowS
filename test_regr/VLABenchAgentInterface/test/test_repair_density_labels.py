@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from .repair_density_labels import (
+from ..repair_density_labels import (
     DENSITY_ORDER, episode_repair, generator_repair, migrate, restore, scene_answer,
     updated_density_examples,
 )
@@ -156,7 +156,7 @@ def test_restore_preflights_entire_batch_without_overwriting_edits(tmp_path, cor
 
 @pytest.mark.parametrize("mode", ["visual", "metadata-assisted"])
 def test_in_memory_labels_preserve_inputs_and_leave_disk_original(tmp_path, mode):
-    from .dataset import load_planning_examples
+    from ..dataset import load_planning_examples
     episode = write_episode(tmp_path)
     before = {p: p.read_bytes() for p in episode.rglob("*") if p.is_file()}
     examples = load_planning_examples(tmp_path, observation_mode=mode)

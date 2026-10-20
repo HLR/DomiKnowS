@@ -5,9 +5,9 @@ from itertools import product
 import pytest
 
 from domiknows.graph.logicalConstrain import andL, atMostAL, existsL, ifL, notL, orL, sumL
-from .constraint_compiler import WorldConstraintCompilationError, WorldConstraintDFA
-from .graph import PlanVocabulary, bind_vlabench_contextual_dfa, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
-from .world_graph import build_vlabench_world_graph, materialize_plan, verify_plan_constraints
+from ..constraint_compiler import WorldConstraintCompilationError, WorldConstraintDFA
+from ..graph import PlanVocabulary, bind_vlabench_contextual_dfa, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
+from ..world_graph import build_vlabench_world_graph, materialize_plan, verify_plan_constraints
 
 
 def runtime(*, builders=(), defaults=True, entities=("apple", "bowl"), task=None, operations=4, planning_facts=None):

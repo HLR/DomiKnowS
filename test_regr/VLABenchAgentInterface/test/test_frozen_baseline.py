@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from . import dataset, main, native_planning, training
-from .dataset import PlanningExample
+from .. import dataset, main, native_planning, training
+from ..dataset import PlanningExample
 
 
 REFERENCE = [
@@ -114,7 +114,7 @@ def test_cli_rejects_misleading_baselines(flags, message):
 
 def test_native_loader_freezes_base_model_without_adapter(monkeypatch):
     import sys
-    from . import models
+    from .. import models
     model = torch.nn.Linear(1, 1)
     calls = []
     class Loader:

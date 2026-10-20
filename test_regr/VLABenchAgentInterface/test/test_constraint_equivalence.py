@@ -3,12 +3,12 @@ import pytest
 
 from domiknows.graph.logicalConstrain import andL, ifL, notL, orL
 from test_regr.generation.constraint_equivalence import assert_bounded_equivalence
-from .constraint_compiler import compile_world_constraints
-from .graph import (
+from ..constraint_compiler import compile_world_constraints
+from ..graph import (
     PlanVocabulary, bind_vlabench_contextual_dfa, compile_planner_dfa,
     create_planner_generation_graph, plan_to_tokens, tokens_to_plan,
 )
-from .world_graph import build_vlabench_world_graph, materialize_plan, verify_plan_constraints
+from ..world_graph import build_vlabench_world_graph, materialize_plan, verify_plan_constraints
 
 
 def compile_policy(world, entities, *, operations=2, task=None):

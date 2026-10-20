@@ -8,7 +8,7 @@ import pytest
 from test_regr.VLABenchAgentInterface import official_protocol as op
 from test_regr.VLABenchAgentInterface.planning_metrics import BENCHMARK_PATTERNS, PlanningMetrics
 
-UPSTREAM_SCORER = Path(__file__).parent / "outputs/native_refined_20261014/results_full/official_scoring_source.py"
+UPSTREAM_SCORER = Path(__file__).parent.parent / "outputs/native_refined_20261014/results_full/official_scoring_source.py"
 
 
 def make_episode(root, task, number, instruction, plan, dimension="M&T"):

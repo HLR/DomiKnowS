@@ -4,8 +4,8 @@ import json
 import pytest
 import torch
 
-from .native_planning import NativePlanDFA, NativeConstraintProcessor, byte_token_map, save_lookahead_table, restore_lookahead_table
-from .planning_experiment import sequence_nll, read_records, append_record, load_graph_planner, scene_only_examples
+from ..native_planning import NativePlanDFA, NativeConstraintProcessor, byte_token_map, save_lookahead_table, restore_lookahead_table
+from ..planning_experiment import sequence_nll, read_records, append_record, load_graph_planner, scene_only_examples
 
 
 def character_dfa(**kwargs):
@@ -198,7 +198,7 @@ def test_whitespace_and_escape_tokens_cross_json_boundaries():
 
 
 def test_grounding_is_skill_role_specific_and_independent_of_goals():
-    from .object_grounding import scene_objects, instruction_object_constraints
+    from ..object_grounding import scene_objects, instruction_object_constraints
     entities=('table','apple','pear','plate_seen','apple_tag')
     config={'task':{'components':[
         {'name':'table','class':'Table'}, {'name':'apple','class':'Fruit'},
@@ -224,13 +224,13 @@ def test_grounding_is_skill_role_specific_and_independent_of_goals():
     'Please add something besides an apple', 'Pick a fruit other than the apple',
 ])
 def test_grounding_abstains_on_unsupported_interpretations(instruction):
-    from .object_grounding import SceneObject,instruction_object_constraints
+    from ..object_grounding import SceneObject,instruction_object_constraints
     constraints=instruction_object_constraints(instruction,(SceneObject(0,'apple','Fruit'),SceneObject(1,'pear','Fruit')))
     assert constraints.restrictions==()
 
 
 def test_type_grounding_retains_candidates_instead_of_guessing_the_answer():
-    from .object_grounding import SceneObject,instruction_object_constraints
+    from ..object_grounding import SceneObject,instruction_object_constraints
     objects=(SceneObject(0,'table','Table'),SceneObject(1,'CuSO4','ChemistryTube'),
              SceneObject(2,'I2','ChemistryTube'),SceneObject(3,'CuSO4_tag','NameTag'))
     constraints=instruction_object_constraints('Take out the blue solution',objects)
@@ -252,8 +252,8 @@ def test_frozen_generation_preserves_raw_logits_and_accepts_spaced_json(tmp_path
     import sys
     from types import SimpleNamespace
     from PIL import Image
-    from .native_planning import FrozenNativePlanner
-    from .dataset import PlanningExample
+    from ..native_planning import FrozenNativePlanner
+    from ..dataset import PlanningExample
     monkeypatch.setitem(sys.modules,'transformers',SimpleNamespace(LogitsProcessorList=list))
     class Tokenizer:
         eos_token_id=133
@@ -296,7 +296,7 @@ def test_frozen_generation_preserves_raw_logits_and_accepts_spaced_json(tmp_path
 
 def test_evaluator_persists_native_and_graph_validity_separately_and_resumes(tmp_path,monkeypatch):
     from argparse import Namespace
-    from . import planning_experiment as module
+    from .. import planning_experiment as module
     episode=tmp_path/'data/select_fruit/example0'
     (episode/'output').mkdir(parents=True);(episode/'env_config').mkdir();(episode/'input').mkdir()
     reference=[{'name':'pick','params':{'target_entity_name':1}},
@@ -357,7 +357,7 @@ def test_hmm_acceptance_with_whitespace_cycles_against_exhaustive_enumeration():
     '[{"name":"press","params":{"target_entity_name":true}}]',
 ])
 def test_native_diagnostic_rejects_malformed_raw_json_without_affecting_metrics(raw):
-    from .native_planning import validate_native_plan
+    from ..native_planning import validate_native_plan
     valid,errors=validate_native_plan(raw,('apple','plate'))
     assert not valid and errors
 

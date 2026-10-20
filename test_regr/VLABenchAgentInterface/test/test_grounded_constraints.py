@@ -1,9 +1,9 @@
 """Request facts affect both compiled decoding and completed-plan verification."""
 from itertools import product
 import pytest
-from .training import build_constraint_runtime
-from .graph import plan_to_tokens
-from .world_graph import materialize_plan, verify_plan_constraints, validate_plan
+from ..training import build_constraint_runtime
+from ..graph import plan_to_tokens
+from ..world_graph import materialize_plan, verify_plan_constraints, validate_plan
 
 ENTITIES = ("apple", "cup", "bowl", "cooler")
 
@@ -101,7 +101,7 @@ def test_bounded_completed_verification_and_token_masks(runtime):
     ("preservation", {"protected_entities": ["apple"]}, [operation("pick", 0), operation("lift")]),
 ])
 def test_each_lc_changes_enforcement_without_decoder_edits(family, facts, plan):
-    from .world_graph import build_vlabench_world_graph
+    from ..world_graph import build_vlabench_world_graph
     from domiknows.graph.logicalConstrain import andL, ifL
     world = build_vlabench_world_graph("editable_grounded_"+family)
     for rule in world.graph.logicalConstrains.values():

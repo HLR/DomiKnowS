@@ -1,8 +1,8 @@
 """Independent semantic examples for completed plans and decoding prefixes."""
 
 import pytest
-from .semantics import PlanSemantics, PlanSemanticState
-from .world_graph import SKILL_ARGUMENTS, build_vlabench_world_graph, materialize_plan, verify_plan_constraints
+from ..semantics import PlanSemantics, PlanSemanticState
+from ..world_graph import SKILL_ARGUMENTS, build_vlabench_world_graph, materialize_plan, verify_plan_constraints
 
 
 @pytest.mark.parametrize("skill,params", [

@@ -5,8 +5,8 @@ import json
 import pytest
 
 from domiknows.generation.grounded import PlanningFacts, Operation
-from .dataset import load_planning_examples, load_scene_planning_examples
-from .physics_grounding import PHYSICS_PROFILE, physics_planning_facts
+from ..dataset import load_planning_examples, load_scene_planning_examples
+from ..physics_grounding import PHYSICS_PROFILE, physics_planning_facts
 from .test_qa_and_pick_history import accepted, encode, runtime
 
 
@@ -117,7 +117,7 @@ def test_grounded_rank_changes_compiled_token_masks_and_independent_plan_verific
     other = runtime.dfa_for("vlabench", {**context, "planning_facts": raw})
     assert other.accepts(encode(runtime, [{"name": "press", "params": {"target_entity_name": 2}}], entities))
     assert not policy.accepts(encode(runtime, [{"name": "press", "params": {"target_entity_name": 2}}], entities))
-    from .constraint_compiler import WorldConstraintDFA, compile_world_constraints
+    from ..constraint_compiler import WorldConstraintDFA, compile_world_constraints
     rule = next(c for c in runtime.world_bundle.graph.logicalConstrains.values() if c.name == "grounded__affordance")
     rule.active = False
     try:

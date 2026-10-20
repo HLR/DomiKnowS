@@ -184,7 +184,7 @@ Eligibility is an action-target precondition enforced by the existing `grounded_
 
 The first chosen receptacle is not restored as a universal destination requirement. The accepted design permits task/object-specific destinations; use `task_target_container` or `planning_facts.destinations` when the task declares them. Changing this globally would incorrectly reject legitimate plans with different destinations. Distinct-object diversity alone also does not identify the correct ingredients: those targets require exposed task facts or the planner's grounded prediction.
 
-Validation: 196 focused generic/standalone/EAI/joint checks passed; an additional 44-test QA, semantic, decoding/replay, and reachability run passed. The broader generation suite passed 634 tests with the existing trace-log-path failure described in section 4.4. Reproduce the new requirements with `.venv/Scripts/python.exe -m pytest test_regr/generation/test_selection_requirements.py test_regr/VLABenchAgentInterface/test_qa_and_pick_history.py test_regr/EmbodiedAgentInterface/test_grounded_constraints.py -q`. A fresh 450-episode checkpoint run is required to measure benchmark changes; neither restoring 75.13 macro nor 100% PhysLaw is implied by these local tests.
+Validation: 196 focused generic/standalone/EAI/joint checks passed; an additional 44-test QA, semantic, decoding/replay, and reachability run passed. The broader generation suite passed 634 tests with the existing trace-log-path failure described in section 4.4. Reproduce the new requirements with `.venv/Scripts/python.exe -m pytest test_regr/generation/test_selection_requirements.py test_regr/VLABenchAgentInterface/test/test_qa_and_pick_history.py test_regr/EmbodiedAgentInterface/test_grounded_constraints.py -q`. A fresh 450-episode checkpoint run is required to measure benchmark changes; neither restoring 75.13 macro nor 100% PhysLaw is implied by these local tests.
 
 ### 3.1 Optional `planning_facts` input
 
@@ -313,7 +313,7 @@ The structural bound cache is scoped to the compiled grammar and keyed by the pr
 
 `test_planning_search_failures.py` includes 64-entity chemistry and hammer/picture counterexamples: without the bound, both exhaust the unchanged 10,000-expansion limit; with the bound, the same prefixes are proved infeasible without enumerating their entity combinations. Separate positive cases check valid completions and identical sampling/replay masks. These checks complement the bounded-language audits against completed-plan verification; they do not constitute a rerun of the 450-episode checkpoint benchmark.
 
-Validation of this change: 207 focused compiler/planning/EAI/joint tests passed; the updated search-failure suite passed all 8 cases. The broader generation suite passed 618 tests with one existing failure in `test_decode_hmm_dfa_trace_logger_writes_step_stats` (expected log path versus repository-namespaced log path). Reproduce the wide-scene checks with `.venv/Scripts/python.exe -m pytest test_regr/VLABenchAgentInterface/test_planning_search_failures.py -q` and the generic search checks with `.venv/Scripts/python.exe -m pytest test_regr/generation/test_productive_reachability.py test_regr/generation/test_predicate_monitor.py -q`.
+Validation of this change: 207 focused compiler/planning/EAI/joint tests passed; the updated search-failure suite passed all 8 cases. The broader generation suite passed 618 tests with one existing failure in `test_decode_hmm_dfa_trace_logger_writes_step_stats` (expected log path versus repository-namespaced log path). Reproduce the wide-scene checks with `.venv/Scripts/python.exe -m pytest test_regr/VLABenchAgentInterface/test/test_planning_search_failures.py -q` and the generic search checks with `.venv/Scripts/python.exe -m pytest test_regr/generation/test_productive_reachability.py test_regr/generation/test_predicate_monitor.py -q`.
 
 Planner evaluation retains failed generations in the score denominator and reports `generation_failures`, `semantic_search_limit_failures`, and `generation_errors` with episode identifiers and error messages. The joint evaluation JSON exposes both counts at the top level and prints them in the scorecard. An empty output caused by unknown reachability must therefore be distinguished from a successfully decoded plan. Search regression tests do not establish a replacement 450-episode checkpoint score; that requires rerunning the checkpoint evaluation.
 
@@ -387,17 +387,17 @@ From the repository root on Windows, the focused checks can be reproduced with:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest `
   test_regr/generation/test_grounded_planning.py `
-  test_regr/VLABenchAgentInterface/test_grounded_constraints.py `
+  test_regr/VLABenchAgentInterface/test/test_grounded_constraints.py `
   test_regr/EmbodiedAgentInterface/test_grounded_constraints.py `
   test_regr/EmbodiedAgentInterface/test_world_graph.py `
   test_regr/EmbodiedAgentInterface/test_reward.py `
-  test_regr/VLABenchAgentInterface/test_task_policy.py `
-  test_regr/VLABenchAgentInterface/test_constraint_equivalence.py `
-  test_regr/VLABenchAgentInterface/test_constraint_compiler.py `
-  test_regr/VLABenchAgentInterface/test_semantics.py `
-  test_regr/VLABenchAgentInterface/test_graph.py `
-  test_regr/VLABenchAgentInterface/test_reward.py `
-  test_regr/VLABenchAgentInterface/test_decoding_integration.py `
+  test_regr/VLABenchAgentInterface/test/test_task_policy.py `
+  test_regr/VLABenchAgentInterface/test/test_constraint_equivalence.py `
+  test_regr/VLABenchAgentInterface/test/test_constraint_compiler.py `
+  test_regr/VLABenchAgentInterface/test/test_semantics.py `
+  test_regr/VLABenchAgentInterface/test/test_graph.py `
+  test_regr/VLABenchAgentInterface/test/test_reward.py `
+  test_regr/VLABenchAgentInterface/test/test_decoding_integration.py `
   test_regr/generation/test_predicate_monitor.py `
   test_regr/generation/test_stop_policy.py `
   test_regr/JointEmbodiedAgentInterface/test_joint_pipeline.py -q --tb=short
@@ -494,9 +494,9 @@ Reproduce the key new checks with:
 
 ```bash
 python -m pytest test_regr/generation/test_selection_requirements.py \
-  test_regr/VLABenchAgentInterface/test_physics_grounding.py \
-  test_regr/VLABenchAgentInterface/test_qa_and_pick_history.py \
-  test_regr/VLABenchAgentInterface/test_decoding_integration.py \
+  test_regr/VLABenchAgentInterface/test/test_physics_grounding.py \
+  test_regr/VLABenchAgentInterface/test/test_qa_and_pick_history.py \
+  test_regr/VLABenchAgentInterface/test/test_decoding_integration.py \
   test_regr/EmbodiedAgentInterface/test_grounded_constraints.py -q
 ```
 
@@ -578,8 +578,8 @@ baseline-reproduced failures remain separate evidence for steps 1-3.
 
 ```bash
 python -m pytest test_regr/generation/test_property_observations.py \
-  test_regr/VLABenchAgentInterface/test_reflection_observations.py \
-  test_regr/VLABenchAgentInterface/test_physics_grounding.py -q
+  test_regr/VLABenchAgentInterface/test/test_reflection_observations.py \
+  test_regr/VLABenchAgentInterface/test/test_physics_grounding.py -q
 ```
 
 
@@ -713,7 +713,7 @@ remain separate input contracts.
 Reproducible checks:
 
 ```bash
-python -m pytest -q test_regr/VLABenchAgentInterface/test_complex_improvements.py \
+python -m pytest -q test_regr/VLABenchAgentInterface/test/test_complex_improvements.py \
   test_regr/JointEmbodiedAgentInterface/test_planning_adaptation.py
 python -m test_regr.VLABenchAgentInterface.audit_planning \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning --output audit.json

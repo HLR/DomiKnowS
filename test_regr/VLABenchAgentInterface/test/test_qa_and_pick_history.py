@@ -2,10 +2,10 @@
 import pytest
 import torch
 
-from .constraint_compiler import WorldConstraintDFA, compile_world_constraints
-from .graph import plan_to_tokens
-from .training import build_constraint_runtime, evaluate_planner
-from .world_graph import materialize_plan, verify_plan_constraints
+from ..constraint_compiler import WorldConstraintDFA, compile_world_constraints
+from ..graph import plan_to_tokens
+from ..training import build_constraint_runtime, evaluate_planner
+from ..world_graph import materialize_plan, verify_plan_constraints
 
 
 @pytest.fixture(scope="module")

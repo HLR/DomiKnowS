@@ -3,7 +3,7 @@ import itertools
 import pytest
 import torch
 
-from .official_adapt import adapt_emission, episode_seed, expected_counts
+from ..official_adapt import adapt_emission, episode_seed, expected_counts
 
 
 def tiny_hmm(states=3, vocabulary=6, seed=0):

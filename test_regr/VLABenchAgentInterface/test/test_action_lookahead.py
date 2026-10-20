@@ -6,9 +6,9 @@ import torch
 
 from domiknows.generation.applications.action_lookahead import ActionAutomaton, ActionLookahead, TokenOperators
 
-from .native_lookahead import DFAActionLookahead, PLAN_CLOSE, PLAN_OPEN, canonical_body, operation_texts, plan_tokens, tokenization_gaps
-from .native_planning import NativeConstraintProcessor, NativePlanDFA, validate_native_plan
-from .object_grounding import ObjectConstraints
+from ..native_lookahead import DFAActionLookahead, PLAN_CLOSE, PLAN_OPEN, canonical_body, operation_texts, plan_tokens, tokenization_gaps
+from ..native_planning import NativeConstraintProcessor, NativePlanDFA, validate_native_plan
+from ..object_grounding import ObjectConstraints
 
 VOCABULARY = 134
 EOS = 133
@@ -167,8 +167,8 @@ def test_segment_tokens_equal_the_whole_plan_tokens_for_the_real_tokenizer():
     if not path:
         pytest.skip("set VLABENCH_TOKENIZER to a Qwen3-VL tokenizer folder")
     from transformers import AutoTokenizer
-    from .native_planning import BENCHMARK_ARGUMENTS
-    from .planning_metrics import BENCHMARK_PATTERNS
+    from ..native_planning import BENCHMARK_ARGUMENTS
+    from ..planning_metrics import BENCHMARK_PATTERNS
     import random
     tokenizer = AutoTokenizer.from_pretrained(path)
     rng = random.Random(0)

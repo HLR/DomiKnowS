@@ -5,10 +5,10 @@ import json
 import pytest
 import torch
 
-from .dataset import load_planning_examples, load_scene_planning_examples
+from ..dataset import load_planning_examples, load_scene_planning_examples
 from .test_reflection_observations import components, supplied, write_episode
 from .test_qa_and_pick_history import accepted, runtime
-from .training import evaluate_planner
+from ..training import evaluate_planner
 
 
 def test_visual_default_ignores_answer_metadata_and_sidecars_but_keeps_all_buttons(tmp_path, runtime):

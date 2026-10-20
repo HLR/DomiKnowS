@@ -2,10 +2,10 @@
 import pytest
 
 from domiknows.generation import find_predicate_monitor
-from .constraint_compiler import WorldConstraintDFA
-from .graph import plan_to_tokens
-from .training import build_constraint_runtime
-from .world_graph import build_vlabench_world_graph, materialize_plan, verify_plan_constraints
+from ..constraint_compiler import WorldConstraintDFA
+from ..graph import plan_to_tokens
+from ..training import build_constraint_runtime
+from ..world_graph import build_vlabench_world_graph, materialize_plan, verify_plan_constraints
 
 
 def encode(runtime, plan, entities):
@@ -126,7 +126,7 @@ def test_no_default_constraints_has_no_hidden_button_or_pointer_filter():
 
 def test_bounded_task_language_and_masks_match_completed_world_verification():
     from test_regr.generation.constraint_equivalence import assert_bounded_equivalence
-    from .graph import tokens_to_plan
+    from ..graph import tokens_to_plan
     runtime = build_constraint_runtime(max_entities=3, max_operations=2, name_prefix="task_language_audit")
     entities = ("apple", "bowl", "button0")
     context = {"entities": entities, "task_skill_sequence": ("pick", "place"), "task_target_entity": "apple"}

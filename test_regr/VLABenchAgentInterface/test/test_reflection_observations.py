@@ -6,13 +6,13 @@ from types import SimpleNamespace
 import pytest
 
 from domiknows.generation.grounded import Operation, PlanningFacts
-from .dataset import load_planning_examples, load_scene_planning_examples
-from .physics_grounding import physics_planning_facts
-from .preserve_reflection_observations import (
+from ..dataset import load_planning_examples, load_scene_planning_examples
+from ..physics_grounding import physics_planning_facts
+from ..preserve_reflection_observations import (
     ENTITY, GENERATOR, patch_entity, patch_generator, preserve,
 )
 from .test_qa_and_pick_history import accepted, runtime
-from .training import evaluate_planner
+from ..training import evaluate_planner
 
 
 def components(values=None, buttons=None):

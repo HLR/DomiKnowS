@@ -3,8 +3,8 @@ import pytest
 import torch
 
 from domiknows.generation import SemanticSearchLimitExceeded
-from .graph import plan_to_tokens
-from .training import build_constraint_runtime, evaluate_planner
+from ..graph import plan_to_tokens
+from ..training import build_constraint_runtime, evaluate_planner
 
 
 @pytest.fixture(scope="module")
@@ -35,7 +35,7 @@ def test_wide_complex_dead_ends_are_proved_without_enumerating_entity_combinatio
     policy, state, labels, context = complex_prefix(wide_complex_runtime, task)
     # Four operations have used neither place nor pour/push. No declared suffix
     # of at most two operations can supply both missing requirements.
-    from .graph import _legal_skill_sequences
+    from ..graph import _legal_skill_sequences
     schema = policy.adapter.schema
     complete, _ = _legal_skill_sequences(wide_complex_runtime.world_bundle, 6)
     prefix = ("pick", "lift", "pull", "press")
@@ -54,7 +54,7 @@ def test_wide_complex_dead_ends_are_proved_without_enumerating_entity_combinatio
 
 def test_task_completion_bound_follows_lc_deactivation_addition_and_frozen_programs(wide_complex_runtime):
     from domiknows.graph.logicalConstrain import ifL, notL
-    from .constraint_compiler import WorldConstraintDFA, compile_world_constraints
+    from ..constraint_compiler import WorldConstraintDFA, compile_world_constraints
     world = wide_complex_runtime.world_bundle
     original, state, labels, context = complex_prefix(wide_complex_runtime, "take_chemistry_experiment")
     rule = next(rule for rule in world.graph.logicalConstrains.values() if rule.name == "composite_subgoal_completion")
