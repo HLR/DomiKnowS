@@ -1182,7 +1182,7 @@ def test_standalone_agent_uses_bounded_report_defaults():
     assert args.rl_preflight_min_successful_tasks == 10
     assert args.rl_preflight_min_positive_return_rate == pytest.approx(0.01)
     assert args.rl_preflight_max_ik_truncation_rate == pytest.approx(0.50)
-    assert args.eval_rollouts_per_task == 3
+    assert args.eval_rollouts_per_task == 10
     assert args.ik_tolerance == pytest.approx(5e-3)
     assert args.max_consecutive_ik_rejections == 3
 
@@ -1499,7 +1499,7 @@ def test_controller_actor_critic_gae_and_ppo_contracts():
     assert actions.shape == (1, 2, 7)
     assert logprob.shape == entropy.shape == (1, 2)
     assert value.shape == (1,)
-    evaluated, _, evaluated_value = controller.evaluate_action_chunk(*inputs, actions.detach())
+    evaluated, _, evaluated_value, _ = controller.evaluate_action_chunk(*inputs, actions.detach())
     torch.testing.assert_close(evaluated, logprob, rtol=1e-4, atol=1e-4)
     previous = torch.cat((inputs[1][:, -1:, :6], actions[:, :-1, :6]), dim=1)
     delta = actions[..., :6] - previous
@@ -1509,7 +1509,7 @@ def test_controller_actor_critic_gae_and_ppo_contracts():
     assert bool((bounded_delta.abs() <= scales + 1e-6).all())
     loss = ppo_clipped_loss(evaluated.sum(1), logprob.detach().sum(1), torch.ones(1)) + evaluated_value.mean()
     loss.backward()
-    assert controller.value_head.weight.grad is not None
+    assert controller.value_head[-1].weight.grad is not None
     advantages, returns = generalized_advantage_estimate([0.1, 1.0], [0.2, 0.3], [False, True])
     assert len(advantages) == len(returns) == 2
     assert returns[-1] == pytest.approx(1.0)
@@ -1519,8 +1519,8 @@ def test_controller_critic_is_bounded():
     controller = MultiViewController(
         TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
     )
-    controller.value_head.weight.data.fill_(1.0e6)
-    controller.value_head.bias.data.fill_(1.0e6)
+    controller.value_head[-1].weight.data.fill_(1.0e6)
+    controller.value_head[-1].bias.data.fill_(1.0e6)
     output = controller.policy(
         torch.rand(1, 2, 1, 3, 16, 16),
         torch.rand(1, 2, 7),
@@ -1537,8 +1537,8 @@ def test_controller_features_are_conditioned_on_active_graph_operation():
     images = torch.rand(1, 2, 1, 3, 16, 16)
     state = torch.rand(1, 2, 7)
     task = torch.zeros(1, dtype=torch.long)
-    pick = controller._features(images, state, task, torch.tensor([[1, 1, 1]]))
-    place = controller._features(images, state, task, torch.tensor([[2, 2, 2]]))
+    pick, _ = controller._features(images, state, task, torch.tensor([[1, 1, 1]]))
+    place, _ = controller._features(images, state, task, torch.tensor([[2, 2, 2]]))
     assert not torch.allclose(pick, place)
 
 
@@ -1546,6 +1546,10 @@ def test_controller_pose_chunk_is_local_cumulative_and_uses_physical_noise_scale
     controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=3, max_views=1)
     controller.policy_head.weight.data.zero_()
     controller.policy_head.bias.data.zero_()
+    # The state-conditioned std head replaces the fixed log-std parameter; pin it to the exploration std.
+    for parameter in controller.std_head.parameters():
+        parameter.data.zero_()
+    controller.std_head[-1].bias.data.fill_(float(torch.tensor(controller.exploration_std[0]).log()))
     state = torch.zeros(1, 2, 7)
     state[0, -1, :6] = torch.tensor([0.2, -0.1, 0.4, 3.13, 0.2, -0.3])
     inputs = (torch.rand(1, 2, 1, 3, 16, 16), state, torch.zeros(1, dtype=torch.long))
@@ -1888,6 +1892,7 @@ def test_feasibility_gradient_changes_only_rejected_action_likelihood():
                 self.logprobs.unsqueeze(0),
                 torch.zeros(1, 4),
                 self.value.unsqueeze(0),
+                torch.zeros(()),
             )
 
     controller = IndexedLogprobController()
@@ -1949,6 +1954,7 @@ def test_single_positive_transition_preserves_ppo_policy_signal():
                 self.logprob.reshape(1, 1),
                 torch.zeros(1, 1),
                 self.value.reshape(1),
+                torch.zeros(()),
             )
 
     controller = SingleLogprobController()
@@ -2007,6 +2013,7 @@ def test_mixed_return_batch_uses_zero_return_rollout_as_negative_evidence():
                 self.logprobs[index].reshape(1, 1),
                 torch.zeros(1, 1),
                 self.value.reshape(1),
+                torch.zeros(()),
             )
 
     controller = IndexedEpisodeController()
@@ -2958,12 +2965,12 @@ def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
     program.controller_bc_weight = 1.0
     actor_before = controller.policy_head.weight.detach().clone()
     task_before = controller.task_embedding.weight.detach().clone()
-    value_before = controller.value_head.weight.detach().clone()
+    value_before = controller.value_head[-1].weight.detach().clone()
     loss = program._update_controller([episode])
     assert torch.isfinite(torch.tensor(loss))
     assert torch.equal(actor_before, controller.policy_head.weight)
     assert torch.equal(task_before, controller.task_embedding.weight)
-    assert not torch.equal(value_before, controller.value_head.weight)
+    assert not torch.equal(value_before, controller.value_head[-1].weight)
     assert program.last_controller_update["actor_update_attempted"] is False
     assert program.last_controller_update["rolled_back"] is False
     assert program.last_controller_update["parameters_changed"] is False
@@ -3041,7 +3048,7 @@ def test_joint_simulator_training_updates_planner_and_controller():
         controller_bc_weight=0.0,
     )
     planner_before = planner.preference.detach().clone()
-    controller_before = controller.value_head.weight.detach().clone()
+    controller_before = controller.value_head[-1].weight.detach().clone()
     metrics = program.train_joint_epoch([{"task": "select_book", "task_skill_sequence": ("pick", "place")}], rollouts_per_update=2)
     assert metrics["success_rate"] == 0.5
     task_metrics = metrics["per_task"]["select_book"]
@@ -3057,7 +3064,7 @@ def test_joint_simulator_training_updates_planner_and_controller():
     assert task_metrics["assisted_episode_rate"] == 0.0
     assert task_metrics["unassisted_success_rate"] == 0.5
     assert planner.preference.item() != planner_before.item()
-    assert not torch.equal(controller.value_head.weight, controller_before)
+    assert not torch.equal(controller.value_head[-1].weight, controller_before)
     assert metrics["controller_update"]["parameters_changed"] is True
     assert metrics["controller_update"]["parameter_delta_l2"] > 0.0
     assert metrics["controller_update"]["approximate_kl"] >= 0.0

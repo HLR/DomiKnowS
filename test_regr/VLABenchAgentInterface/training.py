@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import json
+import sys
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -564,7 +565,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 complex_grounding_reports.append({"episode_id": _example_value(example, "episode_id", None),
                                                   **facts["complex_grounding_report"]})
             if total_examples and (count == 1 or count % 25 == 0 or count == total_examples):
-                print(f"[eval-planner] Evaluating example {count}/{total_examples}...", flush=True)
+                print(f"[eval-planner] Evaluating example {count}/{total_examples}...", file=sys.stderr, flush=True)
             if native:
                 # No graph decoder, DFA, HMM, or instruction mask participates.
                 output, _tokens = planner.generate(example, mode="raw", sample=False,
@@ -595,7 +596,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                             "error_type": type(err).__name__,
                             "message": str(err),
                         })
-                        print(f"[eval-planner] Warning: plan generation failed for example {count}: {err}", flush=True)
+                        print(f"[eval-planner] Warning: plan generation failed for example {count}: {err}", file=sys.stderr, flush=True)
                         output = []
                 finally:
                     for image in images:

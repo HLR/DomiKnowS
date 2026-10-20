@@ -1448,6 +1448,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             )
             
         alpha, assist_orientation, assist_approach, assist_skills, latch_assistance_enabled = _get_active_assistance()
+        assistance_enabled = True if handover_active else base_assistance_enabled
         kwargs = dict(descriptor.get("env_kwargs", {}))
         if descriptor.get("task") is not None:
             kwargs.setdefault("task", descriptor["task"])
@@ -1811,6 +1812,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if handover_active and current_target_distance is not None and current_target_distance <= self.handover_distance:
                         handover_active = False
                         alpha, assist_orientation, assist_approach, assist_skills, latch_assistance_enabled = _get_active_assistance()
+                        assistance_enabled = True if handover_active else base_assistance_enabled
                         self._report_progress(f"VLABench handover triggered at distance {current_target_distance:.3f}")
                     try:
                         current = world_to_robot_ee_state(
@@ -1980,7 +1982,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             pour_assist_steps += 1
                             any_action_assisted = True
                         if (
-                            assist_approach
+                            assistance_enabled
                             and
                             operation_cursor == 0
                             and active_skill == "pick"
@@ -3839,7 +3841,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     - entropy_bonus
                     + feasibility_loss
                     + dagger_loss
-                    + std_penalty
+                    # The std regulariser reaches the shared trunk, so it follows the actor gate: an update with no
+                    # task-signal episode must not move the actor's features.
+                    + (std_penalty if actor_update_enabled else torch.zeros_like(std_penalty))
                 )
             mean_action_log_ratio, max_action_log_ratio, approximate_kl = (
                 action_ratio_statistics(action_log_ratios)

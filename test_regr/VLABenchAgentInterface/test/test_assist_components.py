@@ -201,12 +201,12 @@ def test_evaluate_rollouts_assistance_and_component_overrides_are_scoped():
     program = _joint_program(
         runtime, planner, controller, lambda **_: FakeSimulator(success=True), num_samples=1
     )
-    default = program.evaluate_rollouts([{"task": "select_book"}], rollouts_per_task=1, seed=3)
+    default = program.evaluate_rollouts([{"task": "select_book", "task_skill_sequence": ("pick", "place")}], rollouts_per_task=1, seed=3)
     assert default["episode_diagnostics"][0]["diagnostics"]["assist_components"] == []
     assert default["episode_diagnostics"][0]["success"] is True
     assert default["episode_diagnostics"][0]["return"] > 0.0
     assisted = program.evaluate_rollouts(
-        [{"task": "select_book"}],
+        [{"task": "select_book", "task_skill_sequence": ("pick", "place")}],
         rollouts_per_task=1,
         seed=3,
         assistance=True,
