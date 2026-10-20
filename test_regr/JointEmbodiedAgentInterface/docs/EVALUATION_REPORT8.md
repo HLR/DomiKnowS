@@ -132,7 +132,7 @@ Following an exhaustive audit of the planning evaluation pipeline, seven concret
 
 ### Full 450-Episode Reproduction Scorecard (Test Split, `cuda:2`):
 
-The full non-interactive VLABench Table 1 benchmark reproduction was executed on GPU 2 (`vigorous_easley`) across all **450 test episodes** using champion checkpoint [`joint_stage2_best.pt`](file:///workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt), saving results to [`planning_progress_score_best_test450_reproduced.json`](results/planning_progress_score_best_test450_reproduced.json):
+The full non-interactive VLABench Table 1 benchmark reproduction was executed on GPU 2 (`vigorous_easley`) across all **450 test episodes** using champion checkpoint [`joint_stage2_best.pt`](file:///workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt), saving results to [`planning_progress_score_best_test450_reproduced.json`](../results/planning_progress_score_best_test450_reproduced.json):
 
 ```
 ======================================================================
