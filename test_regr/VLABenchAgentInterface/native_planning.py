@@ -105,16 +105,26 @@ class NativePlanDFA:
         self.object_constraints = object_constraints or ObjectConstraints()
         self.states = frozenset()  # lazily projected states
         self.start_state = (0, ((),), "start", 0, "")
+        self.token_bytes = token_bytes
         self.operations = [{}]
         self.ends = {}
         self.possible = [set()]
         self.in_string = [False]
         self.whitespace_boundary = [False]
+        # Action inventory (skill, pointer) shared with the action-level HMM lookahead: the lookahead
+        # is built from these tables, so it can never rank a plan the language does not contain.
+        self.actions = []
+        self.action_index = {}
+        self.end_action = {}
+        node_actions = [set()]
         for skill, roles in self.skill_arguments.items():
             values = self.object_constraints.ids(skill, roles[0], self.entity_count) if roles else [None]
             for pointer in values:
                 if pointer is not None and (isinstance(pointer, bool) or not 0 <= pointer < self.entity_count):
                     raise ValueError("object constraint ID is outside the scene table")
+                action = len(self.actions)
+                self.actions.append((skill, pointer))
+                self.action_index[(skill, pointer)] = action
                 params = {role: pointer for role in roles}
                 variants = [{"name": skill, "params": params}]
                 if grammar_profile == "benchmark":
@@ -123,6 +133,7 @@ class NativePlanDFA:
                     text = json.dumps(value, separators=(",", ":"))
                     node, quoted = 0, False
                     self.possible[node].add(skill)
+                    node_actions[node].add(action)
                     for byte in text.encode():
                         if byte == ord('"'):
                             quoted = not quoted
@@ -132,9 +143,13 @@ class NativePlanDFA:
                             self.possible.append(set())
                             self.in_string.append(quoted)
                             self.whitespace_boundary.append(not quoted and (byte in b'{}:,"' or byte in b'0123456789'))
+                            node_actions.append(set())
                         node = self.operations[node][byte]
                         self.possible[node].add(skill)
+                        node_actions[node].add(action)
                     self.ends[node] = skill
+                    self.end_action[node] = action
+        self.node_actions = [tuple(sorted(members)) for members in node_actions]
         self.tokens = [{}]
         self.token_ends = {}
         for token_id, value in token_bytes.items():
@@ -241,6 +256,75 @@ class NativePlanDFA:
             result.append((self.eos_label, (state[0], state[1], "ended", 0, "")))
         return tuple(result)
 
+    def completed_action(self, state, label):
+        """``(action, rest)`` for the operation that ``label`` finishes from ``state``, else ``None``.
+
+        ``rest`` are the token bytes after the operation's closing brace (a comma, a bracket or whitespace).
+        """
+        current = state
+        data = self.token_bytes[label]
+        for position, byte in enumerate(data):
+            following = self.byte_step(current, byte)
+            if following is None:
+                return None
+            if following[0] > current[0]:
+                action = self.end_action.get(self.operations[current[3]].get(byte))
+                return None if action is None else (action, bytes(data[position + 1:]))
+            current = following
+        return None
+
+    @lru_cache(maxsize=None)
+    def effect_groups(self, state):
+        """Group the legal tokens of ``state`` by what they decide for an action-level lookahead.
+
+        Keys: ``("action", node)`` narrows the operation being written, ``("done", action, mode)``
+        finishes it (``mode`` is what the token already says follows: ``continue`` after a comma,
+        ``stop`` after a bracket or a line end, ``any`` after a bare brace), and ``("continue",)`` /
+        ``("stop",)`` are the decision after a bare brace. Whitespace and the brackets before the
+        first operation belong to no group.
+        """
+        count, _, phase, node, _ = state
+        groups = {}
+        for label, target in self.transitions(state):
+            if label == self.eos_label:
+                continue
+            target_count, _, target_phase, target_node, _ = target
+            key = None
+            if target_count == count:
+                if target_phase == "operation" and target_node != 0 and not (phase == "operation" and target_node == node):
+                    key = ("action", target_node)  # also a merged token such as '[{"name":"pi'
+                elif phase == "separator":
+                    key = {"operation": ("continue",), "closed": ("stop",)}.get(target_phase)
+            elif target_count == count + 1:
+                finished = self.completed_action(state, label)
+                if finished is not None:
+                    action, rest = finished
+                    mode = "continue" if b"," in rest else "stop" if (b"]" in rest or b"\n" in rest) else "any"
+                    key = ("done", action, mode)
+            if key is not None:
+                groups.setdefault(key, []).append(label)
+        return {key: tuple(labels) for key, labels in groups.items()}
+
+    def semantic_automaton(self):
+        """Subtask-pattern automaton over skills: ``(prefix sets -> index, successors, accepting)``."""
+        index = {self.start_state[1]: 0}
+        order = [self.start_state[1]]
+        successors = []
+        skills = list(self.skill_arguments)
+        position = 0
+        while position < len(order):
+            moves = {}
+            for group, skill in enumerate(skills):
+                following = self.next_semantics(order[position], skill)
+                if following:
+                    if following not in index:
+                        index[following] = len(order)
+                        order.append(following)
+                    moves[group] = index[following]
+            successors.append(moves)
+            position += 1
+        return index, tuple(successors), tuple(() in prefixes for prefixes in order)
+
     def allowed_tokens(self, state, remaining_steps=None):
         return {label for label, target in self.transitions(state)
                 if remaining_steps != 0 or self.is_accepting(target)}
@@ -263,19 +347,25 @@ class NativePlanDFA:
 class NativeConstraintProcessor:
     """HF logits processor using the repository's CTRL-G success DP and belief update."""
 
-    def __init__(self, dfa, prompt_length, max_tokens, *, hmm=None, weight=0, lookahead=50, table=None):
+    def __init__(self, dfa, prompt_length, max_tokens, *, hmm=None, weight=0, lookahead=50, table=None,
+                 action_lookahead=None):
+        """``action_lookahead`` (a ``DFAActionLookahead`` for this DFA) replaces the token-level table:
+        the HMM then only ranks tokens the DFA allows, per action, and never removes one."""
         self.dfa, self.prompt_length, self.max_tokens = dfa, prompt_length, max_tokens
         self.state = dfa.start_state
         self.consumed = 0
         self.weight = weight
         self.hmm = hmm
         self.table = table
+        self.session = None
         if hmm is not None and weight:
             from domiknows.generation.applications.hmm_dfa_decoder import HMMDFAStaticLookahead
             from domiknows.generation.dfa.stop_policy import StopPolicy
             self.initial, self.transition, self.emission = [value.double() for value in hmm]
             self.belief = self.initial.clone()
-            if self.table is None:
+            if action_lookahead is not None:
+                self.session = action_lookahead.session(self.belief)
+            elif self.table is None:
                 self.table = HMMDFAStaticLookahead(
                     transition=self.transition, emission=self.emission,
                     policy=StopPolicy(max_steps=max_tokens), eos_label=dfa.eos_label,
@@ -289,11 +379,14 @@ class NativeConstraintProcessor:
         from domiknows.generation.applications.hmm_utils import hmm_forward_update
         labels = input_ids[0, self.prompt_length:].tolist()
         for label in labels[self.consumed:]:
+            previous = self.state
             self.state = self.dfa.step(self.state, label)
             if self.state is None:
                 raise ValueError("generation left the native plan DFA")
             if self.hmm is not None and self.weight:
                 self.belief = hmm_forward_update(self.belief, self.emission, self.transition, label)
+                if self.session is not None:
+                    self.session.observe(previous, label, self.state, self.belief)
         self.consumed = len(labels)
         remaining = self.max_tokens - len(labels) - 1
         allowed = self.dfa.allowed_tokens(self.state, remaining_steps=remaining)
@@ -302,7 +395,7 @@ class NativeConstraintProcessor:
         result = torch.full_like(scores, -torch.inf)
         for label in allowed:
             value = scores[0, label]
-            if self.hmm is not None and self.weight:
+            if self.hmm is not None and self.weight and self.session is None:
                 target = self.dfa.step(self.state, label)
                 if self.dfa.is_accepting(target):
                     probability = self.belief.new_tensor(1.)
@@ -311,6 +404,8 @@ class NativeConstraintProcessor:
                     probability = self.table.success_after(belief, target, remaining)
                 value = value + self.weight * probability.clamp_min(torch.finfo(probability.dtype).tiny).log().to(value.dtype)
             result[0, label] = value
+        if self.session is not None:
+            self.session.apply(result, self.state, self.weight)
         return result
 
 
