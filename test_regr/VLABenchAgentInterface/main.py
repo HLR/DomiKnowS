@@ -908,7 +908,7 @@ def command_evaluate_official(args) -> None:
         raise ValueError("--protocol official uses the dataset's images and instruction only")
     if args.few_shot_num < 0 or args.max_new_tokens <= 0:
         raise ValueError("--few-shot-num must be nonnegative and --max-new-tokens positive")
-    if (args.press_question or args.hmm or args.scene_ids) and args.constraints != "grammar":
+    if (args.press_question or args.hmm or args.scene_ids or args.pattern_first) and args.constraints != "grammar":
         raise ValueError("--press-question, --scene-ids and --hmm extend the grammar DFA; add --constraints grammar")
     from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
     from test_regr.VLABenchAgentInterface.official_protocol import (
@@ -929,10 +929,11 @@ def command_evaluate_official(args) -> None:
     decoding = "greedy"
     if grammar:
         from test_regr.VLABenchAgentInterface.official_hmm import decoding_label
-        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "")
-    suffix = ("_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_hmm" if args.hmm else "")
+        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "")
+    suffix = ("_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "")
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
     generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question, scene_ids=args.scene_ids,
+                                           pattern_first=args.pattern_first,
                                            hmm=hmm, weight=args.hmm_weight) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
@@ -1386,6 +1387,9 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--press-question", action="store_true",
                           help="official protocol with --constraints grammar: the model first says whether the instruction is a "
                                "choose-one-and-press question; if so the plan is restricted to one press")
+    evaluate.add_argument("--pattern-first", action="store_true",
+                          help="official protocol with --constraints grammar: the model first names the subtask pattern(s) "
+                               "from the official prompt's list and the grammar is limited to them")
     evaluate.add_argument("--scene-ids", action="store_true",
                           help="official protocol with --constraints grammar: the model first reads the largest tag number in "
                                "the number-labeled image and object ids are limited to 0..that number")

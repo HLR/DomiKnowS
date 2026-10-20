@@ -125,6 +125,11 @@ revision pinned in `planning_benchmark.json`:
   a negative result: the HMM does not see the image or the instruction. `lookahead_score="conditional"` is the Ctrl-G form CLAMP uses (the HMM's chance that a valid plan can still be
   completed); on validation it was worse than the joint score (37.93 at weight 0.5, 33.6 at weight 5, against 38.18
   without the HMM) because it pushes plans to stop early and loses the long Complex plans.
+  Validation results for the other additions (450 episodes, six-dimension mean; grammar DFA alone 38.18, joint HMM
+  weight 0.5 38.37): `--scene-ids` changes no plan (the model already picks only visible ids); per-instance
+  adaptation (`official_adapt.py`, 16 samples, one EM step) scores 38.03 at best (weight 0.5, lam 0.1) and falls as
+  lam and weight grow (down to 37.38); `--pattern-first` (the model names the subtask patterns from the official
+  prompt's list and the grammar is limited to them; 39 of 450 replies were unusable) scores 38.29.
 
 Evaluations from `evaluate-planner` without `--protocol official` also report an
 `official_mapping` block (upstream-mapped tasks only, upstream dimensions) to help

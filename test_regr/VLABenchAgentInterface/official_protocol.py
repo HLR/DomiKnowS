@@ -28,13 +28,13 @@ from typing import Any, Callable, Mapping, Sequence
 
 try:
     from .planning_metrics import (
-        _CONFIG, DIMENSIONS, OFFICIAL_TASK_DIMENSIONS, PlanningMetrics, default_dependency,
+        BENCHMARK_PATTERNS, _CONFIG, DIMENSIONS, OFFICIAL_TASK_DIMENSIONS, PlanningMetrics, default_dependency,
         score_planning_metrics,
     )
     from .world_graph import canonicalize_plan
 except ImportError:  # pragma: no cover - flat-module execution
     from planning_metrics import (
-        _CONFIG, DIMENSIONS, OFFICIAL_TASK_DIMENSIONS, PlanningMetrics, default_dependency,
+        BENCHMARK_PATTERNS, _CONFIG, DIMENSIONS, OFFICIAL_TASK_DIMENSIONS, PlanningMetrics, default_dependency,
         score_planning_metrics,
     )
     from world_graph import canonicalize_plan
@@ -373,6 +373,33 @@ ENTITY_QUESTION = (
 )
 
 
+# Stage one of the pattern-first variant. It names no task and no benchmark topic: the patterns it
+# chooses from are the ones the official prompt already lists.
+PATTERN_QUESTION = (
+    "Using only the sub-skill sequence patterns listed above, which pattern or patterns solve the language "
+    "instruction? Answer with a JSON list of patterns, each pattern a list of skill names, and nothing else."
+)
+
+
+def parse_patterns(text: str, allowed: Sequence[Sequence[str]]) -> tuple[tuple[str, ...], ...]:
+    """The distinct listed patterns in a stage-one reply (none if it is not a JSON list of patterns)."""
+    start, end = text.find("["), text.rfind("]")
+    if start < 0 or end <= start:
+        return ()
+    try:
+        value = json.loads(text[start:end + 1])
+    except ValueError:
+        return ()
+    known = {tuple(pattern) for pattern in allowed}
+    if not isinstance(value, list) or (value and isinstance(value[0], str)):
+        value = [value] if isinstance(value, list) else []
+    chosen: list[tuple[str, ...]] = []
+    for pattern in value:
+        if isinstance(pattern, list) and all(isinstance(skill, str) for skill in pattern) and tuple(pattern) in known                 and tuple(pattern) not in chosen:
+            chosen.append(tuple(pattern))
+    return tuple(chosen)
+
+
 def parse_entity_count(text: str, cap: int = DFA_ENTITY_CAP) -> int:
     """Object ids ``0..n-1`` for the largest tag number the model read; ``cap`` if it gave no number."""
     import re
@@ -402,7 +429,7 @@ def prepare_inputs(planner: Any, items: list[list[Any]], prefix: str = ""):
 def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_cap: int = DFA_ENTITY_CAP,
                                max_operations: int = 16, press_question: bool = False,
                                hmm: Any = None, weight: float = 0.0,
-                               lookahead_score: str = "joint", scene_ids: bool = False,
+                               lookahead_score: str = "joint", scene_ids: bool = False, pattern_first: bool = False,
                                adapt: dict[str, Any] | None = None, seed: int = 42) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
@@ -439,13 +466,13 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         except ImportError:  # pragma: no cover - flat-module execution
             from official_adapt import adapt_emission, episode_seed, sample_plans
 
-    def language(press_only: bool, ids: int):
-        key = ("official-grammar", ids, 1 if press_only else max_operations, press_only)
+    def language(press_only: bool, ids: int, patterns: tuple = ()):
+        key = ("official-grammar", ids, 1 if press_only else max_operations, press_only, patterns)
         if key not in planner.dfas:
             planner.dfas[key] = NativePlanDFA(
                 planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=ids,
                 max_operations=1 if press_only else max_operations, grammar_profile="benchmark",
-                patterns=(("press",),) if press_only else None)
+                patterns=(("press",),) if press_only else (patterns or None))
         return key, planner.dfas[key]
 
     def lookahead_for(key, dfa):
@@ -479,10 +506,23 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                 image.close()
 
     @torch.no_grad()
+    def choose_patterns(items: list[list[Any]]) -> tuple:
+        """Stage one: the model names the subtask patterns (from the official prompt's list) for this episode."""
+        inputs, images = prepare_inputs(planner, [*items, ["text", PATTERN_QUESTION]])
+        try:
+            length = inputs.input_ids.shape[1]
+            answer = planner.model.generate(**inputs, max_new_tokens=96, do_sample=False, use_cache=True)[0, length:]
+            return parse_patterns(planner.tokenizer.decode(answer, skip_special_tokens=True), BENCHMARK_PATTERNS)
+        finally:
+            for image in images:
+                image.close()
+
+    @torch.no_grad()
     def generate(items: list[list[Any]]) -> str:
         press_only = press_question and says_yes(items)
         ids = read_entity_count(items) if scene_ids else entity_cap
-        key, dfa = language(press_only, ids)
+        chosen = choose_patterns(items) if pattern_first and not press_only else ()
+        key, dfa = language(press_only, ids, tuple(sorted(chosen)))
         steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
         try:
@@ -514,6 +554,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                 notes.append(f"<!-- {PRESS_MARK} {'yes' if press_only else 'no'} -->")
             if kept is not None:
                 notes.append(f"<!-- adapt: samples={kept} -->")
+            if pattern_first:
+                notes.append("<!-- pattern-first: " + json.dumps(["+".join(pattern) for pattern in chosen]) + " -->")
             if scene_ids:
                 notes.append(f"<!-- scene-ids: {ids} -->")
             if constraint.session is not None:

@@ -258,3 +258,14 @@ def test_entity_count_is_the_largest_tag_number_plus_one():
     assert op.parse_entity_count("0, 1, 2, 3") == 4
     assert op.parse_entity_count("no number") == op.DFA_ENTITY_CAP
     assert op.parse_entity_count("900") == op.DFA_ENTITY_CAP  # never wider than the grammar cap
+
+
+def test_stage_one_patterns_are_parsed_and_checked_against_the_official_list():
+    from test_regr.VLABenchAgentInterface.planning_metrics import BENCHMARK_PATTERNS as listed
+
+    assert op.parse_patterns('[["pick", "place"]]', listed) == (("pick", "place"),)
+    assert op.parse_patterns('```json\n[["pick", "pour", "place"], ["pick", "place"], ["pick", "place"]]\n```', listed) == (
+        ("pick", "pour", "place"), ("pick", "place"))
+    assert op.parse_patterns('["pick", "lift"]', listed) == (("pick", "lift"),)  # a single flat pattern
+    assert op.parse_patterns('[["pick"], ["grab", "place"]]', listed) == ()  # neither is a listed pattern
+    assert op.parse_patterns("I would pick it up", listed) == ()
