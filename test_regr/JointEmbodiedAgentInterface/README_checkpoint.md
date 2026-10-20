@@ -145,8 +145,15 @@ To evaluate the planner on held-out EAI symbolic validation goals (testing goal 
 ```bash
 python -m test_regr.JointEmbodiedAgentInterface.paired_eai_eval \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt \
-  --selection mutual-holdout
+  --output test_regr/JointEmbodiedAgentInterface/results/paired_eai_joint.json \
+  --selection canonical-validation
 ```
+
+`canonical-validation` (the ordered 80/20 holdout, all VirtualHome rows) is
+correct for current checkpoints. `mutual-holdout` and `joint-validation-32`
+apply only to Joint checkpoints trained with the earlier shuffled 90/10 split.
+Both models decode with `--max-steps 60` by default; at 30 steps the reference
+trajectories themselves reach only 95% goal success.
 
 ---
 

@@ -162,7 +162,8 @@ def token_sequence(labels, vocabulary):
     return labels_to_actions(labels, vocabulary)
 
 
-def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0):
+def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0, policy_for=None):
+    """Score predictions; ``policy_for(sample)`` supplies the per-sample bound DFA used for decoding."""
     if not examples:
         return {
             "name": name,
@@ -192,7 +193,10 @@ def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0)
         effective_gold = labels_through_first_eos(gold, eos_label)
         token_correct += sum(int(p == g) for p, g in zip(padded, effective_gold))
         token_total += len(effective_gold)
-        dfa_valid += int(True if dfa is None else (dfa.accepts(pred_trimmed) or dfa.accepts(padded)))
+        # Same check as main.sequence_score: the EOS-padded sequence against the
+        # contextual DFA that constrains decoding, not the unbound global DFA.
+        sample_dfa = dfa if dfa is None or policy_for is None else policy_for(sample)
+        dfa_valid += int(True if sample_dfa is None else sample_dfa.accepts(padded))
         goal_result = evaluate_goal_satisfaction(pred_trimmed, sample, vocabulary)
         predicted_state = goal_result["predicted_state"]
         gold_state = goal_result["gold_state"]
@@ -722,19 +726,19 @@ def main():
             scores.append(score_predictions(f"NT DomiKnowS + HMM + DFA ({label}, distilled original Qwen HMM)", hmm_preds, examples, artifact["vocabulary"], dfa=artifact["dfa"], show=args.show))
 
     if "1" in settings:
-        scores.append(score_predictions("1 Qwen-1.5B zero-shot", raw_preds, examples, score_vocab, dfa=dfa, show=args.show))
+        scores.append(score_predictions("1 Qwen-1.5B zero-shot", raw_preds, examples, score_vocab, dfa=dfa, show=args.show, policy_for=bundle.policy_for if bundle is not None else None))
 
     if "2" in settings:
         preds = program_predictions(program, bundle, examples, args.max_steps, args.device, use_dfa=False, desc="2 DomiKnowS+Qwen")
-        scores.append(score_predictions("2 DomiKnowS + Qwen-1.5B", preds, examples, bundle.vocabulary, dfa=dfa, show=args.show))
+        scores.append(score_predictions("2 DomiKnowS + Qwen-1.5B", preds, examples, bundle.vocabulary, dfa=dfa, show=args.show, policy_for=bundle.policy_for if bundle is not None else None))
 
     if "3" in settings:
         dfa_preds = program_predictions(program, bundle, examples, args.max_steps, args.device, use_dfa=True, desc="3 DomiKnowS+Qwen+DFA")
-        scores.append(score_predictions("3 DomiKnowS + Qwen-1.5B + DFA", dfa_preds, examples, bundle.vocabulary, dfa=dfa, show=args.show))
+        scores.append(score_predictions("3 DomiKnowS + Qwen-1.5B + DFA", dfa_preds, examples, bundle.vocabulary, dfa=dfa, show=args.show, policy_for=bundle.policy_for if bundle is not None else None))
 
     if "4" in settings:
         hmm_preds = hmm_dfa_predictions(args, program, bundle, examples)
-        scores.append(score_predictions("4 DomiKnowS + Qwen-1.5B + DFA + HMM", hmm_preds, examples, bundle.vocabulary, dfa=dfa, show=args.show))
+        scores.append(score_predictions("4 DomiKnowS + Qwen-1.5B + DFA + HMM", hmm_preds, examples, bundle.vocabulary, dfa=dfa, show=args.show, policy_for=bundle.policy_for if bundle is not None else None))
 
     lines = [
         "EAI evaluation settings",

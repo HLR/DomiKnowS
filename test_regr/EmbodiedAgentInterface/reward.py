@@ -1023,8 +1023,10 @@ def _evaluate_goal_satisfaction(
                 temporal_progress = _temporal_progress(
                     ast, states, events, context
                 )
-            # Grounded fact recall is the authoritative final-condition check.
-            # Temporal goals additionally require the ordered SimpleTL result.
+            # Goals without ``then`` succeed on grounded fact recall. Goals with
+            # ``then`` succeed on the ordered SimpleTL result alone; final-state
+            # recall is reported separately because earlier facts may no longer
+            # hold at the last state.
             is_success = ast_success if has_temporal_order else recall >= 1.0 and bool(gold_state)
         except (ValueError, TypeError) as exc:
             parse_error = str(exc)

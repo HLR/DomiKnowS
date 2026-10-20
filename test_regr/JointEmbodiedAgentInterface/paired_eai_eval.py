@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -32,8 +33,17 @@ from .models import JointQwenVLPlanner
 from .world_graph import build_joint_runtime, build_joint_world_graph
 
 
+LEGACY_SELECTIONS = ("mutual-holdout", "joint-validation-32")
+
+
 def paired_indices(count: int, *, seed: int, selection: str) -> list[int]:
-    """Return reproducible row identities for paired checkpoint evaluation."""
+    """Return reproducible row identities for paired checkpoint evaluation.
+
+    ``canonical-validation`` is the ordered 80/20 holdout used by both current
+    trainers. The other selections assume a Joint checkpoint trained with the
+    earlier shuffled 90/10 split; on a current Joint checkpoint
+    ``joint-validation-32`` includes Joint training rows.
+    """
     if selection == "canonical-validation":
         cut = min(count, max(1, int(0.8 * count)))
         return list(range(cut, count))
@@ -49,12 +59,12 @@ def paired_indices(count: int, *, seed: int, selection: str) -> list[int]:
     raise ValueError(f"unknown evaluation selection {selection!r}")
 
 
-def _standalone_args(checkpoint: Path, device: str, backbone: str):
+def _standalone_args(checkpoint: Path, device: str, backbone: str, max_steps: int):
     old_argv = sys.argv
     try:
         sys.argv = [
             "eai-paired-evaluation", "--dataset", "all", "--split", "train",
-            "--max-steps", "30", "--baseline-model", "causal-lm",
+            "--max-steps", str(max_steps), "--baseline-model", "causal-lm",
             "--llm-backbone-path", backbone, "--llm-device-map", "auto",
             "--use-lora", "--lora-r", "8", "--lora-alpha", "16",
             "--device", device, "--model", str(checkpoint),
@@ -64,8 +74,8 @@ def _standalone_args(checkpoint: Path, device: str, backbone: str):
         sys.argv = old_argv
 
 
-def _load_standalone(checkpoint: Path, device: str, backbone: str, examples):
-    args = _standalone_args(checkpoint, device, backbone)
+def _load_standalone(checkpoint: Path, device: str, backbone: str, examples, max_steps: int):
+    args = _standalone_args(checkpoint, device, backbone, max_steps)
     program, bundle = build_trainable_program(args, examples, device)
     load_eai_checkpoint(program, bundle, args, checkpoint, map_location="cpu")
     program.model.eval()
@@ -77,10 +87,10 @@ def _load_standalone(checkpoint: Path, device: str, backbone: str, examples):
     return predict
 
 
-def _load_joint(checkpoint: Path, device: str, backbone: str, examples):
+def _load_joint(checkpoint: Path, device: str, backbone: str, examples, max_steps: int):
     args = build_parser().parse_args([
         "train-agent", "--two-stage", "--planner-model", backbone,
-        "--device", device,
+        "--device", device, "--eai-max-steps", str(max_steps),
     ])
     vocabulary = TokenVocabulary(examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
     world = build_joint_world_graph("joint_embodied_training")
@@ -127,6 +137,11 @@ def _load_joint(checkpoint: Path, device: str, backbone: str, examples):
     return predict
 
 
+def _domain(item) -> str:
+    model = re.sub(r"\s+", " ", str(item.get("transition_model", "")))
+    return "virtualhome" if re.search(r"\(:domain virtualhome\b", model, re.I) else "behavior"
+
+
 def score_examples(examples, indices, predict):
     rows = []
     for position, index in enumerate(indices, 1):
@@ -139,6 +154,7 @@ def score_examples(examples, indices, predict):
         row = {
             "row_index": index,
             "task_id": item.get("task_id"),
+            "domain": _domain(item),
             "instruction": item.get("natural_language_description") or item.get("text"),
             "tl_goal": item.get("tl_goal"),
             "gold_actions": list(item.get("target_action_tokens", ())),
@@ -157,7 +173,18 @@ def score_examples(examples, indices, predict):
             flush=True,
         )
     count = len(rows)
+    domains: dict[str, dict[str, float]] = {}
+    for row in rows:
+        entry = domains.setdefault(row["domain"], {"examples": 0, "goal_success": 0.0, "goal_recall": 0.0})
+        entry["examples"] += 1
+        entry["goal_success"] += row["goal_success"]
+        entry["goal_recall"] += row["goal_recall"]
+    for entry in domains.values():
+        entry["goal_success"] /= entry["examples"]
+        entry["goal_recall"] /= entry["examples"]
     return {
+        # The ordered 80/20 split holds out only VirtualHome rows; report the mix.
+        "domains": domains,
         "examples": count,
         "goal_success": sum(row["goal_success"] for row in rows) / count if count else 0.0,
         "goal_recall": sum(row["goal_recall"] for row in rows) / count if count else 0.0,
@@ -179,10 +206,21 @@ def main(argv=None):
     )
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--backbone")
+    parser.add_argument(
+        "--max-steps", type=int, default=60,
+        help="decoding and reference-trajectory budget shared by both models; "
+             "reference trajectories only reach 95% goal success at 30 steps",
+    )
     args = parser.parse_args(argv)
     if not args.checkpoint.is_file():
         parser.error(f"checkpoint does not exist: {args.checkpoint}")
-    max_steps = 30 if args.model == "standalone" else 60
+    max_steps = args.max_steps
+    if args.selection in LEGACY_SELECTIONS:
+        print(
+            f"[paired-eai] warning: --selection {args.selection} assumes the legacy shuffled "
+            "90/10 Joint split; current Joint checkpoints hold out canonical-validation only",
+            flush=True,
+        )
     examples = load_eai_dataset(
         dataset_name="all", split="train", data_path=args.eai_data_path,
         device="cpu", max_steps=max_steps,
@@ -195,7 +233,7 @@ def main(argv=None):
         else "Qwen/Qwen2.5-VL-3B-Instruct"
     )
     loader = _load_standalone if args.model == "standalone" else _load_joint
-    predict = loader(args.checkpoint, args.device, backbone, examples)
+    predict = loader(args.checkpoint, args.device, backbone, examples, max_steps)
     with torch.no_grad():
         result = score_examples(examples, indices, predict)
     result.update({
@@ -204,6 +242,7 @@ def main(argv=None):
         "backbone": backbone,
         "selection": args.selection,
         "row_indices": indices,
+        "max_steps": max_steps,
         "seed": args.seed,
     })
     args.output.parent.mkdir(parents=True, exist_ok=True)
