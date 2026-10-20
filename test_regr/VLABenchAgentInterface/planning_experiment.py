@@ -296,13 +296,16 @@ def fit_hmm(args):
     if {item["episode_id"] for item in train}.intersection(item["episode_id"] for item in validation):
         raise ValueError("training and validation teacher corpora overlap")
     max_epochs, patience = getattr(args, "epochs", 10), getattr(args, "patience", 2)
-    head = HMMGenerationHead(label_count=args.vocab_size, state_count=128, random_seed=42).to("cuda")
-    optimizer = torch.optim.Adam(head.parameters(), lr=1e-3)
+    states, learning_rate = getattr(args, "states", 128), getattr(args, "learning_rate", 1e-3)
+    head = HMMGenerationHead(label_count=args.vocab_size, state_count=states, random_seed=42).to("cuda")
+    optimizer = torch.optim.Adam(head.parameters(), lr=learning_rate)
     start, best, stale, history = 0, float("inf"), 0, []
     resume = output / "progress.pt"
     identity = {"train_sha256": digest(Path(args.corpus) / "episodes.jsonl"),
         "validation_sha256": digest(Path(args.validation_corpus) / "episodes.jsonl"),
         "tokenizer_sha256": provenance["tokenizer_sha256"], "vocab_size": args.vocab_size}
+    if states != 128:  # runs with the original size keep their earlier identity so they can still resume
+        identity["states"] = states
     if resume.exists():
         payload = torch.load(resume, map_location="cuda", weights_only=False)
         if payload["identity"] != identity:

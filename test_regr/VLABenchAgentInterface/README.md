@@ -110,8 +110,19 @@ revision pinned in `planning_benchmark.json`:
   the measured run it recognised 127 of 600 question tasks, mostly tasks outside upstream's
   dim2task, and never chose the right button, so the official score barely moved.
 - `official_hmm.py` samples the frozen model on the benchmark inputs without labels, fits an HMM on the
-  plan tokens and picks a lookahead weight on validation. Sampling and fitting work; decoding with the
-  lookahead is limited by the size of the DFA's state space (see the module docstring).
+  canonical plan tokens (`json.dumps(plan, indent=4)`, integer ids) and picks a lookahead weight on the
+  450 validation episodes of the seed-42 split. The lookahead is action-level, after CLAMP's budget-aware
+  reachability (`domiknows/generation/applications/action_lookahead.py`, `native_lookahead.py`): the
+  grammar DFA stays the only authority on which tokens are legal, and the HMM adds
+  `weight * (log HMM mass - best log HMM mass)` to the legal tokens that decide an action (skill name,
+  object id, continue or stop), with the mass taken over the complete valid plans that token leaves
+  open. Formatting tokens are neutral. The token-level product with the DFA (`HMMDFAStaticLookahead`)
+  is not used here: it ran out of memory at about 93 GB. Fit the HMM with a large learning rate
+  (`--states 2048 --learning-rate 0.3`): 128 states at 1e-3 stalled at 2.9 nats per token and made the
+  lookahead prefer one-step plans, 2048 states at 0.3 reaches 0.18. Measured result (weight 0.5, chosen
+  on validation): 38.02 against 38.24 for the grammar DFA alone over all 4,500 episodes (38.62 against
+  38.78 on the held-out test split). The lookahead changed 873 of 265,192 greedy tokens, so treat it as
+  a negative result: the HMM does not see the image or the instruction.
 
 Evaluations from `evaluate-planner` without `--protocol official` also report an
 `official_mapping` block (upstream-mapped tasks only, upstream dimensions) to help

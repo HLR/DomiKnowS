@@ -312,6 +312,7 @@ def run_official_protocol(
         "supplementary_integer_ids": {
             "official_total_score_by_dimension": coerced["official_total_score_by_dimension"],
             "dimension_mean_of_total_score": coerced["dimension_mean_of_total_score"],
+            "official_mapped_overall": coerced["official_mapped_overall"],
             "answers_with_quoted_ids": sum(
                 row["scores"] != crow["scores"] for row, crow in zip(rows, coerced_rows)),
         },
@@ -383,7 +384,7 @@ def prepare_inputs(planner: Any, items: list[list[Any]], prefix: str = ""):
 
 def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_cap: int = DFA_ENTITY_CAP,
                                max_operations: int = 16, press_question: bool = False,
-                               hmm: Any = None, weight: float = 0.0, lookahead: int = 50) -> Callable[[list[list[Any]]], str]:
+                               hmm: Any = None, weight: float = 0.0) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
     The DFA enforces the JSON skill language, argument roles, the benchmark subtask
@@ -395,24 +396,38 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     ``press_question`` first asks the model :data:`PRESS_QUESTION`. On "Yes" the language is
     restricted to a single ``press``; otherwise the full grammar applies. The decision is
     recorded in an HTML comment ahead of the fence. ``hmm`` is an ``(initial, transition,
-    emission)`` tuple whose lookahead, scaled by ``weight``, steers the full grammar.
+    emission)`` tuple; with ``weight`` > 0 its action-level lookahead (``native_lookahead``) adds
+    ``weight * (log HMM mass - best log HMM mass)`` to the DFA-legal tokens that decide an action.
+    The DFA stays the only authority on which tokens are legal, and the comment
+    ``hmm-action: changed=x scored=y steps=z`` records how often the lookahead changed the greedy token.
     """
     import torch
     from transformers import LogitsProcessorList
 
     try:
         from .native_planning import NativeConstraintProcessor, NativePlanDFA
+        from .native_lookahead import DFAActionLookahead
     except ImportError:  # pragma: no cover - flat-module execution
         from native_planning import NativeConstraintProcessor, NativePlanDFA
+        from native_lookahead import DFAActionLookahead
+    from domiknows.generation.applications.action_lookahead import TokenOperators
+
+    operators = TokenOperators(hmm[1], hmm[2]) if hmm is not None and weight > 0 else None
 
     def language(press_only: bool):
-        key = ("official-grammar", entity_cap, 1 if press_only else max_operations, press_only, lookahead)
+        key = ("official-grammar", entity_cap, 1 if press_only else max_operations, press_only)
         if key not in planner.dfas:
             planner.dfas[key] = NativePlanDFA(
                 planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=entity_cap,
                 max_operations=1 if press_only else max_operations, grammar_profile="benchmark",
                 patterns=(("press",),) if press_only else None)
         return key, planner.dfas[key]
+
+    def lookahead_for(key, dfa):
+        slot = ("action-lookahead", operators.size, id(operators)) + key
+        if slot not in planner.tables:
+            planner.tables[slot] = DFAActionLookahead(dfa, planner.tokenizer, operators)
+        return planner.tables[slot]
 
     @torch.no_grad()
     def says_yes(items: list[list[Any]]) -> bool:
@@ -429,22 +444,26 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     def generate(items: list[list[Any]]) -> str:
         press_only = press_question and says_yes(items)
         key, dfa = language(press_only)
-        steered = hmm is not None and weight > 0 and not press_only
+        steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
         try:
             length = inputs.input_ids.shape[1]
             constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=hmm if steered else None,
-                                                   weight=weight if steered else 0, table=planner.tables.get(key),
-                                                   lookahead=lookahead)
+                                                   weight=weight if steered else 0,
+                                                   action_lookahead=lookahead_for(key, dfa) if steered else None)
             output = planner.model.generate(
                 **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
                 logits_processor=LogitsProcessorList([constraint]),
                 eos_token_id=planner.tokenizer.eos_token_id)[0, length:].tolist()
-            if constraint.table is not None:
-                planner.tables[key] = constraint.table
             plan = planner.tokenizer.decode(output, skip_special_tokens=True).strip()
             reply = f"```json\n{plan}\n```" if dfa.accepts(output) else plan
-            return f"<!-- {PRESS_MARK} {'yes' if press_only else 'no'} -->\n{reply}" if press_question else reply
+            notes = []
+            if press_question:
+                notes.append(f"<!-- {PRESS_MARK} {'yes' if press_only else 'no'} -->")
+            if constraint.session is not None:
+                stats = constraint.session.stats
+                notes.append(f"<!-- hmm-action: changed={stats['changed']} scored={stats['scored_steps']} steps={stats['steps']} -->")
+            return "\n".join([*notes, reply])
         finally:
             for image in images:
                 image.close()

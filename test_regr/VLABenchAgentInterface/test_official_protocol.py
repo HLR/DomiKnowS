@@ -186,6 +186,7 @@ def test_quoted_ids_fail_upstream_scoring_but_are_reported_supplementally(datase
     assert summary["official_total_score_by_dimension"]["M&T"] == 40  # skills match, quoted ids do not
     assert summary["supplementary_integer_ids"]["official_total_score_by_dimension"]["M&T"] == 80
     assert summary["supplementary_integer_ids"]["answers_with_quoted_ids"] == 3
+    assert summary["supplementary_integer_ids"]["official_mapped_overall"]["legacy_score"] == 80
 
 
 def test_decoding_is_part_of_the_run_configuration(dataset, tmp_path):
@@ -208,7 +209,7 @@ def test_decoding_labels_identify_the_hmm_and_weight():
 
     assert decoding_label(None, 1.0) == "grammar-dfa:64"
     assert decoding_label("abcdef0123456789", 0.0) == "grammar-dfa:64"
-    assert decoding_label("abcdef0123456789", 0.5) == "grammar-dfa:64+hmm:abcdef012345:w0.5"
+    assert decoding_label("abcdef0123456789", 0.5) == "grammar-dfa:64+hmm-action:abcdef012345:w0.5"
 
     class Tokenizer:
         eos_token_id = 9
@@ -237,3 +238,15 @@ def test_teacher_samples_are_rewritten_to_integer_ids_before_hmm_fitting():
     assert json.loads(text) == [{"name": "pick", "params": {"target_entity_name": 6}}]
     assert '"6"' not in text and text.startswith("[\n    {")
     assert canonical_plan_text("no plan here")[0] is None
+
+
+def test_hmm_corpus_text_is_the_serialisation_the_action_lookahead_scores():
+    from test_regr.VLABenchAgentInterface.native_lookahead import PLAN_CLOSE, PLAN_OPEN, operation_texts
+    from test_regr.VLABenchAgentInterface.official_hmm import canonical_plan_text
+
+    sampled = ('[{"name": "pick", "params": {"target_entity_name": "6"}}, '
+               '{"name": "place", "params": {"target_container_name": 9}}]' + chr(10) + '```')
+    text, _ = canonical_plan_text(sampled)
+    carry, _ = operation_texts("pick", ("target_entity_name",), 6)
+    _, last = operation_texts("place", ("target_container_name",), 9)
+    assert text == PLAN_OPEN + carry + last + PLAN_CLOSE

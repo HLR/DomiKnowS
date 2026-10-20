@@ -12,12 +12,14 @@ held-out figure next to the all-episodes figure.
 
 Run ``python -m test_regr.VLABenchAgentInterface.official_hmm --help``. Every stage resumes.
 
-Known limit: sampling and fitting are cheap (an hour and a few minutes on one GPU), but the
-lookahead table is a token-level dynamic programme over every state of the grammar DFA. With 64
-ids and pretty-printed JSON that is millions of (state, depth) entries already at depth 6, and at
-the default depth of 50 it ran out of memory (about 93 GB). Depth 6 is too short to steer a plan of
-about 60 tokens, so decoding with the lookahead needs a smaller language (fewer ids, compact JSON)
-than the grammar-DFA row uses, and its result would not be comparable with that row.
+Decoding: the lookahead is action-level (``native_lookahead``, after CLAMP's budget-aware
+reachability), not a token-level product with the grammar. A first attempt multiplied the HMM with
+the token DFA (``HMMDFAStaticLookahead``); with 64 ids, free whitespace and an operation counter that
+is millions of (state, depth) entries at depth 6 and about 93 GB at depth 50, so it was dropped for
+this protocol. The action-level lookahead needs ``K_max * |Z| * H`` numbers plus one ``H x H``
+operator per action, and it only ranks tokens the DFA already allows. It scores the canonical
+serialisation of an action, which is why the corpus is rewritten to ``json.dumps(plan, indent=4)``
+with integer ids before fitting.
 """
 from __future__ import annotations
 
@@ -42,7 +44,7 @@ except ImportError:  # pragma: no cover - flat-module execution
         make_grammar_dfa_generator, official_report, run_official_protocol,
     )
 
-WEIGHTS = (0.0, 0.1, 0.5, 1.0)
+WEIGHTS = (0.0, 0.1, 0.5, 1.0, 2.0)
 SAMPLING = {"temperature": 0.8, "top_p": 0.95}
 
 
@@ -169,7 +171,7 @@ def load_hmm(path: str | Path, planner: Any, device: str = "cuda") -> tuple[Any,
 
 def decoding_label(hmm_sha256: str | None, weight: float) -> str:
     base = f"grammar-dfa:{DFA_ENTITY_CAP}"
-    return base if hmm_sha256 is None or weight <= 0 else f"{base}+hmm:{hmm_sha256[:12]}:w{weight:g}"
+    return base if hmm_sha256 is None or weight <= 0 else f"{base}+hmm-action:{hmm_sha256[:12]}:w{weight:g}"
 
 
 def heldout_report(final_scores: str | Path, test_ids: set[str]) -> dict[str, Any]:
@@ -194,10 +196,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         directory = root / f"corpus_{name}"
         sample_corpus(planner, splits[name], directory, seed=args.seed, batch_size=args.batch_size)
         finalize_corpus(directory, planner, str(args.model))
-    checkpoint = root / "hmm_model" / "best.pt"
+    checkpoint = root / args.hmm_dir / "best.pt"
     if not checkpoint.exists():
         fit_hmm(argparse.Namespace(corpus=root / "corpus_train", validation_corpus=root / "corpus_validation",
-                                   output=root / "hmm_model", vocab_size=args.vocab_size))
+                                   output=root / args.hmm_dir, vocab_size=args.vocab_size, states=args.states,
+                                   learning_rate=args.learning_rate, epochs=args.epochs, patience=args.patience))
     hmm, digest = load_hmm(checkpoint, planner)
 
     def evaluate(stage: str, items: Sequence[OfficialExample], weight: float, standard: bool) -> dict[str, Any]:
@@ -238,6 +241,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--max-new-tokens", type=int, default=768)
     parser.add_argument("--vocab-size", type=int, default=151936)
+    parser.add_argument("--hmm-dir", default="hmm_model", help="folder under --output holding (or receiving) the HMM checkpoint best.pt")
+    parser.add_argument("--states", type=int, default=128, help="hidden states of an HMM fitted by this run")
+    parser.add_argument("--learning-rate", type=float, default=1e-3,
+                        help="Adam rate of the HMM fit; 128 states at 1e-3 stalled near 2.9 nats per token, 1e-1 reached below 0.5")
+    parser.add_argument("--epochs", type=int, default=400)
+    parser.add_argument("--patience", type=int, default=8)
     parser.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=False)
     result = run(parser.parse_args(argv))
     print(json.dumps({key: value for key, value in result.items() if key == "selected_weight"}), flush=True)
