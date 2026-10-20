@@ -250,3 +250,11 @@ def test_hmm_corpus_text_is_the_serialisation_the_action_lookahead_scores():
     carry, _ = operation_texts("pick", ("target_entity_name",), 6)
     _, last = operation_texts("place", ("target_container_name",), 9)
     assert text == PLAN_OPEN + carry + last + PLAN_CLOSE
+
+
+def test_entity_count_is_the_largest_tag_number_plus_one():
+    assert op.parse_entity_count("5") == 6
+    assert op.parse_entity_count("The largest number is 12.") == 13
+    assert op.parse_entity_count("0, 1, 2, 3") == 4
+    assert op.parse_entity_count("no number") == op.DFA_ENTITY_CAP
+    assert op.parse_entity_count("900") == op.DFA_ENTITY_CAP  # never wider than the grammar cap

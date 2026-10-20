@@ -364,6 +364,23 @@ PRESS_QUESTION = (
 )
 
 
+# Asked about the number-labeled image only. On 150 validation episodes the largest number the model
+# read was never below the largest id of the reference plan (the references were used only to check
+# this, not by the decoder), and exceeded it by 2.7 on average.
+ENTITY_QUESTION = (
+    "This picture shows four camera views of a scene. Small black tags with white numbers mark objects. "
+    "What is the largest number written on any tag? Answer with one integer only."
+)
+
+
+def parse_entity_count(text: str, cap: int = DFA_ENTITY_CAP) -> int:
+    """Object ids ``0..n-1`` for the largest tag number the model read; ``cap`` if it gave no number."""
+    import re
+
+    numbers = [int(match) for match in re.findall(r"\d+", text)]
+    return min(max(numbers) + 1, cap) if numbers else cap
+
+
 def prepare_inputs(planner: Any, items: list[list[Any]], prefix: str = ""):
     """Chat-template a ti-list. Returns ``(inputs, images)``; the caller closes the images."""
     from PIL import Image
@@ -385,7 +402,8 @@ def prepare_inputs(planner: Any, items: list[list[Any]], prefix: str = ""):
 def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_cap: int = DFA_ENTITY_CAP,
                                max_operations: int = 16, press_question: bool = False,
                                hmm: Any = None, weight: float = 0.0,
-                               lookahead_score: str = "joint") -> Callable[[list[list[Any]]], str]:
+                               lookahead_score: str = "joint", scene_ids: bool = False,
+                               adapt: dict[str, Any] | None = None, seed: int = 42) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
     The DFA enforces the JSON skill language, argument roles, the benchmark subtask
@@ -414,12 +432,18 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     from domiknows.generation.applications.action_lookahead import TokenOperators
 
     operators = TokenOperators(hmm[1], hmm[2]) if hmm is not None and weight > 0 else None
+    adapting = operators is not None and adapt is not None and adapt.get("samples", 0) > 0 and adapt.get("lam", 0) > 0
+    if adapting:
+        try:
+            from .official_adapt import adapt_emission, episode_seed, sample_plans
+        except ImportError:  # pragma: no cover - flat-module execution
+            from official_adapt import adapt_emission, episode_seed, sample_plans
 
-    def language(press_only: bool):
-        key = ("official-grammar", entity_cap, 1 if press_only else max_operations, press_only)
+    def language(press_only: bool, ids: int):
+        key = ("official-grammar", ids, 1 if press_only else max_operations, press_only)
         if key not in planner.dfas:
             planner.dfas[key] = NativePlanDFA(
-                planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=entity_cap,
+                planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=ids,
                 max_operations=1 if press_only else max_operations, grammar_profile="benchmark",
                 patterns=(("press",),) if press_only else None)
         return key, planner.dfas[key]
@@ -442,16 +466,42 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                 image.close()
 
     @torch.no_grad()
+    def read_entity_count(items: list[list[Any]]) -> int:
+        """Object ids the number-labeled image offers, read by the same frozen model (no labels, no names)."""
+        mask = [value for kind, value in items if kind == "image"][-1]
+        inputs, images = prepare_inputs(planner, [["text", ENTITY_QUESTION], ["image", mask]])
+        try:
+            length = inputs.input_ids.shape[1]
+            answer = planner.model.generate(**inputs, max_new_tokens=40, do_sample=False, use_cache=True)[0, length:]
+            return parse_entity_count(planner.tokenizer.decode(answer, skip_special_tokens=True), entity_cap)
+        finally:
+            for image in images:
+                image.close()
+
+    @torch.no_grad()
     def generate(items: list[list[Any]]) -> str:
         press_only = press_question and says_yes(items)
-        key, dfa = language(press_only)
+        ids = read_entity_count(items) if scene_ids else entity_cap
+        key, dfa = language(press_only, ids)
         steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
         try:
             length = inputs.input_ids.shape[1]
-            constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=hmm if steered else None,
-                                                   weight=weight if steered else 0,
-                                                   action_lookahead=lookahead_for(key, dfa) if steered else None,
+            episode_hmm, episode_lookahead, kept = hmm, None, None
+            if steered and adapting:
+                # Per-instance adaptation: sample this prompt, re-estimate the emissions, rebuild the lookahead.
+                sequences = sample_plans(planner, inputs, planner.tokenizer, samples=adapt["samples"],
+                                         max_new_tokens=adapt.get("max_new_tokens", 320), seed=episode_seed(items, seed))
+                kept = len(sequences)
+                emission = adapt_emission(hmm[0].to(operators.emission.dtype), operators.transition, operators.emission,
+                                          sequences, adapt["lam"])
+                episode_hmm = (hmm[0], hmm[1], emission)
+                episode_lookahead = DFAActionLookahead(dfa, planner.tokenizer, TokenOperators(operators.transition, emission))
+                del emission
+            elif steered:
+                episode_lookahead = lookahead_for(key, dfa)
+            constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=episode_hmm if steered else None,
+                                                   weight=weight if steered else 0, action_lookahead=episode_lookahead,
                                                    lookahead_score=lookahead_score)
             output = planner.model.generate(
                 **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
@@ -462,6 +512,10 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
             notes = []
             if press_question:
                 notes.append(f"<!-- {PRESS_MARK} {'yes' if press_only else 'no'} -->")
+            if kept is not None:
+                notes.append(f"<!-- adapt: samples={kept} -->")
+            if scene_ids:
+                notes.append(f"<!-- scene-ids: {ids} -->")
             if constraint.session is not None:
                 stats = constraint.session.stats
                 notes.append(f"<!-- hmm-action: changed={stats['changed']} scored={stats['scored_steps']} steps={stats['steps']} -->")
