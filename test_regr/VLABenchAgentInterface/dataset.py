@@ -332,6 +332,8 @@ class PlanningExample:
     task_skill_sequence: tuple[str, ...] | None = None
     planning_observation_profile: str | None = None
     planning_interface: str = "compact"
+    # Task identity predicted from the instruction (``--knowledge learned``); never the episode's own task name.
+    predicted_task: str | None = None
 
     def as_reward_item(self) -> dict[str, Any]:
         return {
@@ -348,6 +350,7 @@ class PlanningExample:
             "task_skill_sequence": self.task_skill_sequence,
             "planning_observation_profile": self.planning_observation_profile,
             "planning_interface": self.planning_interface,
+            "predicted_task": self.predicted_task,
         }
 
 
@@ -529,6 +532,57 @@ def _extract_entities(config: Any) -> tuple[str, ...]:
     return tuple(found)
 
 
+def ground_planning_facts(task, instruction, config, entities, input_dir, *, observation_mode="visual",
+                          ground_complex=True):
+    """Input-only planning facts for ``task``: the physics (QA) and complex adapters, as ``(facts, profile)``.
+
+    Only scene components and input language enter the adapters; task.conditions and output plans are not
+    observations. ``task`` is the episode's task name, or the predicted one at ``--knowledge learned``.
+    """
+    try:
+        from .physics_grounding import QA_TASK_PATTERNS, physics_planning_facts, visual_qa_planning_facts
+        from .complex_grounding import complex_planning_facts
+    except ImportError:
+        from physics_grounding import QA_TASK_PATTERNS, physics_planning_facts, visual_qa_planning_facts
+        from complex_grounding import complex_planning_facts
+    scene = config.get("task", config)
+    if observation_mode == "visual" and task in QA_TASK_PATTERNS:
+        facts, profile = visual_qa_planning_facts(task, instruction, scene.get("components", ()))
+    else:
+        observations = input_dir / "property_observations.json"
+        facts, profile = physics_planning_facts(
+            task, instruction, scene.get("components", ()), config.get("planning_facts"),
+            observations=_read_json(observations)
+            if observation_mode == "metadata-assisted" and observations.is_file() else None,
+        )
+    if ground_complex:
+        facts = complex_planning_facts(task, instruction, entities, facts)
+    return facts, profile
+
+
+def with_predicted_task(example: PlanningExample, predicted: str | None, *, observation_mode: str = "visual",
+                        ground_complex: bool = True) -> PlanningExample:
+    """Rebuild every task-derived input of ``example`` from a predicted task (``--knowledge learned``).
+
+    The episode's task name, declared skill sequence, task targets and the facts grounded from its name are
+    dropped; the adapters run again with the prediction on the same scene and instruction.
+    """
+    try:
+        from .physics_grounding import QA_TASK_PATTERNS
+    except ImportError:
+        from physics_grounding import QA_TASK_PATTERNS
+    config = _read_json(example.env_config_path) if example.env_config_path is not None else {}
+    input_dir = example.env_config_path.parent.parent / "input" if example.env_config_path is not None else Path(".")
+    facts, profile = ground_planning_facts(
+        predicted, example.instruction, config, list(example.entities), input_dir,
+        observation_mode=observation_mode, ground_complex=ground_complex)
+    visual_qa = observation_mode == "visual" and predicted in QA_TASK_PATTERNS
+    return replace(
+        example, predicted_task=predicted, planning_facts=facts, planning_observation_profile=profile,
+        task_skill_sequence=QA_TASK_PATTERNS[predicted] if visual_qa else None,
+        task_target_container=None, task_target_entity=None)
+
+
 def load_planning_examples(root: str | Path, *, limit: int | None = None,
                            observation_mode: str = "visual", ground_complex: bool = True) -> list[PlanningExample]:
     """Group the official image-folder layout back into complete episodes."""
@@ -565,30 +619,17 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None,
         episode_id = str(example_dir.relative_to(root)).replace("\\", "/")
         task, dimension = planning_metadata(episode_id)
         try:
-            from .physics_grounding import QA_TASK_PATTERNS, physics_planning_facts, visual_qa_planning_facts
+            from .physics_grounding import QA_TASK_PATTERNS
         except ImportError:
-            from physics_grounding import QA_TASK_PATTERNS, physics_planning_facts, visual_qa_planning_facts
+            from physics_grounding import QA_TASK_PATTERNS
         instruction = _read_instruction(input_dir)
-        # Only scene components and input language enter the physics adapter.
-        # In particular, task.conditions and output plans are not observations.
         scene = config.get("task", config)
         visual_qa = observation_mode == "visual" and task in QA_TASK_PATTERNS
-        if visual_qa:
-            planning_facts, observation_profile = visual_qa_planning_facts(task, instruction, scene.get("components", ()))
-        else:
-            planning_facts, observation_profile = physics_planning_facts(
-                task, instruction, scene.get("components", ()), config.get("planning_facts"),
-                observations=_read_json(input_dir / "property_observations.json")
-                if observation_mode == "metadata-assisted" and (input_dir / "property_observations.json").is_file() else None,
-            )
-        dependency = payload.get("dependency", config.get("dependency", default_dependency(task))) if isinstance(payload, Mapping) else config.get("dependency", default_dependency(task))
         entities = list(_extract_entities({key: scene[key] for key in ("components", "scene", "entities") if key in scene}))
-        try:
-            from .complex_grounding import complex_planning_facts
-        except ImportError:
-            from complex_grounding import complex_planning_facts
-        if ground_complex:
-            planning_facts = complex_planning_facts(task, instruction, entities, planning_facts)
+        planning_facts, observation_profile = ground_planning_facts(
+            task, instruction, config, entities, input_dir, observation_mode=observation_mode,
+            ground_complex=ground_complex)
+        dependency = payload.get("dependency", config.get("dependency", default_dependency(task))) if isinstance(payload, Mapping) else config.get("dependency", default_dependency(task))
         examples.append(PlanningExample(
             episode_id=episode_id,
             instruction=instruction,

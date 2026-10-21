@@ -57,6 +57,8 @@ def add_knowledge_argument(parser) -> None:
     parser.add_argument("--knowledge", choices=LEVELS, default=None,
                         help="knowledge tier of the world graph: generic < scene < learned < task < metadata "
                              "(default: task, or $VLABENCH_KNOWLEDGE)")
+    parser.add_argument("--task-classifier", default=None,
+                        help="classifier file from fit-task-classifier; required by --knowledge learned")
 
 
 def apply_knowledge_argument(args) -> str:

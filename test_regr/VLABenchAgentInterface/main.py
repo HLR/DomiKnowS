@@ -43,6 +43,7 @@ try:
     )
     from .world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
     from .knowledge import add_knowledge_argument, apply_knowledge_argument
+    from .knowledge.task_classifier import fit_task_classifier, accuracy as task_accuracy, predict_tasks
 except ImportError:
     from agent import HierarchicalVLABenchAgent
     from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples, OBSERVATION_MODES
@@ -51,6 +52,7 @@ except ImportError:
     from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch, train_controller_steps
     from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
     from knowledge import add_knowledge_argument, apply_knowledge_argument
+    from knowledge.task_classifier import fit_task_classifier, accuracy as task_accuracy, predict_tasks
 
 
 def _json(value) -> None:
@@ -947,6 +949,18 @@ def command_evaluate_official(args) -> None:
                      "max_new_tokens": args.max_new_tokens})
 
 
+def command_fit_task_classifier(args) -> None:
+    """Fit the learned task concept on the training split only and report held-out accuracy."""
+    examples = load_planning_examples(args.planning_dir, limit=args.limit)
+    splits = deterministic_split(examples, seed=args.seed)
+    classifier = fit_task_classifier(splits["train"], seed=args.seed)
+    for name in ("validation", "test"):
+        classifier.assert_disjoint(splits[name])
+    classifier.save(args.out)
+    _json({"classifier": str(args.out), "classes": len(classifier.classes), "train_examples": len(splits["train"]),
+           **{name: task_accuracy(classifier, splits[name]) for name in ("validation", "test")}})
+
+
 def command_evaluate_planner(args) -> None:
     if getattr(args, "protocol", "internal") == "official":
         return command_evaluate_official(args)
@@ -991,6 +1005,8 @@ def command_evaluate_planner(args) -> None:
             if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
             or (getattr(e, "task", None) and dim_str in str(e.task).lower())
         ]
+    if knowledge == "learned":
+        eval_examples = predict_tasks(eval_examples, args.task_classifier, observation_mode=observation_mode)
     world = build_vlabench_world_graph("vlabench_eval_world")
     vocabulary = PlanVocabulary.load(args.vocab) if args.vocab else PlanVocabulary.from_world(world, args.max_entities)
     runtime = build_constraint_runtime(world, max_entities=vocabulary.max_entities, max_operations=args.max_operations, name_prefix="vlabench_eval")
@@ -1368,6 +1384,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)
+
+    fit_classifier = sub.add_parser("fit-task-classifier", help="fit the learned task concept (training split only)")
+    fit_classifier.add_argument("--planning-dir", required=True)
+    fit_classifier.add_argument("--out", required=True)
+    fit_classifier.add_argument("--seed", type=int, default=42)
+    fit_classifier.add_argument("--limit", type=int)
+    fit_classifier.set_defaults(handler=command_fit_task_classifier)
 
     evaluate = sub.add_parser("evaluate-planner")
     planner_options(evaluate)

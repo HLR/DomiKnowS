@@ -29,6 +29,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     OBSERVATION_MODES,
 )
 from test_regr.VLABenchAgentInterface.knowledge import add_knowledge_argument, apply_knowledge_argument
+from test_regr.VLABenchAgentInterface.knowledge.task_classifier import predict_tasks
 from test_regr.VLABenchAgentInterface.main import _controller
 from test_regr.VLABenchAgentInterface.training import evaluate_planner
 
@@ -250,6 +251,9 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     if not examples:
         raise ValueError(f"no planning examples found for split={args.split!r}")
+    if knowledge == "learned":
+        examples = predict_tasks(examples, args.task_classifier, observation_mode=getattr(args, "observation_mode", "visual"),
+                                 ground_complex=getattr(args, "ground_complex", True))
     from test_regr.VLABenchAgentInterface.planning_augmentation import diagnostic_examples
     examples = diagnostic_examples(examples, getattr(args, "input_probe", "original"), args.seed)
 
@@ -282,6 +286,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "split": args.split,
         "observation_mode": getattr(args, "observation_mode", "visual"),
         "knowledge": knowledge,
+        "task_classifier": str(args.task_classifier) if knowledge == "learned" else None,
         "reference_labels": "density-material-button-v1" if getattr(args, "updated_data", False) else "as-stored",
         "updated_data": getattr(args, "updated_data", False),
         "ground_complex": getattr(args, "ground_complex", True),

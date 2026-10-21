@@ -11,7 +11,7 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 | `task` | + per-task skill-sequence, completion and obligation LCs, grounded physics/complex families | the episode's task name |
 | `metadata` | + QA property observations (`--observation-mode metadata-assisted`) | the episode's task name |
 
-`learned` (task predicted from the instruction) is not part of this run; it needs the Phase C classifier.
+| `learned` | same rules as `task` | predicted from the instruction by a classifier fitted on the training split |
 
 ## Setup
 
@@ -36,6 +36,7 @@ Raw reports: `test_regr/JointEmbodiedAgentInterface/results/knowledge_ablation/<
 | --- | --- | --- | --- | --- | --- | --- |
 | generic | 66.9 | 70.8 | 89.4 | 62.4 | 63.0 | 37.7 |
 | scene | 67.9 | 71.8 | 89.4 | 63.7 | 65.5 | 39.6 |
+| learned | 77.1 | 78.0 | 98.2 | 66.6 | 70.2 | 50.8 |
 | task | 77.1 | 78.0 | 98.2 | 66.6 | 70.2 | 50.8 |
 | metadata | 81.5 | 81.5 | 98.2 | 72.4 | 75.9 | 56.6 |
 
@@ -45,8 +46,30 @@ Per-dimension score:
 | --- | --- | --- | --- | --- | --- | --- |
 | generic | 85.0 | 71.2 | 81.6 | 82.3 | 37.7 | 43.6 |
 | scene | 85.4 | 72.2 | 81.7 | 85.5 | 37.7 | 44.6 |
+| learned | 78.9 | 72.2 | 81.7 | 85.5 | 57.0 | 87.4 |
 | task | 78.9 | 72.2 | 81.7 | 85.5 | 57.0 | 87.4 |
 | metadata | 78.9 | 72.2 | 81.7 | 85.5 | 83.0 | 87.4 |
+
+## Learned task concept
+
+`learned` replaces the episode's task name by a classifier over the instruction (hashed word and bigram bag,
+linear softmax head, `knowledge/task_classifier.py`). It is fitted on the training split only (3,600 episodes,
+45 task names, the episode ids are stored with the weights and evaluation refuses an overlapping split).
+Task-name accuracy is 95.1% on the 450 test episodes (94.2% on validation). At this level the declared
+sequence, task targets and the facts grounded from the task name are rebuilt from the prediction.
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main fit-task-classifier   --planning-dir test_regr/VLABenchAgentInterface/data/planning --out task_classifier.pt
+python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning ... --knowledge learned   --task-classifier task_classifier.pt
+```
+
+The `learned` scores equal the `task` scores to every digit. Of the 212 test episodes whose task has declared
+knowledge, the rebuilt requirements differ from the task-level ones in 66: 60 are QA episodes where the same
+sequence is now supplied by the declared LCs instead of the dataset (same constraint), and 6 are
+`insert_bloom_flower` episodes predicted as `insert_flower`. Those 6 changed no score; I did not check
+whether their generated plans are identical. The misclassifications otherwise fall on task variants
+(`*_semantic`, `*_common_sense`) that have no declared rules. So on the seen tasks the task name adds
+nothing the instruction does not already give; the unseen-task test (Phase D) is what separates the two.
 
 ## Reading
 

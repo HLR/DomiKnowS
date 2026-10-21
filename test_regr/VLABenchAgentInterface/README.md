@@ -563,6 +563,7 @@ repository root; every module is also importable as `test_regr.VLABenchAgentInte
 | `__init__.py` | Knowledge tiers (`generic`, `scene`, `learned`, `task`, `metadata`), `--knowledge` flag helpers, and `TaskKnowledge` (the declared sequences and obligations the builder loops over). |
 | `tables.py` | The declarative per-task data: primitive, QA and planning skill sequences and the complex-task schemas. |
 | `task_lcs.py` | Declares `task__<name>`, interface, position, history and phase concepts on the operation concept and the per-task `skill_sequence`, `completion` and `obligations` logical constraints, plus the observation values that feed them. |
+| `task_classifier.py` | The learned task concept: a classifier over the instruction fitted on the training split only, used by `--knowledge learned`. |
 
 ### `official/` (standard VLM-planning protocol)
 
