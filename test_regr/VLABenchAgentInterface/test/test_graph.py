@@ -347,7 +347,7 @@ def test_materialize_plan_and_score_vlabench_plan_auto_resolve_task_name():
     root = materialize_plan(short_plan, entities, bundle, task_name="cook_dishes")
     evaluation = verify_plan_constraints(root, bundle)
     assert evaluation.score < 1.0
-    assert evaluation.results["composite_subgoal_completion"]["satisfied"] < 100.0
+    assert evaluation.results["task__cook_dishes__obligations"]["satisfied"] < 100.0
 
     # score_vlabench_plan also propagates task_name and marks short composite plans invalid
     ref_plan = [
@@ -364,7 +364,7 @@ def test_materialize_plan_and_score_vlabench_plan_auto_resolve_task_name():
         task_name="cook_dishes",
     )
     assert not breakdown.valid
-    assert any("composite_subgoal_completion" in err or "constraints scored" in err for err in breakdown.errors)
+    assert any("task__cook_dishes__obligations" in err or "constraints scored" in err for err in breakdown.errors)
 
 
 def test_score_planning_metrics_grounds_entity_indices_against_names():

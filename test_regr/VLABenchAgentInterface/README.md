@@ -540,7 +540,7 @@ repository root; every module is also importable as `test_regr.VLABenchAgentInte
 | `graph.py` | Generation vocabulary (`PlanVocabulary`), plan/token conversion and the planner DFA derived from the world graph. |
 | `constraint_compiler.py` | VLABench predicate bindings and the token/state adapter that compiles the world constraints into decoding masks. |
 | `semantics.py` | Executable world predicates (enclosed or opened containers, static fixtures, pointer resolution, operation schema errors), independent of DataNodes and token decoding. |
-| `task_policy.py` | Declarative task facts, per-task required skill sequences and their executable predicate meanings. |
+| `task_policy.py` | Turns supplied task facts into the observations for the generic compiler (tier-gated); the declared sequences themselves are task LCs in `knowledge/`. |
 | `complex_grounding.py` | Complex-task requirements derived from the exposed language and scene names only. |
 | `physics_grounding.py` | Input-only adapters for the qualitative physics (QA) tasks, in `visual` and `metadata-assisted` form. |
 | `object_grounding.py` | Conservative instruction grounding from scene components, never from goal metadata; produces per-skill object-id restrictions. |
@@ -555,6 +555,14 @@ repository root; every module is also importable as `test_regr.VLABenchAgentInte
 | `planning_experiment.py` | Resumable, evidence-producing native and graph planner experiments, teacher-corpus sampling and HMM fitting. |
 | `repair_density_labels.py` | Audit, repair and restore of the density QA labels. |
 | `planning_benchmark.json` | Pinned upstream revision, dimension-to-task mapping and benchmark configuration (data, not code). |
+
+### `knowledge/` (task knowledge as graph concepts and logical constraints)
+
+| File | Functionality |
+| --- | --- |
+| `__init__.py` | Knowledge tiers (`generic`, `scene`, `learned`, `task`, `metadata`), `--knowledge` flag helpers, and `TaskKnowledge` (the declared sequences and obligations the builder loops over). |
+| `tables.py` | The declarative per-task data: primitive, QA and planning skill sequences and the complex-task schemas. |
+| `task_lcs.py` | Declares `task__<name>`, interface, position, history and phase concepts on the operation concept and the per-task `skill_sequence`, `completion` and `obligations` logical constraints, plus the observation values that feed them. |
 
 ### `official/` (standard VLM-planning protocol)
 

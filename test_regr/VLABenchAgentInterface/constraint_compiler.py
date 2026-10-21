@@ -15,8 +15,10 @@ from domiknows.generation.dfa.predicate_monitor import (
 
 try:
     from .semantics import OperationPredicates, PlanSemantics, PlanSemanticState
+    from .knowledge.task_lcs import knowledge_values
 except ImportError:
     from semantics import OperationPredicates, PlanSemantics, PlanSemanticState
+    from knowledge.task_lcs import knowledge_values
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,9 @@ def compile_world_constraints(world):
     ))
     bindings.extend(PredicateBinding(concept, "skill:" + skill, "operation")
                     for skill, concept in world.skills.items())
+    if getattr(world, "task_concepts", None) is not None:
+        bindings.extend(PredicateBinding(concept, name, "operation", phase)
+                        for concept, name, phase in world.task_concepts.bindings())
     from domiknows.generation.grounded import predicate_bindings
     bindings.append(PredicateBinding(world.plan, "episode", "episode"))
     bindings.extend(predicate_bindings(world.grounded_constraints))
@@ -117,17 +122,27 @@ class VLABenchPredicateAdapter:
         return (PredicateEvent("operation", values, "completion"),) + ((root_event,) if eos else ())
 
     def task_completion_values(self, semantic, *, eos):
+        # Declared obligations (minimum operations, required skills) are task LCs over the history concepts.
         return {
             "task_sequence_complete": not eos or self.requirements.sequence_complete(semantic.completed_operations),
-            "premature_composite_eos": bool(eos and self.schema and self.semantics.premature_composite_eos(
-                semantic, min_operations=self.schema.min_operations, required_skills=self.schema.required_skills,
-            )),
+            "premature_composite_eos": False,
+            **self.knowledge_values(semantic.completed_operations - 1, final=eos, history=semantic.completed_skills),
         }
+
+    def knowledge_values(self, index, *, choice=False, final=False, history=()):
+        """Observations for the task concepts of the world graph (empty if the graph declares none)."""
+        concepts = getattr(self.world, "task_concepts", None)
+        if concepts is None:
+            return {}
+        from_task = self.requirements
+        return knowledge_values(concepts, from_task.task, from_task.interface, index,
+                                explicit=from_task.explicit_sequence, choice=choice, final=final, history=history)
 
     def task_skill_values(self, count, skill):
         return {"operation": True,
                 "task_skill_allowed": self.requirements.skill_allowed(count, skill),
-                **{"skill:" + name: skill == name for name in self.world.skills}}
+                **{"skill:" + name: skill == name for name in self.world.skills},
+                **self.knowledge_values(count, choice=True)}
 
     def step(self, state, symbol):
         token = self.vocabulary.token_for_label(int(symbol))
@@ -197,6 +212,8 @@ def task_completion_bounds(base_dfa, vocabulary, adapter, program):
         return None
     names = {"operation", "task_skill_allowed", "task_sequence_complete", "premature_composite_eos"}
     names.update("skill:" + skill for skill in adapter.world.skills)
+    if getattr(adapter.world, "task_concepts", None) is not None:
+        names.update(name for _concept, name, _phase in adapter.world.task_concepts.bindings())
     projected = program.project(names, domain="operation", phases=("task_skill", "completion"))
     if not projected.rules:
         return None
@@ -206,7 +223,8 @@ def task_completion_bounds(base_dfa, vocabulary, adapter, program):
     # This cache is structural, not keyed by context identity or entity counts.
     # Entity facts are absent from the projection and remain request-bound.
     key = (projected, requirements.expected_skills, requirements.skill_cycle, prefix,
-           None if schema is None else (schema.min_operations, schema.required_skills))
+           None if schema is None else (schema.min_operations, schema.required_skills),
+           requirements.task, requirements.interface, requirements.explicit_sequence)
     cache = base_dfa.completion_bounds_cache
     if key in cache:
         return cache[key]

@@ -28,6 +28,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     load_planning_examples,
     OBSERVATION_MODES,
 )
+from test_regr.VLABenchAgentInterface.knowledge import add_knowledge_argument, apply_knowledge_argument
 from test_regr.VLABenchAgentInterface.main import _controller
 from test_regr.VLABenchAgentInterface.training import evaluate_planner
 
@@ -65,6 +66,7 @@ def build_eval_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--observation-mode", choices=OBSERVATION_MODES, default="visual",
                         help="QA property selection: visual VLM predictions (default) or explicit metadata-assisted constraints")
+    add_knowledge_argument(parser)
     parser.add_argument("--updated-data", "--updated-labels", action="store_true",
                         help="score against corrected density labels computed in memory; default uses labels stored in --planning-dir")
     parser.add_argument(
@@ -196,6 +198,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     checkpoint_path = Path(args.checkpoint).resolve()
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"checkpoint not found: {checkpoint_path}")
+    knowledge = apply_knowledge_argument(args)
 
     device = torch.device(args.device)
     random.seed(args.seed)
@@ -278,6 +281,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "epoch": payload.get("epoch"),
         "split": args.split,
         "observation_mode": getattr(args, "observation_mode", "visual"),
+        "knowledge": knowledge,
         "reference_labels": "density-material-button-v1" if getattr(args, "updated_data", False) else "as-stored",
         "updated_data": getattr(args, "updated_data", False),
         "ground_complex": getattr(args, "ground_complex", True),

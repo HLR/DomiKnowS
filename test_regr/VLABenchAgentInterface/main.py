@@ -42,6 +42,7 @@ try:
         train_controller_steps,
     )
     from .world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
+    from .knowledge import add_knowledge_argument, apply_knowledge_argument
 except ImportError:
     from agent import HierarchicalVLABenchAgent
     from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples, OBSERVATION_MODES
@@ -49,6 +50,7 @@ except ImportError:
     from models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
     from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch, train_controller_steps
     from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
+    from knowledge import add_knowledge_argument, apply_knowledge_argument
 
 
 def _json(value) -> None:
@@ -949,6 +951,7 @@ def command_evaluate_planner(args) -> None:
     if getattr(args, "protocol", "internal") == "official":
         return command_evaluate_official(args)
     observation_mode = getattr(args, "observation_mode", "visual")
+    knowledge = apply_knowledge_argument(args)
     if args.generation_mode == "frozen-vlm":
         if observation_mode != "visual":
             raise ValueError("frozen-vlm evaluation uses visual observation mode; metadata-assisted requires graph generation")
@@ -973,7 +976,7 @@ def command_evaluate_planner(args) -> None:
                                   generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens)
         _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
                         "dfa_constrained": False, "max_new_tokens": args.max_new_tokens,
-                        "observation_mode": observation_mode})
+                        "observation_mode": observation_mode, "knowledge": knowledge})
         return
     if not args.resume_adapter:
         raise ValueError("graph evaluation requires --resume-adapter with trained graph-decoder weights; "
@@ -995,7 +998,8 @@ def command_evaluate_planner(args) -> None:
         raise ValueError("loaded vocabulary differs from the graph-derived runtime vocabulary")
     planner = _load_planner(args, runtime.vocabulary)
     _json(evaluate_planner(planner, eval_examples, runtime)
-          | {"generation_mode": "graph", "dfa_constrained": True, "observation_mode": observation_mode})
+          | {"generation_mode": "graph", "dfa_constrained": True, "observation_mode": observation_mode,
+             "knowledge": knowledge})
 
 
 def _factory(value: str):
@@ -1369,6 +1373,7 @@ def build_parser() -> argparse.ArgumentParser:
     planner_options(evaluate)
     evaluate.add_argument("--observation-mode", choices=OBSERVATION_MODES, default="visual",
                           help="QA property selection: visual predictions (default) or metadata-assisted constraints")
+    add_knowledge_argument(evaluate)
     evaluate.add_argument("--generation-mode", choices=["graph", "frozen-vlm"], default="graph",
                           help="graph: trained adapter and DFA decoder; frozen-vlm: direct base VLM, no DFA")
     evaluate.add_argument("--max-new-tokens", type=int, default=768,

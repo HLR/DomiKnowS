@@ -41,41 +41,20 @@ SUBTASK_PATTERNS: tuple[tuple[str, ...], ...] = (
     ("press",),
 )
 
-PRIMITIVE_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
-    "add_condiment": ("pick", "pour"),
-    "insert_flower": ("pick", "insert"),
-    # SelectBookTask removes the book from the shelf with pick followed by pull.
-    "select_book": ("pick", "pull"),
-    "select_chemistry_tube": ("pick", "lift"),
-    # SelectDrinkTask officially lifts the drink before pulling it clear.
-    "select_drink": ("pick", "lift", "pull"),
-    "select_fruit": ("pick", "place"),
-    "select_mahjong": ("pick", "place"),
-    # VLABench SelectPaintingTask inherits PressButtonTask: the goal is to
-    # press the button associated with the requested painting style.
-    "select_painting": ("press",),
-    "select_poker": ("pick", "lift"),
-    # SelectToyTask lifts the toy before placing it in the target.
-    "select_toy": ("pick", "lift", "place"),
-})
-
-# Planning-only QA aliases do not add controller primitives or change token IDs.
-# Keep their task requirements separate from the checkpoint's controller schema.
-QA_TASK_PATTERNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
-    "density_qa": ("press",),
-    "friction_qa": ("press",),
-    "magnetism_qa": ("press",),
-    "reflection_qa": ("press",),
-    "speed_of_sound_qa": ("press",),
-    "thermal_expansion_qa": ("press",),
-})
-
-# Compact non-interactive labels omit these simulator lift movements.
-PLANNING_TASK_PATTERNS = MappingProxyType({
-    **QA_TASK_PATTERNS,
-    "select_drink": ("pick", "pull"),
-    "select_toy": ("pick", "place"),
-})
+# The task tables are declarative data in ``knowledge.tables``; the builder below turns them into
+# ``task__<name>`` concepts and logical constraints (``knowledge.task_lcs``).
+try:
+    from .knowledge import (
+        DEFAULT_TASK_KNOWLEDGE, KnowledgeState, check_level, default_level, group_active,
+        PLANNING_TASK_PATTERNS, PRIMITIVE_TASK_PATTERNS, QA_TASK_PATTERNS,
+    )
+    from .knowledge.task_lcs import declare_task_concepts, knowledge_values
+except ImportError:  # pragma: no cover - flat-module execution
+    from knowledge import (
+        DEFAULT_TASK_KNOWLEDGE, KnowledgeState, check_level, default_level, group_active,
+        PLANNING_TASK_PATTERNS, PRIMITIVE_TASK_PATTERNS, QA_TASK_PATTERNS,
+    )
+    from knowledge.task_lcs import declare_task_concepts, knowledge_values
 
 
 @dataclass(frozen=True)
@@ -419,6 +398,10 @@ class VLABenchWorldGraphBundle:
     task_target_allowed: Any = None
     task_sequence_complete: Any = None
     grounded_constraints: Any = None
+    task_concepts: Any = None
+    task_knowledge: Any = None
+    knowledge_state: Any = None
+    knowledge_groups: Any = None
 
     @property
     def optional_skill_arguments(self):
@@ -450,9 +433,21 @@ def build_vlabench_world_graph(
     *,
     include_default_constraints: bool = True,
     semantic_parents: Mapping[str, Any] | None = None,
+    knowledge_level: str | None = None,
+    task_knowledge: Any = None,
 ) -> VLABenchWorldGraphBundle:
-    """Define the DomiKnowS plan ontology and its hard logical constraints."""
+    """Define the DomiKnowS plan ontology and its hard logical constraints.
+
+    Every rule is a concept plus logical constraints, in three groups: ``generic`` (schema, patterns, causal
+    rules), ``scene`` (rules that need an entity table) and ``task`` (task facts and the ``task__<name>``
+    rules of ``knowledge.task_lcs``). ``knowledge_level`` (default: ``knowledge.default_level()``) decides which
+    groups are active; :func:`set_knowledge_level` changes it later.
+    """
     from domiknows.graph import Concept, Graph
+
+    level = check_level(knowledge_level or default_level())
+    state = KnowledgeState(level)
+    task_knowledge = task_knowledge or DEFAULT_TASK_KNOWLEDGE
 
     build_id = next(_BUILD_IDS)
     role_prefix = f"__vlabench_plan_{build_id}__"
@@ -515,7 +510,14 @@ def build_vlabench_world_graph(
         task_sequence_complete = operation(name="operation__task_sequence_complete")
 
         from domiknows.generation.grounded import declare_predicates
-        grounded_constraints = declare_predicates(operation, plan, active=include_default_constraints)
+        grounded_constraints = declare_predicates(
+            operation, plan, active=include_default_constraints and group_active(level, "task"))
+        task_concepts = declare_task_concepts(
+            operation, skills, task_knowledge, active=group_active(level, "task"),
+            constraints=include_default_constraints)
+        groups = {"generic": [], "scene": [], "task": list(task_concepts.constraints)}
+        groups["task"].extend(lc for lc in graph.logicalConstrains.values()
+                              if str(getattr(lc, "name", "")).startswith("grounded__"))
 
         bundle = VLABenchWorldGraphBundle(
             grounded_constraints=grounded_constraints,
@@ -557,29 +559,37 @@ def build_vlabench_world_graph(
             task_skill_allowed=task_skill_allowed,
             task_target_allowed=task_target_allowed,
             task_sequence_complete=task_sequence_complete,
+            task_concepts=task_concepts,
+            task_knowledge=task_knowledge,
+            knowledge_state=state,
+            knowledge_groups=groups,
         )
+
+        def declare(group, antecedent, consequent, name):
+            groups[group].append(ifL(antecedent, consequent, name=name, active=group_active(level, group)))
 
         if include_default_constraints:
             from domiknows.graph.logicalConstrain import ifL, notL
 
-            ifL(operation("op"), valid_skill_type("op"), name="operation_exactly_one_skill")
-            ifL(operation("op"), valid_operation("op"), name="operation_schema_is_valid")
-            ifL(operation("op"), valid_pointer("op"), name="operation_pointer_is_valid")
-            ifL(transition("edge"), allowed_transition("edge"), name="transition_matches_subtask_pattern")
-            ifL(targets_button("op"), skills["press"]("op"), name="button_entity_requires_press_skill")
+            declare("generic", operation("op"), valid_skill_type("op"), "operation_exactly_one_skill")
+            declare("generic", operation("op"), valid_operation("op"), "operation_schema_is_valid")
+            declare("scene", operation("op"), valid_pointer("op"), "operation_pointer_is_valid")
+            declare("generic", transition("edge"), allowed_transition("edge"), "transition_matches_subtask_pattern")
+            declare("scene", targets_button("op"), skills["press"]("op"), "button_entity_requires_press_skill")
 
-            ifL(skills["press"]("op"), targets_button("op"), name="press_requires_button_target")
-            ifL(operation("op"), task_skill_allowed("op"), name="task_skill_sequence")
-            ifL(operation("op"), task_target_allowed("op"), name="task_initial_target")
-            ifL(operation("op"), task_sequence_complete("op"), name="task_sequence_completion")
+            declare("scene", skills["press"]("op"), targets_button("op"), "press_requires_button_target")
+            # Explicit per-request facts (a supplied sequence, initial target, completion) are observations.
+            declare("task", operation("op"), task_skill_allowed("op"), "task_skill_sequence")
+            declare("task", operation("op"), task_target_allowed("op"), "task_initial_target")
+            declare("task", operation("op"), task_sequence_complete("op"), "task_sequence_completion")
 
             # Causal Precondition Constraints (First-Order Logic)
-            ifL(operation("op"), notL(is_self_placement("op")), name="anti_self_placement")
-            ifL(operation("op"), notL(targets_static_fixture("op")), name="pick_excludes_static_fixtures")
-            ifL(transition("edge"), notL(repeated_pick_entity("edge")), name="no_redundant_repeated_picks")
-            ifL(transition("edge"), notL(inconsistent_container("edge")), name="container_destination_consistency")
-            ifL(transition("edge"), notL(unopened_container_placement("edge")), name="open_before_enclosed_placement")
-            ifL(operation("op"), notL(premature_composite_eos("op")), name="composite_subgoal_completion")
+            declare("generic", operation("op"), notL(is_self_placement("op")), "anti_self_placement")
+            declare("scene", operation("op"), notL(targets_static_fixture("op")), "pick_excludes_static_fixtures")
+            declare("generic", transition("edge"), notL(repeated_pick_entity("edge")), "no_redundant_repeated_picks")
+            declare("scene", transition("edge"), notL(inconsistent_container("edge")), "container_destination_consistency")
+            declare("scene", transition("edge"), notL(unopened_container_placement("edge")), "open_before_enclosed_placement")
+            declare("task", operation("op"), notL(premature_composite_eos("op")), "composite_subgoal_completion")
 
             for name, required in SKILL_ARGUMENTS.items():
                 required = set(required)
@@ -590,15 +600,20 @@ def build_vlabench_world_graph(
                     if key in OPTIONAL_SKILL_ARGUMENTS.get(name, ()):
                         continue
                     consequent = flag("op") if key in required else notL(flag("op"))
-                    ifL(
-                        skills[name]("op"),
-                        consequent,
-                        name=f"skill_argument__{name}__{key}",
-                    )
+                    declare("generic", skills[name]("op"), consequent, f"skill_argument__{name}__{key}")
 
         for builder in tuple(constraint_builders):
             builder(bundle)
     return bundle
+
+
+def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str) -> None:
+    """Activate the constraint groups of ``level`` in place. Recompile any DFA built from the graph afterwards."""
+    state = bundle.knowledge_state
+    state.level = check_level(level)
+    for group, constraints in (bundle.knowledge_groups or {}).items():
+        for constraint in constraints:
+            constraint.active = group_active(state.level, group)
 
 
 def _node(concept: Any, instance_id: Any, value: Any = None, attributes: dict | None = None):
@@ -619,6 +634,10 @@ def _truth(node: Any, concept: Any, value: bool) -> None:
 
 def _link(node: Any, role: Any, target: Any) -> None:
     node.addRelationLink(role.name, target)
+
+
+def _task_concept_rows(concepts):
+    return [(name, concept) for concept, name, _phase in concepts.bindings()]
 
 
 def materialize_plan(
@@ -665,13 +684,7 @@ def materialize_plan(
             if task_name is not None:
                 context.setdefault("task", task_name)
             requirements = task_requirements(context, bundle, entities)
-        schema = requirements.schema
-        if schema is not None:
-            if min_operations is None:
-                min_operations = schema.min_operations
-            if required_skills is None:
-                required_skills = schema.required_skills
-
+        # Declared obligations of a complex task are task LCs over the knowledge concepts; only explicit ones remain here.
         if requirements.allowed_sequences is None:
             from dataclasses import replace
             from test_regr.VLABenchAgentInterface.task_policy import request_sequences
@@ -698,6 +711,9 @@ def materialize_plan(
         for key, value in observations((final_check,)).items():
             _truth(root, bundle.grounded_constraints[key], value)
         operation_nodes = []
+        task_concepts = getattr(bundle, "task_concepts", None)
+        offset = len(requirements.planning.completed_skill_prefix)
+        history_skills = list(requirements.planning.completed_skill_prefix)
         for index, operation_value in enumerate(plan):
             name = operation_value["name"]
             params = operation_value["params"]
@@ -739,6 +755,14 @@ def materialize_plan(
             _truth(operation_node, bundle.task_target_allowed, requirements.target_allowed(index + len(requirements.planning.completed_skill_prefix), params, entities))
             _truth(operation_node, bundle.task_sequence_complete,
                    index != len(plan) - 1 or requirements.sequence_complete(len(plan) + len(requirements.planning.completed_skill_prefix)))
+            history_skills.append(name)
+            if task_concepts is not None:
+                observed = knowledge_values(
+                    task_concepts, requirements.task, requirements.interface, index + offset,
+                    explicit=requirements.explicit_sequence, choice=True, final=index == len(plan) - 1,
+                    history=history_skills)
+                for predicate, concept in _task_concept_rows(task_concepts):
+                    _truth(operation_node, concept, observed[predicate])
             _truth(operation_node, bundle.valid_pointer, predicates.valid_pointer)
             _truth(operation_node, bundle.valid_operation, predicates.valid_operation)
             root.addChildDataNode(operation_node)

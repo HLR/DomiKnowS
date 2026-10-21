@@ -10,62 +10,14 @@ from typing import Any, Mapping
 
 try:
     from .semantics import entity_mapping, resolve_pointer
+    from .knowledge import (
+        COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, task_facts_available,
+    )
 except ImportError:
     from semantics import entity_mapping, resolve_pointer
-
-
-@dataclass(frozen=True)
-class ComplexTaskSchema:
-    task_name: str
-    required_skills: tuple[str, ...]
-    min_operations: int
-    phase_transitions: Mapping[tuple[str, str], str] | None = None
-    accepting_phases: frozenset[str] | None = None
-
-
-COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
-    "cook_dishes": ComplexTaskSchema(
-        task_name="cook_dishes",
-        required_skills=("pick", "place"),
-        min_operations=4,
-    ),
-    "cool_drink": ComplexTaskSchema(
-        task_name="cool_drink",
-        required_skills=("pick", "place"),
-        min_operations=2,
-    ),
-    "make_juice": ComplexTaskSchema(
-        task_name="make_juice",
-        required_skills=("pick", "place"),
-        min_operations=2,
-    ),
-    "hammer_nail_and_hang_picture": ComplexTaskSchema(
-        task_name="hammer_nail_and_hang_picture",
-        required_skills=("pick", "place", "push"),
-        min_operations=3,
-    ),
-    "take_chemistry_experiment": ComplexTaskSchema(
-        task_name="take_chemistry_experiment",
-        required_skills=("pick", "place", "pour"),
-        min_operations=3,
-    ),
-    "book_rearrange": ComplexTaskSchema(
-        task_name="book_rearrange",
-        required_skills=("pick", "push", "pull"),
-        min_operations=3,
-    ),
-    "texas_holdem": ComplexTaskSchema(
-        task_name="texas_holdem",
-        required_skills=("pick", "place"),
-        min_operations=2,
-    ),
-    "manage_study_table": ComplexTaskSchema(
-        task_name="manage_study_table",
-        required_skills=("pick", "place"),
-        min_operations=3,
-    ),
-}
-
+    from knowledge import (
+        COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, task_facts_available,
+    )
 
 
 @dataclass(frozen=True)
@@ -76,10 +28,17 @@ class TaskRequirements:
     planning: PlanningFacts = PlanningFacts()
     allowed_sequences: frozenset | None = None
     skill_cycle: tuple = ()
+    # Task identity as an observation for the ``task__<name>`` concepts, the plan interface that picks the declared
+    # sequence, and whether ``expected_skills`` was supplied explicitly (it then overrides the declared sequence).
+    task: str | None = None
+    interface: str = "full"
+    explicit_sequence: bool = False
 
     def skill_allowed(self, index, skill):
-        return (not self.skill_cycle or skill == self.skill_cycle[index % len(self.skill_cycle)]) and (self.expected_skills is None or
-                (index < len(self.expected_skills) and self.expected_skills[index] == skill))
+        # A declared (graph) sequence is enforced by the task LCs; only explicit facts are checked here.
+        expected = self.expected_skills if self.explicit_sequence else None
+        return (not self.skill_cycle or skill == self.skill_cycle[index % len(self.skill_cycle)]) and (expected is None or
+                (index < len(expected) and expected[index] == skill))
 
     def target_allowed(self, index, params, entities):
         if index != 0 or self.initial_target is None:
@@ -93,38 +52,39 @@ class TaskRequirements:
         return valid and name == self.initial_target
 
     def sequence_complete(self, count):
-        return (not self.skill_cycle or count % len(self.skill_cycle) == 0) and (self.expected_skills is None or count == len(self.expected_skills))
+        expected = self.expected_skills if self.explicit_sequence else None
+        return (not self.skill_cycle or count % len(self.skill_cycle) == 0) and (expected is None or count == len(expected))
 
 
 def task_requirements(context, world, entities):
     """Resolve explicit task data; unknown tasks add no implicit goal rules."""
     context = context or {}
     get = context.get if isinstance(context, Mapping) else lambda k, default=None: getattr(context, k, default)
-    task = str(get("task") or get("task_name") or "").strip().lower().replace("-", "_")
-    if not task and get("episode_id"):
+    knowledge = getattr(world, "task_knowledge", None) or DEFAULT_TASK_KNOWLEDGE
+    state = getattr(world, "knowledge_state", None)
+    level = state.level if state is not None else default_level()
+    if not task_facts_available(level):
+        return TaskRequirements()  # generic/scene: no task identity, sequence, target or fact is consulted
+    normalize = lambda value: str(value or "").strip().lower().replace("-", "_")
+    task = normalize(get("task") or get("task_name"))
+    if level == "learned":
+        task = normalize(get("predicted_task"))  # the episode's own task name is not used
+    elif not task and get("episode_id"):
         try:
             from .planning_metrics import planning_metadata
         except ImportError:
             from planning_metrics import planning_metadata
         task = planning_metadata(str(get("episode_id")))[0] or ""
-    expected = get("task_skill_sequence")
+    expected = None if level == "learned" else get("task_skill_sequence")
     if expected is None and isinstance(get("planning_facts"), Mapping):
         expected = get("planning_facts").get("required_skill_sequence")
     if expected is None and isinstance(get("planning_facts"), PlanningFacts):
         expected = get("planning_facts").required_skill_sequence or None
+    explicit_sequence = expected is not None
+    interface = "compact" if get("planning_interface") == "compact" else "full"
     if expected is None:
-        try:
-            from .world_graph import PLANNING_TASK_PATTERNS
-        except ImportError:
-            from world_graph import PLANNING_TASK_PATTERNS
-        expected = (PLANNING_TASK_PATTERNS.get(task, world.primitive_task_patterns.get(task))
-                    if get("planning_interface") == "compact" else world.primitive_task_patterns.get(task))
-        if expected is None:
-            try:
-                from .world_graph import QA_TASK_PATTERNS
-            except ImportError:
-                from world_graph import QA_TASK_PATTERNS
-            expected = QA_TASK_PATTERNS.get(task)
+        # The declared sequence is knowledge: the task LCs enforce it; it is read here only to bound the grammar roots.
+        expected = knowledge.expected(task, interface)
     if expected is not None:
         if isinstance(expected, str):
             raise ValueError("task_skill_sequence must be a sequence of skill names")
@@ -144,11 +104,7 @@ def task_requirements(context, world, entities):
         return name
     planning = PlanningFacts.parse(get("planning_facts"), entities=table.values(), resolve=resolve,
                                    default_destination=get("task_target_container"), constants=("left", "right"))
-    try:
-        from .world_graph import QA_TASK_PATTERNS
-    except ImportError:
-        from world_graph import QA_TASK_PATTERNS
-    if task in QA_TASK_PATTERNS and not any(s.action == "press" for s in planning.selections):
+    if knowledge.is_qa(task) and not any(s.action == "press" for s in planning.selections):
         from domiknows.generation.grounded import SelectionRequirement
         # QA action shape is known; the answer is unavailable without exposed
         # measurements, option bindings and a declared comparison requirement.
@@ -173,7 +129,8 @@ def task_requirements(context, world, entities):
     cycle = planning.skill_cycle
     if any(skill not in world.skill_arguments for skill in cycle):
         raise ValueError("skill_cycle contains an unknown skill")
-    return TaskRequirements(expected, target, COMPLEX_TASK_SCHEMAS.get(task), planning, skill_cycle=cycle)
+    return TaskRequirements(expected, target, knowledge.schema(task), planning, skill_cycle=cycle,
+                            task=task or None, interface=interface, explicit_sequence=explicit_sequence)
 
 
 

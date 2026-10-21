@@ -53,11 +53,11 @@ def test_wide_complex_dead_ends_are_proved_without_enumerating_entity_combinatio
 
 
 def test_task_completion_bound_follows_lc_deactivation_addition_and_frozen_programs(wide_complex_runtime):
-    from domiknows.graph.logicalConstrain import ifL, notL
+    from domiknows.graph.logicalConstrain import andL, ifL
     from ..constraint_compiler import WorldConstraintDFA, compile_world_constraints
     world = wide_complex_runtime.world_bundle
     original, state, labels, context = complex_prefix(wide_complex_runtime, "take_chemistry_experiment")
-    rule = next(rule for rule in world.graph.logicalConstrains.values() if rule.name == "composite_subgoal_completion")
+    rule = next(rule for rule in world.graph.logicalConstrains.values() if rule.name == "task__take_chemistry_experiment__obligations")
     rule.active = False
     try:
         relaxed = WorldConstraintDFA(original.base_dfa, wide_complex_runtime.vocabulary, world,
@@ -67,7 +67,9 @@ def test_task_completion_bound_follows_lc_deactivation_addition_and_frozen_progr
         assert relaxed._reachability.completion_bound(state) == 1
         assert wide_complex_runtime.vocabulary.eos_label in relaxed.allowed_tokens(state, 0)
         with world.graph:
-            added = ifL(world.operation("op"), notL(world.premature_composite_eos("op")),
+            concepts = world.task_concepts
+            added = ifL(andL(concepts.tasks["take_chemistry_experiment"]("op"), concepts.is_final("op")),
+                        andL(*(concepts.history[skill]("op") for skill in ("pick", "place", "pour"))),
                         name="new_completion_rule_without_search_changes")
         restored = WorldConstraintDFA(original.base_dfa, wide_complex_runtime.vocabulary, world,
                                       compile_world_constraints(world), context["entities"],
