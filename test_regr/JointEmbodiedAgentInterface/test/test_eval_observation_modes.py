@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from . import eval_planning
+from .. import eval_planning
 
 
 @pytest.mark.parametrize('mode', ['visual','metadata-assisted'])
@@ -55,7 +55,7 @@ def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypa
 @pytest.mark.parametrize('updated', [False, True])
 def test_joint_test_split_preparation_uses_selected_observation_mode(monkeypatch, mode, updated):
     from test_regr.EmbodiedAgentInterface import dataset as eai_dataset
-    from . import main, world_graph
+    from .. import main, world_graph
     args = eval_planning.build_eval_parser().parse_args(['--checkpoint','unused','--observation-mode',mode])
     args.vlabench_planning_dir = 'unused'
     args.updated_data = updated

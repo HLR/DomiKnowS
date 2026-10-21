@@ -18,7 +18,7 @@ from test_regr.EmbodiedAgentInterface.dataset import dummy_dataset
 from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
 from test_regr.VLABenchAgentInterface.simulation.controller import MultiViewController
 
-from .checkpoint import (
+from ..checkpoint import (
     _checkpoint_staging_location,
     _cpu_rng_state,
     _restore_cuda_rng_states,
@@ -28,7 +28,7 @@ from .checkpoint import (
     load_joint_checkpoint,
     save_joint_checkpoint,
 )
-from .main import (
+from ..main import (
     _evaluate_eai,
     _stage2_resume_position,
     build_parser,
@@ -38,10 +38,10 @@ from .main import (
     stage2_preflight_eligible,
     stage2_selection_key,
 )
-from .models import JointQwenVLPlanner
-from .utils.paired_eai_eval import paired_indices
-from .program import JointReinforcementProgram, JointSolverPOIProgram, _TrainingProgress
-from .world_graph import build_joint_runtime, build_joint_world_graph
+from ..models import JointQwenVLPlanner
+from ..utils.paired_eai_eval import paired_indices
+from ..program import JointReinforcementProgram, JointSolverPOIProgram, _TrainingProgress
+from ..world_graph import build_joint_runtime, build_joint_world_graph
 
 
 class FakeProcessor:

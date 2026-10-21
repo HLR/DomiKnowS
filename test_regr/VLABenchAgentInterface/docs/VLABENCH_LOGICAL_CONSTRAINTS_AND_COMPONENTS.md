@@ -378,7 +378,7 @@ Key test coverage:
 | `test_decoding_integration.py` | Actual model-side masks, sampling/replay log-probability agreement, live-agent task facts, strict acceptance, and cancellation behavior without downloading a VLM. |
 | `test_regr/generation/test_predicate_monitor.py` | Generic compilation and monitoring in a document workflow, including noninteger symbols and independent Boolean truth tables. |
 | `test_regr/generation/test_stop_policy.py` | Shared budget conventions and final-token boundaries across DFA views. |
-| `test_regr/JointEmbodiedAgentInterface/test_joint_pipeline.py` | Joint runtime binding, scene changes, domain facades, and differentiable replay. |
+| `test_regr/JointEmbodiedAgentInterface/test/test_joint_pipeline.py` | Joint runtime binding, scene changes, domain facades, and differentiable replay. |
 
 `test_regr/generation/constraint_equivalence.py` is the reusable audit harness. It enumerates syntax using `step`, not semantic masking, so rejected counterexamples cannot disappear from the comparison. It compares complete acceptance and next-token masks at every budget within the finite horizon. Terminal symbols stop enumeration. These tests establish agreement for the enumerated scenes and bounds, not an unbounded equivalence theorem or general physical feasibility.
 
@@ -400,7 +400,7 @@ From the repository root on Windows, the focused checks can be reproduced with:
   test_regr/VLABenchAgentInterface/test/test_decoding_integration.py `
   test_regr/generation/test_predicate_monitor.py `
   test_regr/generation/test_stop_policy.py `
-  test_regr/JointEmbodiedAgentInterface/test_joint_pipeline.py -q --tb=short
+  test_regr/JointEmbodiedAgentInterface/test/test_joint_pipeline.py -q --tb=short
 ```
 
 Test counts may grow as cases are added. Historical checkpoint scores, remote host paths, and timings from the previous document are not evidence that the current constraint semantics were deployed or benchmarked. Rerun planning evaluation against the intended checkpoint and configuration before reporting current benchmark results.
@@ -408,7 +408,7 @@ Test counts may grow as cases are added. Historical checkpoint scores, remote ho
 The broader command was:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest test_regr/VLABenchAgentInterface test_regr/EmbodiedAgentInterface test_regr/JointEmbodiedAgentInterface/test_joint_pipeline.py test_regr/generation/test_predicate_monitor.py test_regr/generation/test_stop_policy.py test_regr/generation/test_grounded_planning.py -q --tb=short
+.\.venv\Scripts\python.exe -m pytest test_regr/VLABenchAgentInterface test_regr/EmbodiedAgentInterface test_regr/JointEmbodiedAgentInterface/test/test_joint_pipeline.py test_regr/generation/test_predicate_monitor.py test_regr/generation/test_stop_policy.py test_regr/generation/test_grounded_planning.py -q --tb=short
 ```
 
 Baseline comparison used the pre-change source snapshot at `C:/Users/auszok/AppData/Local/Temp/grounded-planning-baseline-fvijmwzk`, with the 13 failing test nodes replayed against those interface modules. Results: two existing assistance assertions, one native CLI JSON-output assertion, one CLI rollout-default assertion, and nine controller API/numerical assertions reproduced. A surviving existing Python docstring escape warning and baseline `atMostAL` deprecation warnings are separate from semantic acceptance results.
@@ -714,7 +714,7 @@ Reproducible checks:
 
 ```bash
 python -m pytest -q test_regr/VLABenchAgentInterface/test/test_complex_improvements.py \
-  test_regr/JointEmbodiedAgentInterface/test_planning_adaptation.py
+  test_regr/JointEmbodiedAgentInterface/test/test_planning_adaptation.py
 python -m test_regr.VLABenchAgentInterface.utils.audit_planning \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning --output audit.json
 python -m test_regr.JointEmbodiedAgentInterface.utils.finetune_planning \
