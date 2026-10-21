@@ -140,3 +140,61 @@ def test_allowed_mass_loss_is_finite_and_differentiable():
 
     assert torch.isfinite(loss)
     assert logits.grad is not None
+
+
+def test_allowed_mass_loss_follows_a_given_path_instead_of_the_greedy_one():
+    import math
+    import torch
+    from domiknows.generation.dfa.core import DFA
+    from domiknows.generation.learners import allowed_mass_loss
+
+    # state 0 allows only label 0 (-> state 1); state 1 allows only label 1 (-> state 2)
+    dfa = DFA(states=frozenset({0, 1, 2}), alphabet=frozenset({0, 1}),
+              transitions={(0, 0): 1, (1, 1): 2, (2, 0): 2}, start_state=0, accepting_states=frozenset({2}))
+    probs = torch.tensor([[0.3, 0.7], [0.9, 0.1]])
+    # greedy: label 1 leaves the language at step 1, so nothing is scored afterwards
+    assert math.isclose(float(allowed_mass_loss(probs, dfa)), -math.log(0.3), abs_tol=1e-4)
+    # along the target 0, 1: step 2 is scored in state 1 (label 1 allowed)
+    assert math.isclose(float(allowed_mass_loss(probs, dfa, path=torch.tensor([0, 1]))),
+                        -(math.log(0.3) + math.log(0.1)) / 2, abs_tol=1e-4)
+
+
+def test_allowed_mass_loss_scores_only_the_requested_steps():
+    import math
+    import torch
+    from domiknows.generation.dfa.core import DFA
+    from domiknows.generation.learners import allowed_mass_loss
+
+    dfa = DFA(states=frozenset({0, 1, 2}), alphabet=frozenset({0, 1}),
+              transitions={(0, 0): 1, (1, 1): 2, (2, 0): 2}, start_state=0, accepting_states=frozenset({2}))
+    probs = torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.5, 0.5]])
+    path = torch.tensor([0, 1, 0])
+    # the state still advances through the unscored steps: step 2 is scored in state 2 (label 0 allowed, 0.5)
+    assert math.isclose(float(allowed_mass_loss(probs, dfa, path=path, score_steps=[2])), -math.log(0.5), abs_tol=1e-4)
+    assert math.isclose(float(allowed_mass_loss(probs, dfa, path=path, score_steps=[0, 1])),
+                        -(math.log(0.3) + math.log(0.1)) / 2, abs_tol=1e-4)
+
+
+def test_allowed_mass_loss_without_lookahead_uses_the_labels_valid_at_the_step():
+    import math
+    import torch
+    from domiknows.generation.dfa.core import DFA
+    from domiknows.generation.learners import allowed_mass_loss
+
+    class Counting:
+        """Records the remaining-step budget that is passed; valid labels: 0 at state 0 and 1 afterwards."""
+        def __init__(self):
+            self.budgets = []
+            self.start_state = 0
+        def allowed_tokens(self, state, remaining_steps=None):
+            self.budgets.append(remaining_steps)
+            return {0} if state == 0 else {1}
+        def step(self, state, symbol):
+            return state + 1
+
+    probs = torch.tensor([[0.3, 0.7], [0.2, 0.8]])
+    with_budget, without = Counting(), Counting()
+    allowed_mass_loss(probs, with_budget, path=[0, 1])
+    value = allowed_mass_loss(probs, without, path=[0, 1], lookahead=False)
+    assert with_budget.budgets == [1, 0] and without.budgets == [None, None]
+    assert math.isclose(float(value), -(math.log(0.3) + math.log(0.8)) / 2, abs_tol=1e-4)

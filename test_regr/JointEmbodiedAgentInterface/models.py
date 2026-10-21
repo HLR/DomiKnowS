@@ -811,7 +811,10 @@ class JointPlannerDomainView(nn.Module):
         return super().train(mode)
 
     def forward(self, _contains, context, target_labels):
-        return self.joint(self.domain, context, target_labels)
+        logits = self.joint(self.domain, context, target_labels)
+        if getattr(self.joint, "capture_logits", False):
+            self.joint.last_logits = logits  # the program reuses this forward for the DFA losses
+        return logits
 
     def sequence_logits(self, context, prefix_labels):
         return self.joint.sequence_logits(self.domain, context, prefix_labels)

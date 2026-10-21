@@ -719,6 +719,10 @@ class Graph(BaseGraphTree):
         """Return whether a graph concept is active for the current step."""
         controller = self._activation_controller()
         if controller is not None and controller is not self:
+            # A bare name is resolved in this graph first: the controller (the root) sees every attached
+            # sub-graph, where the same name may be declared more than once and so be ambiguous.
+            if isinstance(concept, str):
+                concept = self._activation_concepts().get(concept, concept)
             return controller.is_concept_active(concept)
         available = self._activation_concepts()
         resolved = self._resolve_activation_concept(concept, available)
@@ -729,7 +733,7 @@ class Graph(BaseGraphTree):
         controller = self._activation_controller()
         if controller is None:
             return True
-        return all(controller.is_concept_active(concept) for concept in concepts)
+        return all(self.is_concept_active(concept) for concept in concepts)
 
     def is_property_active(self, prop):
         """Return whether a property should participate in this graph step."""

@@ -38,7 +38,7 @@ from test_regr.VLABenchAgentInterface.world_graph import PRIMITIVE_TASK_PATTERNS
 
 from .checkpoint import load_joint_checkpoint, save_joint_checkpoint
 from .models import DEFAULT_MODEL_ID, JointQwenVLPlanner
-from .program import JointReinforcementProgram, JointSolverPOIProgram, _runtime_adapter
+from .program import DFALossConfig, JointReinforcementProgram, JointSolverPOIProgram, _runtime_adapter
 from .world_graph import build_joint_runtime, build_joint_world_graph
 
 
@@ -301,6 +301,17 @@ def _prepare(args, device):
     return runtime, eai_train, eai_valid or eai_examples[:1], vlabench_splits, prepared
 
 
+def _dfa_loss_config(args) -> DFALossConfig | None:
+    """Stage 1 DFA loss (allowed mass on the DFA path + primal-dual constraint loss), on unless disabled."""
+    if getattr(args, "stage1_dfa_loss", "on") == "off":
+        return None
+    return DFALossConfig(mass_weight=args.stage1_dfa_mass_weight, pmd_weight=args.stage1_pmd_weight,
+                         dual_lr=args.stage1_dual_lr, mass_steps=args.stage1_dfa_mass_steps or None,
+                         domains=tuple(d for d in args.stage1_dfa_domains.split(",") if d),
+                         lookahead_domains=tuple(d for d in args.stage1_dfa_lookahead_domains.split(",") if d),
+                         pmd_domains=tuple(d for d in args.stage1_pmd_domains.split(",") if d))
+
+
 def command_train_agent(args):
     if not args.two_stage:
         raise ValueError("train-agent requires --two-stage")
@@ -436,6 +447,7 @@ def command_train_agent(args):
             controller_optimizer=controller_optimizer,
             device=device,
             eai_loss_weight=getattr(args, "stage1_eai_loss_weight", 3.0),
+            dfa_loss=_dfa_loss_config(args),
         )
         stage1.round_robin_cursor = cursor
         if start_stage1 == 0 and getattr(args, "stage1_eai_warmup_steps", 0) > 0:
@@ -1007,6 +1019,19 @@ def build_parser():
     agent.add_argument("--stage1-epochs", type=int, default=5)
     agent.add_argument("--stage2-epochs", type=int, default=3)
     agent.add_argument("--stage1-rounds-per-epoch", type=int)
+    agent.add_argument("--stage1-dfa-loss", choices=("on", "off"), default="on",
+                       help="Stage 1 trains on the DFA: allowed-mass loss along the DFA path plus the primal-dual "
+                            "constraint loss of the generation graph (off = cross entropy only)")
+    agent.add_argument("--stage1-dfa-mass-weight", type=float, default=1.0)
+    agent.add_argument("--stage1-pmd-weight", type=float, default=1.0)
+    agent.add_argument("--stage1-dual-lr", type=float, default=0.05)
+    agent.add_argument("--stage1-dfa-mass-steps", type=int, default=12,
+                       help="score the allowed-mass loss at this many random steps per item (0 = every step)")
+    agent.add_argument("--stage1-dfa-domains", default="eai,vlabench", help="domains trained on the DFA loss")
+    agent.add_argument("--stage1-dfa-lookahead-domains", default="vlabench",
+                       help="domains whose allowed set also needs a reachable completion (slow for eai)")
+    agent.add_argument("--stage1-pmd-domains", default="vlabench",
+                       help="domains given the primal-dual constraint loss (the allowed-mass loss is always on)")
     agent.add_argument("--stage2-rounds-per-epoch", type=int, default=10)
     agent.add_argument(
         "--stage2-min-vlabench-success-rate",

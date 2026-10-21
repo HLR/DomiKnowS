@@ -4,6 +4,7 @@ Adapters supply action meanings. This module never guesses observations from
 reference trajectories, entity names, or a desired answer.
 """
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 from math import isfinite
 from typing import Mapping
 
@@ -228,7 +229,15 @@ class PlanningFacts:
     required_skill_sequence: tuple = ()
 
     def destination_for(self, action, subject):
-        return {(a, s): d for a, s, d in self.action_destinations}.get((action, subject), dict(self.destinations).get(subject, self.default_destination))
+        return self._action_destination_map.get((action, subject), self._destination_map.get(subject, self.default_destination))
+
+    @cached_property
+    def _action_destination_map(self):
+        return {(a, s): d for a, s, d in self.action_destinations}
+
+    @cached_property
+    def _destination_map(self):
+        return dict(self.destinations)
 
     @classmethod
     def parse(cls, raw=None, *, entities=(), resolve=None, default_destination=None, constants=()):
@@ -327,6 +336,23 @@ class PlanningFacts:
         values += [name in state.milestones for name in required]
         return combined("goal_completion", values, applicable=bool(values))
 
+    # The tuples above are immutable; their lookup tables are built once per instance, not once per operation.
+    @cached_property
+    def _capacity_map(self):
+        return dict(self.capacities)
+
+    @cached_property
+    def _property_map(self):
+        return {(s, k): v for s, k, v in self.properties}
+
+    @cached_property
+    def _compatibility_map(self):
+        return {(s, d): v for s, d, v in self.compatibility}
+
+    @cached_property
+    def _goal_and_preserved_facts(self):
+        return self.goals.positive | self.goals.negative | self.preserve.positive | self.preserve.negative
+
     def evaluate(self, state, op, *, positive=(), negative=(), clear_relations=(), holding_fact=None):
         """Source checks followed by symbolic effects and invariant checks."""
         holdings = dict(state.holdings)
@@ -339,10 +365,10 @@ class PlanningFacts:
         checks.append(combined("holding", [True if op.idempotent else
                                            (held is not None and (op.subject is None or held == op.subject)) if hand_known else None],
                                applicable=op.requires_held))
-        capacity = dict(self.capacities).get(op.hand)
+        capacity = self._capacity_map.get(op.hand)
         checks.append(combined("capacity", [False if capacity == 0 or (capacity is not None and hand_known and held is not None and held != subject) else
                                            capacity > 0 if capacity is not None and hand_known else None], applicable=op.grasp))
-        properties = {(s,k): v for s,k,v in self.properties}
+        properties = self._property_map
         selections = tuple(selection.check(replace(op, subject=subject)) for selection in self.selections
                            if selection.action == op.action)
         checks.append(combined("affordance", [properties.get(pair) for pair in op.affordances]
@@ -351,7 +377,7 @@ class PlanningFacts:
                                applicable=bool(op.affordances or op.preconditions or selections),
                                missing=tuple(reason for selection in selections for reason in selection.missing)))
         checks.extend(selections)
-        pairs = {(s,d): v for s,d,v in self.compatibility}
+        pairs = self._compatibility_map
         checks.append(combined("compatibility", [pairs.get((subject, op.destination))] + ([properties.get((op.destination,"container"))] if op.container_required else []),
                                applicable=op.destination is not None))
         matched = [m for m in self.milestones if m[1] == op.action and (m[2] is None or m[2] == subject)
@@ -362,7 +388,9 @@ class PlanningFacts:
         checks.append(combined("milestone_order", [bool(enabled)], applicable=bool(matched)))
         yes, no = set(map(tuple, positive)), set(map(tuple, negative))
         # Functional spatial updates invalidate known/required alternative locations.
-        candidates = state.facts.positive | self.goals.positive | self.goals.negative | self.preserve.positive | self.preserve.negative
+        def candidate_facts():
+            return state.facts.positive | self._goal_and_preserved_facts
+        candidates = candidate_facts() if clear_relations or holding_fact is not None else frozenset()
         for relation, obj in clear_relations:
             no.update(f for f in candidates if len(f) >= 2 and f[:2] == (relation, obj) and f not in yes)
         if op.grasp and subject is not None:

@@ -103,6 +103,126 @@ def _evaluate(expression, values, assignment=None, variable_domains=None, *, _bu
     raise AssertionError(operator)
 
 
+_MISSING = object()
+_MEMO_LIMIT = 1 << 16
+_BOOL_ONLY = frozenset({bool})
+_GROUP_MEMO_LIMIT = 1 << 14
+
+
+def _compile(expression):
+    """Compile ``expression`` once into ``fn(values, assignment, variable_domains, budget)``.
+
+    The closure has exactly the semantics of :func:`_evaluate` (every child is evaluated, a missing or non-Boolean
+    observation raises, each predicate read spends the grounding budget) without re-dispatching on the operator
+    strings and unpacking the tuple at every call.
+    """
+    operator, *args = expression
+    if operator == "predicate":
+        name, variables = args[0], args[1]
+
+        def predicate(values, assignment, variable_domains, budget):
+            if budget is not None:
+                budget[0] -= 1
+                if budget[0] < 0:
+                    raise PredicateGroundingLimitExceeded("predicate grounding limit exceeded; satisfaction is unknown")
+            key = name if assignment is None else (name, *(assignment[v] for v in variables))
+            if key not in values or not isinstance(values[key], bool):
+                raise MissingSemanticBinding(f"requires Boolean predicate {key!r}")
+            return values[key]
+
+        return predicate
+    if operator == "count":
+        count_operator, limit, operands = args
+        operands = tuple((variables, _compile(child)) for variables, child in operands)
+        if count_operator == "atMostL":
+            compare = lambda count: count <= limit
+        elif count_operator in {"atLeastL", "existsL"}:
+            compare = lambda count: count >= limit
+        else:
+            compare = lambda count: count == limit
+
+        def count_(values, assignment, variable_domains, budget):
+            count = 0
+            for variables, child in operands:
+                groundings = (None,) if assignment is None else _assignments(variables, variable_domains, assignment)
+                for grounding in groundings:
+                    count += child(values, grounding, variable_domains, budget)
+            return compare(count)
+
+        return count_
+    children = tuple(_compile(arg) for arg in args)
+    if operator == "notL":
+        combine = lambda results: not results[0]
+    elif operator in {"ifL", "forAllL"}:
+        combine = lambda results: not results[0] or results[1]
+    elif operator == "andL":
+        combine = all
+    elif operator == "nandL":
+        combine = lambda results: not all(results)
+    elif operator == "orL":
+        combine = any
+    elif operator == "norL":
+        combine = lambda results: not any(results)
+    elif operator == "xorL":
+        combine = lambda results: sum(results) % 2 == 1
+    elif operator in {"equivalenceL", "iffL"}:
+        combine = lambda results: all(value == results[0] for value in results)
+    else:
+        def combine(results):
+            raise AssertionError(operator)
+
+    def boolean(values, assignment, variable_domains, budget):
+        return combine([child(values, assignment, variable_domains, budget) for child in children])
+
+    return boolean
+
+
+def _predicate_leaves(expression):
+    operator, *args = expression
+    if operator == "predicate":
+        return 1
+    if operator == "count":
+        return sum(_predicate_leaves(child) for _variables, child in args[2])
+    return sum(_predicate_leaves(arg) for arg in args)
+
+
+class _RuleGroup:
+    """The rules decided by one (domain, phase) of event, with a memo of the whole group's verdict.
+
+    For an ungrounded event whose group predicates are all Boolean, the verdict of every rule is a function of the
+    observed values alone, so a repeated valuation is answered by one lookup (the transition search revisits the
+    same valuations constantly).
+    """
+
+    __slots__ = ("runtimes", "names", "indices", "memoizable", "memo")
+
+    def __init__(self, runtimes):
+        self.runtimes = tuple(runtimes)
+        self.names = tuple(sorted(set().union(*(runtime.names for runtime in self.runtimes))))
+        position = {name: index for index, name in enumerate(self.names)}
+        self.indices = tuple(tuple(position[name] for name in runtime.names) for runtime in self.runtimes)
+        self.memoizable = all(runtime.memoizable for runtime in self.runtimes)
+        self.memo = {}
+
+
+class _RuleRuntime:
+    """A rule with its compiled evaluator and, for unary events, a memo of results by observed values.
+
+    An ungrounded event decides a rule from the Boolean values of the rule's own predicates alone, so the verdict
+    is cached by that tuple. Missing or non-Boolean observations never reach the cache: they take the general
+    path, which raises the usual error.
+    """
+
+    __slots__ = ("rule", "fn", "names", "memoizable", "memo")
+
+    def __init__(self, rule, max_groundings):
+        self.rule = rule
+        self.fn = _compile(rule.expression)
+        self.names = tuple(sorted(rule.predicates))
+        self.memoizable = len(rule.variables) <= 1 and _predicate_leaves(rule.expression) <= max_groundings
+        self.memo = {}
+
+
 _COUNT_OPERATORS = frozenset({"atMostL", "atLeastL", "exactL", "existsL"})
 _BOOLEAN_OPERATORS = frozenset({"ifL", "notL", "andL", "orL", "nandL", "norL",
                                 "xorL", "equivalenceL", "iffL", "forAllL"})
@@ -161,6 +281,11 @@ class PredicateConstraintProgram:
     def __post_init__(self):
         if isinstance(self.max_groundings, bool) or not isinstance(self.max_groundings, int) or self.max_groundings < 1:
             raise ValueError("max_groundings must be a positive integer")
+        # Rules indexed by the (domain, phase) of the events that decide them, in declaration order.
+        plan: dict = {}
+        for rule in self.rules:
+            plan.setdefault((rule.domain, rule.phase), []).append(_RuleRuntime(rule, self.max_groundings))
+        object.__setattr__(self, "_plan", {key: _RuleGroup(value) for key, value in plan.items()})
 
     @property
     def coverage(self) -> PredicateCompilationCoverage:
@@ -184,10 +309,39 @@ class PredicateConstraintProgram:
         )
 
     def check(self, event: PredicateEvent) -> bool:
+        group = self._plan.get((event.domain, event.phase))
+        if group is None:
+            return True
         domains = None
-        for rule in self.rules:
-            if rule.domain != event.domain or rule.phase != event.phase:
-                continue
+        ungrounded = event.variable_domains is None
+        values = event.values
+        if ungrounded and group.memoizable:
+            observed = tuple([values.get(name, _MISSING) for name in group.names])
+            # Types first: 1 == True, so an integer observation would otherwise hit a Boolean valuation's entry.
+            if set(map(type, observed)) <= _BOOL_ONLY:
+                verdict = group.memo.get(observed)
+                if verdict is not None:
+                    return verdict
+                verdict = True
+                for runtime, indices in zip(group.runtimes, group.indices):
+                    seen = tuple([observed[index] for index in indices])
+                    result = runtime.memo.get(seen)
+                    if result is None:
+                        result = bool(runtime.fn(values, None, None, [self.max_groundings]))
+                        if len(runtime.memo) >= _MEMO_LIMIT:
+                            runtime.memo.clear()
+                        runtime.memo[seen] = result
+                    if not result:
+                        verdict = False
+                        break
+                if len(group.memo) >= _GROUP_MEMO_LIMIT:
+                    group.memo.clear()
+                group.memo[observed] = verdict
+                return verdict
+        # General path: grounded events, or an observation that is missing or not Boolean (which raises, but only
+        # if the rule deciding it is reached before an earlier rule is violated).
+        for runtime in group.runtimes:
+            rule = runtime.rule
             try:
                 if event.variable_domains is None:
                     if len(rule.variables) > 1:
@@ -224,7 +378,7 @@ class PredicateConstraintProgram:
                 for assignment in assignments:
                     # Evaluate every grounding, even after a known violation:
                     # an absent observation must not silently become False.
-                    value = _evaluate(rule.expression, event.values, assignment, domains, _budget=budget)
+                    value = runtime.fn(values, assignment, domains, budget)
                     satisfied = satisfied and value
             except (MissingSemanticBinding, PredicateGroundingLimitExceeded) as error:
                 raise type(error)(f"constraint {rule.name!r} at {event.domain!r}/{event.phase!r}: {error}") from error

@@ -66,11 +66,18 @@ def allowed_mass_loss(
     probs: torch.Tensor,
     dfa: DFA,
     *,
+    path: torch.Tensor | Sequence[int] | None = None,
+    score_steps: Sequence[int] | None = None,
+    lookahead: bool = True,
     reduction: str = "mean",
 ) -> torch.Tensor:
     """Softly encourage probability mass on labels allowed by a DFA.
 
-    The DFA state is advanced along the greedy label path for each sequence.
+    The DFA state is advanced along the greedy label path for each sequence, or along ``path`` (a label sequence
+    of shape ``[seq_len]`` or ``[batch, seq_len]``, e.g. the teacher-forced target) when one is given. With
+    ``score_steps`` only those step indices are scored (the state still advances at every step), which bounds the
+    cost when computing the allowed set of a step is expensive. With ``lookahead=False`` the allowed set is the labels
+    valid at the step (``allowed_tokens`` without a remaining-step budget), skipping the search for a completion.
     The loss remains differentiable with respect to the probability mass placed
     on labels that are valid at those visited states.  This is an auxiliary
     training signal; hard correctness still comes from DFA decoding.
@@ -86,23 +93,31 @@ def allowed_mass_loss(
     else:
         raise ValueError("probs must have shape [seq_len, labels] or [batch, seq_len, labels]")
 
+    score_set = None if score_steps is None else {int(i) for i in score_steps}
     losses = []
     eps = torch.finfo(batched.dtype).eps
     label_count = batched.shape[-1]
+    if path is not None:
+        path = torch.as_tensor(path, dtype=torch.long)
+        path = path.unsqueeze(0) if path.dim() == 1 else path
+        if tuple(path.shape) != tuple(batched.shape[:2]):
+            raise ValueError("path must match the [batch, seq_len] shape of probs")
     for batch_idx in range(batched.shape[0]):
         state = dfa.start_state
         step_losses = []
         for step_idx in range(batched.shape[1]):
-            allowed = sorted(
+            scored = score_steps is None or step_idx in score_set
+            allowed = [] if not scored else sorted(
                 int(label)
-                for label in dfa.allowed_tokens(state, remaining_steps=batched.shape[1] - step_idx - 1)
+                for label in (dfa.allowed_tokens(state, remaining_steps=batched.shape[1] - step_idx - 1)
+                              if lookahead else dfa.allowed_tokens(state))
                 if 0 <= int(label) < label_count
             )
             if allowed:
                 allowed_index = torch.tensor(allowed, dtype=torch.long, device=batched.device)
                 mass = batched[batch_idx, step_idx].index_select(0, allowed_index).sum()
                 step_losses.append(-torch.log(mass.clamp_min(eps)))
-            label = int(torch.argmax(batched[batch_idx, step_idx]).item())
+            label = int(path[batch_idx, step_idx]) if path is not None else int(torch.argmax(batched[batch_idx, step_idx]).item())
             next_state = dfa.step(state, label)
             if next_state is not None:
                 state = next_state

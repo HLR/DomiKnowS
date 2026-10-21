@@ -11,7 +11,11 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import torch
 
+from domiknows.generation.latent.losses import GenerationLossWeights, compute_generation_training_loss
+from domiknows.generation.learners.common.losses import allowed_mass_loss
 from domiknows.program import SolverPOIProgram
+from domiknows.program.lossprogram import PrimalDualProgram, _project_cmodel_lambdas, reverse_sign_grad
+from domiknows.program.model.pytorch import SolverModel
 from domiknows.program.gradient_manager import GradientConflictManager
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
@@ -33,6 +37,41 @@ class DomainUpdate:
     planner_loss: float
     controller_loss: float = 0.0
     reward: float | None = None
+
+
+@dataclass(frozen=True)
+class DFALossConfig:
+    """Stage 1 DFA loss: allowed-mass on the DFA path plus the primal-dual constraint loss of the generation graph.
+
+    ``pmd_weight`` is the primal-dual program's ``beta``; the multipliers take an ascent step every ``dual_every``
+    rounds after ``dual_warmup`` rounds, as in ``PrimalDualProgram.train``.
+    """
+
+    mass_weight: float = 1.0
+    pmd_weight: float = 1.0
+    dual_lr: float = 0.05
+    dual_warmup: int = 10
+    dual_every: int = 10
+    mass_steps: int | None = 12  # score at most this many random steps per item (the DFA walk is the cost)
+    compile_lc: bool = True  # evaluate the constraint loss with the compiled (batched) formula protocol
+    domains: tuple[str, ...] = ("eai", "vlabench")  # domains trained on the DFA loss
+    # Domains whose allowed set also requires a reachable completion. The search for one costs seconds per EAI item
+    # (up to 26 s), so EAI scores the labels valid at each step only (hundreds of times cheaper, same loss on most items).
+    lookahead_domains: tuple[str, ...] = ("vlabench",)
+    pmd_domains: tuple[str, ...] = ("vlabench",)  # of those, the domains that get the primal-dual constraint loss
+
+
+def _attach_order_edges(bundle) -> Any:
+    """Give the generation graph its ``is_before`` edges (once), so its ordered EOS constraints have groundings."""
+    from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+
+    if not getattr(bundle.is_before_rel, "_order_edges_attached", False):
+        bundle.is_before_rel._order_edges_attached = True
+        bundle.is_before_rel[bundle.first_token.reversed, bundle.second_token.reversed] = CompositionCandidateSensor(
+            relations=(bundle.first_token.reversed, bundle.second_token.reversed),
+            forward=lambda *_args, arg1, arg2: arg1.getAttribute("position") < arg2.getAttribute("position"),
+        )
+    return bundle.is_before_rel
 
 
 def _emit_progress(message: str) -> None:
@@ -156,6 +195,7 @@ class JointSolverPOIProgram(SolverPOIProgram):
         controller_optimizer: torch.optim.Optimizer | None = None,
         device: str | torch.device = "cpu",
         eai_loss_weight: float = 3.0,
+        dfa_loss: DFALossConfig | None = None,
     ):
         eai_view = planner.for_domain("eai")
         vlabench_view = planner.for_domain("vlabench")
@@ -182,6 +222,90 @@ class JointSolverPOIProgram(SolverPOIProgram):
         self.gradient_manager = GradientConflictManager(self.planner_head, self.planner_optimizer)
         self.round_robin_cursor = 0
         self.eai_loss_weight = float(eai_loss_weight)
+        self.dfa_loss = dfa_loss
+        self.pmd_programs: dict[str, PrimalDualProgram] = {}
+        self.dual_optimizers: dict[str, torch.optim.Optimizer] = {}
+        self.dfa_loss_rounds = 0
+        if dfa_loss is not None:
+            planner.capture_logits = True
+            for domain, graph, view in (
+                ("eai", runtime.eai_generation_graph, eai_view),
+                ("vlabench", runtime.vlabench_generation_graph, vlabench_view),
+            ):
+                if domain not in dfa_loss.domains or domain not in dfa_loss.pmd_domains:
+                    continue  # no DataNode graph is built for a domain without the constraint loss
+                adapter = _runtime_adapter(runtime, domain)
+                program = PrimalDualProgram(
+                    graph, SolverModel,
+                    poi=[*attach_planner_sensors(adapter, view, device=device),
+                         _attach_order_edges(adapter.generation_bundle)],
+                    inferTypes=["local/argmax"], loss=MacroAverageTracker(_ActiveDomainEOSLoss(runtime)),
+                    beta=dfa_loss.pmd_weight, device=device, metric={}, tnorm="P", counting_tnorm="P",
+                    compile_lc=dfa_loss.compile_lc,
+                )
+                self.pmd_programs[domain] = program
+                params = list(program.cmodel.parameters())
+                if params:
+                    self.dual_optimizers[domain] = torch.optim.Adam(params, lr=dfa_loss.dual_lr)
+
+    def _domain_loss(self, domain: str, item: Mapping[str, Any]) -> tuple[torch.Tensor, dict[str, float]]:
+        """Planner loss of one item; with ``dfa_loss`` the CE is combined with the DFA terms in one forward."""
+        context = _context(item, domain)
+        labels = _labels(item, domain).to(self.planner_head.device)
+        if self.dfa_loss is None or domain not in self.dfa_loss.domains:
+            return self.planner_head.supervised_loss(domain, context=context, target_labels=labels), {}
+        keep = ((labels == int(self.planner_head.vocabulary(domain).eos_label)).cumsum(dim=-1) <= 1)
+        program = self.pmd_programs.get(domain)
+        if program is not None:
+            data = {"planner_context": context, "token_positions": torch.arange(labels.numel()),
+                    "target_plan_labels": labels}
+            # One planner forward: the program builds the DataNode graph for the primal-dual constraint loss and
+            # the planner leaves its logits behind; the cross entropy is the same as ``supervised_loss``.
+            _model_loss, _metric, _node, builder = program.model(data)
+            pmd, *_ = program.cmodel(builder)
+            logits = self.planner_head.last_logits
+        else:
+            logits = self.planner_head.sequence_logits(
+                domain, context, self.planner_head.shift_right(domain, labels)).squeeze(0)
+            pmd = logits.new_zeros(())
+        ce = torch.nn.functional.cross_entropy(logits[keep], labels[keep])
+        dfa = self.runtime.dfa_for(domain, {**dict(item), **dict(context)})
+        kept = int(keep.sum())
+        cap = self.dfa_loss.mass_steps
+        steps = sorted(random.sample(range(kept), cap)) if cap and kept > cap else None
+        mass = allowed_mass_loss(torch.softmax(logits[keep], dim=-1), dfa, path=labels[keep], score_steps=steps,
+                                 lookahead=domain in self.dfa_loss.lookahead_domains)
+        breakdown = compute_generation_training_loss(
+            supervised_loss=ce, pmd_loss=pmd, allowed_mass_loss_value=mass,
+            weights=GenerationLossWeights(supervised=1.0, pmd=self.dfa_loss.pmd_weight,
+                                          allowed_mass=self.dfa_loss.mass_weight),
+        )
+        self._dual_grads(domain, pmd)
+        return breakdown.total, {k: v for k, v in breakdown.as_float_dict().items() if k != "total_loss"}
+
+    def _dual_grads(self, domain: str, pmd: torch.Tensor) -> None:
+        optimizer = self.dual_optimizers.get(domain)
+        if optimizer is None or not pmd.requires_grad:
+            return
+        params = [p for group in optimizer.param_groups for p in group["params"]]
+        grads = torch.autograd.grad(pmd, params, retain_graph=True, allow_unused=True)
+        for param, grad in zip(params, grads):
+            if grad is not None:
+                param.grad = grad if param.grad is None else param.grad + grad
+
+    def _dual_step(self) -> None:
+        """Gradient ascent on the multipliers (sign-reversed gradients), on the ``PrimalDualProgram`` schedule."""
+        self.dfa_loss_rounds += 1
+        cfg = self.dfa_loss
+        if cfg is None or self.dfa_loss_rounds <= cfg.dual_warmup or self.dfa_loss_rounds % cfg.dual_every:
+            return
+        for domain, optimizer in self.dual_optimizers.items():
+            params = [p for group in optimizer.param_groups for p in group["params"]]
+            reverse_sign_grad(params)
+            torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
+            optimizer.step()
+            optimizer.zero_grad()
+            _project_cmodel_lambdas(self.pmd_programs[domain].cmodel)
 
     def _planner_step(self, domain: str, item: Mapping[str, Any]) -> float:
         # Validation routes through the same shared object and may leave it in
@@ -190,15 +314,12 @@ class JointSolverPOIProgram(SolverPOIProgram):
         # optimizer-bearing planner turn.
         self.planner_head.train()
         with self.runtime.domain_scope(domain, parameter_policy="freeze_inactive"):
-            loss = self.planner_head.supervised_loss(
-                domain,
-                context=_context(item, domain),
-                target_labels=_labels(item, domain).to(self.planner_head.device),
-            )
+            loss, _terms = self._domain_loss(domain, item)
             self.planner_optimizer.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.planner_head.parameters(), 1.0)
             self.planner_optimizer.step()
+            self._dual_step()
             return float(loss.detach())
 
     def train_eai_warmup(
@@ -309,23 +430,17 @@ class JointSolverPOIProgram(SolverPOIProgram):
         self.gradient_manager.begin_step()
 
         with self.runtime.domain_scope("eai", parameter_policy="freeze_inactive"):
-            eai_tensor = self.planner_head.supervised_loss(
-                "eai",
-                context=_context(eai_item, "eai"),
-                target_labels=_labels(eai_item, "eai").to(self.planner_head.device),
-            )
+            eai_tensor, eai_terms = self._domain_loss("eai", eai_item)
             scaled_eai = eai_tensor * self.eai_loss_weight if self.eai_loss_weight != 1.0 else eai_tensor
             self.gradient_manager.capture("eai", scaled_eai)
 
         with self.runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
-            vlabench_tensor = self.planner_head.supervised_loss(
-                "vlabench",
-                context=_context(vlabench_item, "vlabench"),
-                target_labels=_labels(vlabench_item, "vlabench").to(self.planner_head.device),
-            )
+            vlabench_tensor, vlabench_terms = self._domain_loss("vlabench", vlabench_item)
             self.gradient_manager.capture("vlabench", vlabench_tensor)
 
         self.gradient_manager.step(self.planner_optimizer, method="pcgrad", clip_grad_norm=1.0)
+        self._dual_step()
+        self.last_dfa_terms = {"eai": eai_terms, "vlabench": vlabench_terms}
         eai_loss = float(eai_tensor.detach())
         vlabench_loss = float(vlabench_tensor.detach())
         bc_loss = self._controller_step(controller_batch)
@@ -349,6 +464,8 @@ class JointSolverPOIProgram(SolverPOIProgram):
         eai_stream, vlabench_stream = _cycle(eai_examples), _cycle(vlabench_examples)
         controller_stream = iter(controller_loader) if controller_loader is not None else None
         totals = {"eai_loss": 0.0, "vlabench_loss": 0.0, "controller_bc_loss": 0.0}
+        if self.dfa_loss is not None:
+            totals |= {f"{d}_{t}": 0.0 for d in self.dfa_loss.domains for t in ("allowed_mass_loss", "constraint_loss")}
         progress = _TrainingProgress("Stage 1 rounds", rounds)
         for round_index in range(rounds):
             batch = None
@@ -362,12 +479,21 @@ class JointSolverPOIProgram(SolverPOIProgram):
             totals["eai_loss"] += eai.planner_loss
             totals["vlabench_loss"] += vlabench.planner_loss
             totals["controller_bc_loss"] += vlabench.controller_loss
+            dfa_terms = {}
+            if self.dfa_loss is not None:
+                for domain, terms in self.last_dfa_terms.items():
+                    for term in ("allowed_mass_loss", "constraint_loss") if terms else ():
+                        totals[f"{domain}_{term}"] += terms[term]
             completed = round_index + 1
+            if self.dfa_loss is not None:
+                dfa_terms = {"vla_mass": totals["vlabench_allowed_mass_loss"] / completed,
+                             "vla_pmd": totals["vlabench_constraint_loss"] / completed}
             progress.update(
                 completed,
                 eai_loss=totals["eai_loss"] / completed,
                 vlabench_loss=totals["vlabench_loss"] / completed,
                 controller_bc_loss=totals["controller_bc_loss"] / completed,
+                **dfa_terms,
             )
         return {key: value / max(1, rounds) for key, value in totals.items()} | {"rounds": rounds}
 

@@ -251,7 +251,9 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                 "probabilities for amortized-dual features")
         if any(matrix.shape[0] != num_groundings for matrix in matrices):
             raise ValueError("grounding feature matrices are not row aligned")
-        return torch.cat(matrices, dim=1)
+        # Literal probabilities and constants may live on different devices (e.g. CUDA model, CPU constants).
+        device = matrices[0].device
+        return torch.cat([matrix.to(device) for matrix in matrices], dim=1)
 
     def _get_dtype(self):
         if self.current_dtype is not None:
