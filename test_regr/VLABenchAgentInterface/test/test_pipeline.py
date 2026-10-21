@@ -23,7 +23,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     load_planning_examples,
     _video_tensor,
 )
-from test_regr.VLABenchAgentInterface.environment import (
+from test_regr.VLABenchAgentInterface.simulation.environment import (
     bound_ee_action,
     create_environment,
     ee_action_to_env_action,
@@ -59,7 +59,7 @@ from test_regr.VLABenchAgentInterface.main import (
     reinforcement_preflight_eligible,
     reinforcement_selection_key,
 )
-from test_regr.VLABenchAgentInterface.program import (
+from test_regr.VLABenchAgentInterface.simulation.program import (
     GRIPPER_SETTLED_TOLERANCE,
     INSERT_FLOWER_POSE,
     ControllerTransition,
@@ -159,7 +159,7 @@ def test_environment_imports_registration_modules_before_load_env(monkeypatch):
         return SimpleNamespace()
 
     monkeypatch.setattr(
-        "test_regr.VLABenchAgentInterface.environment.importlib.import_module",
+        "test_regr.VLABenchAgentInterface.simulation.environment.importlib.import_module",
         import_module,
     )
     result = create_environment("select_fruit", robot="franka", time_limit=4)
@@ -2535,7 +2535,7 @@ def test_place_fit_check_rejects_objects_wider_than_a_box_container():
 def test_posture_regularized_ik_matches_pose_and_relaxes_toward_nominal():
     pytest.importorskip("mujoco")
     mjcf = pytest.importorskip("dm_control.mjcf")
-    from test_regr.VLABenchAgentInterface.environment import posture_regularized_qpos
+    from test_regr.VLABenchAgentInterface.simulation.environment import posture_regularized_qpos
 
     model = mjcf.RootElement()
     parent = model.worldbody
@@ -3345,7 +3345,7 @@ def test_condiment_rotation_steps_follow_shortest_arc_through_euler_singularity(
 
 @pytest.mark.parametrize("fail", [False, True])
 def test_environment_configuration_isolated_after_construction(monkeypatch, fail):
-    from test_regr.VLABenchAgentInterface import environment as adapter
+    from test_regr.VLABenchAgentInterface.simulation import environment as adapter
     task_config = {"default": {"engine": {"option": {"impratio": 10}}}}
     robot_config = {"franka": {"position": [0, -0.4, 0.78]}}
     module = SimpleNamespace(TASK_CONFIG=task_config, ROBOT_CONFIG=robot_config)
@@ -3395,7 +3395,7 @@ def test_rollout_physics_failure_preserves_diagnostics():
 
 
 def test_environment_seeds_composer_rng_and_restores_constructor(monkeypatch):
-    from test_regr.VLABenchAgentInterface import environment as adapter
+    from test_regr.VLABenchAgentInterface.simulation import environment as adapter
     seen = []
     def constructor(**kwargs):
         seen.append(kwargs["random_state"])

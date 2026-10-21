@@ -42,15 +42,15 @@ CONDIMENT_GRASP_EULER = (-np.pi / 2, -np.pi / 2, np.pi / 2)
 FINGER_REACH_PAST_SURFACE = 0.022
 
 try:
-    from .diagnostics import RolloutDiagnostics
-    from .observations import (
+    from ..diagnostics import RolloutDiagnostics
+    from ..observations import (
         DEFAULT_CONTROLLER_CAMERA_KEYS,
         camera_indices,
         camera_report,
         image_tensor,
         resolve_controller_camera_names,
     )
-    from .dataset import control_task_index_for_instruction
+    from ..dataset import control_task_index_for_instruction
     from .environment import (
         CONTROLLER_FRAME_VERSION,
         InverseKinematicsError,
@@ -64,9 +64,9 @@ try:
         robot_to_world_ee_action,
         world_to_robot_ee_state,
     )
-    from .graph import bind_vlabench_contextual_dfa, dfa_accepts_plan
-    from .models import controller_loss
-    from .world_graph import (
+    from ..graph import bind_vlabench_contextual_dfa, dfa_accepts_plan
+    from ..models import controller_loss
+    from ..world_graph import (
         PRIMITIVE_TASK_PATTERNS,
         condition_index_for_pattern,
         controller_plan_context,
@@ -471,7 +471,7 @@ def _episode_assist_steps(episode: "JointEpisode") -> int:
 def _task_pattern_dfa(base_dfa, vocabulary, expected_pattern, *, target_name=None, entities=()):
     """Bind task facts to world LCs; retained for existing online callers."""
     try:
-        from .constraint_compiler import bind_task_policy
+        from ..constraint_compiler import bind_task_policy
     except ImportError:
         from constraint_compiler import bind_task_policy
     return bind_task_policy(base_dfa, vocabulary, {

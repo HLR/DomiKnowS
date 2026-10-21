@@ -143,7 +143,7 @@ rest are scene limits that the official expert cannot solve either.
 
 - `ee_action_to_env_action` now solves the Franka IK with a damped
   least-squares solver that adds a bounded null-space step toward the default
-  posture (`posture_regularized_qpos` in `environment.py`; joint ranges from
+  posture (`posture_regularized_qpos` in `simulation/environment.py`; joint ranges from
   the real robot, `joint7` treated as periodic). VLABench's Franka MJCF has
   its joint ranges commented out, so the plain `dm_control` IK wound the
   wrist a little further on every one of the hundreds of incremental solves

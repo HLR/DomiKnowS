@@ -13,10 +13,10 @@ import numpy as np
 import torch
 from PIL import Image
 
-from .diagnostics import RolloutDiagnostics
+from ..diagnostics import RolloutDiagnostics
 from .environment import (InverseKinematicsError, bound_ee_action, ee_action_to_env_action,
                           robot_frame_position, robot_to_world_ee_action, world_to_robot_ee_state)
-from .observations import camera_indices, camera_report, image_tensor
+from ..observations import camera_indices, camera_report, image_tensor
 from .program import _controller_inputs, _observation_state
 
 

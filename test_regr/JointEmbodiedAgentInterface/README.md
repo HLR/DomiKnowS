@@ -334,7 +334,7 @@ python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
   --eai-data-path path\to\eai.json `
   --vlabench-planning-dir path\to\planning `
   --control-source path\to\control `
-  --env-factory test_regr.VLABenchAgentInterface.environment:create_environment
+  --env-factory test_regr.VLABenchAgentInterface.simulation.environment:create_environment
 ```
 
 The official VLABench Python 3.10 simulator environment is required for real

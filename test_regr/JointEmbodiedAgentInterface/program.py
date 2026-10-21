@@ -17,7 +17,7 @@ from domiknows.program.metric import MacroAverageTracker
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
 from test_regr.VLABenchAgentInterface.models import controller_loss
-from test_regr.VLABenchAgentInterface.program import (
+from test_regr.VLABenchAgentInterface.simulation.program import (
     EOSMaskedCrossEntropyLoss,
     VLABenchHierarchicalReinforcementProgram,
     attach_planner_sensors,

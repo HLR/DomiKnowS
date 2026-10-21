@@ -78,7 +78,7 @@ def run_smoke_test(
         controller_rl_learning_rate=3e-5,
         limit=4,
         task=task,
-        env_factory="test_regr.VLABenchAgentInterface.environment:create_environment",
+        env_factory="test_regr.VLABenchAgentInterface.simulation.environment:create_environment",
         execution_assistance="train-only",
         assistance_curriculum="cosine",
         assistance_start=1.0,

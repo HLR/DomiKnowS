@@ -14,7 +14,7 @@ import numpy as np
 from torch.utils.data import ConcatDataset, DataLoader, Subset
 
 try:
-    from .agent import HierarchicalVLABenchAgent
+    from .simulation.agent import HierarchicalVLABenchAgent
     from .dataset import (
         LeRobotWindowDataset,
         deterministic_split,
@@ -1007,9 +1007,9 @@ def _factory(value: str):
 def command_diagnose_controller(args) -> None:
     """Evaluate existing weights without planner loading, migration, or training."""
     if __package__:
-        from .replay import replay_heldout_demo
+        from .simulation.replay import replay_heldout_demo
     else:
-        from test_regr.VLABenchAgentInterface.replay import replay_heldout_demo
+        from test_regr.VLABenchAgentInterface.simulation.replay import replay_heldout_demo
 
     if args.max_batches <= 0 or args.replay_steps <= 0 or args.execute_horizon <= 0:
         raise ValueError("diagnostic batch and step limits must be positive")
@@ -1189,7 +1189,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--control-source", required=True)
     agent.add_argument("--output", required=True)
     agent.add_argument("--task", choices=["all", *PRIMITIVE_TASK_PATTERNS], default="all")
-    agent.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.environment:create_environment")
+    agent.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.simulation.environment:create_environment")
     agent.add_argument("--planner-model", default=PLANNER_MODEL_ID)
     agent.add_argument("--resume-adapter")
     agent.add_argument("--resume", help="standalone agent .pt checkpoint")
@@ -1446,7 +1446,7 @@ def build_parser() -> argparse.ArgumentParser:
     diagnostic.add_argument("--replay-manifest", help="JSON list of task, episode_index, offset and restoration metadata")
     diagnostic.add_argument("--replay-restore", help="module:function restoring the complete held-out scene after env.reset()")
     diagnostic.add_argument("--camera-map", help="JSON object mapping each dataset camera key to a live MuJoCo camera name")
-    diagnostic.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.environment:create_environment")
+    diagnostic.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.simulation.environment:create_environment")
     diagnostic.add_argument("--replay-steps", type=int, default=32)
     diagnostic.set_defaults(handler=command_diagnose_controller)
     return parser

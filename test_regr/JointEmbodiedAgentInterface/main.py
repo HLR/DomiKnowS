@@ -22,9 +22,9 @@ from test_regr.VLABenchAgentInterface.dataset import (
     load_control_task_instructions,
     load_planning_examples,
 )
-from test_regr.VLABenchAgentInterface.assist_ablation import parse_assist_modes, run_assist_ablation
+from test_regr.VLABenchAgentInterface.simulation.assist_ablation import parse_assist_modes, run_assist_ablation
 from test_regr.VLABenchAgentInterface.main import _control_loaders, _controller
-from test_regr.VLABenchAgentInterface.program import parse_assist_components
+from test_regr.VLABenchAgentInterface.simulation.program import parse_assist_components
 from test_regr.VLABenchAgentInterface.training import (
     evaluate_controller,
     evaluate_planner,
@@ -1121,7 +1121,7 @@ def build_parser():
         help="Maximum validation examples; the default scores the complete canonical holdout.",
     )
     agent.add_argument("--task", choices=["all", *PRIMITIVE_TASK_PATTERNS], default="all")
-    agent.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.environment:create_environment")
+    agent.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.simulation.environment:create_environment")
     agent.add_argument("--simulator-max-steps", type=int, default=400)
     agent.add_argument("--max-position-step", type=float, default=0.02)
     agent.add_argument("--max-rotation-step", type=float, default=0.10)

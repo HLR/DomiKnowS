@@ -6,16 +6,16 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from ..assist_ablation import (
+from ..simulation.assist_ablation import (
     mcnemar_exact_p,
     paired_comparison,
     parse_assist_modes,
     run_assist_ablation,
     wilson_interval,
 )
-from ..environment import euler_to_quaternion
+from ..simulation.environment import euler_to_quaternion
 from ..models import MultiViewController, TinyImageEncoder
-from ..program import ASSIST_COMPONENTS, _orientation_step, parse_assist_components
+from ..simulation.program import ASSIST_COMPONENTS, _orientation_step, parse_assist_components
 from .test_pipeline import FakeSimulator, TinyCompactPlanner, _joint_program
 from ..training import build_constraint_runtime
 from ..world_graph import build_vlabench_world_graph

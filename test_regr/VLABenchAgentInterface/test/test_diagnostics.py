@@ -15,8 +15,8 @@ from ..observations import (
     image_tensor,
     resolve_controller_camera_names,
 )
-from ..program import _controller_inputs
-from ..replay import compare_cameras, paired_camera_mapping_verified, replay_heldout_demo
+from ..simulation.program import _controller_inputs
+from ..simulation.replay import compare_cameras, paired_camera_mapping_verified, replay_heldout_demo
 
 
 def test_decoded_byte_pil_and_live_images_have_identical_siglip_inputs():
@@ -263,7 +263,7 @@ def replay_dataset():
 
 
 def test_replay_uses_fresh_observations_restores_each_arm_and_closes(tmp_path, monkeypatch):
-    monkeypatch.setattr("test_regr.VLABenchAgentInterface.replay.ee_action_to_env_action", lambda _env, action, **_: action)
+    monkeypatch.setattr("test_regr.VLABenchAgentInterface.simulation.replay.ee_action_to_env_action", lambda _env, action, **_: action)
     environments = []
     def factory():
         env = ReplayEnv()

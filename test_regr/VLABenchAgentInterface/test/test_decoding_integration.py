@@ -7,7 +7,7 @@ import torch
 from domiknows.generation import MissingSemanticBinding, ProductiveDFA, find_predicate_monitor
 from ..graph import bind_vlabench_contextual_dfa
 from ..models import QwenVLPlanner
-from ..program import PlannerReplayDecision, VLABenchHierarchicalReinforcementProgram, _task_pattern_dfa
+from ..simulation.program import PlannerReplayDecision, VLABenchHierarchicalReinforcementProgram, _task_pattern_dfa
 from ..training import build_constraint_runtime
 
 
@@ -177,7 +177,7 @@ def test_standalone_runtime_passes_task_metadata_to_completion_monitor(setup):
 
 
 def test_live_agent_uses_the_bound_policy_for_generation_and_validation(setup):
-    from ..agent import HierarchicalVLABenchAgent
+    from ..simulation.agent import HierarchicalVLABenchAgent
 
     runtime, planner = setup
     agent = HierarchicalVLABenchAgent(planner, torch.nn.Identity(), runtime)
@@ -301,7 +301,7 @@ def test_sampling_and_replay_share_eos_and_stagnation_policy(setup):
 
 
 def test_live_agent_passes_explicit_task_facts_to_generation_and_verification(setup):
-    from ..agent import HierarchicalVLABenchAgent
+    from ..simulation.agent import HierarchicalVLABenchAgent
     runtime, planner = setup
     agent = HierarchicalVLABenchAgent(planner, torch.nn.Identity(), runtime)
     decision = agent.plan("Move the selected object", (), ("apple", "bowl"), task_context={
@@ -323,7 +323,7 @@ def test_high_level_continuation_preserves_explicit_facts(setup):
 
 
 def test_grounded_noop_stops_agent_without_controller_or_simulator_success(setup, monkeypatch):
-    from .. import agent as agent_module
+    from ..simulation import agent as agent_module
     runtime, planner = setup
     agent = agent_module.HierarchicalVLABenchAgent(planner, torch.nn.Identity(), runtime)
     monkeypatch.setattr(agent_module, "numbered_views_from_observation", lambda *a, **k: ((), ("apple", "bowl")))

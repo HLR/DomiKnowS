@@ -21,7 +21,7 @@ from test_regr.JointEmbodiedAgentInterface.models import JointQwenVLPlanner
 from test_regr.JointEmbodiedAgentInterface.program import JointReinforcementProgram
 from test_regr.VLABenchAgentInterface.main import _controller, _control_loaders
 from test_regr.VLABenchAgentInterface.world_graph import PRIMITIVE_TASK_PATTERNS
-from test_regr.VLABenchAgentInterface.environment import create_environment
+from test_regr.VLABenchAgentInterface.simulation.environment import create_environment
 
 
 def run_eval_for_config(
