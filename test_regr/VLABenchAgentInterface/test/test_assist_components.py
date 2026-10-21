@@ -14,7 +14,7 @@ from ..simulation.assist_ablation import (
     wilson_interval,
 )
 from ..simulation.environment import euler_to_quaternion
-from ..models import MultiViewController, TinyImageEncoder
+from ..simulation.controller import MultiViewController, TinyImageEncoder
 from ..simulation.program import ASSIST_COMPONENTS, _orientation_step, parse_assist_components
 from .test_pipeline import FakeSimulator, TinyCompactPlanner, _joint_program
 from ..training import build_constraint_runtime

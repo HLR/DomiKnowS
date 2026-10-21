@@ -554,7 +554,8 @@ def test_cannot_bypass_checkpoint_checksum_with_foreign_planner(tmp_path):
     from types import SimpleNamespace
     from test_regr.VLABenchAgentInterface.training import load_joint_checkpoint, save_joint_checkpoint
     from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
-    from test_regr.VLABenchAgentInterface.models import QwenVLPlanner, MultiViewController, TinyImageEncoder
+    from test_regr.VLABenchAgentInterface.models import QwenVLPlanner
+    from test_regr.VLABenchAgentInterface.simulation.controller import MultiViewController, TinyImageEncoder
 
     class DummyBackbone(nn.Module):
         def __init__(self):

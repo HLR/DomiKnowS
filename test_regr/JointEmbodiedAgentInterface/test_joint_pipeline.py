@@ -16,7 +16,7 @@ from domiknows.program import SolverPOIProgram
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 from test_regr.EmbodiedAgentInterface.dataset import dummy_dataset
 from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
-from test_regr.VLABenchAgentInterface.models import MultiViewController
+from test_regr.VLABenchAgentInterface.simulation.controller import MultiViewController
 
 from .checkpoint import (
     _checkpoint_staging_location,

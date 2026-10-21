@@ -78,7 +78,7 @@ graph TD
 - **PCGrad Protection (`pcgrad_protected_eai`):** Prevents catastrophic forgetting. When low-level RL gradients conflict with symbolic EAI reasoning gradients ($\mathbf{g}_{\text{RL}} \cdot \mathbf{g}_{\text{EAI}} < 0$), the RL gradient is mathematically projected onto the orthogonal hyperplane of the EAI gradient:
   $$\mathbf{g}_{\text{RL}}^{\text{proj}} = \mathbf{g}_{\text{RL}} - \frac{\mathbf{g}_{\text{RL}} \cdot \mathbf{g}_{\text{EAI}}}{\|\mathbf{g}_{\text{EAI}}\|^2} \mathbf{g}_{\text{EAI}}$$
 
-#### Tier 2: Low-Level Sensorimotor Controller ([`MultiViewController`](file:///c:/Users/auszok/git/DomiKnowS/RelationalGraph/test_regr/VLABenchAgentInterface/models.py#L431))
+#### Tier 2: Low-Level Sensorimotor Controller ([`MultiViewController`](file:///c:/Users/auszok/git/DomiKnowS/RelationalGraph/test_regr/VLABenchAgentInterface/simulation/controller.py#L152))
 - **Dense Spatial Perception:** Utilizes a frozen multi-view SigLIP encoder (`google/siglip-base-patch16-224`) configured with `return_patch_tokens=True`. Rather than flattening camera views into a 1D pooled vector, it produces dense 2D patch grids ($14 \times 14 = 196$ tokens per camera $\times 4$ views).
 - **Proprioceptive Fusion:** Embeds the 7D robot state (Cartesian position $[x, y, z]$, Euler orientation $[\text{roll}, \text{pitch}, \text{yaw}]$, and binary gripper state).
 - **Plan Conditioning:** Embeds the current high-level plan step via learned skill, entity, and operation embeddings.

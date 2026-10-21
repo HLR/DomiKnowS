@@ -18,7 +18,7 @@ try:
     from .planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics
     from .diagnostics import ControllerMetrics
     from .graph import PlanVocabulary, bind_vlabench_contextual_dfa, compile_planner_dfa, create_planner_generation_graph, plan_to_tokens
-    from .models import controller_loss
+    from .simulation.controller import controller_loss
     from .simulation.program import VLABenchHierarchicalReinforcementProgram, build_stage1_program
     from .reward import make_vlabench_reward_function, score_vlabench_plan
     from .world_graph import build_vlabench_world_graph

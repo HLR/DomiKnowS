@@ -8,7 +8,7 @@ from PIL import Image
 
 from ..dataset import LeRobotWindowDataset, _video_tensor
 from ..diagnostics import ControllerMetrics, RolloutDiagnostics
-from ..models import MultiViewController, TinyImageEncoder
+from ..simulation.controller import MultiViewController, TinyImageEncoder
 from ..observations import (
     camera_indices,
     camera_report,

@@ -3,11 +3,8 @@ import json
 import pytest
 import torch
 
-from test_regr.VLABenchAgentInterface.reward import (
-    RolloutRewardAccumulator,
-    make_vlabench_reward_function,
-    score_vlabench_plan,
-)
+from test_regr.VLABenchAgentInterface.reward import make_vlabench_reward_function, score_vlabench_plan
+from test_regr.VLABenchAgentInterface.simulation.rollout_reward import RolloutRewardAccumulator
 
 
 REFERENCE = [

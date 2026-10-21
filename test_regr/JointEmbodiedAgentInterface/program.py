@@ -16,7 +16,7 @@ from domiknows.program.gradient_manager import GradientConflictManager
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
-from test_regr.VLABenchAgentInterface.models import controller_loss
+from test_regr.VLABenchAgentInterface.simulation.controller import controller_loss
 from test_regr.VLABenchAgentInterface.simulation.program import (
     EOSMaskedCrossEntropyLoss,
     VLABenchHierarchicalReinforcementProgram,

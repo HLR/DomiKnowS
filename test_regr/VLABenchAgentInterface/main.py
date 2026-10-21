@@ -25,7 +25,8 @@ try:
         OBSERVATION_MODES,
     )
     from .graph import PlanVocabulary
-    from .models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
+    from .models import PLANNER_MODEL_ID, QwenVLPlanner
+    from .simulation.controller import FrozenSigLIPEncoder, MultiViewController, TinyImageEncoder
     from .training import (
         build_constraint_runtime,
         create_stage1_program,

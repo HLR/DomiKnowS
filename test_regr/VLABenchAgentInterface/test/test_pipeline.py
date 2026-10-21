@@ -37,11 +37,7 @@ from test_regr.VLABenchAgentInterface.simulation.environment import (
 from test_regr.VLABenchAgentInterface.diagnostics import RolloutDiagnostics
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
-    FrozenSigLIPEncoder,
-    MultiViewController,
     QwenVLPlanner,
-    TinyImageEncoder,
-    controller_loss,
     clear_siglip_special_token_ids,
     load_sanitized_auto_config,
     prepare_kbit_model,
@@ -49,6 +45,12 @@ from test_regr.VLABenchAgentInterface.models import (
     sanitize_special_token_ids,
     special_token_id_summary,
     vision_language_hidden_size,
+)
+from test_regr.VLABenchAgentInterface.simulation.controller import (
+    FrozenSigLIPEncoder,
+    MultiViewController,
+    TinyImageEncoder,
+    controller_loss,
 )
 from test_regr.VLABenchAgentInterface.main import (
     _aggregate_task_metrics,

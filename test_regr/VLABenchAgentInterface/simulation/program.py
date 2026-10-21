@@ -65,7 +65,7 @@ try:
         world_to_robot_ee_state,
     )
     from ..graph import bind_vlabench_contextual_dfa, dfa_accepts_plan
-    from ..models import controller_loss
+    from .controller import controller_loss
     from ..world_graph import (
         PRIMITIVE_TASK_PATTERNS,
         condition_index_for_pattern,
