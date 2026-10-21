@@ -10,7 +10,7 @@ of the seed-42 split by their upstream total_score, and the summary says so. The
 episodes of that split are never used for sampling, fitting or selection, so they give a clean
 held-out figure next to the all-episodes figure.
 
-Run ``python -m test_regr.VLABenchAgentInterface.official_hmm --help``. Every stage resumes.
+Run ``python -m test_regr.VLABenchAgentInterface.official.official_hmm --help``. Every stage resumes.
 
 Decoding: the lookahead is action-level (``native_lookahead``, after CLAMP's budget-aware
 reachability), not a token-level product with the grammar. A first attempt multiplied the HMM with
@@ -32,7 +32,7 @@ import random
 from typing import Any, Sequence
 
 try:
-    from .dataset import deterministic_split
+    from ..dataset import deterministic_split
     from .official_protocol import (
         DFA_ENTITY_CAP, OfficialExample, build_ti_list, load_official_examples, load_official_prompt,
         make_grammar_dfa_generator, official_report, run_official_protocol,

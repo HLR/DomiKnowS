@@ -27,11 +27,11 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 try:
-    from .planning_metrics import (
+    from ..planning_metrics import (
         BENCHMARK_PATTERNS, _CONFIG, DIMENSIONS, OFFICIAL_TASK_DIMENSIONS, PlanningMetrics, default_dependency,
         score_planning_metrics,
     )
-    from .world_graph import canonicalize_plan
+    from ..world_graph import canonicalize_plan
 except ImportError:  # pragma: no cover - flat-module execution
     from planning_metrics import (
         BENCHMARK_PATTERNS, _CONFIG, DIMENSIONS, OFFICIAL_TASK_DIMENSIONS, PlanningMetrics, default_dependency,
@@ -451,7 +451,7 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     from transformers import LogitsProcessorList
 
     try:
-        from .native_planning import NativeConstraintProcessor, NativePlanDFA
+        from ..native_planning import NativeConstraintProcessor, NativePlanDFA
         from .native_lookahead import DFAActionLookahead
     except ImportError:  # pragma: no cover - flat-module execution
         from native_planning import NativeConstraintProcessor, NativePlanDFA

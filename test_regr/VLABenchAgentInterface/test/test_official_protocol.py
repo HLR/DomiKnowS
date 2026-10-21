@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from test_regr.VLABenchAgentInterface import official_protocol as op
+from test_regr.VLABenchAgentInterface.official import official_protocol as op
 from test_regr.VLABenchAgentInterface.planning_metrics import BENCHMARK_PATTERNS, PlanningMetrics
 
 UPSTREAM_SCORER = Path(__file__).parent.parent / "outputs/native_refined_20261014/results_full/official_scoring_source.py"
@@ -205,7 +205,7 @@ def test_decoding_is_part_of_the_run_configuration(dataset, tmp_path):
 
 
 def test_decoding_labels_identify_the_hmm_and_weight():
-    from test_regr.VLABenchAgentInterface.official_hmm import decoding_label, plan_tokens
+    from test_regr.VLABenchAgentInterface.official.official_hmm import decoding_label, plan_tokens
 
     assert decoding_label(None, 1.0) == "grammar-dfa:64"
     assert decoding_label("abcdef0123456789", 0.0) == "grammar-dfa:64"
@@ -231,7 +231,7 @@ def test_hmm_weight_selection_prefers_the_smaller_weight_on_ties():
 
 
 def test_teacher_samples_are_rewritten_to_integer_ids_before_hmm_fitting():
-    from test_regr.VLABenchAgentInterface.official_hmm import canonical_plan_text
+    from test_regr.VLABenchAgentInterface.official.official_hmm import canonical_plan_text
 
     text, error = canonical_plan_text('[{"name": "pick", "params": {"target_entity_name": "6"}}]\n```')
     assert error is None
@@ -241,8 +241,8 @@ def test_teacher_samples_are_rewritten_to_integer_ids_before_hmm_fitting():
 
 
 def test_hmm_corpus_text_is_the_serialisation_the_action_lookahead_scores():
-    from test_regr.VLABenchAgentInterface.native_lookahead import PLAN_CLOSE, PLAN_OPEN, operation_texts
-    from test_regr.VLABenchAgentInterface.official_hmm import canonical_plan_text
+    from test_regr.VLABenchAgentInterface.official.native_lookahead import PLAN_CLOSE, PLAN_OPEN, operation_texts
+    from test_regr.VLABenchAgentInterface.official.official_hmm import canonical_plan_text
 
     sampled = ('[{"name": "pick", "params": {"target_entity_name": "6"}}, '
                '{"name": "place", "params": {"target_container_name": 9}}]' + chr(10) + '```')

@@ -84,7 +84,7 @@ revision pinned in `planning_benchmark.json`:
   no train/validation/test split. The summary records a `dataset_fingerprint` of
   episode ids, instructions and reference files; compare it between runs.
 - **Input:** the unlabeled image, the number-labeled image (`input_mask.png`) and
-  the instruction under the unmodified `official_vlm_prompt_en.txt` (SHA-256 checked
+  the instruction under the unmodified `official/official_vlm_prompt_en.txt` (SHA-256 checked
   at load). Entity names are never given. `--few-shot-num` examples are drawn at
   random from any task, as upstream does, seeded per episode by `--seed`;
   `--with-cot` adds the step-by-step line.
@@ -109,10 +109,10 @@ revision pinned in `planning_benchmark.json`:
   validation episodes and names the benchmark's question-task topics, so report it as a variant. In
   the measured run it recognised 127 of 600 question tasks, mostly tasks outside upstream's
   dim2task, and never chose the right button, so the official score barely moved.
-- `official_hmm.py` samples the frozen model on the benchmark inputs without labels, fits an HMM on the
+- `official/official_hmm.py` samples the frozen model on the benchmark inputs without labels, fits an HMM on the
   canonical plan tokens (`json.dumps(plan, indent=4)`, integer ids) and picks a lookahead weight on the
   450 validation episodes of the seed-42 split. The lookahead is action-level, after CLAMP's budget-aware
-  reachability (`domiknows/generation/applications/action_lookahead.py`, `native_lookahead.py`): the
+  reachability (`domiknows/generation/applications/action_lookahead.py`, `official/native_lookahead.py`): the
   grammar DFA stays the only authority on which tokens are legal, and the HMM adds
   `weight * (log HMM mass - best log HMM mass)` to the legal tokens that decide an action (skill name,
   object id, continue or stop), with the mass taken over the complete valid plans that token leaves
@@ -127,7 +127,7 @@ revision pinned in `planning_benchmark.json`:
   without the HMM) because it pushes plans to stop early and loses the long Complex plans.
   Validation results for the other additions (450 episodes, six-dimension mean; grammar DFA alone 38.18, joint HMM
   weight 0.5 38.37): `--scene-ids` changes no plan (the model already picks only visible ids); per-instance
-  adaptation (`official_adapt.py`, 16 samples, one EM step) scores 38.03 at best (weight 0.5, lam 0.1) and falls as
+  adaptation (`official/official_adapt.py`, 16 samples, one EM step) scores 38.03 at best (weight 0.5, lam 0.1) and falls as
   lam and weight grow (down to 37.38); `--pattern-first` (the model names the subtask patterns from the official
   prompt's list and the grammar is limited to them; 39 of 450 replies were unusable) scores 38.29.
 

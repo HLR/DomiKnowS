@@ -912,7 +912,7 @@ def command_evaluate_official(args) -> None:
     if (args.press_question or args.hmm or args.scene_ids or args.pattern_first) and args.constraints != "grammar":
         raise ValueError("--press-question, --scene-ids and --hmm extend the grammar DFA; add --constraints grammar")
     from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
-    from test_regr.VLABenchAgentInterface.official_protocol import (
+    from test_regr.VLABenchAgentInterface.official.official_protocol import (
         load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
     )
     examples = load_official_examples(args.planning_dir, tasks=args.tasks, limit=args.limit)
@@ -925,11 +925,11 @@ def command_evaluate_official(args) -> None:
     grammar = args.constraints == "grammar"
     hmm, hmm_digest = None, None
     if args.hmm:
-        from test_regr.VLABenchAgentInterface.official_hmm import load_hmm
+        from test_regr.VLABenchAgentInterface.official.official_hmm import load_hmm
         hmm, hmm_digest = load_hmm(args.hmm, planner)
     decoding = "greedy"
     if grammar:
-        from test_regr.VLABenchAgentInterface.official_hmm import decoding_label
+        from test_regr.VLABenchAgentInterface.official.official_hmm import decoding_label
         decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "")
     suffix = ("_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "")
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"

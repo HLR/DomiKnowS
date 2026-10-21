@@ -6,7 +6,7 @@ import torch
 
 from domiknows.generation.applications.action_lookahead import ActionAutomaton, ActionLookahead, TokenOperators
 
-from ..native_lookahead import DFAActionLookahead, PLAN_CLOSE, PLAN_OPEN, canonical_body, operation_texts, plan_tokens, tokenization_gaps
+from ..official.native_lookahead import DFAActionLookahead, PLAN_CLOSE, PLAN_OPEN, canonical_body, operation_texts, plan_tokens, tokenization_gaps
 from ..native_planning import NativeConstraintProcessor, NativePlanDFA, validate_native_plan
 from ..object_grounding import ObjectConstraints
 
