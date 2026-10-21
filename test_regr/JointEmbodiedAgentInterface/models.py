@@ -29,6 +29,31 @@ DOMAINS = ("eai", "vlabench")
 DEFAULT_MODEL_ID = COMMON_VLM_MODEL_ID
 
 
+class FreeDecoding:
+    """No grammar and no constraint: every label is allowed at every step until the end label or the step budget.
+
+    The baseline "without any DFA" of the knowledge ablation; any sequence is accepted, and a plan is read from the
+    labels as emitted (``labels_to_plan`` ignores arguments that do not follow a skill).
+    """
+
+    def __init__(self, label_count: int, eos_label: int, min_steps: int = 0):
+        self.start_state = 0
+        self._labels = frozenset(range(int(label_count)))
+        self._eos = int(eos_label)
+        self._min_steps = int(min_steps)  # the end label is withheld for this many steps
+
+    def allowed_tokens(self, state, remaining_steps=None):
+        if state is None:
+            return frozenset()
+        return self._labels - {self._eos} if state < self._min_steps else self._labels
+
+    def step(self, state, label):
+        return state + 1
+
+    def is_accepting(self, state):
+        return True
+
+
 class EncodedContext(torch.Tensor):
     """A tensor representation of prompt context carrying original metadata."""
 
@@ -523,6 +548,10 @@ class JointQwenVLPlanner(nn.Module):
         return EncodedContext(prompt_hidden, context=prepared_context, domain=domain)
 
     def _planning_dfa(self, domain, context, dfa):
+        if domain == "vlabench" and getattr(self, "free_decoding", False):
+            vocabulary = self.vocabulary(domain)
+            return FreeDecoding(vocabulary.label_count, vocabulary.eos_label,
+                                min_steps=getattr(self, "free_decoding_min_steps", 0))
         if domain == "eai":
             from test_regr.EmbodiedAgentInterface.constraint_compiler import bind_eai_policy
             dfa = bind_eai_policy(dfa, self.vocabulary(domain), context)

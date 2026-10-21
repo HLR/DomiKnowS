@@ -70,6 +70,10 @@ def build_eval_parser() -> argparse.ArgumentParser:
                         help="QA property selection: visual VLM predictions (default) or explicit metadata-assisted constraints")
     add_knowledge_argument(parser)
     add_holdout_arguments(parser)
+    parser.add_argument("--no-dfa-min-steps", type=int, default=0,
+                        help="with --no-dfa: withhold the end label for this many steps (0 = fully free)")
+    parser.add_argument("--no-dfa", action="store_true",
+                        help="decode without the grammar DFA or any constraint (baseline below --knowledge grammar)")
     parser.add_argument("--updated-data", "--updated-labels", action="store_true",
                         help="score against corrected density labels computed in memory; default uses labels stored in --planning-dir")
     parser.add_argument(
@@ -238,6 +242,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     planner.eval()
+    planner.free_decoding = bool(getattr(args, "no_dfa", False))
+    planner.free_decoding_min_steps = int(getattr(args, "no_dfa_min_steps", 0))
 
     # Select evaluation examples
     if args.split == "all":
@@ -292,6 +298,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "split": args.split,
         "observation_mode": getattr(args, "observation_mode", "visual"),
         "knowledge": knowledge,
+        "decoding": "free" if getattr(args, "no_dfa", False) else "dfa",
+        "free_decoding_min_steps": int(getattr(args, "no_dfa_min_steps", 0)),
         "holdout_tasks": list(holdout),
         "declare_heldout_knowledge": bool(getattr(args, "declare_heldout_knowledge", False)),
         "task_classifier": str(args.task_classifier) if knowledge == "learned" else None,

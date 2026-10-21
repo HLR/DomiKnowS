@@ -1250,6 +1250,8 @@ def build_parser():
     eval_planning.add_argument("--planning-dir", type=Path, default=DEFAULT_VLABENCH_PLANNING)
     eval_planning.add_argument("--split", choices=("validation", "test", "train", "all", "heldout"), default="validation")
     add_knowledge_argument(eval_planning)
+    eval_planning.add_argument("--no-dfa", action="store_true")
+    eval_planning.add_argument("--no-dfa-min-steps", type=int, default=0)
     add_holdout_arguments(eval_planning)
     eval_planning.add_argument("--limit", type=int, default=None)
     eval_planning.add_argument("--output", type=Path, default=None)

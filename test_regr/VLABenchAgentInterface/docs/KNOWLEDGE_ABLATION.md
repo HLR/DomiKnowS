@@ -6,6 +6,8 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 
 | Level | Active knowledge | Source of the task |
 | --- | --- | --- |
+| `no DFA` | nothing: every label is allowed at every step until the end label or the 61-label budget (`--no-dfa`) | none |
+| `no DFA, end withheld` | as `no DFA`, but the end label is blocked at the first step only (`--no-dfa --no-dfa-min-steps 1`) | none |
 | `grammar` | plan grammar DFA only: the token syntax of a plan, the nine skills, any of the 64 entity ids, the end token, the operation budget and the language of allowed skill patterns; no constraint group | none |
 | `generic` | + skill schema, subtask patterns, pointer, anti-self-placement and repeated-pick rules | none |
 | `scene` | + scene-grounded rules (buttons, fixtures, containers, open-before-place) | none |
@@ -13,8 +15,11 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 | `task` | the same rules as `learned` | the episode's task name |
 | `metadata` | + QA property observations (`--observation-mode metadata-assisted`) | the episode's task name |
 
-`grammar` is the floor of this graph planner: its grammar DFA is the decoding grammar, so no lower row exists.
-The frozen VLM in the standard protocol is a different system and is not comparable with these numbers.
+The `no DFA` rows decode the same checkpoint with the grammar removed. Free decoding makes the champion emit the end label
+as its first label on almost every episode, so its plan is empty (Macro 0.2). The second row blocks that one step to get
+a non-empty output; it is still ungrammatical and is the more informative of the two. Neither is a fair baseline for a
+model trained without the grammar. The frozen VLM in the standard protocol is a different system and is not comparable
+with these numbers.
 
 ## Setup
 
@@ -37,6 +42,8 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
 
 | Level | Macro | Overall | SR | PR | SPR | PM |
 | --- | --- | --- | --- | --- | --- | --- |
+| no DFA | 0.2 | 0.3 | 0.7 | 0.0 | 0.0 | 0.0 |
+| no DFA, end withheld | 26.6 | 28.4 | 57.7 | 8.6 | 16.5 | 1.8 |
 | grammar | 60.9 | 64.3 | 89.4 | 51.1 | 55.2 | 25.5 |
 | generic | 66.9 | 70.8 | 89.4 | 62.4 | 63.0 | 37.7 |
 | scene | 67.9 | 71.8 | 89.4 | 63.7 | 65.5 | 39.6 |
@@ -48,6 +55,8 @@ Per-dimension score:
 
 | Level | M&T | Spatial | ComSense | Semantic | PhysLaw | Complex |
 | --- | --- | --- | --- | --- | --- | --- |
+| no DFA | 1.1 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| no DFA, end withheld | 37.5 | 41.2 | 37.5 | 27.1 | 0.0 | 16.3 |
 | grammar | 74.7 | 63.2 | 75.8 | 75.8 | 37.7 | 37.9 |
 | generic | 85.0 | 71.2 | 81.6 | 82.3 | 37.7 | 43.6 |
 | scene | 85.4 | 72.2 | 81.7 | 85.5 | 37.7 | 44.6 |
@@ -78,6 +87,10 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 
 ## Reading
 
+- **The grammar is what makes the champion usable:** without it the plan is empty (Macro 0.2), and with the end label
+  withheld for one step it reaches 26.6 against 60.9 with the grammar. Skill recall falls from 89.4 to 57.7 and graph
+  match from 25.5 to 1.8. This measures dependence of this checkpoint on its decoding mask (it was trained and
+  selected under the mask), not what an unconstrained model could do.
 - **The generic rules are worth +6.0 Macro over the grammar alone** (60.9 to 66.9): parameter recall 51 to 62 and
   graph match 26 to 38, with gains in every dimension except PhysLaw. Skill recall is unchanged (89.4), so the gain is in
   arguments and graph structure, not in which skills are chosen.
