@@ -6,15 +6,15 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 
 | Level | Active knowledge | Source of the task |
 | --- | --- | --- |
-| (always on) | plan grammar DFA: the token syntax of a plan, the six skills, entity ids within the scene table, the end token and the operation budget | none |
+| (always on) | plan grammar DFA: the token syntax of a plan, the nine skills, entity ids within the scene table, the end token and the operation budget | none |
 | `generic` | + skill schema, subtask patterns, pointer, anti-self-placement and repeated-pick rules | none |
 | `scene` | + scene-grounded rules (buttons, fixtures, containers, open-before-place) | none |
 | `learned` | + the per-task LCs of `task` (skill-sequence, completion, obligations) and the grounded physics/complex families | predicted from the instruction by a classifier fitted on the training split |
 | `task` | the same rules as `learned` | the episode's task name |
 | `metadata` | + QA property observations (`--observation-mode metadata-assisted`) | the episode's task name |
 
-The grammar DFA is the decoding grammar of the graph planner, so it is not a switchable level: this checkpoint cannot
-generate plans without it, and there is no "no constraints" row for it. What the grammar alone is worth is measured on a
+The grammar DFA is the decoding grammar of the graph planner, so it is not a switchable level: the evaluation has no
+flag to remove it, and there is no "no constraints" row for it. What the grammar alone is worth is measured on a
 different system, the frozen VLM in the standard protocol (`VLABENCH_BASELINE_AND_EVALUATION_GUIDE`), and is not
 comparable with the numbers below.
 
