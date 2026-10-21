@@ -490,7 +490,7 @@ this audited schema; exact resume otherwise rejects schema changes. New
 checkpoints load without it. Input-grounded Complex goals use the shared LCs.
 Use `--no-ground-complex` for the representation-only ablation, and
 `--decision-trace decisions.jsonl` for read-only token diagnostics. See
-`test_regr.JointEmbodiedAgentInterface.finetune_planning` for balanced, resumable
+`test_regr.JointEmbodiedAgentInterface.utils.finetune_planning` for balanced, resumable
 planner-head adaptation with entity-order augmentation and validation selection.
 
 ### Original and corrected scoring labels

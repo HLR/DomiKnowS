@@ -27,10 +27,10 @@ from test_regr.EmbodiedAgentInterface.main import (
 from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
 from test_regr.VLABenchAgentInterface.main import _controller
 
-from .checkpoint import load_joint_checkpoint
-from .main import _action_object_constraints, _ordered_union, build_parser
-from .models import JointQwenVLPlanner
-from .world_graph import build_joint_runtime, build_joint_world_graph
+from ..checkpoint import load_joint_checkpoint
+from ..main import _action_object_constraints, _ordered_union, build_parser
+from ..models import JointQwenVLPlanner
+from ..world_graph import build_joint_runtime, build_joint_world_graph
 
 
 LEGACY_SELECTIONS = ("mutual-holdout", "joint-validation-32")

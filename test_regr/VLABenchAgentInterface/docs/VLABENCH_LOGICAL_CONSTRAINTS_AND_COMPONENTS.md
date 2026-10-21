@@ -329,7 +329,7 @@ Replay uses the same bound policy, finite-budget masks, token termination rules,
 | `VLABenchAgentInterface/simulation/program.py` | Binds online task/target facts, retains the resulting policy in replay evidence, and checks schema, DFA acceptance, and world satisfaction before execution. `_task_pattern_dfa` remains a compatibility helper that binds facts to LCs; it contains no separate token-filtering implementation. |
 | `VLABenchAgentInterface/simulation/agent.py` | Accepts optional `task_context`, validates generated plans with the bound DFA and completed-plan verification, and stops rollout when a plan is invalid. |
 | `VLABenchAgentInterface/reward.py` | `score_vlabench_plan` gates its planner reward on schema and world validity. A verification failure or score below 1.0 makes the plan invalid and sets this reward to zero. Simulator rollout returns also depend on environment progress/success; they are not simply this plan score. |
-| `JointEmbodiedAgentInterface/structured_inference.py` | Generates complete constrained candidates, verifies them using the bound policy's task requirements, and selects among eligible candidates. |
+| `JointEmbodiedAgentInterface/utils/structured_inference.py` | Generates complete constrained candidates, verifies them using the bound policy's task requirements, and selects among eligible candidates. |
 | `JointEmbodiedAgentInterface/world_graph.py` | Builds the domain runtimes and binds VLABench facts per request. Scene-dependent VLABench policies are not cached by entity count or context-object identity. |
 | `training.py` and `JointEmbodiedAgentInterface/eval_planning.py` | Use the bound planning policy and report planning metrics plus validity/reward diagnostics. |
 
@@ -717,7 +717,7 @@ python -m pytest -q test_regr/VLABenchAgentInterface/test/test_complex_improveme
   test_regr/JointEmbodiedAgentInterface/test_planning_adaptation.py
 python -m test_regr.VLABenchAgentInterface.utils.audit_planning \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning --output audit.json
-python -m test_regr.JointEmbodiedAgentInterface.finetune_planning \
+python -m test_regr.JointEmbodiedAgentInterface.utils.finetune_planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
   --split validation --epochs 3 --samples-per-epoch 512 --output checkpoints/planning_adaptation
 ```

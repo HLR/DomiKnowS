@@ -143,7 +143,7 @@ python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage \
 To evaluate the planner on held-out EAI symbolic validation goals (testing goal graph satisfaction and precondition recall):
 
 ```bash
-python -m test_regr.JointEmbodiedAgentInterface.paired_eai_eval \
+python -m test_regr.JointEmbodiedAgentInterface.utils.paired_eai_eval \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt \
   --output test_regr/JointEmbodiedAgentInterface/results/paired_eai_joint.json \
   --selection canonical-validation

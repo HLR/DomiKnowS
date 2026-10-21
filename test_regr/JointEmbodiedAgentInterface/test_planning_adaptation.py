@@ -6,7 +6,7 @@ import pytest
 import torch
 from contextlib import nullcontext
 from .checkpoint import validate_planning_schema_migration
-from .finetune_planning import balanced_examples
+from .utils.finetune_planning import balanced_examples
 from domiknows.generation.validation import retains_validation_scores
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
 from test_regr.VLABenchAgentInterface.world_graph import LEGACY_VLABENCH_DOMAIN_CHECKSUM, VLABENCH_DOMAIN_CHECKSUM
@@ -53,7 +53,7 @@ def test_generic_retention_rejects_unknown_nonfinite_and_dimension_regression():
 
 @pytest.mark.parametrize("candidate_physics,should_promote", [(70.0, False), (85.0, True)])
 def test_training_promotes_only_retained_generated_validation_scores(tmp_path, monkeypatch, candidate_physics, should_promote):
-    from . import finetune_planning as module
+    from .utils import finetune_planning as module
     class Planner(torch.nn.Module):
         def __init__(self):
             super().__init__()

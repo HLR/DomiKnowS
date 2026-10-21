@@ -319,7 +319,7 @@ controller retain stronger Stage 1 anchors by default
 Configure these values explicitly when running controlled ablations.
 
 Joint uses the same ordered 80/20 EAI split as the standalone EAI workflow and
-scores the complete 88-example holdout by default. `paired_eai_eval.py` can
+scores the complete 88-example holdout by default. `utils/paired_eai_eval.py` can
 score any retained standalone or Joint checkpoint on those exact row identities
 with `--selection canonical-validation`, including decoded actions and missed
 goal facts for every failure.

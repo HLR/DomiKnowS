@@ -39,7 +39,7 @@ from .main import (
     stage2_selection_key,
 )
 from .models import JointQwenVLPlanner
-from .paired_eai_eval import paired_indices
+from .utils.paired_eai_eval import paired_indices
 from .program import JointReinforcementProgram, JointSolverPOIProgram, _TrainingProgress
 from .world_graph import build_joint_runtime, build_joint_world_graph
 
@@ -1409,7 +1409,7 @@ def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
 
 
 def test_select_candidate_with_ilp_exact_fallback():
-    from test_regr.JointEmbodiedAgentInterface.structured_inference import (
+    from test_regr.JointEmbodiedAgentInterface.utils.structured_inference import (
         StructuredPlanCandidate,
         select_candidate_with_ilp,
     )

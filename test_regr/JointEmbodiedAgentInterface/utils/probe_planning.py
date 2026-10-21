@@ -2,10 +2,10 @@
 import json
 from pathlib import Path
 import torch
-from .eval_planning import build_eval_parser, _prepare_eval
-from .models import JointQwenVLPlanner
-from .checkpoint import load_joint_checkpoint
-from .program import _runtime_adapter
+from ..eval_planning import build_eval_parser, _prepare_eval
+from ..models import JointQwenVLPlanner
+from ..checkpoint import load_joint_checkpoint
+from ..program import _runtime_adapter
 from test_regr.VLABenchAgentInterface.main import _controller
 from test_regr.VLABenchAgentInterface.training import evaluate_planner
 from test_regr.VLABenchAgentInterface.planning_augmentation import diagnostic_examples

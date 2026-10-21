@@ -10,10 +10,10 @@ import random
 import torch
 import torch.nn.functional as F
 
-from .eval_planning import build_eval_parser, _prepare_eval
-from .models import JointQwenVLPlanner
-from .checkpoint import load_joint_checkpoint, save_joint_checkpoint
-from .program import _runtime_adapter
+from ..eval_planning import build_eval_parser, _prepare_eval
+from ..models import JointQwenVLPlanner
+from ..checkpoint import load_joint_checkpoint, save_joint_checkpoint
+from ..program import _runtime_adapter
 from domiknows.generation.validation import retains_validation_scores
 from test_regr.VLABenchAgentInterface.main import _controller
 from test_regr.VLABenchAgentInterface.graph import plan_to_tokens
