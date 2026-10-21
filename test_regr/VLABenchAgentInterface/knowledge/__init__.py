@@ -6,6 +6,7 @@ and where task identity comes from:
 ==========  ==============================================  =========================================
 level       active constraint groups                          source of the ``task__*`` observation
 ==========  ==============================================  =========================================
+grammar     none (the plan grammar DFA alone)                 none
 generic     generic rules                                     none
 scene       generic + scene-grounded rules                    none
 learned     + task rules and facts                            a predicted task (``context['predicted_task']``)
@@ -23,7 +24,7 @@ from .tables import (
     COMPLEX_TASK_SCHEMAS, PLANNING_TASK_PATTERNS, PRIMITIVE_TASK_PATTERNS, QA_TASK_PATTERNS, ComplexTaskSchema,
 )
 
-LEVELS = ("generic", "scene", "learned", "task", "metadata")
+LEVELS = ("grammar", "generic", "scene", "learned", "task", "metadata")
 GROUPS = ("generic", "scene", "task")
 _GROUP_FROM = {"generic": "generic", "scene": "scene", "task": "learned"}
 _default_level = [os.environ.get("VLABENCH_KNOWLEDGE", "task")]

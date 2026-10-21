@@ -70,7 +70,7 @@ def test_explicit_sequence_overrides_the_declared_one(world):
     assert requirements.explicit_sequence and requirements.expected_skills == other
 
 
-@pytest.mark.parametrize("level", ["generic", "scene"])
+@pytest.mark.parametrize("level", ["grammar", "generic", "scene"])
 def test_below_learned_no_task_fact_is_consulted(level):
     world = build_vlabench_world_graph(f"leak_{level}", knowledge_level=level)
     context = {"task": "select_fruit", "task_name": "select_fruit", "episode_id": "select_fruit/example1",
@@ -104,9 +104,10 @@ def test_task_rules_are_inactive_below_learned_and_follow_set_knowledge_level():
 
 def test_levels_are_ordered_and_groups_nest():
     for index, level in enumerate(LEVELS):
-        assert group_active(level, "generic")
-        assert group_active(level, "scene") == (index >= 1)
-        assert group_active(level, "task") == (index >= 2)
+        assert group_active(level, "generic") == (index >= 1)
+        assert group_active(level, "scene") == (index >= 2)
+        assert group_active(level, "task") == (index >= 3)
+    assert LEVELS[0] == "grammar" and not any(group_active("grammar", g) for g in ("generic", "scene", "task"))
 
 
 def test_metadata_observations_need_the_metadata_level():
@@ -115,3 +116,12 @@ def test_metadata_observations_need_the_metadata_level():
         observation_mode = "metadata-assisted"
     with pytest.raises(ValueError):
         apply_knowledge_argument(Args)
+
+
+def test_grammar_level_activates_no_constraint_group():
+    world = build_vlabench_world_graph("grammar_world", knowledge_level="grammar")
+    for group, rules in world.knowledge_groups.items():
+        assert rules and not any(rule.active for rule in rules), group
+    set_knowledge_level(world, "generic")
+    assert all(rule.active for rule in world.knowledge_groups["generic"])
+    assert not any(rule.active for rule in world.knowledge_groups["scene"])

@@ -6,22 +6,20 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 
 | Level | Active knowledge | Source of the task |
 | --- | --- | --- |
-| (always on) | plan grammar DFA: the token syntax of a plan, the nine skills, entity ids within the scene table, the end token and the operation budget | none |
+| `grammar` | plan grammar DFA only: the token syntax of a plan, the nine skills, any of the 64 entity ids, the end token, the operation budget and the language of allowed skill patterns; no constraint group | none |
 | `generic` | + skill schema, subtask patterns, pointer, anti-self-placement and repeated-pick rules | none |
 | `scene` | + scene-grounded rules (buttons, fixtures, containers, open-before-place) | none |
 | `learned` | + the per-task LCs of `task` (skill-sequence, completion, obligations) and the grounded physics/complex families | predicted from the instruction by a classifier fitted on the training split |
 | `task` | the same rules as `learned` | the episode's task name |
 | `metadata` | + QA property observations (`--observation-mode metadata-assisted`) | the episode's task name |
 
-The grammar DFA is the decoding grammar of the graph planner, so it is not a switchable level: the evaluation has no
-flag to remove it, and there is no "no constraints" row for it. What the grammar alone is worth is measured on a
-different system, the frozen VLM in the standard protocol (`VLABENCH_BASELINE_AND_EVALUATION_GUIDE`), and is not
-comparable with the numbers below.
+`grammar` is the floor of this graph planner: its grammar DFA is the decoding grammar, so no lower row exists.
+The frozen VLM in the standard protocol is a different system and is not comparable with these numbers.
 
 ## Setup
 
 - Checkpoint `joint_stage2_best.pt` (Stage 2, epoch 4), 450 test episodes, seed 42, original stored labels,
-  no generation failures at any level. Code: commit `4c04f1e1`, run on gpu2 (one GPU per level).
+  no generation failures at any level. Code: commit `4c04f1e1` (the `learned` and `grammar` rows were run on later commits that only add those levels), run on gpu2 (one GPU per level).
 - Command (per level; `metadata` uses `--observation-mode metadata-assisted`):
 
 ```bash
@@ -29,7 +27,7 @@ python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning \
   --split test --seed 42 --device cuda:0 --allow-planning-schema-migration \
-  --observation-mode visual --knowledge <generic|scene|task> \
+  --observation-mode visual --knowledge <grammar|generic|scene|task> \
   --output test_regr/JointEmbodiedAgentInterface/results/knowledge_ablation/<level>.json
 ```
 
@@ -39,6 +37,7 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
 
 | Level | Macro | Overall | SR | PR | SPR | PM |
 | --- | --- | --- | --- | --- | --- | --- |
+| grammar | 60.9 | 64.3 | 89.4 | 51.1 | 55.2 | 25.5 |
 | generic | 66.9 | 70.8 | 89.4 | 62.4 | 63.0 | 37.7 |
 | scene | 67.9 | 71.8 | 89.4 | 63.7 | 65.5 | 39.6 |
 | learned | 77.1 | 78.0 | 98.2 | 66.6 | 70.2 | 50.8 |
@@ -49,6 +48,7 @@ Per-dimension score:
 
 | Level | M&T | Spatial | ComSense | Semantic | PhysLaw | Complex |
 | --- | --- | --- | --- | --- | --- | --- |
+| grammar | 74.7 | 63.2 | 75.8 | 75.8 | 37.7 | 37.9 |
 | generic | 85.0 | 71.2 | 81.6 | 82.3 | 37.7 | 43.6 |
 | scene | 85.4 | 72.2 | 81.7 | 85.5 | 37.7 | 44.6 |
 | learned | 78.9 | 72.2 | 81.7 | 85.5 | 57.0 | 87.4 |
@@ -78,7 +78,10 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 
 ## Reading
 
-- **Generic and scene knowledge is worth about 1 point of Macro** (66.9 to 67.9); only Semantic moves (+3.2).
+- **The generic rules are worth +6.0 Macro over the grammar alone** (60.9 to 66.9): parameter recall 51 to 62 and
+  graph match 26 to 38, with gains in every dimension except PhysLaw. Skill recall is unchanged (89.4), so the gain is in
+  arguments and graph structure, not in which skills are chosen.
+- **Scene knowledge is worth about 1 point of Macro** (66.9 to 67.9); only Semantic moves (+3.2).
 - **The task tier is the large step, +9.2 Macro**, and it comes from two dimensions: Complex 44.6 to 87.4
   (the obligations and sequence LCs) and PhysLaw 37.7 to 57.0 (grounded QA families). Skill recall rises
   from 89 to 98.
