@@ -523,3 +523,74 @@ Omit `--apply` to preview either operation. Restoration validates every backup
 and current-file checksum before writing, is idempotent, refuses unrelated edits,
 and leaves the upstream generator fix intact. Existing historical reports retain
 their original label protocol; restoring data does not retroactively change them.
+
+## Source code map
+
+All non-test source files in this package are listed below, grouped by folder. Run commands from the
+repository root; every module is also importable as `test_regr.VLABenchAgentInterface.<folder>.<module>`.
+
+### Package root
+
+| File | Functionality |
+| --- | --- |
+| `__init__.py` | Exposes the plan reward types, `PlanVocabulary`, plan canonicalization and validation helpers. |
+| `main.py` | Command-line entry point: dataset download and inspection, vocabulary build, controller, planner and two-stage agent training, `evaluate-planner` (internal and `--protocol official`), rollouts and diagnostics. |
+| `dataset.py` | Downloads and loads the processed planning and control datasets, builds `PlanningExample`s (including the `visual` and `metadata-assisted` observation modes), the seeded 80/10/10 split and the numbered segmentation views. |
+| `world_graph.py` | The DomiKnowS semantic graph for grounded operation plans: skill schemas, subtask patterns, task contracts, plan canonicalization and validation, and verification of the graph's logical constraints. |
+| `graph.py` | Generation vocabulary (`PlanVocabulary`), plan/token conversion and the planner DFA derived from the world graph. |
+| `constraint_compiler.py` | VLABench predicate bindings and the token/state adapter that compiles the world constraints into decoding masks. |
+| `semantics.py` | Executable world predicates (enclosed or opened containers, static fixtures, pointer resolution, operation schema errors), independent of DataNodes and token decoding. |
+| `task_policy.py` | Declarative task facts, per-task required skill sequences and their executable predicate meanings. |
+| `complex_grounding.py` | Complex-task requirements derived from the exposed language and scene names only. |
+| `physics_grounding.py` | Input-only adapters for the qualitative physics (QA) tasks, in `visual` and `metadata-assisted` form. |
+| `object_grounding.py` | Conservative instruction grounding from scene components, never from goal metadata; produces per-skill object-id restrictions. |
+| `planning_augmentation.py` | Entity-order augmentation that keeps scene names and target meaning. |
+| `models.py` | The compact graph-token planner (`QwenVLPlanner`), its prompt, and the model-loading and special-token helpers shared with the controller. |
+| `native_planning.py` | Native-token frozen-VLM planning: byte-exact JSON plan language DFA (`NativePlanDFA`), the logits processor with HMM lookahead hooks and the frozen planner wrapper. |
+| `planning_metrics.py` | Official VLABench planning metrics (SR, PR, SPR, PM, total and four-term scores), dimension mapping and aggregation, independent of training gates. |
+| `reward.py` | The planner reward: `score_vlabench_plan` gates on schema and world validity and mixes the official components. |
+| `training.py` | Resumable supervised and reward-driven training utilities and the planner constraint runtime. |
+| `diagnostics.py` | Controller diagnostics (wrapped pose deltas, rollout summaries); task success stays with the simulator. |
+| `observations.py` | Explicit image range and live camera selection for controller inputs. |
+| `planning_experiment.py` | Resumable, evidence-producing native and graph planner experiments, teacher-corpus sampling and HMM fitting. |
+| `repair_density_labels.py` | Audit, repair and restore of the density QA labels. |
+| `planning_benchmark.json` | Pinned upstream revision, dimension-to-task mapping and benchmark configuration (data, not code). |
+
+### `official/` (standard VLM-planning protocol)
+
+| File | Functionality |
+| --- | --- |
+| `official_protocol.py` | The standard protocol: upstream prompt layout, parsing, differential scoring, resumable runs, and the grammar-DFA generator with its press-question, scene-ids, pattern-first and HMM options. |
+| `official_vlm_prompt_en.txt` | The vendored upstream prompt (hash-checked at load). |
+| `official_hmm.py` | The label-free HMM pipeline: corpus sampling, canonical plan text, HMM loading and decoding labels, validation weight selection and the held-out report. |
+| `official_adapt.py` | Per-instance emission adaptation: expected counts by scaled forward-backward and the mixed emission matrix. |
+| `native_lookahead.py` | The action-level HMM lookahead bound to the plan DFA (canonical action serialisations, session state and per-decision bonuses). |
+
+### `simulation/` (simulator rollouts and controller)
+
+| File | Functionality |
+| --- | --- |
+| `environment.py` | Lazy adapter around the official VLABench environment: frame conversions, end-effector bounds, inverse kinematics and `create_environment`. |
+| `controller.py` | The image encoders, the multi-view actor-critic `MultiViewController` and its behavior-cloning loss. |
+| `program.py` | The DomiKnowS two-stage programs and the joint planner/controller reinforcement program: `collect_episode`, `evaluate_rollouts`, PPO updates and execution assistance. |
+| `agent.py` | Runtime composition of the constrained planner and the continuous controller (`HierarchicalVLABenchAgent`). |
+| `rollout_reward.py` | The bounded terminal reward of a rollout from success, progress and intention signals. |
+| `replay.py` | Short paired demonstration and controller rollouts from a restored held-out scene, with camera-parity checks. |
+| `assist_ablation.py` | Paired assistance-ablation evaluation with Wilson intervals and an exact McNemar test. |
+
+### `utils/` (standalone tools)
+
+| File | Functionality |
+| --- | --- |
+| `audit_planning.py` | Read-only audit of reference representability and constraints. |
+| `preserve_reflection_observations.py` | Patches the upstream scene generator to keep explicit reflectance bindings. |
+| `run_planning_experiment.py` | Sequential experiment driver with durable stage logs and status. |
+
+### Other folders
+
+| Folder | Contents |
+| --- | --- |
+| `test/` | The package's tests (`uv run pytest -q test_regr/VLABenchAgentInterface`). |
+| `docs/` | Notes, reports and the baseline and evaluation guides. |
+| `data/` | Local planning and control datasets. |
+| `outputs/` | Experiment outputs, including the pinned upstream scoring source used by a differential test. |
