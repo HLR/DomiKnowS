@@ -45,13 +45,13 @@ SUBTASK_PATTERNS: tuple[tuple[str, ...], ...] = (
 # ``task__<name>`` concepts and logical constraints (``knowledge.task_lcs``).
 try:
     from .knowledge import (
-        DEFAULT_TASK_KNOWLEDGE, KnowledgeState, check_level, default_level, group_active,
+        DEFAULT_TASK_KNOWLEDGE, KnowledgeState, active_task_knowledge, check_level, default_level, group_active,
         PLANNING_TASK_PATTERNS, PRIMITIVE_TASK_PATTERNS, QA_TASK_PATTERNS,
     )
     from .knowledge.task_lcs import declare_task_concepts, knowledge_values
 except ImportError:  # pragma: no cover - flat-module execution
     from knowledge import (
-        DEFAULT_TASK_KNOWLEDGE, KnowledgeState, check_level, default_level, group_active,
+        DEFAULT_TASK_KNOWLEDGE, KnowledgeState, active_task_knowledge, check_level, default_level, group_active,
         PLANNING_TASK_PATTERNS, PRIMITIVE_TASK_PATTERNS, QA_TASK_PATTERNS,
     )
     from knowledge.task_lcs import declare_task_concepts, knowledge_values
@@ -447,7 +447,7 @@ def build_vlabench_world_graph(
 
     level = check_level(knowledge_level or default_level())
     state = KnowledgeState(level)
-    task_knowledge = task_knowledge or DEFAULT_TASK_KNOWLEDGE
+    task_knowledge = task_knowledge or active_task_knowledge()
 
     build_id = next(_BUILD_IDS)
     role_prefix = f"__vlabench_plan_{build_id}__"

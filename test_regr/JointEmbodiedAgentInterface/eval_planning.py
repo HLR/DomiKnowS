@@ -29,6 +29,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     OBSERVATION_MODES,
 )
 from test_regr.VLABenchAgentInterface.knowledge import add_knowledge_argument, apply_knowledge_argument
+from test_regr.VLABenchAgentInterface.knowledge.holdout import add_holdout_arguments, apply_holdout_arguments, partition
 from test_regr.VLABenchAgentInterface.knowledge.task_classifier import predict_tasks
 from test_regr.VLABenchAgentInterface.main import _controller
 from test_regr.VLABenchAgentInterface.training import evaluate_planner
@@ -61,13 +62,14 @@ def build_eval_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--split",
-        choices=("validation", "test", "train", "all"),
+        choices=("validation", "test", "train", "all", "heldout"),
         default="validation",
         help="dataset split to evaluate (default: validation)",
     )
     parser.add_argument("--observation-mode", choices=OBSERVATION_MODES, default="visual",
                         help="QA property selection: visual VLM predictions (default) or explicit metadata-assisted constraints")
     add_knowledge_argument(parser)
+    add_holdout_arguments(parser)
     parser.add_argument("--updated-data", "--updated-labels", action="store_true",
                         help="score against corrected density labels computed in memory; default uses labels stored in --planning-dir")
     parser.add_argument(
@@ -176,7 +178,10 @@ def _prepare_eval(args, device):
     vlabench_examples = _evaluation_examples(args, args.vlabench_planning_dir)
     if not vlabench_examples:
         raise ValueError("VLABench planning dataset is empty")
-    vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
+    seen, held_out = partition(vlabench_examples, args)
+    vlabench_splits = deterministic_split(seen, seed=args.seed)
+    if getattr(args, "holdout_tasks", None):
+        vlabench_splits["heldout"] = held_out
 
     print(f"[eval-planning] Compiling joint runtime DFAs (entities={args.max_entities}, operations={args.max_operations})...", flush=True)
     runtime = build_joint_runtime(
@@ -200,6 +205,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"checkpoint not found: {checkpoint_path}")
     knowledge = apply_knowledge_argument(args)
+    holdout = apply_holdout_arguments(args)
 
     device = torch.device(args.device)
     random.seed(args.seed)
@@ -286,6 +292,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "split": args.split,
         "observation_mode": getattr(args, "observation_mode", "visual"),
         "knowledge": knowledge,
+        "holdout_tasks": list(holdout),
+        "declare_heldout_knowledge": bool(getattr(args, "declare_heldout_knowledge", False)),
         "task_classifier": str(args.task_classifier) if knowledge == "learned" else None,
         "reference_labels": "density-material-button-v1" if getattr(args, "updated_data", False) else "as-stored",
         "updated_data": getattr(args, "updated_data", False),

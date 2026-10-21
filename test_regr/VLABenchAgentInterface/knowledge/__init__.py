@@ -53,6 +53,15 @@ def task_facts_available(level: str) -> bool:
     return group_active(level, "task")
 
 
+_excluded_tasks: set = set()
+
+
+def set_excluded_tasks(tasks) -> None:
+    """Tasks removed from the default declared knowledge (the unseen-task test)."""
+    _excluded_tasks.clear()
+    _excluded_tasks.update(tasks)
+
+
 def add_knowledge_argument(parser) -> None:
     parser.add_argument("--knowledge", choices=LEVELS, default=None,
                         help="knowledge tier of the world graph: generic < scene < learned < task < metadata "
@@ -91,6 +100,12 @@ class TaskKnowledge:
         if self.complex is None:
             object.__setattr__(self, "complex", COMPLEX_TASK_SCHEMAS)
 
+    def without(self, tasks) -> "TaskKnowledge":
+        """The same declarations minus ``tasks`` (their concepts and constraints are then never built)."""
+        drop = set(tasks)
+        keep = lambda table: {name: value for name, value in table.items() if name not in drop}
+        return TaskKnowledge(keep(self.primitive), keep(self.qa), keep(self.planning), keep(self.complex))
+
     def tasks(self) -> tuple[str, ...]:
         return tuple(sorted({*self.primitive, *self.qa, *self.planning, *self.complex}))
 
@@ -125,3 +140,8 @@ __all__ = [
     "PLANNING_TASK_PATTERNS", "PRIMITIVE_TASK_PATTERNS", "QA_TASK_PATTERNS", "TaskKnowledge", "check_level",
     "default_level", "group_active", "set_default_level", "task_facts_available",
 ]
+
+
+def active_task_knowledge() -> TaskKnowledge:
+    """The declared knowledge minus the tasks excluded by ``--holdout-tasks``."""
+    return DEFAULT_TASK_KNOWLEDGE.without(_excluded_tasks) if _excluded_tasks else DEFAULT_TASK_KNOWLEDGE

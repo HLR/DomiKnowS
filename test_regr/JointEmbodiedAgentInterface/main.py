@@ -23,6 +23,10 @@ from test_regr.VLABenchAgentInterface.dataset import (
     load_planning_examples,
 )
 from test_regr.VLABenchAgentInterface.simulation.assist_ablation import parse_assist_modes, run_assist_ablation
+from test_regr.VLABenchAgentInterface.knowledge import add_knowledge_argument, apply_knowledge_argument
+from test_regr.VLABenchAgentInterface.knowledge.holdout import (
+    add_holdout_arguments, apply_holdout_arguments, partition,
+)
 from test_regr.VLABenchAgentInterface.main import _control_loaders, _controller
 from test_regr.VLABenchAgentInterface.simulation.program import parse_assist_components
 from test_regr.VLABenchAgentInterface.training import (
@@ -270,9 +274,10 @@ def _prepare(args, device):
 
     _status(f"loading VLABench planning data from {args.vlabench_planning_dir}")
     vlabench_examples = load_planning_examples(args.vlabench_planning_dir, limit=args.vlabench_limit)
+    vlabench_examples, held_out = partition(vlabench_examples, args)  # held-out tasks never reach training
     if not vlabench_examples:
         raise ValueError("VLABench planning dataset is empty")
-    _status(f"loaded VLABench planning examples={len(vlabench_examples)}")
+    _status(f"loaded VLABench planning examples={len(vlabench_examples)} held out={len(held_out)}")
     vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
     runtime = build_joint_runtime(
         world,
@@ -301,6 +306,7 @@ def command_train_agent(args):
         raise ValueError("train-agent requires --two-stage")
     random.seed(args.seed)
     torch.manual_seed(args.seed)
+    _status(f"knowledge level={apply_knowledge_argument(args)} held-out tasks={apply_holdout_arguments(args)}")
     # Fail on a mistyped component or mode before loading any model.
     assist_components = parse_assist_components(getattr(args, "assist_components", "all"))
     assist_ablation_modes = None
@@ -985,6 +991,8 @@ def build_parser():
     agent.add_argument("--eai-limit", type=int)
     agent.add_argument("--eai-max-steps", type=int, default=60)
     agent.add_argument("--eai-reward-mode", choices=["binary", "dense"], default="dense")
+    add_knowledge_argument(agent)
+    add_holdout_arguments(agent)
     agent.add_argument("--vlabench-planning-dir", default=str(DEFAULT_VLABENCH_PLANNING))
     agent.add_argument("--control-source", default=str(DEFAULT_VLABENCH_CONTROL))
     agent.add_argument("--vlabench-limit", type=int)
@@ -1240,7 +1248,9 @@ def build_parser():
     )
     eval_planning.add_argument("--checkpoint", type=Path, required=True, help="path to joint checkpoint")
     eval_planning.add_argument("--planning-dir", type=Path, default=DEFAULT_VLABENCH_PLANNING)
-    eval_planning.add_argument("--split", choices=("validation", "test", "train", "all"), default="validation")
+    eval_planning.add_argument("--split", choices=("validation", "test", "train", "all", "heldout"), default="validation")
+    add_knowledge_argument(eval_planning)
+    add_holdout_arguments(eval_planning)
     eval_planning.add_argument("--limit", type=int, default=None)
     eval_planning.add_argument("--output", type=Path, default=None)
     eval_planning.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
