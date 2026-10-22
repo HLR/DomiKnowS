@@ -35,3 +35,25 @@ DFA allows at the teacher-forced step, over 20 validation items, up to 12 scored
   VLABench (the stack dump pointed at `constructCompiled`); I did not find out why this data is slower than the
   earlier 14 s/round run.
 - Not tested: more rounds, a larger mass weight, scoring every step, or the lookahead allowed set on EAI.
+
+## Follow-up: cross entropy under the DFA mask (commit 10117c42)
+
+The allowed-mass term is redundant with cross entropy on teacher-forced steps (the target is always allowed, so
+`-log P(allowed) <= -log p(target)`), which explains the null result above. Option A was chosen instead: accept that
+decoding needs the mask and train the distribution decoding samples from, i.e. cross entropy with the softmax
+restricted to the DFA-allowed labels at each step (`--stage1-masked-ce on`, the default; the mass term is off).
+Primal-dual constraint loss off in this run (`--stage1-pmd-domains none`).
+
+Same seed, same data, 100 rounds, validated through the DFA-masked decoder (100 VLABench validation episodes):
+
+| Run | Overall | SR | PR | SPR | PM | Exact graph | Reward | Unmasked mass EAI / VLABench |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| cross entropy | 66.0 | 73.5 | 71.0 | 52.0 | 30.0 | 0.30 | 0.660 | 0.83 / 0.16 |
+| masked cross entropy | **70.8** | 74.0 | 79.5 | 57.5 | 36.0 | 0.36 | 0.708 | 0.44 / 0.035 |
+
+Training took about the same time (about 10 minutes). EAI validation (8 items) is unchanged (goal success 0.25, goal
+recall 0.47). As expected the unmasked probability on valid labels is lower, since the mask now does that work.
+
+Caveats: one seed, 100 validation episodes, 100 rounds; the gap (+4.8 overall) is consistent across metrics but its
+significance is not established. The share of steps whose gold label the DFA disallows (`masked_ce_misses`) is
+reported by the loss but I did not aggregate it over the run.
