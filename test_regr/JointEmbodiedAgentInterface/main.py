@@ -477,10 +477,13 @@ def command_train_agent(args):
                     vla_splits["validation"],
                     _runtime_adapter(runtime, "vlabench"),
                 )
+            dfa_mass = stage1.dfa_mass_report(eai_valid, prepared["validation"])
+            _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} DFA mass (unmasked probability on valid labels) {dfa_mass}")
             metrics = {
                 "train": train_metrics,
                 "eai": eai_metrics,
                 "vlabench": vla_metrics,
+                "dfa_mass": dfa_mass,
                 "validation_loss": (train_metrics["eai_loss"] + train_metrics["vlabench_loss"]) / 2.0,
             }
             path = save_joint_checkpoint(

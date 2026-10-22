@@ -127,3 +127,14 @@ def test_domains_outside_the_dfa_loss_keep_plain_cross_entropy(joint_fixture):
     with runtime.domain_scope("eai", parameter_policy="freeze_inactive"):
         _loss, terms = program._domain_loss("eai", examples[0])
     assert terms == {}
+
+
+def test_dfa_mass_report_is_a_probability_for_both_domains_and_restores_training_mode(joint_fixture):
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    program = program_with(runtime, planner)
+    planner.train()
+    report = program.dfa_mass_report([examples[0]], [vlabench_item(runtime)], limit=1)
+    assert set(report) == {"eai", "vlabench"} and all(0.0 < value <= 1.0 for value in report.values())
+    assert planner.training
+    assert program.dfa_mass_report([], [], limit=1) == {"eai": None, "vlabench": None}

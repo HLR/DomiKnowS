@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 import sys
 import time
@@ -271,6 +272,40 @@ class JointSolverPOIProgram(SolverPOIProgram):
         )
         self._dual_grads(domain, pmd)
         return breakdown.total, {k: v for k, v in breakdown.as_float_dict().items() if k != "total_loss"}
+
+    @torch.no_grad()
+    def dfa_mass_report(self, eai_items: Sequence[Mapping[str, Any]], vlabench_items: Sequence[Mapping[str, Any]],
+                        *, limit: int = 20, steps: int = 12) -> dict[str, float | None]:
+        """How much probability the unmasked planner puts on DFA-valid labels (the quantity the DFA loss raises).
+
+        Per domain: the geometric mean over ``limit`` items of the probability on labels valid at the teacher-forced
+        step, scored at up to ``steps`` evenly spaced steps per item with one-step validity. 1.0 means the planner
+        needs no mask there. It is measured the same way whether or not the DFA loss was used in training.
+        """
+        was_training = self.planner_head.training
+        self.planner_head.eval()
+        report: dict[str, float | None] = {}
+        try:
+            for domain, items in (("eai", eai_items), ("vlabench", vlabench_items)):
+                values = []
+                for item in list(items)[:limit]:
+                    context = _context(item, domain)
+                    labels = _labels(item, domain).to(self.planner_head.device)
+                    with self.runtime.domain_scope(domain):
+                        logits = self.planner_head.sequence_logits(
+                            domain, context, self.planner_head.shift_right(domain, labels)).squeeze(0)
+                        dfa = self.runtime.dfa_for(domain, {**dict(item), **dict(context)})
+                    eos = int(self.planner_head.vocabulary(domain).eos_label)
+                    keep = (labels == eos).cumsum(dim=-1) <= 1
+                    kept = int(keep.sum())
+                    picks = sorted({round(i * (kept - 1) / max(1, steps - 1)) for i in range(min(steps, kept))})
+                    loss = allowed_mass_loss(torch.softmax(logits[keep].float(), dim=-1), dfa, path=labels[keep],
+                                             score_steps=picks, lookahead=False)
+                    values.append(math.exp(-float(loss)))
+                report[domain] = sum(values) / len(values) if values else None
+        finally:
+            self.planner_head.train(was_training)
+        return report
 
     def _dual_grads(self, domain: str, pmd: torch.Tensor) -> None:
         optimizer = self.dual_optimizers.get(domain)
