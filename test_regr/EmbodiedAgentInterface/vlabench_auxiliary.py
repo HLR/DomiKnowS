@@ -9,10 +9,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import torch
 
-try:
-    from .modules import CausalLMActionObjectGenerator, EOSMaskedCrossEntropyLoss
-except ImportError:  # Direct execution through EmbodiedAgentInterface/main.py.
-    from modules import CausalLMActionObjectGenerator, EOSMaskedCrossEntropyLoss
+from test_regr.EmbodiedAgentInterface.modules import CausalLMActionObjectGenerator, EOSMaskedCrossEntropyLoss
 
 
 VLABENCH_PROMPT_KEY = "vlabench_planner_prompt_text"
@@ -304,10 +301,7 @@ def train_vlabench_text_auxiliary(
         train_source = examples.get("train", ())
         validation_source = examples.get("validation", ())
     else:
-        try:
-            from .dataset import split_vlabench_auxiliary_examples
-        except ImportError:
-            from dataset import split_vlabench_auxiliary_examples
+        from test_regr.EmbodiedAgentInterface.dataset import split_vlabench_auxiliary_examples
 
         split = split_vlabench_auxiliary_examples(list(examples))
         train_source = split["train"]

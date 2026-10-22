@@ -2,11 +2,11 @@ import sys
 import traceback
 from pathlib import Path
 
-p = Path(r"test_regr\EmbodiedAgentInterface").resolve()
+p = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(p))
 sys.path.insert(0, str(p.parents[1]))
 
-import main
+import test_regr.EmbodiedAgentInterface.main as main
 
 log_path = p / "run_direct_err.log"
 

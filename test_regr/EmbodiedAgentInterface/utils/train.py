@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 MAIN = SCRIPT_DIR / "main.py"
 MODEL_DIR = SCRIPT_DIR / "models"
 

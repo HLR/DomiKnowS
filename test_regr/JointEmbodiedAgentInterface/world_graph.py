@@ -149,7 +149,7 @@ class JointDomainRuntime:
             )
         if domain != "eai":
             raise ValueError(f"unknown joint domain {domain!r}; expected one of {DOMAINS}")
-        from test_regr.EmbodiedAgentInterface.constraint_compiler import bind_eai_policy
+        from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import bind_eai_policy
         return bind_eai_policy(self.eai_dfa, self.eai_vocabulary, context or {})
 
     @contextmanager
@@ -276,7 +276,7 @@ def build_joint_runtime(
     eai_dfa = constraints_to_dfa_from_graph(
         eai_graph, eai_generation, on_unsupported="raise", minimize=False,
     )
-    from test_regr.EmbodiedAgentInterface.constraint_compiler import CompiledEAIPlannerDFA, compile_world_constraints
+    from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import CompiledEAIPlannerDFA, compile_world_constraints
     eai_dfa = CompiledEAIPlannerDFA.from_dfa(eai_dfa, compile_world_constraints(world_bundle.eai),
                                             world_constraint_bundle=world_bundle.eai, generation_graph=eai_graph)
     vlabench_dfa = compile_planner_dfa(

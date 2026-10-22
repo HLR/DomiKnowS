@@ -1,26 +1,14 @@
-"""Graph builder for the EmbodiedAgentInterface baseline.
+"""EAI token concepts and readable DomiKnowS generation constraints.
 
-Rebuilt against the current  ``domiknows.generation`` API:
-
-* ``GenerationEncoder`` + ``encoder.build_graph()`` (no constraint-list arg).
-* Raw DomiKnowS LCs (``ifL``, ``atMostAL``, ``atLeastAL``, ``notL``,
-  ``orL``) are written directly inside ``with graph:`` and discovered by
-  :func:`domiknows.generation.constraints_to_dfa_from_graph` at decode time.
-* The ``ActionFollowedByObjectConstraint`` helper subclass that used to
-  carry a hand-rolled ``to_dfa`` is no longer needed — the multi-token
-  ``ifL(rel, ifL(orL(actions), orL(objects)))`` shape it built is now
-  natively recognised by ``_path_token_predicate_from_flat`` and compiled
-  to the same DFA fragment.
-* ``mark_for_dfa(lc)`` takes a single argument (the LC); the second
-  positional ``constraint`` argument the old API accepted was dropped when
-  enforcement was unified.
+Plans start with an action. Object-taking actions are followed by an object;
+objects and zero-argument actions are followed by another action or the end
+label. Task facts additionally restrict entity-changing actions and cleaning.
+Compilation and contextual observation binding use domiknows.generation.
 """
+
 from __future__ import annotations
 
-try:
-    from .dataset import ACTION_VOCAB, EOS_TOKEN, entity_type_for_token
-except ImportError:
-    from dataset import ACTION_VOCAB, EOS_TOKEN, entity_type_for_token
+from test_regr.EmbodiedAgentInterface.dataset import ACTION_VOCAB, EOS_TOKEN, entity_type_for_token
 
 
 def _disjunction(calls, orL):
@@ -28,7 +16,7 @@ def _disjunction(calls, orL):
 
 
 def _apply_default_constraints(bundle, max_steps, required_tokens, forbidden_tokens):
-    """Translate the legacy ``default_generation_constraints`` knobs to raw LCs."""
+    """Sequence boundaries, length, required labels and forbidden labels."""
     from domiknows.generation import mark_for_dfa
     from domiknows.graph.logicalConstrain import atLeastAL, atMostAL, ifL, notL
 
@@ -37,31 +25,42 @@ def _apply_default_constraints(bundle, max_steps, required_tokens, forbidden_tok
 
     # EOS-closure: once EOS appears at some position, every later position
     # is EOS too.  Same shape as Tasks/hf_generation/graph.py.
-    mark_for_dfa(ifL(
-        ctx.is_before_rel("before"),
+    mark_for_dfa(
         ifL(
-            ctx.token_value(eos_token, "x", path=("before", ctx.first_token)),
-            ctx.token_value(eos_token, "y", path=("before", ctx.second_token)),
-        ),
-    ))
+            ctx.is_before_rel("before"),
+            ifL(
+                ctx.token_value(eos_token, "x", path=("before", ctx.first_token)),
+                ctx.token_value(eos_token, "y", path=("before", ctx.second_token)),
+            ),
+            name="end_labels_are_closed",
+        )
+    )
 
     # ``max_non_eos_count = max_steps - 1`` translates to "at most N
     # positions are not EOS".
     max_non_eos = max(0, int(max_steps) - 1)
-    mark_for_dfa(atMostAL(notL(ctx.token_value(eos_token, "x")), max_non_eos))
+    mark_for_dfa(
+        atMostAL(notL(ctx.token_value(eos_token, "position")), max_non_eos, name="plan_token_limit")
+    )
 
     # Each required token must appear at least the requested number of
     # times anywhere in the generated sequence.
     for token, count in (required_tokens or {}).items():
         if token not in bundle.vocabulary.tokens:
             continue
-        mark_for_dfa(atLeastAL(ctx.token_value(token, "x"), int(count)))
+        mark_for_dfa(
+            atLeastAL(
+                ctx.token_value(token, "position"), int(count), name="required_token__" + token
+            )
+        )
 
     # Each forbidden token is barred entirely.
     for token in forbidden_tokens or ():
         if token not in bundle.vocabulary.tokens:
             continue
-        mark_for_dfa(atMostAL(ctx.token_value(token, "x"), 0))
+        mark_for_dfa(
+            atMostAL(ctx.token_value(token, "position"), 0, name="forbidden_token__" + token)
+        )
 
 
 def _transition_constraint(ctx, triggers, allowed, variable):
@@ -102,7 +101,9 @@ def _add_action_sequence_constraints(
         return
     ctx = bundle.context
     with graph:
-        mark_for_dfa(ctx.starts_with(actions))
+        start = ctx.starts_with(actions)
+        start.name = "plan_starts_with_action"
+        mark_for_dfa(start)
         transitions = []
         if requiring_objects and objects:
             transitions.append(
@@ -132,12 +133,12 @@ def _add_action_sequence_constraints(
             valid_objects = tuple(token for token in compatible_objects if token in objects)
             if action in requiring_objects and valid_objects:
                 transitions.append(
-                    _transition_constraint(
-                        ctx, (action,), valid_objects, f"compatible_{index}"
-                    )
+                    _transition_constraint(ctx, (action,), valid_objects, f"compatible_{index}")
                 )
         if transitions:
-            mark_for_dfa(transitions[0] if len(transitions) == 1 else andL(*transitions))
+            sequence = transitions[0] if len(transitions) == 1 else andL(*transitions)
+            sequence.name = "action_argument_sequence"
+            mark_for_dfa(sequence)
 
 
 def _add_contextual_generation_constraints(
@@ -147,17 +148,11 @@ def _add_contextual_generation_constraints(
     action_sequence_tokens,
     action_object_constraint_tokens,
 ):
-    """Declare task-conditioned policies.
+    """Require available task entities and evidence that cleaning is relevant.
 
-    The two formulas declared below are:
-
-    1. ``semantic_action(x) and immediately_next(x, y) and object(y)``
-       ``-> eai_task_entity_available(y)``
-    2. ``clean(x) -> eai_task_action_permitted(x)``
-
-    ``mark_for_contextual_dfa`` does not define either formula. It only
-    records how the Boolean conclusions are grounded from one example's
-    context when the already-compiled DFA is specialized.
+    Contextual markers bind observations from the current example. The formulas
+    determine enforcement. These Boolean concepts have no ordinary solver
+    sensor, so these two LCs are enforced by the bound generation DFA.
     """
     from domiknows.generation import mark_for_contextual_dfa
     from domiknows.graph import Concept
@@ -172,20 +167,9 @@ def _add_contextual_generation_constraints(
 
     with graph:
         if guarded_objects and entity_actions:
-            # Boolean property of an object-token position. For a concrete
-            # task it is true exactly when that label's normalized entity type
-            # occurs in the task's ``generation_entity_types`` context fact.
+            # Entity types come from the task's transition-model object list.
+            # Navigation landmarks remain permitted outside that list.
             entity_available = Concept(name="eai_task_entity_available")
-
-            # ``task_entity_edge`` binds the two endpoints of the generation
-            # ordering relation. The generation DFA compiler interprets this
-            # trigger/second-token form as an immediate-successor policy:
-            #
-            #   entity-changing action --immediately followed by--> object
-            #
-            # Navigation/perception actions are intentionally absent from
-            # ``entity_actions`` because their scene landmarks need not occur
-            # in a task's PDDL ``:objects`` list.
             edge_variable = "task_entity_edge"
             action_predicate = _disjunction(
                 [
@@ -210,15 +194,6 @@ def _add_contextual_generation_constraints(
                 orL,
             )
 
-            # Declarative DomiKnowS formula:
-            #
-            #   is_before_rel(edge)
-            #     -> (entity_action(first(edge))
-            #           -> (object(second(edge))
-            #                 -> eai_task_entity_available(second(edge))))
-            #
-            # The contextual marker below supplies the per-task truth of the
-            # final Boolean concept; it does not replace this LC structure.
             object_exists_lc = ifL(
                 ctx.is_before_rel(edge_variable),
                 ifL(
@@ -228,24 +203,15 @@ def _add_contextual_generation_constraints(
                         entity_available("task_entity_object"),
                     ),
                 ),
-                # No ordinary graph sensor populates this contextual Boolean.
-                # Keep solver verification inactive and enforce the marked LC
-                # through the task-bound DFA, where the context facts exist.
                 active=False,
                 name="generated_object_exists_in_task_world",
             )
 
-            # Bind each concrete object label to its normalized PDDL type.
-            # Example: ``bathtub_35 -> bathtub``. After an entity-changing
-            # action, the bound DFA permits that label only if ``bathtub`` is
-            # present in ``generation_entity_types`` for the current task.
+            # For example, bathtub_35 is available when the task lists bathtub.
             mark_for_contextual_dfa(
                 object_exists_lc,
                 context_key="generation_entity_types",
-                token_to_value={
-                    token: entity_type_for_token(token)
-                    for token in guarded_objects
-                },
+                token_to_value={token: entity_type_for_token(token) for token in guarded_objects},
                 vocabulary=bundle.vocabulary,
                 name="generated_object_exists_in_task_world",
                 # Some external/custom EAI rows omit a transition model.
@@ -254,31 +220,17 @@ def _add_contextual_generation_constraints(
             )
 
         if "clean" in action_sequence_tokens and "clean" in known:
-            # Boolean property saying that a semantic action is relevant to
-            # this task. ``semantic_action_permissions`` is derived from the
-            # instruction, SimpleTL goal, and transition model—not the gold
-            # action trajectory.
+            # Relevance is declared in utils/task_knowledge.py and grounded
+            # from task text and goals, excluding the reference action plan.
             task_action_permitted = Concept(name="eai_task_action_permitted")
-
-            # Declarative DomiKnowS formula:
-            #
-            #   generated_token(x) == clean
-            #       -> eai_task_action_permitted(x)
-            #
-            # This prevents a globally frequent but irrelevant ``clean`` plan
-            # from satisfying the syntax DFA for a reading or navigation task.
             clean_relevant_lc = ifL(
                 ctx.token_value("clean", "clean_action"),
                 task_action_permitted("clean_action"),
-                # As above, the Boolean is supplied while binding the DFA to
-                # one example rather than by an ordinary DataNode sensor.
                 active=False,
                 name="generated_semantic_action_is_task_relevant",
             )
 
-            # An empty permission set deliberately forbids ``clean``. Unlike
-            # entity availability, missing action context is not treated as
-            # unrestricted because every EAI row constructs this field.
+            # An empty permission set forbids cleaning.
             mark_for_contextual_dfa(
                 clean_relevant_lc,
                 context_key="semantic_action_permissions",

@@ -184,7 +184,7 @@ Eligibility is an action-target precondition enforced by the existing `grounded_
 
 The first chosen receptacle is not restored as a universal destination requirement. The accepted design permits task/object-specific destinations; use `task_target_container` or `planning_facts.destinations` when the task declares them. Changing this globally would incorrectly reject legitimate plans with different destinations. Distinct-object diversity alone also does not identify the correct ingredients: those targets require exposed task facts or the planner's grounded prediction.
 
-Validation: 196 focused generic/standalone/EAI/joint checks passed; an additional 44-test QA, semantic, decoding/replay, and reachability run passed. The broader generation suite passed 634 tests with the existing trace-log-path failure described in section 4.4. Reproduce the new requirements with `.venv/Scripts/python.exe -m pytest test_regr/generation/test_selection_requirements.py test_regr/VLABenchAgentInterface/test/test_qa_and_pick_history.py test_regr/EmbodiedAgentInterface/test_grounded_constraints.py -q`. A fresh 450-episode checkpoint run is required to measure benchmark changes; neither restoring 75.13 macro nor 100% PhysLaw is implied by these local tests.
+Validation: 196 focused generic/standalone/EAI/joint checks passed; an additional 44-test QA, semantic, decoding/replay, and reachability run passed. The broader generation suite passed 634 tests with the existing trace-log-path failure described in section 4.4. Reproduce the new requirements with `.venv/Scripts/python.exe -m pytest test_regr/generation/test_selection_requirements.py test_regr/VLABenchAgentInterface/test/test_qa_and_pick_history.py test_regr/EmbodiedAgentInterface/test/test_grounded_constraints.py -q`. A fresh 450-episode checkpoint run is required to measure benchmark changes; neither restoring 75.13 macro nor 100% PhysLaw is implied by these local tests.
 
 ### 3.1 Optional `planning_facts` input
 
@@ -261,7 +261,7 @@ Grounded no-op plans stop the agent before controller execution; simulator succe
 |---|---|
 | `domiknows/generation/dfa/predicate_monitor.py` | Generic unary Boolean LC compilation, coverage, event evaluation, binding guards, and grammar/monitor composition. |
 | `domiknows/generation/grounded.py` | Immutable signed facts, open-world checks, effects, progress and preservation; shared by both adapters. |
-| `EmbodiedAgentInterface/constraint_compiler.py` | EAI action parsing, hand semantics, explicit-fact binding and predicate registration. |
+| `EmbodiedAgentInterface/utils/constraint_compiler.py` | EAI action parsing, hand semantics, explicit-fact binding and predicate registration. |
 | `domiknows/generation/dfa/productive.py` | Generic exact bounded reachability and a productivity view over fully composed policies. |
 | `VLABenchAgentInterface/constraint_compiler.py` | Predicate registration and the VLABench token/event adapter. `WorldConstraintDFA` subclasses the generic monitor. |
 | `VLABenchAgentInterface/semantics.py` | Grounding and physical-prefix predicate meanings. |
@@ -329,7 +329,7 @@ Replay uses the same bound policy, finite-budget masks, token termination rules,
 | `VLABenchAgentInterface/simulation/program.py` | Binds online task/target facts, retains the resulting policy in replay evidence, and checks schema, DFA acceptance, and world satisfaction before execution. `_task_pattern_dfa` remains a compatibility helper that binds facts to LCs; it contains no separate token-filtering implementation. |
 | `VLABenchAgentInterface/simulation/agent.py` | Accepts optional `task_context`, validates generated plans with the bound DFA and completed-plan verification, and stops rollout when a plan is invalid. |
 | `VLABenchAgentInterface/reward.py` | `score_vlabench_plan` gates its planner reward on schema and world validity. A verification failure or score below 1.0 makes the plan invalid and sets this reward to zero. Simulator rollout returns also depend on environment progress/success; they are not simply this plan score. |
-| `JointEmbodiedAgentInterface/utils/structured_inference.py` | Generates complete constrained candidates, verifies them using the bound policy's task requirements, and selects among eligible candidates. |
+| `JointEmbodiedAgentInterface/structured_inference.py` | Generates complete constrained candidates, verifies them using the bound policy's task requirements, and selects among eligible candidates. |
 | `JointEmbodiedAgentInterface/world_graph.py` | Builds the domain runtimes and binds VLABench facts per request. Scene-dependent VLABench policies are not cached by entity count or context-object identity. |
 | `training.py` and `JointEmbodiedAgentInterface/eval_planning.py` | Use the bound planning policy and report planning metrics plus validity/reward diagnostics. |
 
@@ -388,9 +388,9 @@ From the repository root on Windows, the focused checks can be reproduced with:
 .\.venv\Scripts\python.exe -m pytest `
   test_regr/generation/test_grounded_planning.py `
   test_regr/VLABenchAgentInterface/test/test_grounded_constraints.py `
-  test_regr/EmbodiedAgentInterface/test_grounded_constraints.py `
-  test_regr/EmbodiedAgentInterface/test_world_graph.py `
-  test_regr/EmbodiedAgentInterface/test_reward.py `
+  test_regr/EmbodiedAgentInterface/test/test_grounded_constraints.py `
+  test_regr/EmbodiedAgentInterface/test/test_world_graph.py `
+  test_regr/EmbodiedAgentInterface/test/test_reward.py `
   test_regr/VLABenchAgentInterface/test/test_task_policy.py `
   test_regr/VLABenchAgentInterface/test/test_constraint_equivalence.py `
   test_regr/VLABenchAgentInterface/test/test_constraint_compiler.py `
@@ -497,7 +497,7 @@ python -m pytest test_regr/generation/test_selection_requirements.py \
   test_regr/VLABenchAgentInterface/test/test_physics_grounding.py \
   test_regr/VLABenchAgentInterface/test/test_qa_and_pick_history.py \
   test_regr/VLABenchAgentInterface/test/test_decoding_integration.py \
-  test_regr/EmbodiedAgentInterface/test_grounded_constraints.py -q
+  test_regr/EmbodiedAgentInterface/test/test_grounded_constraints.py -q
 ```
 
 Broader validation for these steps: `python -m pytest test_regr/generation test_regr/VLABenchAgentInterface -q` recorded **1166 passed, 14 failed, 1 skipped**. All 14 failing nodes reproduced against the pre-change commit `cb6ed026` in an isolated source snapshot. They concern the trace-log path, two assistance assertions, native CLI stdout, a rollout default, and nine controller API/numerical assertions. No new broader-suite failure was found. Two follow-up observation-profile propagation assertions also passed.

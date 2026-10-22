@@ -3,10 +3,7 @@ from dataclasses import dataclass
 import torch
 from torch.nn import functional as F
 
-try:
-    from .dataset import ACTION_VOCAB, EOS_TOKEN
-except ImportError:  # Direct execution through EmbodiedAgentInterface/main.py.
-    from dataset import ACTION_VOCAB, EOS_TOKEN
+from test_regr.EmbodiedAgentInterface.dataset import ACTION_VOCAB, EOS_TOKEN
 from domiknows.generation.prompting import (
     encode_label_prefix_prompt,
     label_prefix_token_ids,

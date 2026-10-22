@@ -18,12 +18,12 @@ except ImportError:
 def progress_bar(iterable, **kwargs):
     return tqdm(iterable, **kwargs) if tqdm is not None else iterable
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(SCRIPT_DIR))
 sys.path.append(str(SCRIPT_DIR.parents[1]))
 
-from eai_hmm_decoder_adapter import build_hmm_from_label_sequences
-from main import (
+from test_regr.EmbodiedAgentInterface.utils.eai_hmm_decoder_adapter import build_hmm_from_label_sequences
+from test_regr.EmbodiedAgentInterface.main import (
     generation_vocab_from_examples,
     labels_to_actions,
     load_examples,

@@ -3,13 +3,13 @@ from pathlib import Path
 
 import torch
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from dataset import EOS_TOKEN, dummy_dataset, load_eai_dataset
-from reward import (
+from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, dummy_dataset, load_eai_dataset
+from test_regr.EmbodiedAgentInterface.reward import (
     TokenVocabulary,
     abstract_state_from_tokens,
     evaluate_goal_satisfaction,

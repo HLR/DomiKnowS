@@ -7,13 +7,13 @@ from types import SimpleNamespace
 import torch
 from torch.nn import functional as F
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-import main as eai_main
-from main import (
+import test_regr.EmbodiedAgentInterface.main as eai_main
+from test_regr.EmbodiedAgentInterface.main import (
     build_program,
     build_stage2_program,
     labels_through_first_eos,
@@ -25,8 +25,8 @@ from main import (
     _capture_trainable_parameters,
     _restore_trainable_parameters,
 )
-from dataset import causal_prompt_context, dummy_dataset
-from modules import (
+from test_regr.EmbodiedAgentInterface.dataset import causal_prompt_context, dummy_dataset
+from test_regr.EmbodiedAgentInterface.modules import (
     CausalLMActionObjectGenerator,
     EOSMaskedCrossEntropyLoss,
     PretrainedLabelAdapter,
@@ -37,7 +37,7 @@ from domiknows.generation import (
     first_token_allowed_dfa,
     product_dfa,
 )
-from rl_sequence_program import AutoregressiveSequenceReinforcementProgram
+from test_regr.EmbodiedAgentInterface.rl_sequence_program import AutoregressiveSequenceReinforcementProgram
 
 
 def test_supervised_loss_ignores_eos_padding():

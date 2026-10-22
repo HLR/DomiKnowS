@@ -21,7 +21,7 @@ sys.path.append(str(SCRIPT_DIR.parents[1]))
 
 from test_regr.common_backbone import COMMON_VLM_MODEL_ID
 
-from dataset import (
+from test_regr.EmbodiedAgentInterface.dataset import (
     ACTION_VOCAB,
     EOS_TOKEN,
     VLABENCH_AUX_DATA_DIR,
@@ -32,7 +32,7 @@ from dataset import (
     split_train_dev,
     split_vlabench_auxiliary_examples,
 )
-from modules import (
+from test_regr.EmbodiedAgentInterface.modules import (
     AutoregressiveActionObjectGenerator,
     CAUSAL_PROMPT_FORMAT,
     CausalLMActionObjectGenerator,
@@ -41,8 +41,8 @@ from modules import (
     TinyTransformerActionObjectGenerator,
     _prepare_transformers_imports,
 )
-from rl_sequence_program import AutoregressiveSequenceReinforcementProgram
-from reward import (
+from test_regr.EmbodiedAgentInterface.rl_sequence_program import AutoregressiveSequenceReinforcementProgram
+from test_regr.EmbodiedAgentInterface.reward import (
     TokenVocabulary,
     abstract_state_from_tokens,
     eai_action_decoder,
@@ -50,7 +50,7 @@ from reward import (
     evaluate_goal_satisfaction,
     make_eai_reward_function,
 )
-from world_graph import (
+from test_regr.EmbodiedAgentInterface.world_graph import (
     EAIWorldGraphBundle,
     build_eai_world_graph,
 )
@@ -170,7 +170,7 @@ def build_program(
     from domiknows.sensor.pytorch.learners import ModuleLearner
     from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
 
-    from graph import create_generation_graph
+    from test_regr.EmbodiedAgentInterface.graph import create_generation_graph
 
     setProductionLogMode(True)
     graph, generation_bundle = create_generation_graph(
@@ -1118,7 +1118,7 @@ def _maybe_train_vlabench_auxiliary(args, program, bundle, device):
         return None
 
     from test_regr.VLABenchAgentInterface.training import build_constraint_runtime
-    from vlabench_auxiliary import train_vlabench_text_auxiliary
+    from test_regr.EmbodiedAgentInterface.vlabench_auxiliary import train_vlabench_text_auxiliary
 
     planning_dir = ensure_vlabench_auxiliary_planning_data(
         args.vlabench_aux_planning_dir

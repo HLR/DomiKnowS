@@ -13,14 +13,14 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from dataset import EOS_TOKEN, load_eai_dataset
-from reward import TokenVocabulary, evaluate_goal_satisfaction
-from test_reward import (
+from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset
+from test_regr.EmbodiedAgentInterface.reward import TokenVocabulary, evaluate_goal_satisfaction
+from test_regr.EmbodiedAgentInterface.test.test_reward import (
     test_dense_temporal_reward_credits_ordered_prefix_progress,
     test_empty_plan_cannot_satisfy_nonempty_goal,
     test_goal_is_read_from_tl_not_demonstration_side_effects,

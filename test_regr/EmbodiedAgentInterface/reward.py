@@ -8,35 +8,20 @@ from typing import Any, Iterable, Mapping, Sequence, Set, Tuple
 
 import torch
 
-try:
-    from dataset import ACTION_VOCAB, EOS_TOKEN
-except ImportError:
-    from .dataset import ACTION_VOCAB, EOS_TOKEN
+from test_regr.EmbodiedAgentInterface.dataset import ACTION_VOCAB, EOS_TOKEN
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
 from domiknows.reinforcement.rewards import flatten_generator_output
 
-try:
-    from world_graph import (
-        canonical_state_name,
-        evaluate_default_world_constraints,
-        is_goal_action,
-        is_known_action,
-        is_state_predicate,
-        materialize_world_trajectory,
-        positive_state_name,
-        verify_world_constraints,
-    )
-except ImportError:
-    from .world_graph import (
-        canonical_state_name,
-        evaluate_default_world_constraints,
-        is_goal_action,
-        is_known_action,
-        is_state_predicate,
-        materialize_world_trajectory,
-        positive_state_name,
-        verify_world_constraints,
-    )
+from test_regr.EmbodiedAgentInterface.world_graph import (
+    canonical_state_name,
+    is_goal_action,
+    is_known_action,
+    is_state_predicate,
+    positive_state_name,
+)
+from test_regr.EmbodiedAgentInterface.utils.world_runtime import (
+    evaluate_default_world_constraints, materialize_world_trajectory, verify_world_constraints,
+)
 
 
 Fact = Tuple[str, ...]
@@ -103,27 +88,10 @@ def _fact_present(required: Fact, state: Set[Fact]) -> bool:
     return any(_fact_matches(required, actual) for actual in state)
 
 
-def _side_for_action(action: str) -> str | None:
-    if action.startswith("left_"):
-        return "left"
-    if action.startswith("right_"):
-        return "right"
-    return None
-
-
-def _placement_relation(action: str) -> str | None:
-    if "inside" in action or action in {"put", "putin", "put_inside"}:
-        return "inside"
-    # VirtualHome PUTBACK places an object ON the destination; PUTIN contains it.
-    if "ontop" in action or "on_top" in action or action in {
-        "putback", "puton", "putontop", "put_ontop",
-    }:
-        return "ontop"
-    if "nextto" in action or "next_to" in action:
-        return "nextto"
-    if "under" in action:
-        return "under"
-    return None
+# Public compatibility names share the same ontology classification as world rules.
+from test_regr.EmbodiedAgentInterface.utils.world_domain import (
+    _action_side as _side_for_action, _placement_relation_name as _placement_relation,
+)
 
 
 def tokens_from_labels(labels: Sequence[int | str | torch.Tensor], vocabulary: Any = None) -> list[str]:
@@ -196,123 +164,9 @@ def _simulate_events(
     for fact in state:
         if len(fact) == 3 and fact[1] == "character" and fact[0] in ("holds_lh", "holds_rh"):
             held["left" if fact[0] == "holds_lh" else "right"] = fact[2]
-    negative_spatial_goals = {
-        fact for fact in goal_facts
-        if fact and fact[0] in {"not_inside", "not_nextto", "not_ontop", "not_under"}
-    }
-
+    from test_regr.EmbodiedAgentInterface.utils.effect_runtime import apply_event_effects
     for event in events:
-        action = event.name
-        obj = event.args[0] if event.args else None
-        side = _side_for_action(action)
-
-        if any(part in action for part in ("grasp", "grab", "pickup", "take")) and obj:
-            hand = side or ("right" if held["right"] is None else "left")
-            held[hand] = obj
-            hold_pred = "holds_lh" if hand == "left" else "holds_rh"
-            state.difference_update(fact for fact in tuple(state) if len(fact) == 3 and fact[0] == hold_pred and fact[1] == "character")
-            state.add((hold_pred, "character", obj))
-            for fact in negative_spatial_goals:
-                if len(fact) >= 2 and _entities_match(fact[1], obj):
-                    state.add(fact)
-                    state.discard((fact[0][4:], *fact[1:]))
-        else:
-            relation = _placement_relation(action)
-            if relation and obj:
-                held_obj = next((value for value in held.values() if value and action == "puton" and _entities_match(value, obj)), None)
-                held_obj = held_obj or (held.get(side) if side else None)
-                held_obj = held_obj or held.get("right") or held.get("left")
-                if held_obj:
-                    destination = "character" if action == "puton" and _entities_match(held_obj, obj) else obj
-                    if relation != "nextto":
-                        for old in tuple(state):
-                            if len(old) >= 2 and old[0] in {"inside", "onfloor", "ontop", "under"} and _entities_match(old[1], held_obj):
-                                state.discard(old)
-                    effective_relation = "onfloor" if relation == "ontop" and destination.startswith("room_floor_") else relation
-                    state.add((effective_relation, held_obj, destination))
-                    if relation == "ontop":
-                        state.add(("touching", held_obj, destination))
-                    if "nextto_ontop" in action:
-                        state.add(("nextto", held_obj, destination))
-                    state.discard((f"not_{effective_relation}", held_obj, destination))
-                    for hand_name in ("left", "right"):
-                        if held.get(hand_name) == held_obj:
-                            held[hand_name] = None
-                            state.discard(("holds_lh" if hand_name == "left" else "holds_rh", "character", held_obj))
-                else:
-                    state.add((relation, "object", obj))
-            elif any(part in action for part in ("release", "realease", "drop", "putobjback")):
-                held_obj = (held.get(side) if side else next((value for value in held.values() if obj and value == obj), None)) or held.get("right") or held.get("left")
-                if held_obj:
-                    state.add(("released", held_obj))
-                    for fact in goal_facts:
-                        if fact and fact[0] == "onfloor" and len(fact) == 3 and _entities_match(fact[1], held_obj):
-                            state.add(fact)
-                    for hand_name in ("left", "right"):
-                        if held.get(hand_name) == held_obj:
-                            held[hand_name] = None
-                            state.discard(("holds_lh" if hand_name == "left" else "holds_rh", "character", held_obj))
-            elif action in {"clean", "wipe", "scrub", "wash", "rinse"} and obj:
-                state.update({("clean", obj), ("not_dusty", obj), ("not_stained", obj)})
-                state.discard(("dusty", obj))
-                state.discard(("stained", obj))
-                if action in {"wash", "rinse"}:
-                    state.update({("washed", obj), ("rinsed", obj)})
-            elif action == "open" and obj:
-                _set_fact(state, ("open", obj), ("closed", obj), ("not_open", obj))
-                state.add(("not_closed", obj))
-            elif action == "close" and obj:
-                _set_fact(state, ("closed", obj), ("open", obj), ("not_closed", obj))
-                state.add(("not_open", obj))
-            elif action in {"toggle_on", "switchon", "switch_on", "turn_on", "turnon"} and obj:
-                _set_fact(state, ("on", obj), ("off", obj), ("not_on", obj))
-            elif action in {"toggle_off", "switchoff", "switch_off", "turn_off", "turnoff"} and obj:
-                _set_fact(state, ("off", obj), ("on", obj))
-                state.add(("not_on", obj))
-            elif action == "slice" and obj:
-                state.add(("sliced", obj))
-            elif action == "soak" and obj:
-                state.add(("soaked", obj))
-            elif action == "freeze" and obj:
-                _set_fact(state, ("frozen", obj), ("not_frozen", obj))
-            elif action == "unfreeze" and obj:
-                _set_fact(state, ("not_frozen", obj), ("frozen", obj))
-            elif action == "cook" and obj:
-                state.add(("cooked", obj))
-            elif action == "plugin" and obj:
-                _set_fact(state, ("plugged_in", obj), ("not_plugged_in", obj))
-            elif action == "plugout" and obj:
-                state.discard(("plugged_in", obj))
-                state.add(("not_plugged_in", obj))
-            elif action == "pour" and obj:
-                goal_source = next(
-                    (
-                        fact[1]
-                        for fact in goal_facts
-                        if len(fact) == 3 and fact[0] == "inside" and _entities_match(fact[2], obj)
-                    ),
-                    None,
-                )
-                held_obj = next(
-                    (value for value in held.values() if value and goal_source and _entities_match(goal_source, value)),
-                    None,
-                )
-                held_obj = held_obj or held.get("right") or held.get("left")
-                if held_obj:
-                    state.add(("inside", held_obj, obj))
-            elif action in {"walk", "run"} and obj:
-                state.update({
-                    ("near", obj), ("near", "character", obj),
-                    ("inside", "character", obj), ("nextto", "character", obj),
-                })
-            elif action in {"turnto", "lookat", "watch"} and obj:
-                state.add(("facing", "character", obj))
-            elif action == "touch" and obj:
-                state.add(("touch", obj))
-            elif action == "sit" and obj:
-                state.update({("sitting", "character"), ("ontop", "character", obj)})
-            elif action == "lie" and obj:
-                state.update({("lying", "character"), ("ontop", "character", obj)})
+        state = apply_event_effects(event, state, held, goal_facts)
         states.append(set(state))
     return states, list(events)
 
@@ -829,24 +683,16 @@ def _eval_atom_at(atom: _Atom, state: Set[Fact], action: _ActionEvent | None, va
 def _eval_at(node: Any, state: Set[Fact], action: _ActionEvent | None, variables: dict[str, str], context: _EvalContext) -> bool:
     if isinstance(node, _Atom):
         return _eval_atom_at(node, state, action, variables, context)
+    from test_regr.EmbodiedAgentInterface.utils.goal_constraints import evaluate_goal_operator
     if isinstance(node, _Not):
-        return not _eval_at(node.arg, state, action, variables, context)
-    if isinstance(node, _And):
-        return all(_eval_at(arg, state, action, variables, context) for arg in node.args)
-    if isinstance(node, _Or):
-        return any(_eval_at(arg, state, action, variables, context) for arg in node.args)
+        return evaluate_goal_operator("not", (_eval_at(node.arg, state, action, variables, context),))
+    if isinstance(node, (_And, _Or)):
+        values = [_eval_at(arg, state, action, variables, context) for arg in node.args]
+        return evaluate_goal_operator("and" if isinstance(node, _And) else "or", values)
     if isinstance(node, _Quantifier):
         domain, body = _typed_quantifier_body(node, context)
-        values = []
-        for entity in domain:
-            nested = dict(variables)
-            nested[node.variable] = entity
-            values.append(_eval_at(body, state, action, nested, context))
-        if node.kind == "forall":
-            return all(values)
-        if node.kind == "exists":
-            return any(values)
-        return sum(values) == int(node.count or 0)
+        values = [_eval_at(body, state, action, {**variables, node.variable: entity}, context) for entity in domain]
+        return evaluate_goal_operator(node.kind, values, int(node.count or 0))
     if isinstance(node, _Then):
         raise ValueError("Temporal expression cannot be evaluated at one state")
     return False
@@ -872,16 +718,16 @@ def _first_satisfaction(node: Any, states: Sequence[Set[Fact]], actions: Sequenc
             found = _first_satisfaction(node.arg, states, actions, context, start, nested)
             if found is not None:
                 matches.append(found)
-        if node.kind == "forall" and len(matches) == len(context.universe):
-            return max(matches, default=start)
-        if node.kind == "exists" and matches:
-            return min(matches)
-        if node.kind == "forn" and len(matches) == int(node.count or 0):
-            return max(matches, default=start)
+        from test_regr.EmbodiedAgentInterface.utils.goal_constraints import evaluate_goal_operator
+        witnesses = [True] * len(matches) + [False] * (len(context.universe) - len(matches))
+        if evaluate_goal_operator(node.kind, witnesses, int(node.count or 0)):
+            return min(matches) if node.kind == "exists" else max(matches, default=start)
         return None
-    for index in range(start, len(states)):
+    from test_regr.EmbodiedAgentInterface.utils.goal_constraints import evaluate_goal_operator
+    for index in range(len(states)):
         action = actions[index] if index < len(actions) else None
-        if _eval_at(node, states[index], action, variables, context):
+        if evaluate_goal_operator("temporal_witness", (
+            _eval_at(node, states[index], action, variables, context), index < start)):
             return index
     return None
 
@@ -1010,10 +856,17 @@ def _evaluate_goal_satisfaction(
     predicted_state = set(states[-1])
     predicted_state.update(("action", event.name, *event.args) for event in events)
     recall = state_recall(predicted_state, gold_state)
+    from test_regr.EmbodiedAgentInterface.utils.goal_constraints import evaluate_goal_operator
+    # Final-goal success is the declared conjunction of all required fact
+    # observations, with an explicit nonempty-goal observation. Recall remains
+    # a separate numerical measure for partial credit.
+    final_goal_satisfied = evaluate_goal_operator(
+        "and", (bool(gold_state), *(_fact_present(fact, predicted_state) for fact in gold_state))
+    )
     parse_error = None
     temporal_progress = 1.0
     if ast is None:
-        is_success = recall >= 1.0 and bool(gold_state)
+        is_success = final_goal_satisfied
     else:
         context = _EvalContext(prepared.entity_universe, prepared.types)
         try:
@@ -1027,10 +880,10 @@ def _evaluate_goal_satisfaction(
             # ``then`` succeed on the ordered SimpleTL result alone; final-state
             # recall is reported separately because earlier facts may no longer
             # hold at the last state.
-            is_success = ast_success if has_temporal_order else recall >= 1.0 and bool(gold_state)
+            is_success = ast_success if has_temporal_order else final_goal_satisfied
         except (ValueError, TypeError) as exc:
             parse_error = str(exc)
-            is_success = recall >= 1.0 and bool(gold_state)
+            is_success = final_goal_satisfied
             temporal_progress = 0.0 if _contains_then(ast) else 1.0
     if reward_mode == "dense":
         # Final-state recall alone cannot distinguish a correct temporal plan
@@ -1214,10 +1067,7 @@ def test_all_dataset_goals(dataset_name: str = "all", limit: int | None = None, 
     if isinstance(dataset_name, int) and limit is None:
         limit = dataset_name
         dataset_name = "all"
-    try:
-        from dataset import load_eai_dataset
-    except ImportError:
-        from .dataset import load_eai_dataset
+    from test_regr.EmbodiedAgentInterface.dataset import load_eai_dataset
     examples = load_eai_dataset(dataset_name=dataset_name, limit=limit, max_steps=max_steps, device="cpu")
     vocabulary = TokenVocabulary(examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
     successes = 0

@@ -5,14 +5,14 @@ import time
 from pathlib import Path
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from dataset import load_eai_dataset, transition_model_entity_types
-from graph import create_generation_graph
-from main import (
+from test_regr.EmbodiedAgentInterface.dataset import load_eai_dataset, transition_model_entity_types
+from test_regr.EmbodiedAgentInterface.graph import create_generation_graph
+from test_regr.EmbodiedAgentInterface.main import (
     action_object_constraint_tokens_from_examples,
     action_tokens_from_examples,
     action_tokens_requiring_object_from_examples,

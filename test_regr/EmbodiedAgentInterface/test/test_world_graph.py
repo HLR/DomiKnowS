@@ -4,14 +4,14 @@ from types import SimpleNamespace
 
 import torch
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from dataset import EOS_TOKEN, load_eai_dataset
-from reward import TokenVocabulary, evaluate_goal_satisfaction, make_eai_reward_function, prepare_eai_goal
-from world_graph import (
+from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset
+from test_regr.EmbodiedAgentInterface.reward import TokenVocabulary, evaluate_goal_satisfaction, make_eai_reward_function, prepare_eai_goal
+from test_regr.EmbodiedAgentInterface.world_graph import (
     ABSENT_ENTITY,
     ACTION_GOAL_NAMES,
     ACTION_SPECS,
@@ -352,7 +352,7 @@ def test_complete_benchmark_bypass_and_scale():
     assert precondition_trajectories > 0
 
     prepared, sample = largest
-    from reward import _simulate_events
+    from test_regr.EmbodiedAgentInterface.reward import _simulate_events
     states, events = _simulate_events(
         list(prepared.reference_events),
         initial_state=set(prepared.initial_state),

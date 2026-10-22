@@ -1,8 +1,23 @@
 # Embodied Agent Interface (EAI) DomiKnowS Framework
 
+## Directory layout
+
+The parent package keeps `main.py` and its directly imported runtime modules at
+`test_regr/EmbodiedAgentInterface/`. Regression tests live in `test/`;
+supporting scripts, compiler helpers, and ancillary documents live in `utils/`.
+The package's `models/`, `results/`, `logs/`, and data paths stay at the EAI root.
+
+Run commands from the repository root. For example:
+
+```bash
+python -m pytest test_regr/EmbodiedAgentInterface/test -q
+python -m test_regr.EmbodiedAgentInterface.utils.train --help
+python -m test_regr.EmbodiedAgentInterface.utils.evaluate_settings --help
+```
+
 For canonical joint EAI/VLABench training with one dynamically activated root
 graph and shared Qwen3-VL-8B/LoRA backbone, see
-[`../JointEmbodiedAgentInterface/README.md`](../JointEmbodiedAgentInterface/README.md).
+[`../JointEmbodiedAgentInterface/README.md`](../../JointEmbodiedAgentInterface/README.md).
 
 This directory implements the DomiKnowS baseline and reinforcement learning framework for the **Embodied Agent Interface (EAI)** benchmark ([`Inevitablevalor/EmbodiedAgentInterface`](https://huggingface.co/datasets/Inevitablevalor/EmbodiedAgentInterface)).
 
@@ -10,13 +25,21 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 
 ---
 
+## Declarative knowledge
+
+See [EAI logical constraints](../docs/EAILogicalConstraints.md) for every rule
+family, full formulas, counts, activation settings, and source lines. Token
+policies live in `../graph.py`, world rules in `../world_graph.py`, and abstract
+effects, task relevance, and SimpleTL operators in the corresponding `utils/`
+declaration modules. Runtime helpers bind observations to those formulas.
+
 ## Key Features
 
 - **Goal State Translation & Abstract World Simulator** (`reward.py`):
   - Full relational and state tracking: `inside(x, y)`, `ontop(x, y)`, `nextto(x, y)`, `under(x, y)`, `open(x)`, `closed(x)`, `on(x)`, `off(x)`, `clean(x)`, `soaked(x)`, `cooked(x)`, `frozen(x)`, `unfrozen(x)`, `sliced(x)`, `dusty(x)`, `stained(x)`.
   - Supports dual-hand BEHAVIOR interaction formats (`left_place_*`, `right_place_*`) and VirtualHome bracketed formats (`[ACTION] <obj> (id)`).
   - Evaluates final condition satisfaction: binary **$0/1$ Goal Success** (`gt_state_success`) and **Dense Goal Fact Recall** (`gt_state_recall`).
-  - Achieves **100.0% goal satisfaction verification** across all 438 examples in the full benchmark dataset.
+  - The historical 438/438 reference-trajectory check is a self-consistency result: legacy reward preparation still derives some initial/type/goal grounding from reference trajectories. It does not establish independent physical-world correctness.
 
 - **DomiKnowS Reinforcement Learning Integration** (`domiknows.reinforcement`):
   - Per-item reward closures (`make_eai_reward_function`) returning standard PyTorch reward tensors compatible with `ReinforcementProgram`.
@@ -54,23 +77,62 @@ requires the agent to grab an object and later read it. Reading first and grabbi
 
 ---
 
-## Directory Structure
+## Source code map
 
-```
-test_regr/EmbodiedAgentInterface/
-├── dataset.py                # Dataset loader for BEHAVIOR, VirtualHome, and dummy splits
-├── graph.py                  # DomiKnowS declarative graph and logical constraints
-├── world_graph.py            # Independent world/trajectory schema and constraint verifier
-├── modules.py                # Tiny Transformer & Qwen CausalLM autoregressive generators
-├── reward.py                 # Goal state translator, 0/1 reward function, and RL decoder
-├── train.py                  # CLI argument parser and training configurations
-├── main.py                   # Main training, two-stage pipeline, evaluation, and scoring
-├── test_reward.py            # Unit test suite verifying goal translation on all 438 examples
-├── test_world_graph.py       # World schema, materialization, blending, and scale regressions
-├── infer_qwen_hmm_dfa.py     # Qwen + HMM + DFA inference-only evaluation
-├── eai_hmm_decoder_adapter.py# Adapter for HMM-DFA lookahead decoding
-└── evaluate_settings.py      # Benchmark evaluation configurations
-```
+All Python source files in the main package folder are listed below. Supporting
+scripts and knowledge/runtime helpers live in `utils/`, regression tests in
+`test/`, and constraint documentation in `docs/`.
+
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+  <colgroup>
+    <col style="width: 25%;">
+    <col style="width: 75%;">
+  </colgroup>
+  <thead>
+    <tr>
+      <th style="text-align: left; vertical-align: top; padding: 0.5em;">File</th>
+      <th style="text-align: left; vertical-align: top; padding: 0.5em;">Functionality</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="__init__.py"><code>__init__.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Exposes the auxiliary training result type and VLABench text-example preparation and warm-up helpers.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="main.py"><code>main.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Builds the EAI program and generation/world graphs; runs supervised and reinforcement training, the two-stage pipeline, evaluation, scoring, and checkpoint handling through the CLI.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="dataset.py"><code>dataset.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Loads BEHAVIOR, VirtualHome, and dummy examples; normalizes action/object labels, builds task prompts and entity metadata, and prepares dataset splits.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="graph.py"><code>graph.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Declares token-generation constraints for sequence boundaries, token limits, required/forbidden labels, action/object successors, compatibility, and task context.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="world_graph.py"><code>world_graph.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Declares trajectory, step, entity, action, and state concepts; builds readable world preconditions and grounded requirement constraints; preserves compatibility exports for runtime helpers.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="modules.py"><code>modules.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Implements Tiny Transformer and Qwen autoregressive generators, label-prefix prompting, batched rollout/cache handling, and EOS-masked supervised loss.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="reward.py"><code>reward.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Parses and grounds SimpleTL goals, invokes declarative abstract effects and goal-satisfaction operators, computes semantic/world rewards, and provides reward closures and action decoding.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="rl_sequence_program.py"><code>rl_sequence_program.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Implements autoregressive policy rollouts, differentiable sequence rescoring, supervised anchoring, and REINFORCE or importance-weighted reward updates.</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; padding: 0.5em; overflow-wrap: anywhere;"><a href="vlabench_auxiliary.py"><code>vlabench_auxiliary.py</code></a></td>
+      <td style="vertical-align: top; padding: 0.5em;">Prepares text-only VLABench planning examples and warms up the shared causal-LM/LoRA backbone before EAI training, retaining the selected auxiliary snapshot and checkpoint metadata.</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
@@ -81,8 +143,8 @@ test_regr/EmbodiedAgentInterface/
 Run the test suite verifying state extraction, goal satisfaction, and DomiKnowS reward compatibility on both dummy data and the full 438-example EAI dataset:
 
 ```powershell
-uv run python test_regr/EmbodiedAgentInterface/test_reward.py
-uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
+uv run python test_regr/EmbodiedAgentInterface/test/test_reward.py
+uv run python test_regr/EmbodiedAgentInterface/test/test_world_graph.py
 ```
 
 ### 2. Independent EAI semantic audit
@@ -90,7 +152,7 @@ uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 Run the audit before a long EAI RL run. It covers the complete BEHAVIOR and VirtualHome reference set, rejects empty plans, reports per-domain and first-action coverage, and runs adversarial checks for temporal ordering, objectless actions, relation grounding, and VirtualHome PUTBACK semantics. This is a symbolic/reference audit; it does not replace simulator rollouts of a learned policy.
 
 ```powershell
-uv run python -m test_regr.EmbodiedAgentInterface.audit_eai --dataset all --max-steps 135 --json test_regr/EmbodiedAgentInterface/audit_eai.json
+uv run python -m test_regr.EmbodiedAgentInterface.utils.audit_eai --dataset all --max-steps 135 --json test_regr/EmbodiedAgentInterface/audit_eai.json
 ```
 
 Use `--dataset behavior` or `--dataset virtualhome` to audit one domain. Keep the generated JSON report local unless it is explicitly needed for a release record.
@@ -213,7 +275,7 @@ pipeline unchanged and performs no VLABench download.
 Run zero-shot / inference-only constrained decoding using a pretrained or distilled HMM together with compiled DFA constraints:
 
 ```powershell
-uv run python test_regr/EmbodiedAgentInterface/infer_qwen_hmm_dfa.py --dataset all --limit 100 --eval-limit 100 --hmm models/eai_all_qwen25_ctrlg_hmm.npz --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --hmm-dfa-base hmm --output test_regr/EmbodiedAgentInterface/results/results_qwen_hmm_dfa.txt
+uv run python test_regr/EmbodiedAgentInterface/utils/infer_qwen_hmm_dfa.py --dataset all --limit 100 --eval-limit 100 --hmm models/eai_all_qwen25_ctrlg_hmm.npz --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --hmm-dfa-base hmm --output test_regr/EmbodiedAgentInterface/results/results_qwen_hmm_dfa.txt
 ```
 
 ---

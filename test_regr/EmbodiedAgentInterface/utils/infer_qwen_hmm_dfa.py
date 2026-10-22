@@ -8,6 +8,7 @@ DFA, and decode with HMM + DFA using that generator's next-label logits.
 
 import argparse
 import json
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,10 +16,12 @@ from pathlib import Path
 import numpy as np
 import torch
 
-import evaluate_settings as ev
-from main import RESULTS_DIR, build_trainable_program
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPT_DIR.parents[1]))
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+import test_regr.EmbodiedAgentInterface.utils.evaluate_settings as ev
+from test_regr.EmbodiedAgentInterface.main import RESULTS_DIR, build_trainable_program
+
 
 
 def parse_args():

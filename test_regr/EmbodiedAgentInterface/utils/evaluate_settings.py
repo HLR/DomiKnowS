@@ -11,13 +11,13 @@ try:
 except ImportError:
     tqdm = None
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(SCRIPT_DIR))
 sys.path.append(str(SCRIPT_DIR.parents[1]))
 
-from dataset import EOS_TOKEN, split_train_dev
-from graph import create_generation_graph
-from main import (
+from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, split_train_dev
+from test_regr.EmbodiedAgentInterface.graph import create_generation_graph
+from test_regr.EmbodiedAgentInterface.main import (
     action_object_constraint_tokens_from_examples,
     action_tokens_from_examples,
     action_tokens_requiring_object_from_examples,
@@ -33,8 +33,8 @@ from main import (
     openable_object_tokens_from_examples,
     RESULTS_DIR,
 )
-from reward import evaluate_goal_satisfaction
-from train_qwen_hmm import (
+from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
+from test_regr.EmbodiedAgentInterface.utils.train_qwen_hmm import (
     build_prompt,
     generate_text,
     labels_to_ids,

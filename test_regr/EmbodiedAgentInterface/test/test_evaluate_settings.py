@@ -4,14 +4,14 @@ from pathlib import Path
 
 import torch
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from dataset import EOS_TOKEN, dummy_dataset
+from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, dummy_dataset
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
 
-_spec = importlib.util.spec_from_file_location("eai_evaluate_settings", HERE / "evaluate_settings.py")
+_spec = importlib.util.spec_from_file_location("eai_evaluate_settings", HERE / "utils" / "evaluate_settings.py")
 ev = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ev)
 

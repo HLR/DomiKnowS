@@ -9,10 +9,7 @@ from typing import Any, Mapping, Sequence
 
 import torch
 
-try:
-    from world_graph import TASK_ENTITY_ACTION_NAMES
-except ImportError:
-    from .world_graph import TASK_ENTITY_ACTION_NAMES
+from test_regr.EmbodiedAgentInterface.world_graph import TASK_ENTITY_ACTION_NAMES
 
 EOS_TOKEN = "<eos>"
 
@@ -279,33 +276,9 @@ def transition_model_entity_types(value):
 
 
 def task_semantic_action_permissions(row):
-    """Infer guarded semantic actions from non-demonstration task text/goals."""
-    task_text = " ".join(
-        str(row.get(key, ""))
-        for key in (
-            "task_name",
-            "natural_language_description",
-            "original_goal",
-            "tl_goal",
-            "transition_model",
-        )
-    ).lower()
-    clean_cues = (
-        "clean",
-        "dust",
-        "lint",
-        "mop",
-        "polish",
-        "rinse",
-        "scrub",
-        "stain",
-        "wash",
-        "wipe",
-    )
-    permitted = []
-    if any(cue in task_text for cue in clean_cues):
-        permitted.append("clean")
-    return tuple(permitted)
+    """Compatibility export for the declared task relevance knowledge."""
+    from test_regr.EmbodiedAgentInterface.utils.task_knowledge import task_semantic_action_permissions as permissions
+    return permissions(row)
 
 
 def causal_prompt_context(row, task_entity_types=()):

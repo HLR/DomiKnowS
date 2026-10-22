@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import pytest
 from domiknows.generation.dfa.core import DFA
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
-from .constraint_compiler import CompiledEAIPlannerDFA, EAIExecutor, bind_eai_policy, compile_world_constraints
-from .reward import _ActionEvent
-from .world_graph import build_eai_world_graph, materialize_world_trajectory, verify_world_constraints
+from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import CompiledEAIPlannerDFA, EAIExecutor, bind_eai_policy, compile_world_constraints
+from test_regr.EmbodiedAgentInterface.reward import _ActionEvent
+from test_regr.EmbodiedAgentInterface.world_graph import build_eai_world_graph, materialize_world_trajectory, verify_world_constraints
 
 
 ENTITIES = ("apple", "cup", "bowl", "cooler", "character")

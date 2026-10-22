@@ -553,7 +553,7 @@ class JointQwenVLPlanner(nn.Module):
             return FreeDecoding(vocabulary.label_count, vocabulary.eos_label,
                                 min_steps=getattr(self, "free_decoding_min_steps", 0))
         if domain == "eai":
-            from test_regr.EmbodiedAgentInterface.constraint_compiler import bind_eai_policy
+            from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import bind_eai_policy
             dfa = bind_eai_policy(dfa, self.vocabulary(domain), context)
         if domain == "vlabench" and isinstance(context, Mapping) and any(
             key in context for key in ("entities", "entity_table")

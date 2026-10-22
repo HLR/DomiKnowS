@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
 
 EVAL_CONFIGS = {
     "lr1e-4": {
@@ -92,7 +92,7 @@ def main():
 
         cmd = [
             args.python,
-            str(SCRIPT_DIR / "evaluate_settings.py"),
+            str(SCRIPT_DIR / "utils" / "evaluate_settings.py"),
             "--dataset", args.dataset,
             "--device", args.device,
             "--max-steps", str(args.max_steps),
