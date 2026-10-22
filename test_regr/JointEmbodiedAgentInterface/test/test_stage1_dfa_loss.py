@@ -63,7 +63,7 @@ def test_total_is_cross_entropy_plus_weighted_allowed_mass(joint_fixture):
     plain = JointSolverPOIProgram(runtime, planner, planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.0))
     with runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
         baseline, _ = plain._domain_loss("vlabench", item)
-    program = program_with(runtime, planner, mass_weight=2.0, pmd_weight=0.0)
+    program = program_with(runtime, planner, masked_ce=False, mass_weight=2.0, pmd_weight=0.0)
     with runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
         total, terms = program._domain_loss("vlabench", item)
     assert terms["allowed_mass_loss"] > 0
@@ -138,3 +138,17 @@ def test_dfa_mass_report_is_a_probability_for_both_domains_and_restores_training
     assert set(report) == {"eai", "vlabench"} and all(0.0 < value <= 1.0 for value in report.values())
     assert planner.training
     assert program.dfa_mass_report([], [], limit=1) == {"eai": None, "vlabench": None}
+
+
+def test_masked_cross_entropy_is_never_above_the_full_one_and_reports_disagreements(joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    item = vlabench_item(runtime)
+    full = program_with(runtime, planner, masked_ce=False, mass_weight=0.0, pmd_weight=0.0)
+    masked = program_with(runtime, planner, masked_ce=True, mass_weight=0.0, pmd_weight=0.0)
+    with runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
+        full_total, _ = full._domain_loss("vlabench", item)
+        masked_total, terms = masked._domain_loss("vlabench", item)
+    assert float(masked_total) <= float(full_total) + 1e-6
+    assert terms["masked_ce_misses"] == 0.0  # the gold plan is inside the DFA
+    assert masked_total.requires_grad

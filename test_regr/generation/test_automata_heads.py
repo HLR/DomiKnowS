@@ -198,3 +198,32 @@ def test_allowed_mass_loss_without_lookahead_uses_the_labels_valid_at_the_step()
     value = allowed_mass_loss(probs, without, path=[0, 1], lookahead=False)
     assert with_budget.budgets == [1, 0] and without.budgets == [None, None]
     assert math.isclose(float(value), -(math.log(0.3) + math.log(0.8)) / 2, abs_tol=1e-4)
+
+
+def test_masked_cross_entropy_restricts_the_softmax_and_falls_back_when_the_target_is_disallowed():
+    import math
+    import torch
+    from domiknows.generation.learners import allowed_label_sets, allowed_log_mass, masked_cross_entropy
+
+    logits = torch.log(torch.tensor([[0.5, 0.3, 0.2], [0.1, 0.1, 0.8], [0.2, 0.3, 0.5]]))
+    targets = torch.tensor([0, 2, 1])
+    # step 0 allows {0, 1}; step 1 allows {1, 2}; step 2 has no set (full softmax)
+    sets = {0: [0, 1], 1: [1, 2]}
+    loss, misses = masked_cross_entropy(logits, targets, sets)
+    expected = (-math.log(0.5 / 0.8) - math.log(0.8 / 0.9) - math.log(0.3)) / 3
+    assert misses == 0 and math.isclose(float(loss), expected, abs_tol=1e-5)
+    # a target outside its set keeps the full softmax at that step and is counted
+    loss, misses = masked_cross_entropy(logits, targets, {0: [1, 2], 1: [1, 2]})
+    assert misses == 1 and math.isclose(float(loss), (-math.log(0.5) - math.log(0.8 / 0.9) - math.log(0.3)) / 3, abs_tol=1e-5)
+    log_mass = allowed_log_mass(torch.log_softmax(logits, dim=-1), sets)
+    assert torch.allclose(log_mass.exp(), torch.tensor([0.8, 0.9]), atol=1e-5)
+
+
+def test_allowed_label_sets_follow_the_path_and_respect_score_steps():
+    from domiknows.generation.dfa.core import DFA
+    from domiknows.generation.learners import allowed_label_sets
+
+    dfa = DFA(states=frozenset({0, 1, 2}), alphabet=frozenset({0, 1}),
+              transitions={(0, 0): 1, (1, 1): 2, (2, 0): 2}, start_state=0, accepting_states=frozenset({2}))
+    assert allowed_label_sets(dfa, [0, 1, 0], 2, lookahead=False) == {0: [0], 1: [1], 2: [0]}
+    assert allowed_label_sets(dfa, [0, 1, 0], 2, score_steps=[1], lookahead=False) == {1: [1]}

@@ -308,7 +308,8 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
     """Stage 1 DFA loss (allowed mass on the DFA path + primal-dual constraint loss), on unless disabled."""
     if getattr(args, "stage1_dfa_loss", "on") == "off":
         return None
-    return DFALossConfig(mass_weight=args.stage1_dfa_mass_weight, pmd_weight=args.stage1_pmd_weight,
+    return DFALossConfig(masked_ce=args.stage1_masked_ce == "on", mass_weight=args.stage1_dfa_mass_weight,
+                         pmd_weight=args.stage1_pmd_weight,
                          dual_lr=args.stage1_dual_lr, mass_steps=args.stage1_dfa_mass_steps or None,
                          domains=tuple(d for d in args.stage1_dfa_domains.split(",") if d),
                          lookahead_domains=tuple(d for d in args.stage1_dfa_lookahead_domains.split(",") if d),
@@ -1028,7 +1029,10 @@ def build_parser():
     agent.add_argument("--stage1-dfa-loss", choices=("on", "off"), default="on",
                        help="Stage 1 trains on the DFA: allowed-mass loss along the DFA path plus the primal-dual "
                             "constraint loss of the generation graph (off = cross entropy only)")
-    agent.add_argument("--stage1-dfa-mass-weight", type=float, default=1.0)
+    agent.add_argument("--stage1-masked-ce", choices=("on", "off"), default="on",
+                       help="train the softmax restricted to the DFA-allowed labels at each step (what decoding samples from)")
+    agent.add_argument("--stage1-dfa-mass-weight", type=float, default=0.0,
+                       help="weight of the allowed-mass term (redundant with cross entropy on teacher-forced steps)")
     agent.add_argument("--stage1-pmd-weight", type=float, default=1.0)
     agent.add_argument("--stage1-dual-lr", type=float, default=0.05)
     agent.add_argument("--stage1-dfa-mass-steps", type=int, default=12,

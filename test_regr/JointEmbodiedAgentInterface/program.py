@@ -13,7 +13,9 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import torch
 
 from domiknows.generation.latent.losses import GenerationLossWeights, compute_generation_training_loss
-from domiknows.generation.learners.common.losses import allowed_mass_loss
+from domiknows.generation.learners.common.losses import (
+    allowed_label_sets, allowed_log_mass, allowed_mass_loss, masked_cross_entropy,
+)
 from domiknows.program import SolverPOIProgram
 from domiknows.program.lossprogram import PrimalDualProgram, _project_cmodel_lambdas, reverse_sign_grad
 from domiknows.program.model.pytorch import SolverModel
@@ -42,13 +44,18 @@ class DomainUpdate:
 
 @dataclass(frozen=True)
 class DFALossConfig:
-    """Stage 1 DFA loss: allowed-mass on the DFA path plus the primal-dual constraint loss of the generation graph.
+    """Stage 1 DFA loss: cross entropy under the DFA mask, plus the primal-dual constraint loss of the generation graph.
 
-    ``pmd_weight`` is the primal-dual program's ``beta``; the multipliers take an ascent step every ``dual_every``
-    rounds after ``dual_warmup`` rounds, as in ``PrimalDualProgram.train``.
+    ``masked_ce`` trains the distribution a DFA-masked decoder samples from: the softmax is restricted to the labels
+    the DFA allows at each teacher-forced step (a step whose target the DFA disallows keeps the full softmax and is
+    counted). The allowed-mass term (``mass_weight``) is off by default: along the teacher path it is bounded by
+    the full cross entropy, so it adds no signal. ``pmd_weight`` is the primal-dual program's ``beta``; the
+    multipliers take an ascent step every ``dual_every`` rounds after ``dual_warmup`` rounds, as in
+    ``PrimalDualProgram.train``.
     """
 
-    mass_weight: float = 1.0
+    masked_ce: bool = True
+    mass_weight: float = 0.0
     pmd_weight: float = 1.0
     dual_lr: float = 0.05
     dual_warmup: int = 10
@@ -258,20 +265,31 @@ class JointSolverPOIProgram(SolverPOIProgram):
             logits = self.planner_head.sequence_logits(
                 domain, context, self.planner_head.shift_right(domain, labels)).squeeze(0)
             pmd = logits.new_zeros(())
-        ce = torch.nn.functional.cross_entropy(logits[keep], labels[keep])
         dfa = self.runtime.dfa_for(domain, {**dict(item), **dict(context)})
         kept = int(keep.sum())
+        targets = labels[keep]
+        kept_logits = logits[keep]
         cap = self.dfa_loss.mass_steps
-        steps = sorted(random.sample(range(kept), cap)) if cap and kept > cap else None
-        mass = allowed_mass_loss(torch.softmax(logits[keep], dim=-1), dfa, path=labels[keep], score_steps=steps,
-                                 lookahead=domain in self.dfa_loss.lookahead_domains)
+        # The masked cross entropy needs every step's set; a mass term alone is scored on a random subset.
+        steps = None if self.dfa_loss.masked_ce or not cap or kept <= cap else sorted(random.sample(range(kept), cap))
+        sets = allowed_label_sets(dfa, targets, self.planner_head.vocabulary(domain).label_count, score_steps=steps,
+                                  lookahead=domain in self.dfa_loss.lookahead_domains)
+        misses = 0
+        if self.dfa_loss.masked_ce:
+            ce, misses = masked_cross_entropy(kept_logits, targets, sets)
+        else:
+            ce = torch.nn.functional.cross_entropy(kept_logits, targets)
+        log_mass = allowed_log_mass(torch.log_softmax(kept_logits.float(), dim=-1), sets)
+        mass = -log_mass.mean() if log_mass.numel() else ce.new_zeros(())
         breakdown = compute_generation_training_loss(
             supervised_loss=ce, pmd_loss=pmd, allowed_mass_loss_value=mass,
             weights=GenerationLossWeights(supervised=1.0, pmd=self.dfa_loss.pmd_weight,
                                           allowed_mass=self.dfa_loss.mass_weight),
         )
         self._dual_grads(domain, pmd)
-        return breakdown.total, {k: v for k, v in breakdown.as_float_dict().items() if k != "total_loss"}
+        terms = {k: v for k, v in breakdown.as_float_dict().items() if k != "total_loss"}
+        terms["masked_ce_misses"] = misses / max(1, len(sets))  # share of scored steps whose target the DFA disallows
+        return breakdown.total, terms
 
     @torch.no_grad()
     def dfa_mass_report(self, eai_items: Sequence[Mapping[str, Any]], vlabench_items: Sequence[Mapping[str, Any]],

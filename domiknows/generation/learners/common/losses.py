@@ -15,7 +15,8 @@ if TYPE_CHECKING:
     from ..wfa.prompt_conditioned_head import PromptConditionedSpectralWFAGenerationHead
     from ..wfa.head import SpectralWFAGenerationHead
 
-__all__ = ["allowed_mass_loss", "hmm_sequence_nll", "wfa_sequence_energy_loss"]
+__all__ = ["allowed_label_sets", "allowed_log_mass", "allowed_mass_loss", "hmm_sequence_nll", "masked_cross_entropy",
+           "wfa_sequence_energy_loss"]
 
 def hmm_sequence_nll(
     head: HMMGenerationHead,
@@ -134,3 +135,67 @@ def allowed_mass_loss(
     if reduction == "sum":
         return result.sum()
     return result.mean()
+
+
+def allowed_label_sets(
+    dfa: DFA,
+    path: torch.Tensor | Sequence[int],
+    label_count: int,
+    *,
+    score_steps: Sequence[int] | None = None,
+    lookahead: bool = True,
+) -> dict[int, list[int]]:
+    """Labels the DFA allows at each step along ``path`` (step -> sorted labels; steps with none are omitted).
+
+    The state advances along ``path`` at every step; ``score_steps`` restricts which steps compute a set and
+    ``lookahead=False`` takes the labels valid at the step without searching for a completion.
+    """
+    labels = [int(label) for label in (path.tolist() if torch.is_tensor(path) else path)]
+    wanted = None if score_steps is None else {int(step) for step in score_steps}
+    state = dfa.start_state
+    sets: dict[int, list[int]] = {}
+    for step, label in enumerate(labels):
+        if wanted is None or step in wanted:
+            valid = (dfa.allowed_tokens(state, remaining_steps=len(labels) - step - 1) if lookahead
+                     else dfa.allowed_tokens(state))
+            allowed = sorted(int(item) for item in valid if 0 <= int(item) < label_count)
+            if allowed:
+                sets[step] = allowed
+        following = dfa.step(state, label)
+        if following is not None:
+            state = following
+    return sets
+
+
+def allowed_log_mass(log_probs: torch.Tensor, sets: dict[int, Sequence[int]]) -> torch.Tensor:
+    """``log`` of the probability on the allowed labels at each step of ``sets`` (in step order)."""
+    steps = sorted(sets)
+    if not steps:
+        return log_probs.new_zeros(0)
+    return torch.stack([torch.logsumexp(log_probs[step, torch.as_tensor(sets[step], device=log_probs.device)], dim=0)
+                        for step in steps])
+
+
+def masked_cross_entropy(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    sets: dict[int, Sequence[int]],
+) -> tuple[torch.Tensor, int]:
+    """Mean cross entropy of the targets under the softmax restricted to the DFA-allowed labels at each step.
+
+    This is the distribution a DFA-masked decoder samples from, so it trains exactly what decoding uses. A step
+    without an allowed set, or whose target is outside it (the label disagrees with the DFA), keeps the ordinary
+    full-softmax cross entropy; the second value counts those disagreements.
+    """
+    log_probs = F.log_softmax(logits.float(), dim=-1)
+    full = -log_probs.gather(1, targets.reshape(-1, 1)).squeeze(1)
+    losses = list(full.unbind(0))
+    misses = 0
+    for step, allowed in sets.items():
+        if int(targets[step]) not in set(int(label) for label in allowed):
+            misses += 1
+            continue
+        index = torch.as_tensor(list(allowed), device=log_probs.device)
+        losses[step] = full[step] + torch.logsumexp(log_probs[step, index], dim=0)
+    return torch.stack(losses).mean(), misses
+
