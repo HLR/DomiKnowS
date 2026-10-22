@@ -1,9 +1,12 @@
-"""Executable world predicates, independent of DataNodes and token decoding.
+"""Observation grounding and symbolic state updates for the VLABench graph.
 
 Evaluate an operation against the state *before* it executes, then advance
 the immutable state. Partial decoders can use the same predicates once the
 relevant arguments are available; missing arguments are handled by schema
-validation, not interpreted as causal violations.
+validation, not interpreted as causal violations. ``primitive_observations``
+exposes scene facts, equality comparisons and state membership to world_graph.
+The older composite predicates are retained for public/custom-rule compatibility;
+the default graph combines the primitive observations in logical constraints.
 """
 
 from dataclasses import dataclass, replace
@@ -201,6 +204,45 @@ class PlanSemantics:
                 and (not self.planning.supplied or state.grounded.facts.truth(("open", container)) is False
                      or state.grounded.facts.truth(("closed", container)) is True),
         )
+
+    def primitive_observations(self, state, skill, params):
+        """Ground atomic comparisons; policy combinations live in world_graph.
+
+        Membership/identity and measured attributes are observations. For
+        example, picking a static fixture is forbidden by an LC combining
+        ``pick`` with ``entity_is_static_fixture``, not by this adapter.
+        """
+        entity, container = self._arguments(params)
+        subject = entity if entity is not None else state.held_entity
+        expected = self.planning.destination_for(skill, subject)
+
+        def usable(key):
+            value = params.get(key)
+            return value is not None and value != "" and not isinstance(value, bool) and resolve_pointer(value, self.entities)[1]
+
+        return {
+            "entity_value_usable": usable("target_entity_name"),
+            "container_value_usable": usable("target_container_name"),
+            "entity_resolves": resolve_pointer(params.get("target_entity_name"), self.entities)[1],
+            "container_resolves": resolve_pointer(params.get("target_container_name"), self.entities)[1],
+            "entity_is_button": entity is not None and "button" in entity.lower(),
+            "container_is_button": container is not None and "button" in container.lower(),
+            "subject_equals_destination": container is not None and subject == container,
+            "entity_is_static_fixture": entity is not None and is_static_fixture(entity),
+            "next_is_pick": skill == "pick",
+            "next_is_placement": skill in ("place", "pour", "insert"),
+            "next_has_entity": entity is not None,
+            "next_has_destination": container is not None,
+            "target_previously_picked": entity in state.visited_picks,
+            "target_reusable": entity in self.planning.reusable_entities,
+            "expected_destination_known": expected is not None,
+            "destination_matches_expected": container == expected,
+            "destination_is_enclosed": is_enclosed_container(container),
+            "destination_was_opened": is_container_opened(container, state.opened_entities),
+            "planning_facts_supplied": self.planning.supplied,
+            "open_observed_false": state.grounded.facts.truth(("open", container)) is False,
+            "closed_observed_true": state.grounded.facts.truth(("closed", container)) is True,
+        }
 
     def advance(self, state: PlanSemanticState, skill: str, params: Mapping[str, Any]) -> PlanSemanticState:
         grounded, _checks = self.grounded_transition(state, skill, params)

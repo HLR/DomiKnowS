@@ -16,9 +16,13 @@ from domiknows.generation.dfa.predicate_monitor import (
 try:
     from .semantics import OperationPredicates, PlanSemantics, PlanSemanticState
     from .knowledge.task_lcs import knowledge_values
+    from .world_graph import WORLD_FACT_DOMAINS
+    from .pattern_runtime import pattern_progress_for
 except ImportError:
     from semantics import OperationPredicates, PlanSemantics, PlanSemanticState
     from knowledge.task_lcs import knowledge_values
+    from world_graph import WORLD_FACT_DOMAINS
+    from pattern_runtime import pattern_progress_for
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,7 @@ class CompiledPlannerDFA(PredicateConstrainedDFA):
     token_dfa: Any = None
     max_operations: int = 12
     operation_dfa: Any = None
+    pattern_dfa: Any = None
     completion_bounds_cache: Any = field(default_factory=dict, compare=False, repr=False)
 
     @property
@@ -47,6 +52,9 @@ def compile_world_constraints(world):
         PredicateBinding(world.operation, "operation", "operation"),
         PredicateBinding(world.transition, "transition", "transition"),
         PredicateBinding(world.allowed_transition, "allowed_transition", "transition"),
+        PredicateBinding(world.pattern_first_operation, "pattern_first_operation", "operation"),
+        PredicateBinding(world.pattern_start_allowed, "pattern_start_allowed", "operation"),
+        PredicateBinding(world.pattern_complete, "pattern_complete", "episode", "completion"),
         PredicateBinding(world.premature_composite_eos, "premature_composite_eos", "operation", "completion"),
     ))
     bindings.extend(PredicateBinding(getattr(world, name), name, "operation", phase) for name, phase in (
@@ -55,6 +63,8 @@ def compile_world_constraints(world):
     ))
     bindings.extend(PredicateBinding(concept, "skill:" + skill, "operation")
                     for skill, concept in world.skills.items())
+    bindings.extend(PredicateBinding(concept, "fact:" + name, WORLD_FACT_DOMAINS[name])
+                    for name, concept in (world.facts or {}).items())
     if getattr(world, "task_concepts", None) is not None:
         bindings.extend(PredicateBinding(concept, name, "operation", phase)
                         for concept, name, phase in world.task_concepts.bindings())
@@ -72,12 +82,13 @@ class PlanDecodingState:
     pending_argument: str | None = None
     last_values: tuple = ()
     ended: bool = False
+    pattern_state: Any = None
 
 
 class VLABenchPredicateAdapter:
     """Interpret plan tokens and emit predicate valuations at operation boundaries."""
 
-    def __init__(self, vocabulary, world, entities, schema=None, requirements=None):
+    def __init__(self, vocabulary, world, entities, schema=None, requirements=None, pattern_dfa=None):
         self.vocabulary = vocabulary
         self.world = world
         try:
@@ -88,38 +99,52 @@ class VLABenchPredicateAdapter:
         self.semantics = PlanSemantics(entities, world.skill_arguments, self.requirements.planning)
         self.schema = self.requirements.schema
         self.entities = self.semantics.entities
-        self.start_state = PlanDecodingState(self.semantics.initial_state())
+        self.pattern_dfa = pattern_dfa if pattern_dfa is not None else pattern_progress_for(world, self.requirements)
+        self.start_state = PlanDecodingState(self.semantics.initial_state(), pattern_state=self.pattern_dfa.start_state)
 
     def _finish(self, state):
         params = dict(state.params)
+        completed_in_plan = state.semantic.completed_operations - len(self.requirements.planning.completed_skill_prefix)
         facts = self.semantics.evaluate_operation(state.semantic, state.skill, params)
         values = {field.name: getattr(facts, field.name) for field in fields(facts)}
-        # The grammar accepts only declared complete subtask patterns; the edge
-        # predicate therefore holds on every accepting grammar trajectory.
-        from domiknows.generation.grounded import observations
+        values.update({"fact:" + name: value for name, value in
+                       self.semantics.primitive_observations(state.semantic, state.skill, params).items()})
+        values.update(self.knowledge_values(state.semantic.completed_operations, params=params))
+        # Observe the same compiled progress used by standalone verification;
+        # never assert legality merely because another layer checks grammar.
+        from domiknows.generation.grounded import observations, requirement_events
         _successor, grounded_checks = self.semantics.grounded_transition(state.semantic, state.skill, params)
         values.update(observations(grounded_checks))
-        values.update(operation=True, transition=True, allowed_transition=True, premature_composite_eos=False)
+        next_pattern = (None if state.pattern_state is None else
+                        self.pattern_dfa.step(state.pattern_state, state.skill))
+        values.update(operation=True, transition=True, allowed_transition=next_pattern is not None,
+                      pattern_first_operation=completed_in_plan == 0,
+                      pattern_start_allowed=next_pattern is not None, premature_composite_eos=False)
         values.update({"skill:" + skill: state.skill == skill for skill in self.world.skills})
         values["task_target_allowed"] = self.requirements.target_allowed(
             state.semantic.completed_operations, params, self.entities,
         )
         events = [PredicateEvent("operation", values), PredicateEvent("operation", values, "task_target")]
-        if state.semantic.completed_operations:
+        events.extend(requirement_events(self.world.grounded_constraints, grounded_checks))
+        if completed_in_plan:
             events.append(PredicateEvent("transition", values))
         return SemanticTransition(
             PlanDecodingState(self.semantics.advance(state.semantic, state.skill, params),
-                              last_values=tuple(sorted(values.items()))), tuple(events),
+                              last_values=tuple(sorted(values.items())), pattern_state=next_pattern), tuple(events),
         )
 
     def _completion_events(self, state, *, eos):
         values = dict(state.last_values)
-        from domiknows.generation.grounded import observations
-        root_event = PredicateEvent("episode", {"episode": True, **observations((self.requirements.planning.completion(state.semantic.grounded),))}, "completion")
+        from domiknows.generation.grounded import observations, requirement_events
+        final_check = self.requirements.planning.completion(state.semantic.grounded)
+        pattern_complete = (state.pattern_state is not None and self.pattern_dfa.is_accepting(state.pattern_state))
+        root_event = PredicateEvent("episode", {"episode": True, "pattern_complete": pattern_complete,
+                                                **observations((final_check,))}, "completion")
+        final_events = (root_event, *requirement_events(self.world.grounded_constraints, (final_check,)))
         if not values:
-            return (root_event,) if eos else ()
+            return final_events if eos else ()
         values.update(self.task_completion_values(state.semantic, eos=eos))
-        return (PredicateEvent("operation", values, "completion"),) + ((root_event,) if eos else ())
+        return (PredicateEvent("operation", values, "completion"),) + (final_events if eos else ())
 
     def task_completion_values(self, semantic, *, eos):
         # Declared obligations (minimum operations, required skills) are task LCs over the history concepts.
@@ -129,14 +154,15 @@ class VLABenchPredicateAdapter:
             **self.knowledge_values(semantic.completed_operations - 1, final=eos, history=semantic.completed_skills),
         }
 
-    def knowledge_values(self, index, *, choice=False, final=False, history=()):
+    def knowledge_values(self, index, *, choice=False, final=False, history=(), params=None):
         """Observations for the task concepts of the world graph (empty if the graph declares none)."""
         concepts = getattr(self.world, "task_concepts", None)
         if concepts is None:
             return {}
         from_task = self.requirements
         return knowledge_values(concepts, from_task.task, from_task.interface, index,
-                                explicit=from_task.explicit_sequence, choice=choice, final=final, history=history)
+                                explicit=from_task.explicit_sequence, choice=choice, final=final, history=history,
+                                requirements=from_task, params=params, entities=self.entities)
 
     def task_skill_values(self, count, skill):
         return {"operation": True,
@@ -163,7 +189,8 @@ class VLABenchPredicateAdapter:
             if state.skill is not None:
                 return None
             skill = token[6:]
-            next_state = PlanDecodingState(state.semantic, skill=skill, last_values=state.last_values)
+            next_state = PlanDecodingState(state.semantic, skill=skill, last_values=state.last_values,
+                                           pattern_state=state.pattern_state)
             result = (SemanticTransition(next_state) if self.world.skill_arguments[skill] or self.world.optional_skill_arguments.get(skill)
                       else self._finish(next_state))
             # Finalize the previous operation's deferred predicates with False:
@@ -193,7 +220,8 @@ class WorldConstraintDFA(PredicateMonitorDFA):
     """Compatibility entry point binding VLABench to the reusable monitor."""
 
     def __init__(self, base_dfa, vocabulary, world, program, entities, schema=None, *, requirements=None):
-        adapter = VLABenchPredicateAdapter(vocabulary, world, entities, schema, requirements)
+        adapter = VLABenchPredicateAdapter(vocabulary, world, entities, schema, requirements,
+                                           pattern_dfa=getattr(base_dfa, "pattern_dfa", None))
         bounds = task_completion_bounds(base_dfa, vocabulary, adapter, program)
         super().__init__(base_dfa, program, adapter,
                          completion_bound=None if bounds is None else lambda state: bounds(state.grammar[1]))

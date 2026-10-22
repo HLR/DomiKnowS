@@ -6,9 +6,11 @@ from typing import Mapping
 try:
     from .plan_codec import PlanVocabulary, plan_to_tokens
     from .graph import create_planner_generation_graph
+    from .pattern_runtime import project_skill_progress
 except ImportError:
     from plan_codec import PlanVocabulary, plan_to_tokens
     from graph import create_planner_generation_graph
+    from pattern_runtime import project_skill_progress
 
 _BUILD_IDS = count()
 
@@ -64,7 +66,7 @@ def _with_operation_history(dfa, vocabulary, max_operations):
     return DFA(frozenset(states), dfa.alphabet, transitions, start, frozenset(accepting))
 
 
-def _domain_dfa(world, vocabulary, max_operations, complete_sequences=None):
+def _domain_dfa(world, vocabulary, max_operations, complete_sequences=None, *, include_pattern=False):
     """Compatibility helper: build and compile the same declarative graph."""
     from domiknows.generation import constraints_to_dfa_from_graph
     graph, bundle = create_planner_generation_graph(
@@ -72,10 +74,11 @@ def _domain_dfa(world, vocabulary, max_operations, complete_sequences=None):
         graph_name=f"vlabench_request_grammar_{next(_BUILD_IDS)}",
         skill_language=complete_sequences,
     )
-    return _with_operation_history(
-        constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error"),
-        vocabulary, max_operations,
-    )
+    raw = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+    result = _with_operation_history(raw, vocabulary, max_operations)
+    if include_pattern:
+        return result, project_skill_progress(raw, vocabulary)
+    return result
 
 
 def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_operations: int = 12):
@@ -98,9 +101,13 @@ def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_oper
         from constraint_compiler import CompiledPlannerDFA, compile_world_constraints
     program = compile_world_constraints(world)
     operation_dfa = _with_operation_history(graph_dfa, vocabulary, max_operations)
+    # Preserve any explicit bounds/edits of this compiled policy when its
+    # progress is also used to verify a materialized candidate plan.
+    pattern_dfa = project_skill_progress(graph_dfa, vocabulary)
     grammar = product_dfa([token_dfa, operation_dfa])
     return CompiledPlannerDFA.from_dfa(grammar, program, world_constraint_bundle=world, token_dfa=token_dfa,
-                                     max_operations=max_operations, operation_dfa=operation_dfa)
+                                     max_operations=max_operations, operation_dfa=operation_dfa,
+                                     pattern_dfa=pattern_dfa)
 
 
 def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> bool:
@@ -141,10 +148,12 @@ def bind_vlabench_contextual_dfa(base_dfa, vocabulary, context):
     requirements = replace(requirements, allowed_sequences=sequences)
     grammar = base_dfa
     if sequences.allow_empty or frozenset(sequences.roots) != frozenset(world.subtask_patterns):
-        operation_dfa = _domain_dfa(world, vocabulary, base_dfa.max_operations, sequences)
+        operation_dfa, pattern_dfa = _domain_dfa(world, vocabulary, base_dfa.max_operations, sequences,
+                                                include_pattern=True)
         grammar = type(base_dfa).from_dfa(
             product_dfa([base_dfa.token_dfa, operation_dfa]), base_dfa.constraint_program,
             world_constraint_bundle=world, token_dfa=base_dfa.token_dfa,
             max_operations=base_dfa.max_operations, operation_dfa=operation_dfa,
+            pattern_dfa=pattern_dfa,
         )
     return WorldConstraintDFA(grammar, vocabulary, world, base_dfa.constraint_program, entities, requirements=requirements)

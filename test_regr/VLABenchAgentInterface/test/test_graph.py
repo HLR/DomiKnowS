@@ -95,7 +95,9 @@ def test_world_constraints_reject_bad_pointer_and_unknown_skill():
         {"name": "place", "params": {"target_container_name": 1}},
     ]
     evaluation = verify_plan_constraints(materialize_plan(invalid_pointer, ("apple", "bowl"), bundle), bundle)
-    assert evaluation.score == 0.0
+    assert evaluation.score < 1.0
+    # Pointer errors belong to schema/scene constraints, not pattern progress.
+    assert evaluation.results["transition_matches_subtask_pattern"]["satisfied"] == 100.0
     assert evaluation.results["operation_pointer_is_valid"]["satisfied"] < 100.0
 
     unknown = [{"name": "teleport", "params": {} }]
