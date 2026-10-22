@@ -29,6 +29,10 @@ class CompiledEAIPlannerDFA(PredicateConstrainedDFA):
     generation_graph: object = None
 
 
+_UNSET = object()
+_FINISHED_LIMIT = 1 << 16
+
+
 @dataclass(frozen=True)
 class EAIState:
     grounded: object
@@ -154,10 +158,22 @@ class EAIAdapter:
             entities.update(x for x in vocabulary.tokens if x not in world.actions and x != vocabulary.eos_token)
         self.executor = EAIExecutor(world, context, entities)
         self.start_state = EAIState(self.executor.planning.initial)
+        self._finished = {}
 
     def finish(self, state):
         if state.pending is None:
             return SemanticTransition(state)
+        # Closing the pending action depends on the state alone, yet every candidate next token of that state
+        # closes it again (an action, the end token, ...): compute it once per state.
+        cached = self._finished.get(state, _UNSET)
+        if cached is _UNSET:
+            cached = self._finish(state)
+            if len(self._finished) >= _FINISHED_LIMIT:
+                self._finished.clear()
+            self._finished[state] = cached
+        return cached
+
+    def _finish(self, state):
         if len(state.args) < ACTION_SPECS[state.pending].min_args:
             return None
         successor, _checks, values = self.executor.advance(state.grounded, state.pending, state.args)

@@ -316,7 +316,8 @@ class PredicateConstraintProgram:
         ungrounded = event.variable_domains is None
         values = event.values
         if ungrounded and group.memoizable:
-            observed = tuple([values.get(name, _MISSING) for name in group.names])
+            # A missing observation reads as None, which is not a bool and so takes the general path below.
+            observed = tuple(map(values.get, group.names))
             # Types first: 1 == True, so an integer observation would otherwise hit a Boolean valuation's entry.
             if set(map(type, observed)) <= _BOOL_ONLY:
                 verdict = group.memo.get(observed)
