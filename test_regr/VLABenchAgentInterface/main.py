@@ -24,7 +24,7 @@ try:
         load_planning_examples,
         OBSERVATION_MODES,
     )
-    from .graph import PlanVocabulary
+    from .plan_codec import PlanVocabulary
     from .models import PLANNER_MODEL_ID, QwenVLPlanner
     from .simulation.controller import FrozenSigLIPEncoder, MultiViewController, TinyImageEncoder
     from .training import (
@@ -47,7 +47,7 @@ try:
 except ImportError:
     from agent import HierarchicalVLABenchAgent
     from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples, OBSERVATION_MODES
-    from graph import PlanVocabulary
+    from plan_codec import PlanVocabulary
     from models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
     from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch, train_controller_steps
     from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph

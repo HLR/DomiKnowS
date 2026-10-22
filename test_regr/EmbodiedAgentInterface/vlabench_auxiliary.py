@@ -38,7 +38,7 @@ def _example_value(example: Any, key: str, default=None):
 
 def prepare_vlabench_text_examples(examples, runtime) -> list[dict[str, Any]]:
     """Encode VLABench plans and prompts without opening any image path."""
-    from test_regr.VLABenchAgentInterface.graph import plan_to_tokens
+    from test_regr.VLABenchAgentInterface.plan_codec import plan_to_tokens
     from test_regr.VLABenchAgentInterface.models import planner_prompt
 
     prepared: list[dict[str, Any]] = []
@@ -165,7 +165,7 @@ def _build_auxiliary_head(
 @torch.no_grad()
 def _evaluate_auxiliary(auxiliary_head, examples, runtime, loss_function):
     from domiknows.generation import constrained_label_greedy_decode
-    from test_regr.VLABenchAgentInterface.graph import labels_to_plan
+    from test_regr.VLABenchAgentInterface.plan_codec import labels_to_plan
     from test_regr.VLABenchAgentInterface.reward import score_vlabench_plan
 
     auxiliary_head.eval()

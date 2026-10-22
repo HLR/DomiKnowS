@@ -100,7 +100,7 @@ def append_record(path, record):
 
 
 def load_graph_planner(checkpoint, model_path, load_in_4bit=True):
-    from .graph import PlanVocabulary
+    from .plan_codec import PlanVocabulary
     from .models import QwenVLPlanner
     from .training import build_constraint_runtime, _load_planner_trainable_state, _planner_configuration
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False, mmap=True)

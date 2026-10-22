@@ -64,7 +64,7 @@ try:
         robot_to_world_ee_action,
         world_to_robot_ee_state,
     )
-    from ..graph import bind_vlabench_contextual_dfa, dfa_accepts_plan
+    from ..generation_runtime import bind_vlabench_contextual_dfa, dfa_accepts_plan
     from .controller import controller_loss
     from ..world_graph import (
         PRIMITIVE_TASK_PATTERNS,
@@ -99,7 +99,7 @@ except ImportError:
         robot_to_world_ee_action,
         world_to_robot_ee_state,
     )
-    from graph import bind_vlabench_contextual_dfa, dfa_accepts_plan
+    from generation_runtime import bind_vlabench_contextual_dfa, dfa_accepts_plan
     from models import controller_loss
     from world_graph import PRIMITIVE_TASK_PATTERNS, condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, task_contract_for, validate_plan, verify_plan_constraints
 

@@ -18,7 +18,7 @@ import torch
 from domiknows.generation.dfa.stop_policy import StopPolicy, remaining_steps_for, should_stop_on_token
 
 from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
-from test_regr.VLABenchAgentInterface.graph import labels_to_plan
+from test_regr.VLABenchAgentInterface.plan_codec import labels_to_plan
 from test_regr.VLABenchAgentInterface.reward import score_vlabench_plan
 from test_regr.VLABenchAgentInterface.world_graph import (
     materialize_plan,

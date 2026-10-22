@@ -12,9 +12,11 @@ from torch import nn
 from torch.nn import functional as F
 
 try:
-    from .graph import PlanVocabulary, bind_vlabench_contextual_dfa, labels_to_plan, plan_to_tokens
+    from .plan_codec import PlanVocabulary, labels_to_plan, plan_to_tokens
+    from .generation_runtime import bind_vlabench_contextual_dfa
 except ImportError:
-    from graph import PlanVocabulary, bind_vlabench_contextual_dfa, labels_to_plan, plan_to_tokens
+    from plan_codec import PlanVocabulary, labels_to_plan, plan_to_tokens
+    from generation_runtime import bind_vlabench_contextual_dfa
 
 
 from domiknows.generation.dfa.predicate_monitor import require_bound_predicate_dfa

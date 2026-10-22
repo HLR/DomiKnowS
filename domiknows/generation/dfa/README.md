@@ -1028,3 +1028,23 @@ accepts `task_context=...`, or `policy=...` to reuse the exact bound requirement
 from collection. Online sampling retains this same policy for gradient replay.
 The handwritten contextual/causal/composite/task-pattern DFA implementations,
 separate pointer filter, and automatic button-plan fallback have been removed.
+
+## Auxiliary token-state concepts
+
+For regular languages needing hidden progress, declare an `EnumConcept` under
+`bundle.token` and an `andL` family containing `exactL` over all of its values
+with count 1. Combine pathless state/token implications with
+`ifL(sequence_start(...), ...)` and `ifL(is_before_rel(...), ...)` formulas
+whose state predicates follow the corresponding endpoint paths. The latter
+uses the same immediate-successor convention as other local generation rules.
+Boolean formulas use `ifL`, `andL`, `orL`, and `notL`.
+
+`auxiliary.py` reads these formulas, computes compatible token labels and
+successor assignments, then uses subset construction to existentially project
+the auxiliary states. All head constraints sharing an auxiliary enum are
+solved jointly so separate constraints cannot choose inconsistent witnesses.
+Constraint names and DFA markers do not define transitions. Unsupported
+operators, mixed domains, and incorrect endpoint bindings fail compilation.
+Local formulas allow realizable prefixes, including the empty prefix; use an
+ordinary EOS existence constraint when a complete terminated sequence is
+required. The VLABench generation graph provides a complete example.

@@ -16,7 +16,7 @@ from domiknows.generation.dfa.stop_policy import (
     should_stop_on_token, stop_policy_from_legacy,
 )
 from test_regr.common_backbone import COMMON_VLM_MODEL_ID
-from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
+from test_regr.VLABenchAgentInterface.plan_codec import labels_to_plan, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
     planner_prompt,
     prepare_kbit_model,
@@ -558,7 +558,7 @@ class JointQwenVLPlanner(nn.Module):
         if domain == "vlabench" and isinstance(context, Mapping) and any(
             key in context for key in ("entities", "entity_table")
         ):
-            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+            from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary(domain), context)
         return require_bound_predicate_dfa(dfa)
 
@@ -896,7 +896,7 @@ class JointPlannerDomainView(nn.Module):
         }
         dfa = kwargs.get("dfa")
         if self.domain == "vlabench" and dfa is not None:
-            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+            from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         encoded_context = kwargs.get("encoded_context")
         if encoded_context is None:
@@ -933,7 +933,7 @@ class JointPlannerDomainView(nn.Module):
         }
         dfa = kwargs.get("dfa")
         if self.domain == "vlabench" and dfa is not None:
-            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+            from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         labels, _ = self.sample_labels(
             context,

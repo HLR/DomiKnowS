@@ -11,14 +11,14 @@ from PIL import Image
 
 try:
     from .environment import ee_action_to_env_action, numbered_views_from_observation
-    from ..graph import dfa_accepts_plan
+    from ..generation_runtime import dfa_accepts_plan
     from ..reward import RewardBreakdown
     from .rollout_reward import RolloutRewardAccumulator
     from ..training import PlannerConstraintRuntime
     from ..world_graph import condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
 except ImportError:
     from environment import ee_action_to_env_action, numbered_views_from_observation
-    from graph import dfa_accepts_plan
+    from generation_runtime import dfa_accepts_plan
     from reward import RewardBreakdown, RolloutRewardAccumulator
     from training import PlannerConstraintRuntime
     from world_graph import condition_index_for_pattern, controller_plan_context, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints

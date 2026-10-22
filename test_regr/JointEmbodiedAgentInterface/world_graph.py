@@ -19,11 +19,9 @@ from test_regr.EmbodiedAgentInterface.world_graph import (
     EAIWorldGraphBundle,
     build_eai_world_graph,
 )
-from test_regr.VLABenchAgentInterface.graph import (
-    PlanVocabulary,
-    compile_planner_dfa,
-    create_planner_generation_graph,
-)
+from test_regr.VLABenchAgentInterface.plan_codec import PlanVocabulary
+from test_regr.VLABenchAgentInterface.generation_runtime import compile_planner_dfa
+from test_regr.VLABenchAgentInterface.graph import create_planner_generation_graph
 from test_regr.VLABenchAgentInterface.world_graph import (
     VLABenchWorldGraphBundle,
     build_vlabench_world_graph,
@@ -142,7 +140,7 @@ class JointDomainRuntime:
         if domain == "vlabench":
             if not context:
                 return self.vlabench_dfa
-            from test_regr.VLABenchAgentInterface.graph import bind_vlabench_contextual_dfa
+            from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
 
             # Context mappings can be mutated or their ids reused. Scene binding
             # is cheap; never cache a semantic policy by Python object identity.

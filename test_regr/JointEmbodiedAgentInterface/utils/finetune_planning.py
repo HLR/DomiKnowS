@@ -16,7 +16,7 @@ from ..checkpoint import load_joint_checkpoint, save_joint_checkpoint
 from ..program import _runtime_adapter
 from domiknows.generation.validation import retains_validation_scores
 from test_regr.VLABenchAgentInterface.main import _controller
-from test_regr.VLABenchAgentInterface.graph import plan_to_tokens
+from test_regr.VLABenchAgentInterface.plan_codec import plan_to_tokens
 from test_regr.VLABenchAgentInterface.planning_augmentation import permute_entities
 from test_regr.VLABenchAgentInterface.training import _planner_images, evaluate_planner
 

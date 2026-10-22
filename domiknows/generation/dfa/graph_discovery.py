@@ -53,6 +53,9 @@ is supplied.  Value expressions and filters are not standalone Boolean LCs.
   a single path-bound ``token_value`` or an ``orL`` of path-bound
   ``token_value`` siblings on the same path role -> after-trigger-allowed
   DFA over the union of tokens in each set
+- local auxiliary EnumConcept families: one-hot ``exactL`` domains, unary
+  state/token formulas, and state formulas bound to sequence-start or adjacent
+  endpoints. Shared auxiliary assignments are projected jointly (see auxiliary.py).
 
 Any other shape that still references generation concepts is considered
 *unsupported* and handled according to the ``on_unsupported`` policy.
@@ -154,9 +157,19 @@ def analyze_generation_constraints(
     if max_sequence_length is not None and max_sequence_length < 0:
         raise ValueError("max_sequence_length must be non-negative")
 
+    from .auxiliary import compile_auxiliary_state_families
+    auxiliary_families = compile_auxiliary_state_families(graph, bundle)
     analyses: list[GenerationConstraintAnalysis] = []
     for lc_name, lc in graph.logicalConstrains.items():
         if not getattr(lc, "headLC", True):
+            continue
+        # A shared hidden-state family must be projected jointly, before the
+        # ordinary normalizer separates its conjuncts into independent DFAs.
+        if lc_name in auxiliary_families:
+            analyses.append(GenerationConstraintAnalysis(
+                lc_name, lc.__class__.__name__, True, True, auxiliary_families[lc_name],
+                reason="existential projection of local auxiliary-state formulas",
+            ))
             continue
         relevant = _is_generation_relevant(lc, bundle)
         contextual_specs = getattr(lc, "_generation_contextual_dfa_specs", ())

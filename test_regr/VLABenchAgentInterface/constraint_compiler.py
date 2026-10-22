@@ -279,10 +279,10 @@ def requirements_for_policy(policy):
 def bind_task_policy(policy, vocabulary, context):
     """Compatibility entry point: bind task facts using the same compiled LCs."""
     try:
-        from .graph import bind_vlabench_contextual_dfa
+        from .generation_runtime import bind_vlabench_contextual_dfa
         from .task_policy import task_requirements
     except ImportError:
-        from graph import bind_vlabench_contextual_dfa
+        from generation_runtime import bind_vlabench_contextual_dfa
         from task_policy import task_requirements
     from domiknows.generation.dfa.predicate_monitor import find_predicate_monitor
     bound = bind_vlabench_contextual_dfa(policy, vocabulary, context)

@@ -2,6 +2,24 @@
 
 This package trains and evaluates the graph-first VLABench planner/controller.
 
+## Plan graph and compilation
+
+`graph.py` declares the generation language with ordinary DomiKnowS concepts
+and logical constraints: EOS boundaries, operation counts, complete subtask
+patterns, ordered required arguments, and optional argument suffixes. The
+`plan_progress` enum assigns each token a position within a subtask. Its
+`exactL`, `ifL`, `andL`, and `orL` formulas define legal starts, token labels,
+and adjacent progress positions. The generic generation compiler jointly
+solves these auxiliary assignments and projects them onto token labels;
+there is no separate handwritten grammar DFA.
+
+`plan_codec.py` owns the stable vocabulary and plan/token conversions.
+`generation_runtime.py` compiles the graph, annotates operation history for
+task-completion pruning, and binds scene/task facts to world constraints.
+Continuation tasks build the same graph declarations with alternative roots
+or empty-plan permission. `world_graph.py` remains the semantic rule source.
+Earlier imports from `graph` remain available for callers and checkpoints.
+
 ## Table 1 planning metrics
 
 `evaluate-planner` reports `planning_metrics` alongside the existing reward and

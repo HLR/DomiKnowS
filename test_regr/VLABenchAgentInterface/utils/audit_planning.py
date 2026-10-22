@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from pathlib import Path
 from ..dataset import load_planning_examples, deterministic_split
-from ..graph import plan_to_tokens, tokens_to_plan
+from ..plan_codec import plan_to_tokens, tokens_to_plan
 from ..training import build_constraint_runtime
 from ..world_graph import validate_plan
 

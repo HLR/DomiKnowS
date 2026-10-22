@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover - only used outside the repository
         return value
 
 try:
-    from .graph import tokens_to_plan
+    from .plan_codec import tokens_to_plan
     from .world_graph import (
         SKILL_ARGUMENTS,
         PlanValidation,
@@ -34,7 +34,7 @@ try:
     )
     from .planning_metrics import _graph as _official_graph, _ground_plan_entities, _precise_match
 except ImportError:
-    from graph import tokens_to_plan
+    from plan_codec import tokens_to_plan
     from world_graph import (
         SKILL_ARGUMENTS,
         PlanValidation,
