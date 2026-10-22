@@ -1,0 +1,282 @@
+{
+  "checkpoint": "/home/auszok/knowledge-ablation/checkpoints/holdout_dfa2/joint_stage1_epoch_003.pt",
+  "declare_heldout_knowledge": false,
+  "decoding": "dfa",
+  "detailed_metrics": {
+    "complex_grounding_reports": [],
+    "entity_match": 0.12,
+    "exact_graph_match": 0.10142857142857142,
+    "examples": 700,
+    "generation_errors": [],
+    "generation_failures": 0,
+    "grounding_coverage": {
+      "affordance": {
+        "not_applicable": 700,
+        "unavailable": 451
+      },
+      "capacity": {
+        "not_applicable": 700,
+        "unavailable": 451
+      },
+      "compatibility": {
+        "not_applicable": 1134,
+        "unavailable": 17
+      },
+      "destination": {
+        "not_applicable": 1134,
+        "unavailable": 17
+      },
+      "goal_completion": {
+        "not_applicable": 700
+      },
+      "holding": {
+        "checked": 451,
+        "not_applicable": 700
+      },
+      "milestone_order": {
+        "not_applicable": 1151
+      },
+      "preservation": {
+        "not_applicable": 1151
+      }
+    },
+    "observation_profiles": {
+      "undeclared": 700
+    },
+    "observation_reports": [],
+    "planning_metrics": {
+      "Macro": null,
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2",
+      "dimensions": {
+        "ComSense": {
+          "PM": null,
+          "PR": null,
+          "SPR": null,
+          "SR": null,
+          "examples": 0,
+          "legacy_score": null,
+          "score": null
+        },
+        "Complex": {
+          "PM": 0.0,
+          "PR": 0.0,
+          "SPR": 0.0,
+          "SR": 10.51388888888888,
+          "examples": 200,
+          "legacy_score": 4.205555555555563,
+          "score": 4.205555555555563
+        },
+        "M&T": {
+          "PM": 0.0,
+          "PR": 12.0,
+          "SPR": 6.0,
+          "SR": 49.5,
+          "examples": 100,
+          "legacy_score": 24.6,
+          "score": 25.2
+        },
+        "PhysLaw": {
+          "PM": 35.5,
+          "PR": 35.5,
+          "SPR": 35.5,
+          "SR": 100.0,
+          "examples": 200,
+          "legacy_score": 54.2,
+          "score": 61.3
+        },
+        "Semantic": {
+          "PM": 0.0,
+          "PR": 1.0,
+          "SPR": 0.5,
+          "SR": 49.0,
+          "examples": 100,
+          "legacy_score": 20.0,
+          "score": 20.05
+        },
+        "Spatial": {
+          "PM": 0.0,
+          "PR": 0.0,
+          "SPR": 0.0,
+          "SR": 50.0,
+          "examples": 100,
+          "legacy_score": 20.0,
+          "score": 20.0
+        }
+      },
+      "examples": 700,
+      "full_task_coverage": true,
+      "legacy_Macro": null,
+      "official_mapping": {
+        "dimensions": {
+          "ComSense": {
+            "PM": null,
+            "PR": null,
+            "SPR": null,
+            "SR": null,
+            "examples": 0,
+            "legacy_score": null,
+            "score": null
+          },
+          "Complex": {
+            "PM": 0.0,
+            "PR": 0.0,
+            "SPR": 0.0,
+            "SR": 10.51388888888888,
+            "examples": 200,
+            "legacy_score": 4.205555555555563,
+            "score": 4.205555555555563
+          },
+          "M&T": {
+            "PM": 0.0,
+            "PR": 12.0,
+            "SPR": 6.0,
+            "SR": 49.5,
+            "examples": 100,
+            "legacy_score": 24.6,
+            "score": 25.2
+          },
+          "PhysLaw": {
+            "PM": 32.0,
+            "PR": 32.0,
+            "SPR": 32.0,
+            "SR": 100.0,
+            "examples": 100,
+            "legacy_score": 52.8,
+            "score": 59.2
+          },
+          "Semantic": {
+            "PM": 0.0,
+            "PR": 1.0,
+            "SPR": 0.5,
+            "SR": 49.0,
+            "examples": 100,
+            "legacy_score": 20.0,
+            "score": 20.05
+          },
+          "Spatial": {
+            "PM": 0.0,
+            "PR": 0.0,
+            "SPR": 0.0,
+            "SR": 50.0,
+            "examples": 100,
+            "legacy_score": 20.0,
+            "score": 20.0
+          }
+        },
+        "examples": 600,
+        "legacy_total_score_by_dimension": {
+          "ComSense": null,
+          "Complex": 4.205555555555563,
+          "M&T": 24.6,
+          "PhysLaw": 52.8,
+          "Semantic": 20.0,
+          "Spatial": 20.0
+        }
+      },
+      "overall": {
+        "PM": 10.142857142857142,
+        "PR": 12.0,
+        "SPR": 11.071428571428571,
+        "SR": 52.78968253968253,
+        "legacy_score": 25.915873015873018,
+        "score": 28.03730158730159
+      },
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "unknown_task_count": 0
+    },
+    "reward": 0.2803730158730134,
+    "semantic_search_limit_failures": 0,
+    "skill_match": 0.5278968253968253,
+    "skill_with_entity_match": 0.11071428571428571,
+    "valid": 1.0
+  },
+  "dimensions": {
+    "ComSense": {
+      "PM": null,
+      "PR": null,
+      "SPR": null,
+      "SR": null,
+      "examples": 0,
+      "legacy_score": null,
+      "score": null
+    },
+    "Complex": {
+      "PM": 0.0,
+      "PR": 0.0,
+      "SPR": 0.0,
+      "SR": 10.51388888888888,
+      "examples": 200,
+      "legacy_score": 4.205555555555563,
+      "score": 4.205555555555563
+    },
+    "M&T": {
+      "PM": 0.0,
+      "PR": 12.0,
+      "SPR": 6.0,
+      "SR": 49.5,
+      "examples": 100,
+      "legacy_score": 24.6,
+      "score": 25.2
+    },
+    "PhysLaw": {
+      "PM": 35.5,
+      "PR": 35.5,
+      "SPR": 35.5,
+      "SR": 100.0,
+      "examples": 200,
+      "legacy_score": 54.2,
+      "score": 61.3
+    },
+    "Semantic": {
+      "PM": 0.0,
+      "PR": 1.0,
+      "SPR": 0.5,
+      "SR": 49.0,
+      "examples": 100,
+      "legacy_score": 20.0,
+      "score": 20.05
+    },
+    "Spatial": {
+      "PM": 0.0,
+      "PR": 0.0,
+      "SPR": 0.0,
+      "SR": 50.0,
+      "examples": 100,
+      "legacy_score": 20.0,
+      "score": 20.0
+    }
+  },
+  "epoch": 3,
+  "examples_evaluated": 700,
+  "free_decoding_min_steps": 0,
+  "generation_failures": 0,
+  "ground_complex": true,
+  "holdout_tasks": [
+    "cook_dishes",
+    "take_chemistry_experiment",
+    "friction_qa",
+    "thermal_expansion_qa",
+    "select_book",
+    "select_book_semantic",
+    "select_book_spatial"
+  ],
+  "input_probe": "original",
+  "knowledge": "generic",
+  "legacy_macro_score": null,
+  "macro_score": null,
+  "observation_mode": "visual",
+  "overall": {
+    "PM": 10.142857142857142,
+    "PR": 12.0,
+    "SPR": 11.071428571428571,
+    "SR": 52.78968253968253,
+    "legacy_score": 25.915873015873018,
+    "score": 28.03730158730159
+  },
+  "reference_labels": "as-stored",
+  "semantic_search_limit_failures": 0,
+  "split": "heldout",
+  "stage": "stage1",
+  "task_classifier": null,
+  "updated_data": false
+}

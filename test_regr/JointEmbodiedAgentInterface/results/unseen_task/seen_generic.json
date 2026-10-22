@@ -1,0 +1,1184 @@
+{
+  "checkpoint": "/home/auszok/knowledge-ablation/checkpoints/holdout_dfa2/joint_stage1_epoch_003.pt",
+  "declare_heldout_knowledge": false,
+  "decoding": "dfa",
+  "detailed_metrics": {
+    "complex_grounding_reports": [
+      {
+        "episode_id": "Complex/texas_holdem/example87",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example77",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example70",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example3",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example25",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example95",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example79",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example76",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example42",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example47",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example27",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example22",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example3",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example7",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example86",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example87",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example81",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example8",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example92",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example35",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example98",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example78",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example18",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example85",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example72",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example67",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example96",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example43",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example99",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example10",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example93",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example61",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example57",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example39",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example84",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example82",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example10",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example21",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example56",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/book_rearrange/example95",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/hammer_nail_and_hang_picture/example21",
+        "profile": "input_complex_v1",
+        "reasons": [],
+        "status": "checked"
+      },
+      {
+        "episode_id": "Complex/texas_holdem/example11",
+        "profile": "input_complex_v1",
+        "reasons": [
+          "winning card combination must be inferred from observed cards; no hidden winning-hand target imported"
+        ],
+        "status": "unavailable"
+      }
+    ],
+    "entity_match": 0.3252631578947369,
+    "exact_graph_match": 0.11578947368421053,
+    "examples": 380,
+    "generation_errors": [],
+    "generation_failures": 0,
+    "grounding_coverage": {
+      "affordance": {
+        "not_applicable": 469,
+        "unavailable": 310
+      },
+      "capacity": {
+        "not_applicable": 479,
+        "unavailable": 300
+      },
+      "compatibility": {
+        "not_applicable": 691,
+        "unavailable": 88
+      },
+      "destination": {
+        "not_applicable": 691,
+        "unavailable": 88
+      },
+      "goal_completion": {
+        "not_applicable": 380
+      },
+      "holding": {
+        "checked": 279,
+        "not_applicable": 500
+      },
+      "milestone_order": {
+        "not_applicable": 779
+      },
+      "preservation": {
+        "not_applicable": 779
+      }
+    },
+    "observation_profiles": {
+      "unspecified": 339,
+      "visual_qa_v1": 41
+    },
+    "observation_reports": [
+      {
+        "episode_id": "PhysicsLaw/density_qa/example93",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example78",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example73",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example9",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example21",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example58",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example2",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example42",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example41",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example89",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example13",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example70",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example26",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example16",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example64",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example55",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example50",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example82",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example90",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example1",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "magnetism_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example74",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example17",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example80",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "magnetism_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example54",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "magnetism_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example99",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example69",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example7",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/density_qa/example24",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "density_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example28",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "magnetism_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example88",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "magnetism_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example15",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example99",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example49",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "magnetism_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example82",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example88",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example64",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/reflection_qa/example96",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "reflectance_fraction",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example38",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example98",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/magnetism_qa/example71",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "magnetism_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      },
+      {
+        "episode_id": "PhysicsLaw/speed_of_sound_qa/example39",
+        "missing_candidates": [
+          "button0",
+          "button1",
+          "button2"
+        ],
+        "prediction_source": "vlm_visual",
+        "property": "speed_of_sound_qa:visual_property",
+        "reasons": [
+          "visual profile delegates property selection to the VLM; no symbolic property observations consumed"
+        ],
+        "sources": [],
+        "status": "unavailable"
+      }
+    ],
+    "planning_metrics": {
+      "Macro": 38.52519735107811,
+      "dimension_mapping_revision": "vlabench-planning-coverage-v2",
+      "dimensions": {
+        "ComSense": {
+          "PM": 14.634146341463415,
+          "PR": 53.048780487804876,
+          "SPR": 34.75609756097561,
+          "SR": 54.26829268292683,
+          "examples": 82,
+          "legacy_score": 42.926829268292686,
+          "score": 47.86585365853659
+        },
+        "Complex": {
+          "PM": 0.0,
+          "PR": 3.8095238095238093,
+          "SPR": 2.857142857142857,
+          "SR": 15.972222222222218,
+          "examples": 42,
+          "legacy_score": 7.912698412698415,
+          "score": 8.1984126984127
+        },
+        "M&T": {
+          "PM": 8.536585365853659,
+          "PR": 42.68292682926829,
+          "SPR": 40.24390243902439,
+          "SR": 64.63414634146342,
+          "examples": 82,
+          "legacy_score": 42.926829268292686,
+          "score": 47.80487804878049
+        },
+        "PhysLaw": {
+          "PM": 19.51219512195122,
+          "PR": 19.51219512195122,
+          "SPR": 19.51219512195122,
+          "SR": 97.5609756097561,
+          "examples": 41,
+          "legacy_score": 46.829268292682926,
+          "score": 50.73170731707317
+        },
+        "Semantic": {
+          "PM": 14.814814814814815,
+          "PR": 28.395061728395063,
+          "SPR": 35.80246913580247,
+          "SR": 62.34567901234568,
+          "examples": 81,
+          "legacy_score": 36.2962962962963,
+          "score": 41.358024691358025
+        },
+        "Spatial": {
+          "PM": 9.615384615384615,
+          "PR": 24.03846153846154,
+          "SPR": 23.076923076923077,
+          "SR": 55.76923076923077,
+          "examples": 52,
+          "legacy_score": 31.923076923076923,
+          "score": 35.19230769230769
+        }
+      },
+      "examples": 380,
+      "full_task_coverage": true,
+      "legacy_Macro": 34.80249974355666,
+      "official_mapping": {
+        "dimensions": {
+          "ComSense": {
+            "PM": 17.91044776119403,
+            "PR": 55.97014925373134,
+            "SPR": 37.3134328358209,
+            "SR": 59.701492537313435,
+            "examples": 67,
+            "legacy_score": 46.26865671641791,
+            "score": 51.791044776119406
+          },
+          "Complex": {
+            "PM": 0.0,
+            "PR": 3.8095238095238093,
+            "SPR": 2.857142857142857,
+            "SR": 15.972222222222218,
+            "examples": 42,
+            "legacy_score": 7.912698412698415,
+            "score": 8.1984126984127
+          },
+          "M&T": {
+            "PM": 9.333333333333334,
+            "PR": 43.333333333333336,
+            "SPR": 41.333333333333336,
+            "SR": 66.0,
+            "examples": 75,
+            "legacy_score": 43.733333333333334,
+            "score": 48.8
+          },
+          "PhysLaw": {
+            "PM": 50.0,
+            "PR": 50.0,
+            "SPR": 50.0,
+            "SR": 100.0,
+            "examples": 10,
+            "legacy_score": 60.0,
+            "score": 70.0
+          },
+          "Semantic": {
+            "PM": 15.789473684210526,
+            "PR": 26.973684210526315,
+            "SPR": 36.18421052631579,
+            "SR": 64.47368421052632,
+            "examples": 76,
+            "legacy_score": 36.578947368421055,
+            "score": 41.776315789473685
+          },
+          "Spatial": {
+            "PM": 11.627906976744185,
+            "PR": 22.093023255813954,
+            "SPR": 22.093023255813954,
+            "SR": 61.627906976744185,
+            "examples": 43,
+            "legacy_score": 33.48837209302326,
+            "score": 36.86046511627907
+          }
+        },
+        "examples": 313,
+        "legacy_total_score_by_dimension": {
+          "ComSense": 46.26865671641791,
+          "Complex": 7.912698412698415,
+          "M&T": 43.733333333333334,
+          "PhysLaw": 60.0,
+          "Semantic": 36.578947368421055,
+          "Spatial": 33.48837209302326
+        }
+      },
+      "overall": {
+        "PM": 11.578947368421053,
+        "PR": 32.526315789473685,
+        "SPR": 29.394736842105264,
+        "SR": 58.87061403508772,
+        "legacy_score": 36.558771929824566,
+        "score": 40.6561403508772
+      },
+      "source_revision": "cf588fe60c0c7282174fe979f5913170cfe69017",
+      "unknown_task_count": 0
+    },
+    "reward": 0.40656140350877285,
+    "semantic_search_limit_failures": 0,
+    "skill_match": 0.5887061403508772,
+    "skill_with_entity_match": 0.2939473684210527,
+    "valid": 1.0
+  },
+  "dimensions": {
+    "ComSense": {
+      "PM": 14.634146341463415,
+      "PR": 53.048780487804876,
+      "SPR": 34.75609756097561,
+      "SR": 54.26829268292683,
+      "examples": 82,
+      "legacy_score": 42.926829268292686,
+      "score": 47.86585365853659
+    },
+    "Complex": {
+      "PM": 0.0,
+      "PR": 3.8095238095238093,
+      "SPR": 2.857142857142857,
+      "SR": 15.972222222222218,
+      "examples": 42,
+      "legacy_score": 7.912698412698415,
+      "score": 8.1984126984127
+    },
+    "M&T": {
+      "PM": 8.536585365853659,
+      "PR": 42.68292682926829,
+      "SPR": 40.24390243902439,
+      "SR": 64.63414634146342,
+      "examples": 82,
+      "legacy_score": 42.926829268292686,
+      "score": 47.80487804878049
+    },
+    "PhysLaw": {
+      "PM": 19.51219512195122,
+      "PR": 19.51219512195122,
+      "SPR": 19.51219512195122,
+      "SR": 97.5609756097561,
+      "examples": 41,
+      "legacy_score": 46.829268292682926,
+      "score": 50.73170731707317
+    },
+    "Semantic": {
+      "PM": 14.814814814814815,
+      "PR": 28.395061728395063,
+      "SPR": 35.80246913580247,
+      "SR": 62.34567901234568,
+      "examples": 81,
+      "legacy_score": 36.2962962962963,
+      "score": 41.358024691358025
+    },
+    "Spatial": {
+      "PM": 9.615384615384615,
+      "PR": 24.03846153846154,
+      "SPR": 23.076923076923077,
+      "SR": 55.76923076923077,
+      "examples": 52,
+      "legacy_score": 31.923076923076923,
+      "score": 35.19230769230769
+    }
+  },
+  "epoch": 3,
+  "examples_evaluated": 380,
+  "free_decoding_min_steps": 0,
+  "generation_failures": 0,
+  "ground_complex": true,
+  "holdout_tasks": [
+    "cook_dishes",
+    "take_chemistry_experiment",
+    "friction_qa",
+    "thermal_expansion_qa",
+    "select_book",
+    "select_book_semantic",
+    "select_book_spatial"
+  ],
+  "input_probe": "original",
+  "knowledge": "generic",
+  "legacy_macro_score": 34.80249974355666,
+  "macro_score": 38.52519735107811,
+  "observation_mode": "visual",
+  "overall": {
+    "PM": 11.578947368421053,
+    "PR": 32.526315789473685,
+    "SPR": 29.394736842105264,
+    "SR": 58.87061403508772,
+    "legacy_score": 36.558771929824566,
+    "score": 40.6561403508772
+  },
+  "reference_labels": "as-stored",
+  "semantic_search_limit_failures": 0,
+  "split": "test",
+  "stage": "stage1",
+  "task_classifier": null,
+  "updated_data": false
+}
