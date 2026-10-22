@@ -1,5 +1,9 @@
 # Unified Embodied Agent Checkpoint Guide: `joint_stage2_best.pt`
 
+## Current logical-knowledge provenance
+
+New checkpoints record a separate formula/ontology/binding manifest. Definition drift is rejected during exact loading; intentional activation changes are reported separately. Historical checkpoints without this evidence retain their existing compatibility checks and are reported as `unrecorded_legacy`. See [Joint logical constraints](docs/JointLogicalConstraints.md#knowledge-provenance-and-checkpoint-behavior). This does not retrofit provenance or recompute metrics for the historical checkpoint described below.
+
 This document details the architectural composition, internal representation, and execution instructions for [`joint_stage2_best.pt`](file:///workspace/test_regr/JointEmbodiedAgentInterface/checkpoints/joint_gpu6_r7_20261007_230348_resumed/joint_stage2_best.pt), the champion model produced by the 5-epoch Stage 2 Reinforcement Learning run (`joint_gpu6_r7_20261007_230348_resumed`) of the Joint Embodied Agent Interface.
 
 ---

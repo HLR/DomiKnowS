@@ -1,0 +1,250 @@
+"""Compile joint domain policies and manage scoped graph activation.
+
+Logical knowledge remains owned by the domain declaration modules. This
+module binds facts, builds activation profiles, and preserves runtime budgets.
+"""
+
+from __future__ import annotations
+import threading
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any, Iterable, Mapping
+from domiknows.graph import Graph
+from test_regr.EmbodiedAgentInterface.graph import create_generation_graph
+from test_regr.VLABenchAgentInterface.graph import create_planner_generation_graph
+from test_regr.VLABenchAgentInterface.generation_runtime import compile_planner_dfa
+from test_regr.VLABenchAgentInterface.plan_codec import PlanVocabulary
+from ..world_graph import JointWorldGraphBundle
+from .world_schema import ACTIVATION_PROFILE_VERSION, DOMAINS, _checksum
+
+
+def _subgraph_concepts(graph: Graph) -> tuple[Any, ...]:
+    concepts = tuple(
+        graph.collectAllConcepts(
+            include_subgraphs=True,
+            include_supergraph=False,
+            include_siblings=False,
+        ).values()
+    )
+    return tuple(
+        concept
+        for concept in concepts
+        if getattr(concept.getOntologyGraph(), "constraint", None) is not concept
+    )
+
+
+@dataclass
+class JointDomainRuntime:
+    world: JointWorldGraphBundle
+    eai_generation_graph: Graph
+    eai_generation: Any
+    eai_dfa: Any
+    vlabench_generation_graph: Graph
+    vlabench_generation: Any
+    vlabench_dfa: Any
+    eai_vocabulary: Any
+    vlabench_vocabulary: PlanVocabulary
+    max_eai_steps: int
+    max_vlabench_operations: int
+    activation_profiles: Mapping[str, tuple[Any, ...]]
+    runtime_checksum: str
+    activation_profile_version: int = ACTIVATION_PROFILE_VERSION
+    _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _domain_stack: list[str | None] = field(default_factory=list, repr=False)
+    _selected_domain: str | None = field(default=None, repr=False)
+
+    @property
+    def knowledge_manifest(self):
+        from .knowledge_manifest import knowledge_manifest
+
+        return knowledge_manifest(self)
+
+    @property
+    def root(self) -> Graph:
+        return self.world.root
+
+    @property
+    def active_domain(self) -> str | None:
+        return self._selected_domain
+
+    def activate_domain(
+        self,
+        domain: str | None,
+        extra_concepts: Iterable[Any] = (),
+        *,
+        parameter_policy: Any = None,
+    ) -> tuple[Any, ...]:
+        """Activate one complete domain profile, or reset all concepts."""
+        if domain is None:
+            active = self.root.set_active_concepts(None, parameter_policy=parameter_policy)
+            self._selected_domain = None
+            return active
+        if domain not in DOMAINS:
+            raise ValueError(f"unknown joint domain {domain!r}; expected one of {DOMAINS}")
+        active = self.root.set_active_concepts(
+            [
+                *self.activation_profiles[domain],
+                *tuple(extra_concepts),
+            ],
+            parameter_policy=parameter_policy,
+        )
+        self._selected_domain = domain
+        return active
+
+    def dfa_for(self, domain: str, context: Mapping[str, Any] | None = None):
+        """Return the immutable domain DFA, binding EAI and VLABench contextual facts."""
+        if domain == "vlabench":
+            if not context:
+                return self.vlabench_dfa
+            from test_regr.VLABenchAgentInterface.generation_runtime import (
+                bind_vlabench_contextual_dfa,
+            )
+
+            # Context mappings can be mutated or their ids reused. Scene binding
+            # is cheap; never cache a semantic policy by Python object identity.
+            return bind_vlabench_contextual_dfa(
+                self.vlabench_dfa,
+                self.vlabench_vocabulary,
+                context,
+            )
+        if domain != "eai":
+            raise ValueError(f"unknown joint domain {domain!r}; expected one of {DOMAINS}")
+        from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import bind_eai_policy
+
+        return bind_eai_policy(self.eai_dfa, self.eai_vocabulary, context or {})
+
+    @contextmanager
+    def domain_scope(
+        self,
+        domain: str,
+        extra_concepts: Iterable[Any] = (),
+        *,
+        parameter_policy: Any = None,
+    ):
+        """Serialize mutable activation and restore the preceding selection via Graph.active_scope()."""
+        if domain not in DOMAINS:
+            raise ValueError(f"unknown joint domain {domain!r}; expected one of {DOMAINS}")
+        with self._lock:
+            concepts = [
+                *self.activation_profiles[domain],
+                *tuple(extra_concepts),
+            ]
+            with self.root.active_scope(concepts, parameter_policy=parameter_policy):
+                previous = self._selected_domain
+                self._selected_domain = domain
+                self._domain_stack.append(domain)
+                try:
+                    yield self
+                finally:
+                    self._domain_stack.pop()
+                    self._selected_domain = previous
+
+
+def build_joint_runtime(
+    world_bundle: JointWorldGraphBundle,
+    eai_vocabulary,
+    vlabench_vocabulary: PlanVocabulary | None = None,
+    *,
+    max_eai_steps: int = 60,
+    eai_object_tokens=(),
+    eai_action_tokens=(),
+    eai_action_sequence_tokens=(),
+    eai_openable_object_tokens=(),
+    eai_action_object_constraint_tokens=None,
+    max_vlabench_entities: int = 64,
+    max_vlabench_operations: int = 12,
+) -> JointDomainRuntime:
+    """Attach both generation schemas and compile both immutable DFAs."""
+    from domiknows.generation import constraints_to_dfa_from_graph
+
+    eai_graph, eai_generation = create_generation_graph(
+        max_steps=max_eai_steps,
+        vocab=tuple(getattr(eai_vocabulary, "tokens", eai_vocabulary)),
+        object_tokens=eai_object_tokens,
+        action_tokens=eai_action_tokens,
+        action_sequence_tokens=eai_action_sequence_tokens,
+        openable_object_tokens=eai_openable_object_tokens,
+        action_object_constraint_tokens=eai_action_object_constraint_tokens or {},
+    )
+    if vlabench_vocabulary is None:
+        vlabench_vocabulary = PlanVocabulary.from_world(
+            world_bundle.vlabench,
+            max_entities=max_vlabench_entities,
+        )
+    else:
+        expected = PlanVocabulary.from_world(
+            world_bundle.vlabench,
+            max_entities=vlabench_vocabulary.max_entities,
+        )
+        if vlabench_vocabulary.checksum != expected.checksum:
+            raise ValueError("VLABench vocabulary differs from the joint world definition")
+    vlabench_graph, vlabench_generation = create_planner_generation_graph(
+        world_bundle.vlabench,
+        vlabench_vocabulary,
+        max_operations=max_vlabench_operations,
+        graph_name="joint_vlabench_generation",
+    )
+    # GenerationEncoder owns graph construction and may reset its context;
+    # attach the completed schemas explicitly to the already-built joint root.
+    world_bundle.root.attach(eai_graph)
+    world_bundle.root.attach(vlabench_graph)
+    eai_dfa = constraints_to_dfa_from_graph(
+        eai_graph,
+        eai_generation,
+        on_unsupported="raise",
+        minimize=False,
+    )
+    from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import (
+        CompiledEAIPlannerDFA,
+        compile_world_constraints,
+    )
+
+    eai_dfa = CompiledEAIPlannerDFA.from_dfa(
+        eai_dfa,
+        compile_world_constraints(world_bundle.eai),
+        world_constraint_bundle=world_bundle.eai,
+        generation_graph=eai_graph,
+    )
+    vlabench_dfa = compile_planner_dfa(
+        vlabench_graph,
+        vlabench_generation,
+        world_bundle.vlabench,
+        vlabench_vocabulary,
+        max_operations=max_vlabench_operations,
+    )
+    profiles = {
+        "eai": (*_subgraph_concepts(world_bundle.eai.graph), *_subgraph_concepts(eai_graph)),
+        "vlabench": (
+            *_subgraph_concepts(world_bundle.vlabench.graph),
+            *_subgraph_concepts(vlabench_graph),
+        ),
+    }
+    runtime_checksum = _checksum(
+        {
+            "world": world_bundle.combined_checksum,
+            "activation_profile_version": ACTIVATION_PROFILE_VERSION,
+            "eai_vocabulary": list(
+                getattr(eai_vocabulary, "labels", getattr(eai_vocabulary, "tokens", ()))
+            ),
+            "vlabench_vocabulary": vlabench_vocabulary.checksum,
+            "max_eai_steps": int(max_eai_steps),
+            "max_vlabench_operations": int(max_vlabench_operations),
+        }
+    )
+    runtime = JointDomainRuntime(
+        world=world_bundle,
+        eai_generation_graph=eai_graph,
+        eai_generation=eai_generation,
+        eai_dfa=eai_dfa,
+        vlabench_generation_graph=vlabench_graph,
+        vlabench_generation=vlabench_generation,
+        vlabench_dfa=vlabench_dfa,
+        eai_vocabulary=eai_vocabulary,
+        vlabench_vocabulary=vlabench_vocabulary,
+        max_eai_steps=int(max_eai_steps),
+        max_vlabench_operations=int(max_vlabench_operations),
+        activation_profiles=profiles,
+        runtime_checksum=runtime_checksum,
+    )
+    runtime.activate_domain(None)
+    return runtime

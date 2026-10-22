@@ -115,19 +115,8 @@ class _TrainingProgress:
 
 
 def _context(item: Mapping[str, Any], domain: str) -> Mapping[str, Any]:
-    value = item.get("planner_context")
-    if isinstance(value, Mapping):
-        return value
-    if domain == "eai":
-        return {
-            "instruction": item.get("causal_prompt_text") or item.get("instruction_text") or item.get("instruction", ""),
-            "goal": item.get("goal") or item.get("tl_goal", ""),
-        }
-    return {
-        "instruction": item.get("instruction", ""),
-        "images": item.get("images", item.get("segmented_image_paths", ())),
-        "entity_table": item.get("entities", ()),
-    }
+    from .utils.planner_context import planner_context
+    return planner_context(domain, item)
 
 
 def _labels(item: Mapping[str, Any], domain: str) -> torch.Tensor:

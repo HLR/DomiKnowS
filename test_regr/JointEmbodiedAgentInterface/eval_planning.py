@@ -239,6 +239,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         controller=controller,
         map_location=device,
         allow_planning_schema_migration=getattr(args, "allow_planning_schema_migration", False),
+        allow_knowledge_ablation=bool(holdout) and not bool(getattr(args, "declare_heldout_knowledge", False)),
     )
 
     planner.eval()
@@ -298,6 +299,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "split": args.split,
         "observation_mode": getattr(args, "observation_mode", "visual"),
         "knowledge": knowledge,
+        "knowledge_manifest": getattr(runtime, "knowledge_manifest", None),
+        "knowledge_provenance": payload.get("knowledge_provenance", {"status": "unrecorded_legacy"}),
         "decoding": "free" if getattr(args, "no_dfa", False) else "dfa",
         "free_decoding_min_steps": int(getattr(args, "no_dfa_min_steps", 0)),
         "holdout_tasks": list(holdout),
@@ -341,10 +344,10 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     print(f" 6-Dimension Macro:       {macro if macro is not None else 'N/A'}")
     print("-" * 70)
     print(" Component Breakdown:")
-    print(f"   • Skill Recall (SR):                   {overall.get('SR', 0.0):.2f}%")
-    print(f"   • Parameter Recall (PR):               {overall.get('PR', 0.0):.2f}%")
-    print(f"   • Skill-Parameter Recall (SPR):        {overall.get('SPR', 0.0):.2f}%")
-    print(f"   • Dependency Graph Matching (PM):      {overall.get('PM', 0.0):.2f}%")
+    print(f"   Ã¢â‚¬Â¢ Skill Recall (SR):                   {overall.get('SR', 0.0):.2f}%")
+    print(f"   Ã¢â‚¬Â¢ Parameter Recall (PR):               {overall.get('PR', 0.0):.2f}%")
+    print(f"   Ã¢â‚¬Â¢ Skill-Parameter Recall (SPR):        {overall.get('SPR', 0.0):.2f}%")
+    print(f"   Ã¢â‚¬Â¢ Dependency Graph Matching (PM):      {overall.get('PM', 0.0):.2f}%")
     print("-" * 70)
     print(" Dimension Breakdown:")
     for dim_name, dim_data in sorted(dimensions.items()):

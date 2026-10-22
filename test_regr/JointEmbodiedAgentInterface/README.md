@@ -494,13 +494,23 @@ not simulator execution success.
 
 ## Source code map
 
-All non-test source files in this package are listed below.
+All Python source files in the main folder are listed below. Task knowledge
+and its activation/provenance are documented in
+[Joint logical constraints](docs/JointLogicalConstraints.md).
 
-| File | Functionality |
-| --- | --- |
-| `__init__.py` | Exposes the joint runtime, graph builder, shared planner, and both program classes. |
-| `world_graph.py` | Builds the shared semantic spine, attaches sibling domain and generation graphs, compiles both DFAs, creates identity-based activation profiles, provides locked domain scopes, and computes joint checksums. |
-| `models.py` | Loads one Qwen3-VL-8B/LoRA backbone, encodes each observation once, owns separate EAI/VLABench graph-token embeddings, recurrent decoders, label heads, and prompts, and provides teacher-forced and DFA-masked autoregressive domain APIs. |
-| `program.py` | Implements equal Stage 1 round-robin updates, the controller-only BC warm-up, and equal Stage 2 EAI-REINFORCE/VLABench-REINFORCE-plus-PPO updates with domain-local activation and rewards. |
-| `checkpoint.py` | Atomically saves and restores the complete joint state, RNGs, scheduling cursor, and compatibility metadata. |
-| `main.py` | Defines the canonical `train-agent --two-stage` CLI, data/model construction, balanced checkpoint keys, exploration gate, and per-epoch resume files. |
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;"><colgroup><col style="width: 27%;"><col style="width: 73%;"></colgroup><thead><tr><th style="text-align: left; padding: 0.5em;">File</th><th style="text-align: left; padding: 0.5em;">Functionality</th></tr></thead><tbody>
+<tr><td style="vertical-align: top; padding: 0.5em;"><a href="__init__.py"><code>__init__.py</code></a></td><td style="padding: 0.5em;">Exposes the joint graph builder, runtime, planner and training programs.</td></tr>
+<tr><td style="vertical-align: top; padding: 0.5em;"><a href="world_graph.py"><code>world_graph.py</code></a></td><td style="padding: 0.5em;">Declares the three shared semantic parents and composes the authoritative EAI/VLABench domain graphs; preserves former runtime imports.</td></tr>
+<tr><td style="vertical-align: top; padding: 0.5em;"><a href="models.py"><code>models.py</code></a></td><td style="padding: 0.5em;">Implements the shared vision-language planner and domain adapters, using the common observation contract and bound constraint policies.</td></tr>
+<tr><td style="vertical-align: top; padding: 0.5em;"><a href="program.py"><code>program.py</code></a></td><td style="padding: 0.5em;">Runs supervised and reinforcement updates, allowed-mass and primal-dual losses, and domain-local rewards with scoped activation.</td></tr>
+<tr><td style="vertical-align: top; padding: 0.5em;"><a href="checkpoint.py"><code>checkpoint.py</code></a></td><td style="padding: 0.5em;">Saves/restores joint state and compatibility metadata; records and checks separate logical-knowledge provenance.</td></tr>
+<tr><td style="vertical-align: top; padding: 0.5em;"><a href="main.py"><code>main.py</code></a></td><td style="padding: 0.5em;">Builds data/models/runtime and controls training stages, evaluation, retention gates and checkpoints.</td></tr>
+<tr><td style="vertical-align: top; padding: 0.5em;"><a href="eval_planning.py"><code>eval_planning.py</code></a></td><td style="padding: 0.5em;">Evaluates planning and knowledge/observation ablations; reports the current manifest and checkpoint knowledge provenance.</td></tr>
+</tbody></table>
+
+Knowledge/runtime support lives in `utils/`:
+
+- [generation_runtime.py](utils/generation_runtime.py): compilation, contextual binding and activation scopes.
+- [planner_context.py](utils/planner_context.py): the shared observation-field contract and precedence rules.
+- [knowledge_manifest.py](utils/knowledge_manifest.py): inspectable formula/ontology/source fingerprints and compatibility validation.
+- [world_schema.py](utils/world_schema.py): the existing schema/vocabulary checksums.

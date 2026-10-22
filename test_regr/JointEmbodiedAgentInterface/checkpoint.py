@@ -322,6 +322,7 @@ def _compatibility(runtime: JointDomainRuntime, planner, controller) -> Mapping[
         "vlabench_domain_checksum": runtime.world.vlabench_domain_checksum,
         "runtime_checksum": runtime.runtime_checksum,
         "activation_profile_version": runtime.activation_profile_version,
+        "knowledge_manifest": runtime.knowledge_manifest,
         "eai_vocabulary": _vocabulary_payload(runtime.eai_vocabulary),
         "vlabench_vocabulary": _vocabulary_payload(runtime.vlabench_vocabulary),
         "eai_dfa": _dfa_configuration(runtime.eai_dfa, max_steps=runtime.max_eai_steps),
@@ -355,9 +356,11 @@ def save_joint_checkpoint(
     target = Path(path).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(target.suffix + ".tmp")
+    compatibility = _compatibility(runtime, planner, controller)
     payload = {
         "joint_checkpoint_version": JOINT_CHECKPOINT_VERSION,
-        "compatibility": _compatibility(runtime, planner, controller),
+        "compatibility": compatibility,
+        "knowledge_manifest_version": compatibility["knowledge_manifest"]["version"],
         "stage": str(stage),
         "epoch": int(epoch),
         "round_robin_cursor": int(round_robin_cursor),
@@ -390,6 +393,7 @@ def load_joint_checkpoint(
     controller_optimizer: torch.optim.Optimizer | None = None,
     map_location: str | torch.device = "cpu",
     allow_planning_schema_migration: bool = False,
+    allow_knowledge_ablation: bool = False,
 ) -> Mapping[str, Any]:
     """Restore an exact joint run, rejecting any schema/model drift."""
     payload = torch.load(
@@ -436,6 +440,8 @@ def load_joint_checkpoint(
     ):
         if migrating_planning and key in {"combined_domain_checksum", "vlabench_domain_checksum", "runtime_checksum", "vlabench_vocabulary", "vlabench_dfa"}:
             continue
+        if allow_knowledge_ablation and key == "vlabench_dfa":
+            continue  # explicit held-out VLABench declaration ablation
         saved_value = actual.get(key)
         current_value = expected.get(key)
         if key in {"eai_dfa", "vlabench_dfa"}:
@@ -449,6 +455,12 @@ def load_joint_checkpoint(
                 f"joint checkpoint {key} differs from the current runtime: "
                 f"saved={saved_value!r}, current={current_value!r}"
             )
+    from .utils.knowledge_manifest import check_knowledge_compatibility
+    if payload.get("knowledge_manifest_version") is not None and not actual.get("knowledge_manifest"):
+        raise ValueError("joint checkpoint is missing its declared knowledge manifest")
+    payload["knowledge_provenance"] = check_knowledge_compatibility(
+        actual.get("knowledge_manifest"), expected["knowledge_manifest"],
+        planning_migration=migrating_planning, knowledge_ablation=allow_knowledge_ablation)
     compatible_checksums = {expected.get("parameter_ownership_checksum")}
     if hasattr(planner, "compatible_parameter_ownership_checksums"):
         compatible_checksums.update(planner.compatible_parameter_ownership_checksums())

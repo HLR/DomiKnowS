@@ -48,6 +48,8 @@ DEFAULT_VLABENCH_CONTROL = PACKAGE_DIR.parent / "VLABenchAgentInterface" / "data
 DEFAULT_OUTPUT = PACKAGE_DIR / "checkpoints"
 
 
+from .utils.planner_context import planner_context
+
 def _ordered_union(examples, key):
     vocabulary = examples[0]["generation_vocab"] if examples else ()
     return tuple(
@@ -214,10 +216,7 @@ def _evaluate_eai(planner, runtime, examples, *, limit=32):
         with runtime.domain_scope("eai"):
             for item in selected:
                 labels, _ = view.sample_labels(
-                    {
-                        "instruction": item.get("causal_prompt_text", item.get("text", "")),
-                        "goal": item.get("tl_goal", ""),
-                    },
+                    planner_context("eai", item),
                     runtime.dfa_for("eai", item),
                     max_steps=runtime.max_eai_steps,
                     deterministic=True,
@@ -295,6 +294,10 @@ def _prepare(args, device):
         name: prepare_planner_program_examples(values, _runtime_adapter(runtime, "vlabench"))
         for name, values in vlabench_splits.items()
     }
+    for name, items in prepared.items():
+        for item, example in zip(items, vlabench_splits[name]):
+            item["planner_context"] = planner_context(
+                "vlabench", example, context=item.get("planner_context"))
     # Match the standalone EAI workflow exactly so standalone and joint
     # checkpoints are selected and compared on the same row identities.
     eai_train, eai_valid = split_train_dev(eai_examples, dev_fraction=0.2)

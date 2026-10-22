@@ -24,6 +24,8 @@ from test_regr.VLABenchAgentInterface.models import (
     vision_language_hidden_size,
 )
 
+from .utils.planner_context import planner_context
+
 
 DOMAINS = ("eai", "vlabench")
 DEFAULT_MODEL_ID = COMMON_VLM_MODEL_ID
@@ -860,21 +862,12 @@ class JointPlannerDomainView(nn.Module):
 
     def supervised_loss(self, **kwargs):
         if self.domain == "eai":
-            context = kwargs.get("context") or {
-                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
-                "instruction": kwargs.get("instruction", ""),
-                "goal": kwargs.get("goal", ""),
-            }
+            context = planner_context(self.domain, kwargs, context=kwargs.get("context"))
             labels = kwargs.get("target_labels")
             if labels is None:
                 raise ValueError("EAI supervised_loss requires target_labels")
         else:
-            context = kwargs.get("context") or {
-                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
-                "instruction": kwargs.get("instruction", ""),
-                "images": kwargs.get("images", ()),
-                "entity_table": kwargs.get("entity_table", ()),
-            }
+            context = planner_context(self.domain, kwargs, context=kwargs.get("context"))
             labels = kwargs.get("target_labels")
             if labels is None:
                 tokens = plan_to_tokens(
@@ -887,14 +880,11 @@ class JointPlannerDomainView(nn.Module):
         return self.joint.supervised_loss(self.domain, context=context, target_labels=labels)
 
     def sample_with_logprob(self, **kwargs):
-        context = kwargs.get("context") or {
-                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
-            "instruction": kwargs.get("instruction", ""),
-            "goal": kwargs.get("goal", ""),
-            "images": kwargs.get("images", ()),
-            "entity_table": kwargs.get("entity_table", ()),
-        }
+        context = planner_context(self.domain, kwargs, context=kwargs.get("context"))
         dfa = kwargs.get("dfa")
+        if self.domain == "eai" and dfa is not None:
+            from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import bind_eai_policy
+            dfa = bind_eai_policy(dfa, self.vocabulary, context)
         if self.domain == "vlabench" and dfa is not None:
             from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
@@ -924,14 +914,11 @@ class JointPlannerDomainView(nn.Module):
 
     @torch.no_grad()
     def generate_plan(self, **kwargs):
-        context = kwargs.get("context") or {
-                **{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")},
-            "instruction": kwargs.get("instruction", ""),
-            "goal": kwargs.get("goal", ""),
-            "images": kwargs.get("images", ()),
-            "entity_table": kwargs.get("entity_table", ()),
-        }
+        context = planner_context(self.domain, kwargs, context=kwargs.get("context"))
         dfa = kwargs.get("dfa")
+        if self.domain == "eai" and dfa is not None:
+            from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import bind_eai_policy
+            dfa = bind_eai_policy(dfa, self.vocabulary, context)
         if self.domain == "vlabench" and dfa is not None:
             from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)

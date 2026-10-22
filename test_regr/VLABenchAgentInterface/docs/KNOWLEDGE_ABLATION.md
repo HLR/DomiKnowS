@@ -73,6 +73,10 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 
 Logical constraints express the rules; concept values express the task identity and observed facts to which those rules apply. Thus `learned` enables additional constraints, while `task` and `metadata` can change accepted plans through different facts without adding constraints. The current declaration counts and concrete examples are documented in [VLABenchLogicaConstraints.md](VLABenchLogicaConstraints.md#ablation-levels).
 
+EAI has its own activation settings and inventory: see [EAI logical constraints](../../EmbodiedAgentInterface/docs/EAILogicalConstraints.md). Its declarative action effects and goal evaluation do not change the VLABench levels or counts below.
+
+Joint checkpoints now record logical-knowledge provenance separately from vocabulary/schema compatibility. Activation and task-identity-source changes remain visible without changing these ablation counts; explicit held-out knowledge evaluation is reported as an ablation. Historical checkpoints without a manifest are marked unrecorded. See [Joint logical constraints](../../JointEmbodiedAgentInterface/docs/JointLogicalConstraints.md#knowledge-provenance-and-checkpoint-behavior).
+
 Actual DomiKnowS formula examples for every rule family, including each task/interface variant and grounded family, are provided in the [constraint inventory](VLABenchLogicaConstraints.md#reading-the-formula-examples).
 
 The `no DFA` rows decode the same checkpoint with the grammar removed. Free decoding makes the champion emit the end label
