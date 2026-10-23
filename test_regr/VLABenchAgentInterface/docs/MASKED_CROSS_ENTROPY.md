@@ -37,17 +37,17 @@ of scored steps whose gold label the DFA disallows).
    [`supervised_loss`](../../JointEmbodiedAgentInterface/models.py#L504), the reference for what the masked loss
    replaces). With the primal-dual constraint loss on, the logits are captured from the same forward in
    [`JointPlannerDomainView.forward`](../../JointEmbodiedAgentInterface/models.py#L815).
-3. **Loss assembly** is [`JointSolverPOIProgram._domain_loss`](../../JointEmbodiedAgentInterface/program.py#L248):
-   - keep the positions up to and including the first end label ([L254](../../JointEmbodiedAgentInterface/program.py#L254));
-   - get the logits ([L255-L267](../../JointEmbodiedAgentInterface/program.py#L255));
-   - bind the DFA to the item with `runtime.dfa_for` ([L268](../../JointEmbodiedAgentInterface/program.py#L268);
+3. **Loss assembly** is [`JointSolverPOIProgram._domain_loss`](../../JointEmbodiedAgentInterface/program.py#L249):
+   - keep the positions up to and including the first end label ([L255](../../JointEmbodiedAgentInterface/program.py#L255));
+   - get the logits ([L256-L268](../../JointEmbodiedAgentInterface/program.py#L256));
+   - bind the DFA to the item with `runtime.dfa_for` ([L269](../../JointEmbodiedAgentInterface/program.py#L269);
      implemented in [`utils/generation_runtime.py:94`](../../JointEmbodiedAgentInterface/utils/generation_runtime.py#L94),
      which binds VLABench through [`bind_vlabench_contextual_dfa`](../generation_runtime.py#L123) and EAI through
      [`bind_eai_policy`](../../EmbodiedAgentInterface/utils/constraint_compiler.py#L371));
-   - compute the allowed sets along the gold path ([L275](../../JointEmbodiedAgentInterface/program.py#L275));
-   - apply the masked loss ([L278-L281](../../JointEmbodiedAgentInterface/program.py#L278));
+   - compute the allowed sets along the gold path ([L277](../../JointEmbodiedAgentInterface/program.py#L277));
+   - apply the masked loss ([L280-L283](../../JointEmbodiedAgentInterface/program.py#L280));
    - combine with the optional allowed-mass and primal-dual terms and report `masked_ce_misses`
-     ([L284-L292](../../JointEmbodiedAgentInterface/program.py#L284)).
+     ([L286-L294](../../JointEmbodiedAgentInterface/program.py#L286)).
 4. **The three loss helpers** are in the learners package:
    [`allowed_label_sets`](../../../domiknows/generation/learners/common/losses.py#L140) walks the DFA along the gold
    path (the state advances at every step; `lookahead` chooses between "valid now" and "valid and still completable"),
@@ -58,29 +58,33 @@ of scored steps whose gold label the DFA disallows).
    [L195-L197](../../../domiknows/generation/learners/common/losses.py#L195)). They are exported from
    `domiknows.generation.learners`.
 5. **Where it is called per round:** the Stage 1 round calls `_domain_loss` for each domain
-   ([L359](../../JointEmbodiedAgentInterface/program.py#L359) in the single-domain step, and
-   [L475](../../JointEmbodiedAgentInterface/program.py#L475) / [L480](../../JointEmbodiedAgentInterface/program.py#L480)
+   ([L361](../../JointEmbodiedAgentInterface/program.py#L361) in the single-domain step, and
+   [L477](../../JointEmbodiedAgentInterface/program.py#L477) / [L482](../../JointEmbodiedAgentInterface/program.py#L482)
    for EAI and VLABench in `train_round`), then the two domain gradients are combined with PCGrad as before.
 
 ## 3. Configuration
 
 Config class [`DFALossConfig`](../../JointEmbodiedAgentInterface/program.py#L46):
-`masked_ce` ([L57](../../JointEmbodiedAgentInterface/program.py#L57)) and `mass_weight`
-([L58](../../JointEmbodiedAgentInterface/program.py#L58)). Built from the command line in
+`masked_ce_domains` ([L58](../../JointEmbodiedAgentInterface/program.py#L58)) and `mass_weight`
+([L59](../../JointEmbodiedAgentInterface/program.py#L59)). Built from the command line in
 [`_dfa_loss_config`](../../JointEmbodiedAgentInterface/main.py#L307) and passed at
-[main.py:454](../../JointEmbodiedAgentInterface/main.py#L454). Flags of `train-agent`
-([main.py:1029-1043](../../JointEmbodiedAgentInterface/main.py#L1029)):
+[main.py:455](../../JointEmbodiedAgentInterface/main.py#L455). Flags of `train-agent`
+([main.py:1030-1045](../../JointEmbodiedAgentInterface/main.py#L1030)):
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--stage1-dfa-loss on/off` | on | off = plain cross entropy only |
-| `--stage1-masked-ce on/off` | on | the masked loss described here |
+| `--stage1-masked-ce-domains` | vlabench | domains trained on the masked loss described here; the others keep plain cross entropy; `none` disables it |
 | `--stage1-dfa-mass-weight` | 0.0 | weight of the (redundant) allowed-mass term |
 | `--stage1-dfa-domains` | eai,vlabench | domains trained on the DFA |
 | `--stage1-dfa-lookahead-domains` | vlabench | domains whose sets also require a reachable completion (a search that costs seconds per EAI item) |
 | `--stage1-pmd-domains` | vlabench | domains that also get the primal-dual constraint loss (about ten times slower; `none` disables it) |
 
 ## 4. What it does and does not give
+
+It is a per-domain choice. VLABench uses it by default: quality under the mask rose in the smoke test. EAI keeps plain
+cross entropy by default because the smoke test showed no measured gain there while its unmasked probability halved
+(see [DFA_LOSS_SMOKE.md](DFA_LOSS_SMOKE.md) and the EAI comparison below it).
 
 - It trains the distribution used when decoding through the DFA, which is how the planner is used.
 - It does **not** make the planner mask-independent: the probability on valid labels without the mask is lower than
@@ -90,23 +94,24 @@ Config class [`DFALossConfig`](../../JointEmbodiedAgentInterface/program.py#L46)
   before trusting either.
 
 Diagnostic for the other direction: `dfa_mass_report`
-([program.py:295](../../JointEmbodiedAgentInterface/program.py#L295), logged per epoch at
-[main.py:481](../../JointEmbodiedAgentInterface/main.py#L481)) measures the unmasked probability on valid labels.
+([program.py:297](../../JointEmbodiedAgentInterface/program.py#L297), logged per epoch at
+[main.py:482](../../JointEmbodiedAgentInterface/main.py#L482)) measures the unmasked probability on valid labels.
 
 ## 5. Tests
 
 - Helpers: [`test_masked_cross_entropy_restricts_the_softmax_and_falls_back_when_the_target_is_disallowed`](../../generation/test_automata_heads.py#L203)
   (hand-computed values, fallback and miss count) and
   [`test_allowed_label_sets_follow_the_path_and_respect_score_steps`](../../generation/test_automata_heads.py#L222).
-- Program: [`test_masked_cross_entropy_is_never_above_the_full_one_and_reports_disagreements`](../../JointEmbodiedAgentInterface/test/test_stage1_dfa_loss.py#L143).
+- Program: [`test_masked_cross_entropy_is_never_above_the_full_one_and_reports_disagreements`](../../JointEmbodiedAgentInterface/test/test_stage1_dfa_loss.py#L143) and
+  [`test_masked_cross_entropy_applies_only_to_the_listed_domains`](../../JointEmbodiedAgentInterface/test/test_stage1_dfa_loss.py#L157).
 
 ## 6. Example
 
 ```bash
 python -u -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage \
-  --stage1-masked-ce on --stage1-pmd-domains none ...   # masked cross entropy, no primal-dual term
+  --stage1-masked-ce-domains vlabench --stage1-pmd-domains none ...   # masked cross entropy on VLABench only, no primal-dual term
 python -u -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage \
   --stage1-dfa-loss off ...                             # plain cross entropy, for comparison
 ```
 
-Line numbers refer to commit 14f296d5 and its successors until those files change.
+Line numbers refer to the commit that introduced `--stage1-masked-ce-domains` and its successors until those files change.

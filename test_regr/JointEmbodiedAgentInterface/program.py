@@ -46,15 +46,16 @@ class DomainUpdate:
 class DFALossConfig:
     """Stage 1 DFA loss: cross entropy under the DFA mask, plus the primal-dual constraint loss of the generation graph.
 
-    ``masked_ce`` trains the distribution a DFA-masked decoder samples from: the softmax is restricted to the labels
-    the DFA allows at each teacher-forced step (a step whose target the DFA disallows keeps the full softmax and is
-    counted). The allowed-mass term (``mass_weight``) is off by default: along the teacher path it is bounded by
+    ``masked_ce_domains`` lists the domains trained on the distribution a DFA-masked decoder samples from: the softmax
+    is restricted to the labels the DFA allows at each teacher-forced step (a step whose target the DFA disallows keeps
+    the full softmax and is counted). Other domains keep plain cross entropy. The allowed-mass term (``mass_weight``)
+    is off by default: along the teacher path it is bounded by
     the full cross entropy, so it adds no signal. ``pmd_weight`` is the primal-dual program's ``beta``; the
     multipliers take an ascent step every ``dual_every`` rounds after ``dual_warmup`` rounds, as in
     ``PrimalDualProgram.train``.
     """
 
-    masked_ce: bool = True
+    masked_ce_domains: tuple[str, ...] = ("vlabench",)
     mass_weight: float = 0.0
     pmd_weight: float = 1.0
     dual_lr: float = 0.05
@@ -271,11 +272,12 @@ class JointSolverPOIProgram(SolverPOIProgram):
         kept_logits = logits[keep]
         cap = self.dfa_loss.mass_steps
         # The masked cross entropy needs every step's set; a mass term alone is scored on a random subset.
-        steps = None if self.dfa_loss.masked_ce or not cap or kept <= cap else sorted(random.sample(range(kept), cap))
+        masked = domain in self.dfa_loss.masked_ce_domains
+        steps = None if masked or not cap or kept <= cap else sorted(random.sample(range(kept), cap))
         sets = allowed_label_sets(dfa, targets, self.planner_head.vocabulary(domain).label_count, score_steps=steps,
                                   lookahead=domain in self.dfa_loss.lookahead_domains)
         misses = 0
-        if self.dfa_loss.masked_ce:
+        if masked:
             ce, misses = masked_cross_entropy(kept_logits, targets, sets)
         else:
             ce = torch.nn.functional.cross_entropy(kept_logits, targets)
