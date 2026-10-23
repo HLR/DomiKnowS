@@ -57,3 +57,25 @@ recall 0.47). As expected the unmasked probability on valid labels is lower, sin
 Caveats: one seed, 100 validation episodes, 100 rounds; the gap (+4.8 overall) is consistent across metrics but its
 significance is not established. The share of steps whose gold label the DFA disallows (`masked_ce_misses`) is
 reported by the loss but I did not aggregate it over the run.
+
+## EAI: plain versus masked cross entropy (commit 844014b9)
+
+Question: should the masked loss also apply to EAI? Four runs, 100 rounds each, VLABench masked in all of them,
+primal-dual off, EAI validated through the DFA on 60 items (the earlier 8-item check could not show a difference).
+Only the EAI setting differs within a seed (`--stage1-masked-ce-domains vlabench` against `vlabench,eai`).
+
+| | Seed 7 plain | Seed 7 masked | Seed 11 plain | Seed 11 masked |
+| --- | --- | --- | --- | --- |
+| EAI goal success | 0.333 | 0.367 | 0.317 | 0.367 |
+| EAI goal recall | 0.446 | 0.496 | 0.438 | 0.496 |
+| EAI positive reward rate | 0.550 | 0.617 | 0.550 | 0.617 |
+| EAI exact sequence | 0.150 | 0.150 | 0.133 | 0.133 |
+| EAI unmasked mass on valid labels | 0.84 | 0.44 | 0.85 | 0.45 |
+| VLABench overall score | 69.6 | 70.8 | 69.8 | 69.3 |
+
+Reading: masked is higher on three EAI metrics in both seeds (success +2 episodes out of 60, recall +0.05 to +0.06,
+reward rate +0.07) and equal on exact sequence; the VLABench score is unaffected within about one point. The
+direction is consistent but the effect is small and rests on two seeds and 60 items. The two masked seeds give
+identical success, recall and reward-rate values although their models differ (training losses and exact-sequence
+rates differ), which is probably coincidence at this sample size but is worth keeping in mind. The default stays
+`vlabench` only; widening it to EAI is reasonable but not yet well supported.
