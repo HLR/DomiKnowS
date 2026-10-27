@@ -453,10 +453,10 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     from transformers import LogitsProcessorList
 
     try:
-        from ..native_planning import NativeConstraintProcessor, NativePlanDFA
+        from ..native_planning import NativeConstraintProcessor, NativePlanDFA, NativePlanFailure
         from .native_lookahead import DFAActionLookahead
     except ImportError:  # pragma: no cover - flat-module execution
-        from native_planning import NativeConstraintProcessor, NativePlanDFA
+        from native_planning import NativeConstraintProcessor, NativePlanDFA, NativePlanFailure
         from native_lookahead import DFAActionLookahead
     from domiknows.generation.applications.action_lookahead import TokenOperators
 
@@ -555,10 +555,13 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
             constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=episode_hmm if steered else None,
                                                    weight=weight if steered else 0, action_lookahead=episode_lookahead,
                                                    lookahead_score=lookahead_score)
-            output = planner.model.generate(
-                **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
-                logits_processor=LogitsProcessorList([constraint]),
-                eos_token_id=planner.tokenizer.eos_token_id)[0, length:].tolist()
+            try:
+                output = planner.model.generate(
+                    **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
+                    logits_processor=LogitsProcessorList([constraint]),
+                    eos_token_id=planner.tokenizer.eos_token_id)[0, length:].tolist()
+            except NativePlanFailure as failure:  # no legal completion: an unfenced reply, i.e. a format error
+                output = list(failure.tokens)
             plan = planner.tokenizer.decode(output, skip_special_tokens=True).strip()
             reply = f"```json\n{plan}\n```" if dfa.accepts(output) else plan
             notes = []

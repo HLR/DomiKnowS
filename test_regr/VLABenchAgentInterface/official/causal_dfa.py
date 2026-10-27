@@ -80,6 +80,11 @@ class CausalPlanDFA(NativePlanDFA):
         if following[2] == "operation" and following[3] != 0 and following[3] != node:
             if not self.reachable(following[3], prefixes, count, causal):
                 return None
+        if following[2] == "operation" and following[4] == "ws" and node != 0:
+            # Whitespace after an id leaves only the closing bytes; refuse it when they would be refused.
+            extended = following + causal
+            if not any(self.byte_step(extended, key) is not None for key in self.operations[node]):
+                return None
         return following + causal
 
     @lru_cache(maxsize=None)

@@ -54,6 +54,21 @@ def test_reference_shapes_stay_accepted(plan):
     assert accepted_by_both(plan) == (True, True)
 
 
+def test_pretty_printed_plans_never_reach_a_dead_end():
+    dfa = character_dfa(entity_count=30)  # "2" may still become 20..29
+    state = dfa.start_state
+    for label in b'[{"name":"pick","params":{"target_entity_name":2}},{"name":"place","params":{"target_container_name":2':
+        state = dfa.step(state, label)
+    assert state is not None
+    assert dfa.step(state, ord("\n")) is None and dfa.step(state, ord("}")) is None
+    assert dfa.step(state, ord("1")) is not None
+    state = dfa.start_state
+    pretty = json.dumps([op("pick", 2), op("place", container=3)], indent=4).encode()
+    for label in pretty:
+        state = dfa.step(state, label)
+        assert state is not None and dfa.allowed_tokens(state)
+
+
 def test_forbidden_ids_are_pruned_before_the_operation_closes():
     dfa = character_dfa()
     state = dfa.start_state
