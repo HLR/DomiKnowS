@@ -430,7 +430,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                max_operations: int = 16, press_question: bool = False,
                                hmm: Any = None, weight: float = 0.0,
                                lookahead_score: str = "joint", scene_ids: bool = False, pattern_first: bool = False,
-                               adapt: dict[str, Any] | None = None, seed: int = 42) -> Callable[[list[list[Any]]], str]:
+                               adapt: dict[str, Any] | None = None, seed: int = 42,
+                               causal: bool = False) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
     The DFA enforces the JSON skill language, argument roles, the benchmark subtask
@@ -446,6 +447,7 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     ``weight * (log HMM mass - best log HMM mass)`` to the DFA-legal tokens that decide an action.
     The DFA stays the only authority on which tokens are legal, and the comment
     ``hmm-action: changed=x scored=y steps=z`` records how often the lookahead changed the greedy token.
+    ``causal`` adds the id-only causal rules of :mod:`.causal_dfa` to the grammar (not with ``hmm``).
     """
     import torch
     from transformers import LogitsProcessorList
@@ -458,6 +460,15 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         from native_lookahead import DFAActionLookahead
     from domiknows.generation.applications.action_lookahead import TokenOperators
 
+    if causal and hmm is not None and weight > 0:
+        raise ValueError("the causal DFA does not support the HMM lookahead")
+    if causal:
+        try:
+            from .causal_dfa import CausalPlanDFA as PlanDFA
+        except ImportError:  # pragma: no cover - flat-module execution
+            from causal_dfa import CausalPlanDFA as PlanDFA
+    else:
+        PlanDFA = NativePlanDFA
     operators = TokenOperators(hmm[1], hmm[2]) if hmm is not None and weight > 0 else None
     adapting = operators is not None and adapt is not None and adapt.get("samples", 0) > 0 and adapt.get("lam", 0) > 0
     if adapting:
@@ -467,9 +478,10 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
             from official_adapt import adapt_emission, episode_seed, sample_plans
 
     def language(press_only: bool, ids: int, patterns: tuple = ()):
-        key = ("official-grammar", ids, 1 if press_only else max_operations, press_only, patterns)
+        key = ("official-causal" if causal else "official-grammar", ids, 1 if press_only else max_operations,
+               press_only, patterns)
         if key not in planner.dfas:
-            planner.dfas[key] = NativePlanDFA(
+            planner.dfas[key] = PlanDFA(
                 planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=ids,
                 max_operations=1 if press_only else max_operations, grammar_profile="benchmark",
                 patterns=(("press",),) if press_only else (patterns or None))

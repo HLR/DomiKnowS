@@ -913,8 +913,10 @@ def command_evaluate_official(args) -> None:
         raise ValueError("--protocol official uses the dataset's images and instruction only")
     if args.few_shot_num < 0 or args.max_new_tokens <= 0:
         raise ValueError("--few-shot-num must be nonnegative and --max-new-tokens positive")
-    if (args.press_question or args.hmm or args.scene_ids or args.pattern_first) and args.constraints != "grammar":
+    if (args.press_question or args.hmm or args.scene_ids or args.pattern_first) and args.constraints == "none":
         raise ValueError("--press-question, --scene-ids and --hmm extend the grammar DFA; add --constraints grammar")
+    if args.hmm and args.constraints == "causal":
+        raise ValueError("--hmm is not supported with --constraints causal")
     from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
     from test_regr.VLABenchAgentInterface.official.official_protocol import (
         load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
@@ -926,7 +928,8 @@ def command_evaluate_official(args) -> None:
     planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
     model_label = Path(str(args.planner_model)).name or "model"
     cot_label = "_cot" if args.with_cot else ""
-    grammar = args.constraints == "grammar"
+    grammar = args.constraints in ("grammar", "causal")
+    causal = args.constraints == "causal"
     hmm, hmm_digest = None, None
     if args.hmm:
         from test_regr.VLABenchAgentInterface.official.official_hmm import load_hmm
@@ -934,12 +937,12 @@ def command_evaluate_official(args) -> None:
     decoding = "greedy"
     if grammar:
         from test_regr.VLABenchAgentInterface.official.official_hmm import decoding_label
-        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "")
-    suffix = ("_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "")
+        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "")
+    suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "")
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
     generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question, scene_ids=args.scene_ids,
                                            pattern_first=args.pattern_first,
-                                           hmm=hmm, weight=args.hmm_weight) if grammar
+                                           hmm=hmm, weight=args.hmm_weight, causal=causal) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
         examples, generate, output_dir=output_dir,
@@ -1410,9 +1413,10 @@ def build_parser() -> argparse.ArgumentParser:
                                "(all episodes, official prompt, images and instruction only, frozen VLM)")
     evaluate.add_argument("--few-shot-num", type=int, default=0, help="official protocol: in-context examples")
     evaluate.add_argument("--with-cot", action="store_true", help="official protocol: ask for step-by-step analysis")
-    evaluate.add_argument("--constraints", choices=["none", "grammar"], default="none",
+    evaluate.add_argument("--constraints", choices=["none", "grammar", "causal"], default="none",
                           help="official protocol: grammar adds the DomiKnowS grammar DFA (skills, roles, subtask patterns, "
-                               "integer ids); it uses no scene information")
+                               "integer ids); causal adds id-only causal knowledge (no self-placement, distinct "
+                               "destinations, destinations are not picked); neither uses scene information")
     evaluate.add_argument("--press-question", action="store_true",
                           help="official protocol with --constraints grammar: the model first says whether the instruction is a "
                                "choose-one-and-press question; if so the plan is restricted to one press")
