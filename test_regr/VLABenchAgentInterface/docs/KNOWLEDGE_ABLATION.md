@@ -35,31 +35,31 @@ What each knowledge tier of the world graph contributes when the same checkpoint
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">grammar</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">plan grammar DFA only: the token syntax of a plan, the nine skills, any of the 64 entity ids, the end token, the operation budget and the language of allowed skill patterns; no constraint group</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar only: the token syntax of a plan, the nine skills, any of the 64 entity ids, the end token, the operation budget and the language of allowed skill patterns; no constraint group</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">none</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable grammar formulas; an incomplete subtask cannot terminate.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ three id-only DomiKnowS ifL constraints over the ids the plan writes: a destination is never the object picked in its subtask (anti-self-placement), a subtask never repeats a destination, an object that has served as a destination is never picked later; no entity table, so any of the 64 ids remains allowed</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ Causal: three id-only DomiKnowS ifL constraints over the ids the plan writes: a destination is never the object picked in its subtask (anti-self-placement), a subtask never repeats a destination, an object that has served as a destination is never picked later; no entity table, so any of the 64 ids remains allowed</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">none</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable only the three causal formulas (<code style="white-space: normal; overflow-wrap: anywhere;">--knowledge causal</code>): the world graph&#x27;s <code style="white-space: normal; overflow-wrap: anywhere;">causal</code> group in the graph DFA, or the official causal graph under <code style="white-space: normal; overflow-wrap: anywhere;">--protocol official</code>. Placing the picked object on itself is rejected without any scene table; repeated picks stay legal.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ skill schema, subtask patterns, pointer, anti-self-placement and repeated-pick rules</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ Generic: skill schema, subtask patterns, pointer, anti-self-placement and repeated-pick rules</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">none</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable generic formulas; self-placement, for example, is rejected.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">scene</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ scene-grounded rules (buttons, fixtures, containers, open-before-place)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ Scene: scene-grounded rules (buttons, fixtures, containers, open-before-place)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">none</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable scene formulas and evaluate scene facts; a static fixture cannot be picked.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ the per-task LCs of <code style="white-space: normal; overflow-wrap: anywhere;">task</code> (skill-sequence, completion, obligations) and the grounded physics/complex families</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ Task sequences, Task obligations, Complex tasks, Physics and Grounded families (rows of the source map below), with the task identity predicted</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">predicted from the instruction by a classifier fitted on the training split</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable task/grounded formulas. A predicted <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code> task makes its task concept true and requires <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code>; the classifier supplies identity, not new formulas.</td>
     </tr>
@@ -71,7 +71,7 @@ What each knowledge tier of the world graph contributes when the same checkpoint
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">metadata</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ QA property observations (<code style="white-space: normal; overflow-wrap: anywhere;">--observation-mode metadata-assisted</code>)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the same rules as <code style="white-space: normal; overflow-wrap: anywhere;">task</code>, + QA property observations (<code style="white-space: normal; overflow-wrap: anywhere;">--observation-mode metadata-assisted</code>): the Physics rules then see each option&#x27;s material, shape or bound reflectance</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the episode&#x27;s task name</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Keep the same formulas; added property facts can change which candidates satisfy existing grounded selection requirements.</td>
     </tr>
@@ -103,62 +103,73 @@ before attributing scores to this refactor.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
-    <col style="width: 17%;">
-    <col style="width: 43%;">
-    <col style="width: 40%;">
+    <col style="width: 14%;">
+    <col style="width: 11%;">
+    <col style="width: 42%;">
+    <col style="width: 33%;">
   </colgroup>
   <thead>
     <tr>
-      <th scope="col" width="17%" style="width: 17%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Knowledge</th>
-      <th scope="col" width="43%" style="width: 43%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Logical declaration</th>
-      <th scope="col" width="40%" style="width: 40%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Observations supplied to it</th>
+      <th scope="col" width="14%" style="width: 14%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Knowledge</th>
+      <th scope="col" width="11%" style="width: 11%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">First active level</th>
+      <th scope="col" width="42%" style="width: 42%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Logical declaration</th>
+      <th scope="col" width="33%" style="width: 33%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Observations supplied to it</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">grammar</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">graph.py</code>: EOS existence/closure, token/operation limits, one-hot progress concepts, legal starts, skill patterns and ordered/optional arguments</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">token labels and request-specific continuation roots</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Causal</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">official/causal_graph.py</code> declares three readable <code>ifL</code> formulas, compiled by the generic predicate compiler and evaluated by <code>official/causal_dfa.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">CausalPlanDFA</code>: the grammar DFA plus anti-self-placement (as in generic), distinct destinations within a subtask and no pick of a former destination. It drops generic&#x27;s pointer validity (no entity table) and repeated-pick rule (all 100 <code style="white-space: normal; overflow-wrap: anywhere;">take_chemistry_experiment</code> references pick an object twice). A pick or press starts a subtask; ids are pruned as soon as no admitted action can follow, and whitespace before a refused closing brace is refused, so pretty-printed JSON has no dead end</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">only the ids the plan writes: the subject of the current subtask, its destinations so far and every earlier destination</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">world_graph.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_causal_rules</code>: the world graph&#x27;s <code style="white-space: normal; overflow-wrap: anywhere;">causal</code> group of three <code style="white-space: normal; overflow-wrap: anywhere;">ifL</code> rules for the Joint and internal graph decoders (anti-self-placement, distinct destinations within a subtask, no pick of a former destination). Under <code style="white-space: normal; overflow-wrap: anywhere;">--protocol official</code> the same three rules are <code style="white-space: normal; overflow-wrap: anywhere;">official/causal_graph.py</code>, compiled into <code style="white-space: normal; overflow-wrap: anywhere;">CausalPlanDFA</code>.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the subject of the current subtask, its destinations so far and every earlier destination (<code style="white-space: normal; overflow-wrap: anywhere;">subject_equals_destination</code>, <code style="white-space: normal; overflow-wrap: anywhere;">destination_used_in_subtask</code>, <code style="white-space: normal; overflow-wrap: anywhere;">target_was_destination</code>; plan ids under the official protocol)</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">world_graph.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_generic_rules</code>: exactly one skill, each skill&#x27;s required/forbidden roles, usable argument values, declared subtask membership, distinct subject/destination, controlled object reuse</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">skill labels, role presence, pointer resolution, subject equality and pick history</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Scene</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">scene</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">world_graph.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_scene_rules</code>: pointers resolve, button targets require press and vice versa, picks exclude fixtures, destinations match supplied requirements, enclosed destinations require opening when access is known</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">scene classifications, destination equality, opened entities and explicit open/closed observations</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task sequences</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/task_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_task_sequence</code>: task/interface and operation position imply the declared skill; the final position completes the sequence</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task identity, interface, position, skill-choice/final phase; explicit requests override defaults</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task obligations</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/task_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_obligations</code> and <code style="white-space: normal; overflow-wrap: anywhere;">_declare_requested_rules</code>: minimum length, all required history skills, explicit sequence/cycle choices, initial target and request completion</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">operation counts/history and explicitly supplied request arrays/targets</td>
     </tr>
     <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grounded families</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">domiknows/generation/grounded.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">declare_predicates</code>: each known required fact must hold; holding/capacity formulas expose their Boolean conditions</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">separate requirements for capabilities, preconditions, compatibility, destinations, milestone progress, goals and preservation; raw hand/occupancy/capacity facts</td>
+    </tr>
+    <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Complex tasks</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/complex_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">declare_complex</code>: 85 <code style="white-space: normal; overflow-wrap: anywhere;">ifL</code> rules generated from <code style="white-space: normal; overflow-wrap: anywhere;">knowledge/tables.py</code> (recipes, scene roles, hammer chain): allowed pick subjects, destinations, step order from performed operations, and plan-end steps and goals, relayed by <code style="white-space: normal; overflow-wrap: anywhere;">ComplexMonitor</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, named recipe, unique role bindings, foods present, book years and direction, named reagents, performed operations, final facts</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Physics</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/physics_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">declare_physics</code>: 82 <code style="white-space: normal; overflow-wrap: anywhere;">ifL</code> rules generated from <code style="white-space: normal; overflow-wrap: anywhere;">knowledge/tables.py</code> (property tiers, instruction phrases): press-option membership, max/min, below-water and rank rules per QA task, relayed into <code style="white-space: normal; overflow-wrap: anywhere;">grounded__affordance</code> by <code style="white-space: normal; overflow-wrap: anywhere;">PhysicsMonitor</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, instruction phrases, option count, each option&#x27;s material, shape or reflectance, the pressed option</td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grounded families</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">domiknows/generation/grounded.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">declare_predicates</code>: each known required fact must hold; holding/capacity formulas expose their Boolean conditions</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">separate requirements for capabilities, preconditions, compatibility, destinations, milestone progress, goals and preservation; raw hand/occupancy/capacity facts</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, instruction phrases, option count, each option&#x27;s material, shape or reflectance, the pressed option. These attributes come from scene metadata, so they exist only with metadata-assisted observations (<code style="white-space: normal; overflow-wrap: anywhere;">metadata</code>); in visual mode the VLM chooses and no physics rule fires</td>
     </tr>
   </tbody>
 </table>
