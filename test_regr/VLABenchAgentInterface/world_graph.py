@@ -156,7 +156,7 @@ def _declare_generic_rules(world, level):
 
 
 def _declare_causal_rules(world, level):
-    """Id-level causal rules, active only at ``causal`` (a branch beside ``generic``, not below it).
+    """Id-level causal rules, active from ``causal`` upwards (the lowest world group).
 
     They read only prefix comparisons of the plan's own targets: the subject picked in the current
     subtask, its earlier destinations, and every earlier destination. A pick or press starts a subtask.
@@ -209,8 +209,8 @@ def build_vlabench_world_graph(
 ) -> VLABenchWorldGraphBundle:
     """Define the DomiKnowS plan ontology and its hard logical constraints.
 
-    Every rule is a concept plus logical constraints, in four groups: ``causal`` (id-level causal rules of the
-    ``causal`` branch), ``generic`` (schema, patterns, causal rules), ``scene`` (rules that need an entity table)
+    Every rule is a concept plus logical constraints, in four groups: ``causal`` (id-level causal rules),
+    ``generic`` (schema, patterns, causal rules), ``scene`` (rules that need an entity table)
     and ``task`` (task facts and the ``task__<name>``
     rules of ``knowledge.task_lcs``). ``knowledge_level`` (default: ``knowledge.default_level()``) decides which
     groups are active; :func:`set_knowledge_level` changes it later.

@@ -152,7 +152,8 @@ def test_wide_complex_valid_completions_and_replay_remain_available(wide_complex
     policy = runtime.dfa_for("vlabench", {"entities": entities, "task": task})
     plan = [{"name": "pick", "params": {"target_entity_name": 0}},
             {"name": middle, "params": {"target_container_name": 1} if middle == "pour" else {}},
-            {"name": "place", "params": {"target_container_name": 1}}]
+            # A subtask may not reuse its pour destination (causal__distinct_subtask_destinations).
+            {"name": "place", "params": {"target_container_name": 2 if middle == "pour" else 1}}]
     labels = [runtime.vocabulary.label_for_token(token)
               for token in plan_to_tokens(plan, entities, world=runtime.world_bundle)]
     masks = []

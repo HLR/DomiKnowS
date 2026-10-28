@@ -103,14 +103,12 @@ def test_task_rules_are_inactive_below_learned_and_follow_set_knowledge_level():
 
 
 def test_levels_are_ordered_and_groups_nest():
-    cumulative = [level for level in LEVELS if level != "causal"]  # causal is a branch, checked separately
-    for index, level in enumerate(cumulative):
-        assert group_active(level, "generic") == (index >= 1)
-        assert group_active(level, "scene") == (index >= 2)
-        assert group_active(level, "task") == (index >= 3)
-        assert not group_active(level, "causal")
-    assert LEVELS[0] == "grammar" and not any(group_active("grammar", g) for g in ("generic", "scene", "task"))
-    assert [g for g in ("causal", "generic", "scene", "task") if group_active("causal", g)] == ["causal"]
+    for index, level in enumerate(LEVELS):
+        assert group_active(level, "causal") == (index >= 1)
+        assert group_active(level, "generic") == (index >= 2)
+        assert group_active(level, "scene") == (index >= 3)
+        assert group_active(level, "task") == (index >= 4)
+    assert LEVELS[0] == "grammar" and not any(group_active("grammar", g) for g in ("causal", "generic", "scene", "task"))
 
 
 def test_metadata_observations_need_the_metadata_level():

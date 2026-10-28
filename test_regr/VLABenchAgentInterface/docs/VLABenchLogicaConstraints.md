@@ -42,7 +42,7 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Causal world knowledge</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">3</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code> only (a branch beside <code style="white-space: normal; overflow-wrap: anywhere;">generic</code>, not below it)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code></td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic world knowledge</td>
@@ -62,18 +62,18 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>World subtotal</strong></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>89</strong></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Declared; <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above enable 86 (all but the causal group)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Grammar + world total</strong></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>94</strong></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Declared; <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above enable 91</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above</td>
     </tr>
   <tr><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Inventory across both paths</strong></td><td style="padding: 0.55em 0.65em;"><strong>102</strong></td><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;">94 grammar/world + 3 official causal + 5 episode decoding declarations; not one active setting</td></tr>
 </tbody>
 </table>
 
-The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. The separate `causal` level declares **3 id-only logical constraints**, compiled into `CausalPlanDFA` and described below. The world graph also declares the same three rules as its `causal` group, for the graph DFA of the Joint and internal planners; the VLABench grammar/world baseline is therefore 94 declarations (91 enabled at `learned` and above), and the inventory across that baseline, the separate causal graph and the separate decoding graph (5 formulas, below) contains **102 declarations**. These are counts of declarations, so the causal and generic anti-self-placement formulas count separately even though their rule names overlap. All 89 world constraints use `ifL` as their outermost operator. The five grammar constraints use one `atLeastAL`, one `ifL`, two `atMostAL`, and one `andL`.
+The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. The separate `causal` level declares **3 id-only logical constraints**, compiled into `CausalPlanDFA` and described below. The world graph also declares the same three rules as its `causal` group, for the graph DFA of the Joint and internal planners; the VLABench grammar/world baseline is therefore 94 declarations, all enabled at `learned` and above, and the inventory across that baseline, the separate causal graph and the separate decoding graph (5 formulas, below) contains **102 declarations**. These are counts of declarations, so the causal and generic anti-self-placement formulas count separately even though their rule names overlap. All 89 world constraints use `ifL` as their outermost operator. The five grammar constraints use one `atLeastAL`, one `ifL`, two `atMostAL`, and one `andL`.
 
 ## Ablation levels
 
@@ -127,43 +127,43 @@ The grammar/world levels are cumulative. The official-protocol `causal` row is a
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + generic</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">29</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + causal + generic</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">32</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable 24 additional schema and domain constraints, including explicit subtask-start and completion checks.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A required subject must be supplied to <code style="white-space: normal; overflow-wrap: anywhere;">pick</code>; placing an object into itself violates <code style="white-space: normal; overflow-wrap: anywhere;">anti_self_placement</code>.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">scene</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + generic + scene</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">35</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + causal + generic + scene</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">38</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable six additional constraints using scene observations.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">If a target is classified as a static fixture, the existing <code style="white-space: normal; overflow-wrap: anywhere;">pick_excludes_static_fixtures</code> formula rejects picking it.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">91</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">94</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable 56 additional task/grounded constraints. A classifier&#x27;s predicted task sets task-concept values; supplied requirements provide further facts. The formulas are predefined, not learned by this classifier.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Predicting <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code> makes its task concept true. Its sequence constraint requires <code style="white-space: normal; overflow-wrap: anywhere;">place</code> at operation index 1, and its completion constraint prevents stopping after index 0.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">91</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">94</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">No additional constraints. Use the episode task identity instead of the predicted identity; this can change which task-guarded formulas apply.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">If the classifier predicted <code style="white-space: normal; overflow-wrap: anywhere;">select_chemistry_tube</code> but the episode task is <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code>, the applicable sequence changes from <code style="white-space: normal; overflow-wrap: anywhere;">pick, lift</code> to <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code>. If the prediction was correct, this identity change has no effect.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">metadata</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">91</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">94</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">No additional constraints. Supply metadata-assisted property observations to the existing formulas.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">For a requested highest-density choice, supplied density comparisons can make candidate A satisfy the selection requirement and candidate B fail it. The existing <code style="white-space: normal; overflow-wrap: anywhere;">grounded__affordance</code> constraint then rejects B.</td>
     </tr>
   </tbody>
 </table>
 
-`causal` is not cumulative with the levels around it in this table: it belongs to the standard protocol, whose grammar DFA (`NativePlanDFA`) is not the five-constraint grammar of `graph.py`, and it enforces three separate id-only logical constraints. It does not enable the generic/scene/task world groups. `metadata` introduces observations, not a fourth world rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `learned`.
+The levels are cumulative: `causal` adds the three id-level causal formulas to the grammar, and every higher level keeps them. Under `--protocol official`, whose grammar DFA (`NativePlanDFA`) is not the five-constraint grammar of `graph.py`, `causal` is the highest level that can be grounded and enforces the official causal graph instead. `metadata` introduces observations, not a fourth world rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `learned`.
 
 The distinction is between **enabling a logical constraint** and **changing the facts evaluated by that constraint**. Moving from `scene` to `learned` enables more constraints. Moving from `learned` to `task` or `metadata` retains the same formulas but can change their applicable cases and accepted plans through different concept values. More supplied knowledge therefore need not increase the constraint count.
 
@@ -516,7 +516,7 @@ Skill role data are defined at [test_regr/VLABenchAgentInterface/world_domain.py
 
 ## Causal (id-only) DFA rules: 3 logical constraints
 
-These rules are active only at `causal`, in the standard VLABench protocol. `official/causal_graph.py` declares three formulas and compiles them with the generic DomiKnowS predicate compiler. `CausalPlanDFA.admits` evaluates that compiled program at both partial-id reachability checks and operation closure. Rule names are labels: changing a formula, removing it, or making it inactive changes the language after creating a new DFA. An already compiled DFA retains its snapshot.
+These rules are the `causal` level of the standard VLABench protocol, the highest level it can ground. `official/causal_graph.py` declares three formulas and compiles them with the generic DomiKnowS predicate compiler. `CausalPlanDFA.admits` evaluates that compiled program at both partial-id reachability checks and operation closure. Rule names are labels: changing a formula, removing it, or making it inactive changes the language after creating a new DFA. An already compiled DFA retains its snapshot.
 
 Each formula binds `operation` to the candidate operation. `pick`, `place`, `insert`, `pour`, and `push` are skill concepts under the graph's operation concept; the grammar already determines the skill. `target_is_subject` observes equality with the object picked in the current subtask; `target_used_in_subtask` observes membership in its earlier destinations; `target_was_destination` observes membership in all earlier destinations. These are comparisons of plan ids, computed before the candidate executes, without scene metadata or task identity. They are not precomputed legality flags.
 
@@ -997,7 +997,7 @@ In particular, `place`, `insert`, and `pour` refer to the destination; their man
 
 Both DataNode verification and decoding consume these progress observations. Decoding no longer supplies an unconditional true flag. Start and completion constraints cover invalid first operations, incomplete final subtasks, single-operation plans, and empty plans. The completion observation is independent of argument-pointer validity; schema and scene constraints diagnose those errors separately. After an invalid prefix, later transitions remain unreachable rather than silently restarting a subtask.
 
-This change adds **two generic logical constraints**. The current totals are **3 causal, 24 generic, 6 scene, and 56 task constraints: 89 world constraints and 94 including grammar** (the causal group was added later and is active only at `causal`). Historical checkpoint ablation scores have not been rerun. Partial diagnostic scores for invalid plans can change because a pointer error no longer marks every transition invalid; the hard validity gate still requires every active constraint to be fully satisfied.
+This change adds **two generic logical constraints**. The current totals are **3 causal, 24 generic, 6 scene, and 56 task constraints: 89 world constraints and 94 including grammar** (the causal group was added later and is active from `causal` upwards). Historical checkpoint ablation scores have not been rerun. Partial diagnostic scores for invalid plans can change because a pointer error no longer marks every transition invalid; the hard validity gate still requires every active constraint to be fully satisfied.
 
 ## Scene world families: six logical constraints
 

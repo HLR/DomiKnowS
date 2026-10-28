@@ -3,7 +3,7 @@
 What each knowledge tier of the world graph contributes when the same checkpoint is evaluated on the same
 450 test episodes. Task knowledge is expressed as graph concepts and logical constraints
 (`knowledge/`, see the README source code map); `--knowledge` switches which constraint groups are active.
-`causal` is a `--knowledge` level on every path: it enables only **3 DomiKnowS logical constraints**, the world graph's `causal` group for the Joint and internal graph decoders and the equivalent official causal graph for `--protocol official` (where `--constraints causal` remains an alias). It is a branch beside `generic`, not a cumulative tier, and its result-table rows come from `eval_planning --knowledge causal`.
+`causal` is a `--knowledge` level on every path: it enables only **3 DomiKnowS logical constraints**, the world graph's `causal` group for the Joint and internal graph decoders and the equivalent official causal graph for `--protocol official` (where `--constraints causal` remains an alias). It is the first cumulative tier above `grammar`, so `generic` and every higher level also keep the causal group active, and its result-table rows come from `eval_planning --knowledge causal`. Rows from `generic` up were measured before causal joined them (see Caveats).
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -190,7 +190,7 @@ EAI adapter, but do not determine VLABench's default detailed enforcement.
 
 The current default world graph has **89 logical constraints**: 3 causal, 24 generic, 6 scene,
 and 56 task constraints (including the eight grounded families). With the five
-grammar constraints, the total is **94**; the causal group is active only at `causal`. Counts refer to complete logical
+grammar constraints, the total is **94**; the causal group is active from `causal` upwards. Counts refer to complete logical
 constraints, not operators within their formulas. Grounded per-rule satisfaction percentages now average requirement
 nodes rather than operation nodes, so partial diagnostic percentages can differ.
 The reward and validity gate remain unchanged: every active rule must be fully
@@ -227,7 +227,7 @@ satisfied; a partial result still fails the gate.
 </tbody>
 </table>
 
-The official causal setting therefore enables **3 logical constraints**; its native JSON grammar adds no DomiKnowS declarations. It does not use the five grammar formulas from `graph.py` or activate the generic/scene/task world groups. The grammar/world path declares the same three rules as its `causal` group (94 declarations, 91 enabled at `learned` and above); with the official causal graph and the five episode-decoding formulas the inventory is **102 declarations**, rather than 102 constraints active together. Each complete formula counts once; nested operators are excluded. Full formulas and observation definitions are in the [causal constraint inventory](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
+The official causal setting therefore enables **3 logical constraints**; its native JSON grammar adds no DomiKnowS declarations. It does not use the five grammar formulas from `graph.py` or activate the generic/scene/task world groups. The grammar/world path declares the same three rules as its `causal` group (94 declarations, all enabled at `learned` and above); with the official causal graph and the five episode-decoding formulas the inventory is **102 declarations**, rather than 102 constraints active together. Each complete formula counts once; nested operators are excluded. Full formulas and observation definitions are in the [causal constraint inventory](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
 
 The DFA still accumulates prefix observations and handles JSON bytes, pointer bounds, EOS, and operation limits. The compiled formulas decide the three causal admission rules. This refactor changes where the rules are expressed, and adds no new task or scene knowledge. Historical result tables below are unchanged.
 
@@ -235,7 +235,7 @@ The DFA still accumulates prefix observations and handles JSON bytes, pointer bo
 
 The transition rule now uses prefix progress projected from the same generation formulas, rather than a whole-plan validation flag. Each operation advances the compiled state; earlier valid transitions are not marked invalid because of a later bad transition or an unrelated pointer error. Decoding supplies the same progress observations instead of setting `allowed_transition=True` unconditionally.
 
-Two additional generic constraints require a legal first operation and a complete final subtask, including explicit empty-plan permission. Thus the current cumulative counts are grammar **5**, generic **29**, scene **35**, and learned/task/metadata **91**; the `causal` branch enables grammar **5** + causal **3** = **8**. This implementation change has not rerun the historical checkpoint scores below. The added checks improve direct world verification of invalid starts and incomplete/single-operation/empty plans; a fully satisfied active constraint set is still required for hard validity. Partial diagnostic scores can differ because unrelated argument errors no longer invalidate the pattern constraint.
+Two additional generic constraints require a legal first operation and a complete final subtask, including explicit empty-plan permission. Thus the current cumulative counts are grammar **5**, causal **8**, generic **32**, scene **38**, and learned/task/metadata **94**. This implementation change has not rerun the historical checkpoint scores below. The added checks improve direct world verification of invalid starts and incomplete/single-operation/empty plans; a fully satisfied active constraint set is still required for hard validity. Partial diagnostic scores can differ because unrelated argument errors no longer invalidate the pattern constraint.
 
 `pattern_runtime.py` caches the structural projection. Bound-policy verification reuses that policy's progress DFA, preserving its continuation language and declared limits. The projection reads the actual graph formulas and relation paths; it does not maintain a separate table of allowed skill pairs.
 
@@ -254,8 +254,8 @@ the DFA afterward. Building at a low level and enabling task knowledge must
 activate the same rules as building directly at task level. Request/task facts
 are not consulted below `learned`.
 
-`causal` is a level of `knowledge/__init__.py` that is not cumulative: `group_active` enables the `causal` group at
-`causal` only and no other group there, so `generic` and above leave it inactive. `--knowledge causal` selects it in
+`causal` is the second level of `knowledge/__init__.py` (`grammar < causal < generic < scene < learned < task <
+metadata`); `group_active` keeps the `causal` group active at every level from `causal` up. `--knowledge causal` selects it in
 `evaluate-planner` (graph and official protocols), `eval_planning` and `train-agent`.
 
 The declaration refactor is validated with independently specified semantic
@@ -562,7 +562,9 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 - `task` gives Macro 77.1 here against the 75.1 recorded in `README_checkpoint.md`; that earlier figure came
   from an older code revision. This run is the reference for the knowledge comparison.
 - The `metadata` level uses a different observation mode, so it is not a pure LC-group toggle.
-- The `causal` row ran on a later commit than the other levels; `grammar` and `metadata` rerun on that commit
-  reproduce their rows, so the comparison holds. None of the 4,500 reference plans
+- The rows from `generic` up were measured while the causal group was not part of those levels; since causal became
+  cumulative they also enforce its three rules, and they have not been rerun. The `causal` row ran on a later commit
+  than the other levels; `grammar` and `metadata` rerun on that commit (still without causal at `metadata`) reproduce
+  their rows. None of the 4,500 reference plans
   breaks its three rules, but the two rules that `generic` lacks were chosen after that check, so like the press
   question they encode benchmark knowledge.

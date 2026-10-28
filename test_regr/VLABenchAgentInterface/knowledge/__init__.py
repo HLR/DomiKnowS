@@ -7,17 +7,17 @@ and where task identity comes from:
 level       active constraint groups                          source of the ``task__*`` observation
 ==========  ==============================================  =========================================
 grammar     none (the plan grammar DFA alone)                 none
-causal      causal rules only (a branch, not cumulative)      none
-generic     generic rules                                     none
-scene       generic + scene-grounded rules                    none
+causal      causal rules                                      none
+generic     causal + generic rules                            none
+scene       causal + generic + scene-grounded rules           none
 learned     + task rules and facts                            a predicted task (``context['predicted_task']``)
 task        + task rules and facts                            the episode's task name (privileged)
 metadata    + property observations / simulator assistance    the episode's task name
 ==========  ==============================================  =========================================
 
 ``causal`` uses only the ids the plan writes: a destination is never the subtask's picked object, a subtask
-never repeats a destination, and an earlier destination is never picked. It is not below ``generic``: the
-generic rules do not include the last two, so ``generic`` and the levels above leave the causal group inactive.
+never repeats a destination, and an earlier destination is never picked. It is the highest level the standard
+protocol can ground (no entity table, no task); every level above keeps the causal group active.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from .tables import (
 
 LEVELS = ("grammar", "causal", "generic", "scene", "learned", "task", "metadata")
 GROUPS = ("causal", "generic", "scene", "task")
-_GROUP_FROM = {"generic": "generic", "scene": "scene", "task": "learned"}
+_GROUP_FROM = {"causal": "causal", "generic": "generic", "scene": "scene", "task": "learned"}
 _default_level = [os.environ.get("VLABENCH_KNOWLEDGE", "task")]
 
 
@@ -52,8 +52,6 @@ def set_default_level(level: str) -> None:
 
 def group_active(level: str, group: str) -> bool:
     """Whether a constraint group is enabled at ``level``."""
-    if group == "causal":
-        return check_level(level) == "causal"
     return LEVELS.index(check_level(level)) >= LEVELS.index(_GROUP_FROM[group])
 
 
@@ -72,8 +70,7 @@ def set_excluded_tasks(tasks) -> None:
 
 def add_knowledge_argument(parser) -> None:
     parser.add_argument("--knowledge", choices=LEVELS, default=None,
-                        help="knowledge tier of the world graph: generic < scene < learned < task < metadata; causal is a branch "
-                             "with only the id-level causal rules "
+                        help="knowledge tier of the world graph: grammar < causal < generic < scene < learned < task < metadata "
                              "(default: task, or $VLABENCH_KNOWLEDGE)")
     parser.add_argument("--task-classifier", default=None,
                         help="classifier file from fit-task-classifier; required by --knowledge learned")

@@ -91,8 +91,10 @@ def test_deactivating_and_adding_rules_changes_both_verified_and_decoded_languag
     self_placement = [op("pick", 0), op("place", 0)]
     sequence = encode(self_placement, vocab, world, entities)
     assert not original.accepts(sequence) and not verified(self_placement, entities, world)
-    rule = next(rule for rule in world.graph.logicalConstrains.values() if rule.name == "anti_self_placement")
-    rule.active = False
+    # The generic rule and its causal-level twin both forbid self-placement; switch both off.
+    for rule in world.graph.logicalConstrains.values():
+        if rule.name in ("anti_self_placement", "causal__anti_self_placement"):
+            rule.active = False
     _, _, relaxed = compile_policy(world, entities)
     assert relaxed.accepts(sequence)
     assert verified(self_placement, entities, world)

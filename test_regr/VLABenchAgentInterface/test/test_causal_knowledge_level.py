@@ -15,14 +15,17 @@ def active(world):
             if getattr(rule, "headLC", True) and rule.active}
 
 
-def test_causal_is_a_branch_that_enables_only_its_own_group():
+def test_causal_is_the_first_cumulative_level():
     assert LEVELS.index("grammar") < LEVELS.index("causal") < LEVELS.index("generic")
     assert [group for group in ("causal", "generic", "scene", "task") if group_active("causal", group)] == ["causal"]
-    assert not any(group_active(level, "causal") for level in LEVELS if level != "causal")
+    assert all(group_active(level, "causal") for level in LEVELS[LEVELS.index("causal"):])
     world = build_vlabench_world_graph("causal_level_groups", knowledge_level="causal")
     assert active(world) == set(CAUSAL)
+    for level in ("generic", "task", "metadata"):
+        set_knowledge_level(world, level)
+        assert set(CAUSAL) <= active(world)
     set_knowledge_level(world, "generic")
-    assert not active(world) & set(CAUSAL) and "anti_self_placement" in active(world)
+    assert "anti_self_placement" in active(world)
 
 
 @pytest.mark.parametrize("plan,expected", [
