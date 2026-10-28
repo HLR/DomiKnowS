@@ -318,8 +318,15 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
 
 
 def command_train_agent(args):
-    if not args.two_stage:
-        raise ValueError("train-agent requires --two-stage")
+    ce_only = getattr(args, "ce_only", False)
+    if not args.two_stage and not ce_only:
+        raise ValueError("train-agent requires --two-stage or --ce-only")
+    if ce_only:
+        args.stage1_dfa_loss = "off"
+        args.stage2_epochs = 0
+        args.controller_warmup_steps = 0
+        if getattr(args, "assist_ablation_rollouts", 0) > 0:
+            raise ValueError("--ce-only cannot run Stage 2 assist ablations")
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     _status(f"knowledge level={apply_knowledge_argument(args)} held-out tasks={apply_holdout_arguments(args)}")
@@ -331,7 +338,7 @@ def command_train_agent(args):
             raise ValueError("--assist-ablation-rollouts requires --resume with a trained Stage 2 checkpoint")
         assist_ablation_modes = parse_assist_modes(args.assist_ablation_modes)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
-    _status(f"starting joint two-stage training device={device}")
+    _status(f"starting joint {'CE-only' if ce_only else 'two-stage'} training device={device}")
     runtime, eai_train, eai_valid, vla_splits, prepared = _prepare(args, device)
     _status(
         f"prepared splits: EAI train={len(eai_train)} validation={len(eai_valid)}; "
@@ -348,6 +355,7 @@ def command_train_agent(args):
         decoder_hidden_size=args.planner_decoder_hidden_dim,
     )
     _status("planner backbone and graph-token decoders ready")
+    planner.free_decoding = ce_only
     _status(f"loading controller vision encoder {args.vision_model if not args.tiny_vision else 'tiny'}")
     controller = _controller(args, device)
     _status("controller ready; building control-data indices")
@@ -400,6 +408,8 @@ def command_train_agent(args):
                 "language-conditioned action policy"
             )
         resume_stage = payload["stage"]
+        if ce_only and resume_stage != "stage1":
+            raise ValueError("--ce-only requires a Stage 1 checkpoint when resuming")
         if assist_ablation_modes and resume_stage == "stage1":
             raise ValueError(
                 "--assist-ablation-rollouts needs a controller_warmup or stage2 checkpoint; "
@@ -479,9 +489,12 @@ def command_train_agent(args):
                     vla_splits["validation"],
                     _runtime_adapter(runtime, "vlabench"),
                 )
-            dfa_mass = stage1.dfa_mass_report(eai_valid, prepared["validation"])
-            _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} DFA mass (unmasked probability on valid labels) {dfa_mass}")
+            dfa_mass = {} if ce_only else stage1.dfa_mass_report(eai_valid, prepared["validation"])
+            if not ce_only:
+                _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} DFA mass (unmasked probability on valid labels) {dfa_mass}")
             metrics = {
+                "training_mode": "ce-only" if ce_only else "two-stage",
+                "decoding": "free" if ce_only else "dfa",
                 "train": train_metrics,
                 "eai": eai_metrics,
                 "vlabench": vla_metrics,
@@ -515,6 +528,11 @@ def command_train_agent(args):
                 map_location=device,
             )
             cursor = int(payload["round_robin_cursor"])
+            if args.stage2_epochs <= 0:
+                _json({"stage": "stage1-complete", "checkpoint": best_stage1,
+                       "training_mode": "ce-only" if ce_only else "two-stage",
+                       "metrics": payload.get("metrics", {})})
+                return
             eai_metrics = payload.get("metrics", {}).get("eai")
             if eai_metrics is None:
                 eai_metrics = _evaluate_eai(planner, runtime, eai_valid, limit=args.validation_limit)
@@ -580,6 +598,9 @@ def command_train_agent(args):
                     "checkpoint": best_stage1,
                     "metrics": warmup_metrics,
                 })
+
+    if args.stage2_epochs <= 0:
+        return
 
     if resume_stage != "stage2":
         _enter_controller_reinforcement(
@@ -1004,7 +1025,11 @@ def build_parser():
     parser = argparse.ArgumentParser(description="Unified EAI/VLABench dynamic-activation training")
     subparsers = parser.add_subparsers(dest="command", required=True)
     agent = subparsers.add_parser("train-agent", help="run joint SolverPOI then joint reinforcement learning")
-    agent.add_argument("--two-stage", action="store_true", required=True)
+    mode = agent.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--two-stage", action="store_true", help="run supervised training followed by RL")
+    mode.add_argument("--ce-only", action="store_true",
+                      help="planner cross-entropy baseline: no DFA loss or decoding masks, no RL, "
+                           "and no extra controller warm-up; retain Stage 1 controller behavior cloning")
     agent.add_argument("--eai-dataset", default="all")
     agent.add_argument("--eai-split", default="train")
     agent.add_argument("--eai-data-path")

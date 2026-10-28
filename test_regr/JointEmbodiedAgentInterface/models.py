@@ -550,7 +550,7 @@ class JointQwenVLPlanner(nn.Module):
         return EncodedContext(prompt_hidden, context=prepared_context, domain=domain)
 
     def _planning_dfa(self, domain, context, dfa):
-        if domain == "vlabench" and getattr(self, "free_decoding", False):
+        if getattr(self, "free_decoding", False):
             vocabulary = self.vocabulary(domain)
             return FreeDecoding(vocabulary.label_count, vocabulary.eos_label,
                                 min_steps=getattr(self, "free_decoding_min_steps", 0))

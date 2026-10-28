@@ -58,6 +58,37 @@ rebuilds the graph, program, model, heads, controller, or optimizers.
 
 ## Training stages
 
+For a supervised cross-entropy baseline without DFA enforcement or RL, run:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --ce-only \
+  --stage1-epochs 5 --output test_regr/JointEmbodiedAgentInterface/checkpoints_ce_only
+```
+
+Use the same data paths, split/holdout settings, seed, model, domain weights,
+and Stage 1 training budget as the two-stage comparison. `--ce-only` replaces
+`--two-stage`: it overrides the DFA-loss setting to `off`, uses unrestricted
+decoding for both EAI and VLABench validation, skips the DFA-mass diagnostic,
+and stops after restoring the selected Stage 1 checkpoint. It disables Stage 2
+and the extra controller warm-up even if their step/epoch flags are supplied.
+Planner updates use plain teacher-forced cross entropy (padding after the
+first EOS is ignored); Stage 1 controller behavior cloning, domain weighting,
+PCGrad, and EAI supervised warm-up retain their usual settings. Graphs and
+DFAs are still built for runtime/checkpoint compatibility, but DFA losses and
+decoding constraints do not influence this baseline.
+
+Epoch checkpoints remain `joint_stage1_epoch_XXX.pt`; the final
+`stage1-complete` log identifies the selected checkpoint. Metrics record
+`training_mode: ce-only` and `decoding: free`. Resume with `--ce-only --resume
+<stage1-checkpoint>` and a larger total `--stage1-epochs` as needed. For a
+baseline trained entirely with CE, start fresh or resume a CE-only checkpoint;
+resuming a DFA-trained Stage 1 checkpoint is a warm start. Stage 2 and controller
+warm-up checkpoints are rejected in CE-only mode. When evaluating the saved
+baseline with `evaluate-planning`, include `--no-dfa` for free decoding.
+
+For CE training with DFA-constrained validation instead, the lower-level
+combination is `--two-stage --stage1-dfa-loss off --stage2-epochs 0`.
+
 Stage 1 constructs one `JointSolverPOIProgram(SolverPOIProgram)` with both
 sensor branches attached. Each round performs one EAI update and one VLABench
 update, giving the domains equal weight:

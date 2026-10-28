@@ -129,6 +129,71 @@ def test_domains_outside_the_dfa_loss_keep_plain_cross_entropy(joint_fixture):
     assert terms == {}
 
 
+def test_ce_only_command_trains_both_heads_without_dfa_or_rl(joint_fixture, monkeypatch, tmp_path):
+    from .. import main as cli
+    from ..models import FreeDecoding
+
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = torch.nn.Linear(1, 1)
+    item = vlabench_item(runtime)
+    before = {d: planner.label_heads[d].weight.detach().clone() for d in ("eai", "vlabench")}
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("CE-only training entered a DFA loss/report or RL path")
+
+    monkeypatch.setattr(cli, "apply_knowledge_argument", lambda args: "test")
+    monkeypatch.setattr(cli, "apply_holdout_arguments", lambda args: ())
+    monkeypatch.setattr(cli, "_prepare", lambda *args: (
+        runtime, examples, examples, {"validation": [item]}, {"train": [item], "validation": [item]}))
+    monkeypatch.setattr(cli.JointQwenVLPlanner, "from_pretrained", lambda **kwargs: planner)
+    monkeypatch.setattr(cli, "_controller", lambda *args: controller)
+    monkeypatch.setattr(cli, "_control_loaders", lambda args: {"train": [None]})
+    monkeypatch.setattr(cli, "load_control_task_instructions", lambda *args: {})
+    monkeypatch.setattr(JointSolverPOIProgram, "dfa_mass_report", forbidden)
+    monkeypatch.setattr(runtime, "dfa_for", forbidden)
+    monkeypatch.setattr(cli, "JointReinforcementProgram", forbidden)
+    monkeypatch.setattr(cli, "_enter_controller_reinforcement", forbidden)
+    monkeypatch.setattr(JointSolverPOIProgram, "train_controller_warmup", forbidden)
+
+    def evaluate_eai(*args, **kwargs):
+        assert isinstance(planner._planning_dfa("eai", {}, None), FreeDecoding)
+        # Poor baseline performance must still be saved, without an RL exploration gate.
+        return {"goal_success": 0.0, "goal_recall": 0.0, "positive_reward_rate": 0.0}
+
+    def evaluate_vla(*args, **kwargs):
+        assert isinstance(planner._planning_dfa("vlabench", {}, None), FreeDecoding)
+        return {"exact_graph_match": 0.0, "valid": 0.0}
+
+    monkeypatch.setattr(cli, "_evaluate_eai", evaluate_eai)
+    monkeypatch.setattr(cli, "evaluate_planner", evaluate_vla)
+    saved = {}
+
+    def save(path, **kwargs):
+        saved.update(kwargs)
+        return path
+
+    monkeypatch.setattr(cli, "save_joint_checkpoint", save)
+    monkeypatch.setattr(cli, "load_joint_checkpoint", lambda *a, **kw: saved)
+    args = cli.build_parser().parse_args([
+        "train-agent", "--ce-only", "--device", "cpu", "--output", str(tmp_path),
+        "--stage1-epochs", "1", "--stage1-rounds-per-epoch", "1", "--stage1-eai-warmup-steps", "0",
+    ])
+    cli.command_train_agent(args)
+    assert cli._dfa_loss_config(args) is None
+    assert saved["stage"] == "stage1"
+    assert saved["metrics"]["training_mode"] == "ce-only"
+    assert saved["metrics"]["decoding"] == "free"
+    assert all(not torch.equal(before[d], planner.label_heads[d].weight) for d in before)
+
+
+def test_ce_only_and_two_stage_are_mutually_exclusive():
+    from ..main import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["train-agent", "--ce-only", "--two-stage"])
+
+
 def test_dfa_mass_report_is_a_probability_for_both_domains_and_restores_training_mode(joint_fixture):
     examples, runtime = joint_fixture
     planner = make_planner(runtime)
