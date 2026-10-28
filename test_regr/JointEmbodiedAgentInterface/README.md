@@ -89,6 +89,14 @@ baseline with `evaluate-planning`, include `--no-dfa` for free decoding.
 For CE training with DFA-constrained validation instead, the lower-level
 combination is `--two-stage --stage1-dfa-loss off --stage2-epochs 0`.
 
+Visual causal decoding aligns label positions to the processor's expanded
+image/text input, including multi-token label strings. Checkpoints from before
+this alignment repair learned from incorrect hidden-state positions; start a
+fresh run for a valid baseline. Earlier default epochs also stopped at the
+smaller domain size (350 updates for 3,600 VLABench training examples). The
+current default covers the larger planner dataset once per epoch; use an
+explicit round count when reproducing a historical update budget.
+
 For DFA-masked cross-entropy training on **both EAI and VLABench**, without
 RL or primal-dual training, run:
 
@@ -129,7 +137,8 @@ shared Qwen/LoRA parameters are projected with PCGrad and the pair produces
 one optimizer step, so update order cannot let one domain immediately
 overwrite the other. Domain-only decoders retain their own gradients. The
 controller is updated only during the VLABench turn. An epoch defaults to the
-smaller loader length; override it
+larger planner loader length, covering both domains and cycling/reshuffling
+the smaller domain while preserving one update per domain per round; override it
 with `--stage1-rounds-per-epoch`. Stage 1 checkpoint selection first maximizes
 the minimum of EAI goal success and VLABench exact graph match, then their
 mean, EAI recall, VLABench validity, and validation loss. The EAI exploration

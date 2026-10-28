@@ -388,42 +388,36 @@ class JointQwenVLPlanner(nn.Module):
         if tokenizer is None and callable(getattr(self.processor, "encode", None)):
             tokenizer = self.processor
 
-        boundaries: list[int] = []
         if not active_tokens:
             boundaries = [total_len - 1]
-        elif tokenizer is not None and hasattr(self.processor, "apply_chat_template"):
-            try:
-                if hasattr(tokenizer, "encode"):
-                    base_ids = tokenizer.encode(base_chat, add_special_tokens=False)
-                elif hasattr(tokenizer, "__call__"):
-                    base_res = tokenizer(base_chat, add_special_tokens=False)
-                    base_ids = base_res.get("input_ids", ()) if isinstance(base_res, Mapping) else base_res
-                else:
-                    base_ids = [1]
-                base_len = len(base_ids)
-                boundaries.append(base_len - 1)
-                curr_offset = base_len
-                for t in active_tokens:
-                    chunk = f" {t}"
-                    if hasattr(tokenizer, "__call__"):
-                        chunk_ids = tokenizer(chunk, add_special_tokens=False)
-                        if isinstance(chunk_ids, Mapping):
-                            chunk_ids = chunk_ids.get("input_ids", ())
-                    elif hasattr(tokenizer, "encode"):
-                        chunk_ids = tokenizer.encode(chunk, add_special_tokens=False)
-                    else:
-                        chunk_ids = [1]
-                    curr_offset += len(chunk_ids)
-                    boundaries.append(curr_offset - 1)
-            except Exception:
-                boundaries = []
+        else:
+            if tokenizer is None or input_ids is None:
+                raise ValueError("causal label alignment requires a tokenizer and processor input_ids")
 
-        if not boundaries or boundaries[-1] >= total_len:
-            step_count = len(active_tokens) + 1
-            if total_len >= step_count:
-                boundaries = [total_len - step_count + i for i in range(step_count)]
-            else:
-                boundaries = [min(i, total_len - 1) for i in range(step_count)]
+            def encode(text):
+                if hasattr(tokenizer, "encode"):
+                    return list(tokenizer.encode(text, add_special_tokens=False))
+                return list(tokenizer(text, add_special_tokens=False)["input_ids"])
+
+            # The processor expands image placeholders. Anchor the unchanged text
+            # suffix at the end of its actual input_ids instead of indexing the
+            # unexpanded text stream (which can point into the image patches).
+            text_ids = encode(full_text)
+            expansion = total_len - len(text_ids)
+            prefix_text = base_chat
+            boundaries = []
+            for chunk in ("", *(f" {token}" for token in active_tokens)):
+                prefix_text += chunk
+                prefix_ids = encode(prefix_text)
+                if not prefix_ids or text_ids[:len(prefix_ids)] != prefix_ids:
+                    raise ValueError("tokenization crosses a causal label boundary")
+                boundaries.append(expansion + len(prefix_ids) - 1)
+
+            first_text_index = boundaries[0] - expansion
+            suffix = text_ids[first_text_index:]
+            if (boundaries[0] < 0 or boundaries[-1] != total_len - 1
+                    or input_ids[0, boundaries[0]:].tolist() != suffix):
+                raise ValueError("processor input_ids do not preserve the causal label suffix")
 
         cpu_batch = {
             key: value.detach().cpu() if torch.is_tensor(value) else value

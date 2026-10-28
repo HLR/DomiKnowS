@@ -504,7 +504,9 @@ class JointSolverPOIProgram(SolverPOIProgram):
     ) -> dict[str, float]:
         if not eai_examples or not vlabench_examples:
             raise ValueError("joint Stage 1 requires non-empty EAI and VLABench loaders")
-        rounds = int(rounds) if rounds is not None else min(len(eai_examples), len(vlabench_examples))
+        # Cover both datasets once; cycle and reshuffle the smaller domain so
+        # equal-domain updates do not silently truncate the larger dataset.
+        rounds = int(rounds) if rounds is not None else max(len(eai_examples), len(vlabench_examples))
         eai_stream, vlabench_stream = _cycle(eai_examples), _cycle(vlabench_examples)
         controller_stream = iter(controller_loader) if controller_loader is not None else None
         totals = {"eai_loss": 0.0, "vlabench_loss": 0.0, "controller_bc_loss": 0.0}

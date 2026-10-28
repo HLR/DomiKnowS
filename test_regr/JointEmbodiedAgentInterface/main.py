@@ -1066,7 +1066,9 @@ def build_parser():
     agent.add_argument("--seed", type=int, default=42)
     agent.add_argument("--stage1-epochs", type=int, default=5)
     agent.add_argument("--stage2-epochs", type=int, default=3)
-    agent.add_argument("--stage1-rounds-per-epoch", type=int)
+    agent.add_argument("--stage1-rounds-per-epoch", type=int,
+                       help="paired domain updates per epoch; defaults to the larger planner dataset size, "
+                            "cycling the smaller domain so both datasets are covered")
     agent.add_argument("--stage1-dfa-loss", choices=("on", "off"), default="on",
                        help="Stage 1 trains on the DFA: allowed-mass loss along the DFA path plus the primal-dual "
                             "constraint loss of the generation graph (off = cross entropy only)")
