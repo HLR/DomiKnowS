@@ -389,11 +389,11 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">metadata</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.5</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.5</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.4</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">98.2</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">72.4</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">75.9</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">71.6</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">75.6</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56.6</td>
     </tr>
   </tbody>
@@ -497,10 +497,10 @@ Per-dimension score:
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">metadata</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">78.9</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">72.2</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.7</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">85.5</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">77.8</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">75.1</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">80.4</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">84.6</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">83.0</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">87.4</td>
     </tr>
@@ -555,8 +555,11 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 - **The task tier is the large step, +9.2 Macro**, and it comes from two dimensions: Complex 44.6 to 87.4
   (the obligations and sequence LCs) and PhysLaw 37.7 to 57.0 (grounded QA families). Skill recall rises
   from 89 to 98.
-- **Metadata adds +4.3 Macro**, all of it PhysLaw (57.0 to 83.0), the dimension whose answer needs measured
-  property values.
+- **Metadata adds about +4.3 Macro**, almost all of it PhysLaw (57.0 to 83.0), the dimension whose answer needs
+  measured property values. The `metadata` row was rerun on `1bd53605`, where the level also enforces the causal
+  rules and the physics and complex knowledge are logical constraints: 81.4 against 81.5 before causal joined the
+  levels (parameter recall 72.4 to 71.6; Spatial +2.9, ComSense, M&T and Semantic about -1). The same run on
+  `e358e881`, before the physics/complex conversion, gives identical metrics to full precision.
 - **Task knowledge hurts M&T** (85.4 to 78.9): skill recall reaches 100 but parameter recall falls from 83 to 65.
   The cause was not investigated; the declared M&T sequence may force a skill order that the model's
   parameters were not trained to follow.
@@ -572,9 +575,9 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 - `task` gives Macro 77.1 here against the 75.1 recorded in `README_checkpoint.md`; that earlier figure came
   from an older code revision. This run is the reference for the knowledge comparison.
 - The `metadata` level uses a different observation mode, so it is not a pure LC-group toggle.
-- The rows from `generic` up were measured while the causal group was not part of those levels; since causal became
-  cumulative they also enforce its three rules, and they have not been rerun. The `causal` row ran on a later commit
-  than the other levels; `grammar` and `metadata` rerun on that commit (still without causal at `metadata`) reproduce
-  their rows. None of the 4,500 reference plans
+- The `generic`, `scene`, `learned` and `task` rows were measured while the causal group was not part of those
+  levels; since causal became cumulative they also enforce its three rules, and they have not been rerun. The
+  `metadata` row is the rerun on `1bd53605` (with causal). The `causal` row ran on `54da7bba`, where `grammar` and the
+  pre-fold `metadata` reproduced their earlier rows. None of the 4,500 reference plans
   breaks its three rules, but the two rules that `generic` lacks were chosen after that check, so like the press
   question they encode benchmark knowledge.
