@@ -294,3 +294,5 @@ test_regr/VLABenchAgentInterface/outputs/
 # generated 3D-FORCE question sets (reproducible via gen_force3d_free.py)
 test_regr/Clever/generated/*.json
 test_regr/Clever/generated/*.log
+test_regr/JointEmbodiedAgentInterface/results/
+test_regr/JointEmbodiedAgentInterface/docs/BASELINE_RETEST_20261027.md

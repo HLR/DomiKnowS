@@ -3,7 +3,15 @@
 This document describes the operational flow of the Embodied Agent Interface
 (EAI) two-stage training pipeline. Stage 1 learns action plans from reference
 sequences. Stage 2 starts from the best Stage 1 policy and refines it using
-simulator outcomes, SimpleTL goal progress, and world-graph constraints.
+abstract symbolic simulator outcomes, SimpleTL goal progress, and world-graph
+constraints. This describes `main.py --two-stage`; the separate single-program
+solver, primal-dual, and reinforcement paths have different lifecycles.
+
+The CLI defaults to `--baseline-model tiny-transformer`. The Qwen-specific
+sections below apply to `--baseline-model causal-lm`; its default backbone is
+`Qwen/Qwen3-VL-8B-Instruct`, used with text inputs here. `--use-lora` explicitly
+enables LoRA. A BERT+GRU head is also supported. Unless an alternative is named,
+the decoding description assumes the default `--generation-constraints always`.
 
 ## Operation at a glance
 
@@ -16,6 +24,12 @@ EAI task row
    +-- reference action trajectory
    |
    v
+Optional text-only VLABench warm-up (causal-lm + LoRA)
+   |
+   +-- shared backbone; separate VLABench labels, adapter, and graph
+   +-- restore best auxiliary epoch before EAI training
+   |
+   v
 Stage 1: supervised teacher forcing
    |
    +-- token-level cross-entropy through the first EOS
@@ -26,13 +40,13 @@ Stage 1: supervised teacher forcing
 Stage 1 exploration gate
    |
    +-- fail: retain Stage 1 and skip reinforcement learning
-   +-- pass: reuse the same Qwen, LoRA, adapter, graphs, vocabulary, and DFA
+   +-- pass: reuse the same policy head, graphs, vocabulary, and DFA
    |
    v
 Stage 2: reinforcement learning plus supervised anchor
    |
    +-- sample graph-constrained trajectories
-   +-- simulate actions and evaluate the actual SimpleTL goal
+   +-- simulate actions with the abstract evaluator and score task goals
    +-- apply REINFORCE using within-task reward advantages
    +-- add teacher-forced gold-token cross-entropy
    |
@@ -64,10 +78,44 @@ policy. Qwen3 thinking is disabled, and the native chat template contributes
 one assistant-generation marker.
 
 The model predicts over the EAI action/entity vocabulary rather than Qwen's
-entire native vocabulary. The default pretrained label adapter starts from
-Qwen output-embedding vectors and adds a trainable low-rank residual, bias, and
-temperature. In the Qwen+LoRA configuration, base Qwen weights remain frozen;
-LoRA and label-adapter parameters are trainable in both stages.
+entire native vocabulary. The default causal-LM label adapter starts from
+averaged Qwen output-embedding vectors for each label and adds a trainable
+low-rank residual, bias, and temperature scale. `--causal-label-head linear`
+selects the alternative random linear classifier. In the Qwen+LoRA
+configuration, base Qwen weights remain frozen; LoRA and label-adapter
+parameters are trainable in both stages. Without LoRA, the causal backbone is
+frozen by default; `--finetune-encoder` enables backbone training.
+
+The EAI vocabulary and action/object compatibility sets are collected from the
+loaded reference trajectories before the train/dev split. Contextual entity
+types come from the transition model's PDDL `:objects` section. Hard entity-type
+filtering is enabled for recognized VirtualHome domains; it is withheld for
+BEHAVIOR because its WordNet taxonomy differs. A separate contextual rule gates
+`clean` using task text and goals. These inputs have different provenance from
+a fully observation-only policy.
+
+`split_train_dev()` takes a prefix for training and a suffix for development;
+it does not shuffle. The default development fraction is `0.2`. Epoch selection
+and final evaluation use `dev or train`, falling back to training examples if
+the development split is empty. Per-epoch semantic selection evaluates that
+whole split; the additional final `--evaluate` report can be capped by
+`--num-generations` (default 300, nonpositive means all).
+
+## Optional text-only VLABench warm-up
+
+Before EAI Stage 1, positive `--vlabench-aux-epochs` enables a separate planning
+warm-up requiring `--baseline-model causal-lm --use-lora`. Its default is zero
+epochs, so ordinary two-stage runs skip it.
+
+`vlabench_auxiliary.py` shares the EAI Qwen/LoRA object but creates a temporary
+VLABench label adapter, vocabulary, prompt, and graph runtime. It uses text
+instructions and numbered entity tables without opening images or training a
+controller. EOS-masked teacher forcing updates the shared trainable backbone
+and temporary output adapter. Auxiliary validation selects and restores the
+best epoch before EAI Stage 1; the EAI label adapter is checked to remain
+unchanged. The phase saves `<model-stem>.vlabench_aux.pth` and records its
+provenance in subsequent EAI checkpoint metadata. `--vlabench-aux-resume` can
+initialize this auxiliary phase from a compatible auxiliary checkpoint.
 
 ## Stage 1: supervised exact-match pretraining
 
@@ -86,9 +134,12 @@ This supplies a correct target at every meaningful sequence position.
 ### 1. Build the gold sequence
 
 The reference action trajectory is normalized into alternating action and
-argument labels, followed by EOS. Truncation preserves action/argument
-atomicity: an object-taking action is never left at the end without its object.
-Remaining positions are padded with EOS to `max_steps`.
+argument labels, with objectless actions represented by one label, followed by
+EOS. Multi-object placement actions retain the destination token; the abstract
+simulator tracks the held source separately. Truncation preserves
+action/argument atomicity: an object-taking action is never left at the end
+without its object. Remaining positions are padded with EOS to `max_steps`
+(CLI default 60, including EOS).
 
 Example:
 
@@ -122,7 +173,9 @@ of those boundaries; Qwen is not separately re-prompted with a new user
 message for every gold position.
 
 The label adapter converts each selected hidden state into logits over all EAI
-labels.
+labels. Stage 1 uses `SolverPOIProgram` with `local/argmax` inference and
+`EOSMaskedCrossEntropyLoss`; its cross-entropy uses the full label logits,
+without the autoregressive DFA mask.
 
 ### 4. Calculate EOS-masked cross-entropy
 
@@ -143,17 +196,24 @@ from receiving many duplicate EOS training terms.
 
 ### 5. Update the policy
 
-Backpropagation updates the trainable LoRA and label-adapter parameters. The
-reference sequence of length `T` supplies `T` direct learning signals, which
-makes Stage 1 substantially more sample-efficient than trajectory-level
-reinforcement learning.
+Backpropagation updates the selected head's trainable parameters; in the
+Qwen+LoRA configuration these are LoRA and the label adapter. A reference
+sequence of length `T` supplies `T` direct token targets, rather than one
+trajectory-level reward. This gives a denser learning signal; relative sample
+efficiency still depends on the task and run.
 
 ### 6. Autoregressive semantic validation
 
 After each Stage 1 epoch, validation does not use gold prefixes. The policy
 decodes from its own predictions, and the graph-compiled DFA masks illegal next
 labels. The generated plan is simulated and evaluated against the task's
-SimpleTL goal.
+grounded goal representation and, for temporal goals, its ordered SimpleTL
+expression. These are abstract evaluator metrics, not live BEHAVIOR or
+VirtualHome simulator results.
+
+`--generation-constraints eval` keeps DFA decoding for validation but disables
+the runtime mask during RL sampling and rescoring. `off` disables runtime DFA
+decoding in both phases. The deprecated `--use-dfa` flag forces `always`.
 
 The generation graph is therefore the hard-policy authority during decoding;
 it does not manufacture the gold labels or replace Stage 1 cross-entropy. The
@@ -183,12 +243,17 @@ Stage 1 checkpoints are ordered by:
 Only trainable parameters are copied into the in-memory best snapshot, avoiding
 a second frozen Qwen copy. After all Stage 1 epochs, the best snapshot is
 restored and saved as `<model-stem>.stage1.pth`.
+`--stage1-checkpoint` overrides this path.
 
 ### 8. Apply the exploration gate
 
 Stage 2 starts only if the restored checkpoint meets configured minimums for
 positive-reward rate, goal recall, and goal success. If the gate fails, the
-Stage 1 checkpoint is retained and the command skips Stage 2.
+Stage 1 checkpoint is retained and the command skips Stage 2 with exit code 2.
+The defaults are `0.25`, `0.10`, and `0.05`, respectively, controlled by
+`--stage1-min-positive-reward-rate`, `--stage1-min-goal-recall`, and
+`--stage1-min-goal-success-rate`. Positive-reward rate counts trajectories with
+positive task reward before world-constraint modulation.
 
 ## Stage 2: reinforcement learning fine-tuning
 
@@ -218,7 +283,8 @@ new Stage 2 optimizer is constructed over the same trainable parameters.
 ### 2. Sample several on-policy trajectories
 
 For each training example, the policy samples `N = --rl-num-samples`
-trajectories. Each trajectory conditions on its own generated prefix:
+trajectories (default eight; the CLI requires at least four for RL).
+Each trajectory conditions on its own generated prefix:
 
 ```text
 label_t ~ policy(label_t | task_prompt, sampled_labels_<t)
@@ -247,8 +313,10 @@ The DFA guarantees structural legality, not task success.
 
 Rollout generation runs under `no_grad`. All trajectories for one task are
 evaluated as one Qwen batch and maintain separate sampled prefixes and DFA
-states. When chosen labels have equal native-Qwen token widths, the KV cache is
-advanced. Unequal widths cause one safe batched full-prefix/cache rebuild.
+states. Cache reuse requires equal native-Qwen token widths for continuing
+rows, an available cache, and room within the configured context length.
+Otherwise, the implementation rebuilds the batched full-prefix cache. Smaller
+heads use the generic prefix-scoring path rather than this Qwen cache path.
 
 This avoids retaining sampling-time gradient graphs and avoids one Qwen forward
 per trajectory at every label step.
@@ -257,7 +325,19 @@ per trajectory at every label step.
 
 Sampled labels are decoded into action events and executed by the deterministic
 abstract simulator. It produces ordered action events and state snapshots from
-the task's initial state.
+an inferred initial state.
+
+`prepare_eai_goal()` parses `tl_goal`, simulates the reference trajectory, and
+uses reference facts/events to ground variable goal atoms and infer entity
+types. `_initial_goal_facts()` heuristically infers initially true goal facts
+from that reference information. It does not parse the full PDDL `:init` or
+execute the supplied `transition_model` as a simulator. The PDDL object list
+used for prompt/context filtering is a separate data path.
+
+Thus the evaluator reads the declared goal, but its grounding and starting
+state still depend on the demonstration and the implemented symbolic effects.
+Goal success here measures this abstraction. It does not independently certify
+benchmark simulator execution or all possible SimpleTL/PDDL semantics.
 
 For the book example:
 
@@ -277,13 +357,30 @@ In dense mode, the task score is:
 task_reward = grounded_goal_recall * ordered_temporal_progress
 ```
 
-Grounded recall measures how many required facts/events were achieved.
+Grounded recall measures how many required facts match the final abstract state,
+augmented with action facts for events anywhere in the generated trajectory.
 Temporal progress measures the longest satisfied ordered SimpleTL prefix. For
 `GRAB(book) then READ(book)`, grabbing only receives partial credit; reading
 before grabbing cannot receive full temporal credit.
 
-Binary mode instead uses `1.0` for complete SimpleTL success and `0.0`
-otherwise.
+For the book example, grabbing only has recall `0.5`, temporal progress `0.5`,
+and dense task reward `0.25`. Reversing read/grab can retain recall `1.0` while
+temporal progress and dense reward remain `0.5`.
+
+Binary mode instead uses `1.0` for the evaluator's `is_success` result and `0.0`
+otherwise. For goals containing `then`, success uses ordered AST satisfaction;
+for goals without `then`, it requires a nonempty grounded fact set with every
+fact matched. The latter does not use the AST's Boolean satisfaction result as
+the final success decision. A temporal goal can therefore succeed while its
+final-state recall is below one if an earlier required state no longer holds.
+
+Within the AST evaluation block, caught `ValueError`/`TypeError` exceptions are
+reported as `parse_error` and fall back to grounded final-goal satisfaction;
+temporal progress becomes zero for an ordered goal. Errors while initially
+parsing/preparing a goal are outside that fallback. If no grounded goal facts
+exist, `state_recall()` returns one only when the predicted fact set is also
+empty, while non-temporal success still requires a nonempty goal set. These
+edge cases matter when interpreting dense reward and goal success separately.
 
 ### 7. Modulate progress with world constraints
 
@@ -297,6 +394,13 @@ RL_reward = task_reward * ((1 - w) + w * C)
 The default `w` is `0.25`. A compliant trajectory preserves its task reward;
 violations discount it. Constraints cannot create positive reward when the
 task score is zero.
+
+`--rl-constraint-aggregate` selects `mean` (default), `min`, or `prod` across
+applicable constraints. Default rules use direct source-state evaluation;
+custom world constraints materialize the trajectory as DataNodes for logical
+verification. If constraints are disabled with `--no-world-constraints`, or no
+constraint score is available, reward equals task reward. Read applicable and
+declared constraint counts alongside the aggregate score to understand coverage.
 
 ### 8. Compute within-task advantages
 
@@ -326,19 +430,29 @@ This is teacher-forced computationally, but its targets are the sampled labels,
 not the gold labels. The same compiled DFA masks sampling and rescoring, so the
 probability used by REINFORCE matches the sampling policy.
 
+Sampling and the training rescore/anchor block put the head in evaluation mode
+to disable dropout and restore its previous mode afterward. Rescoring still
+runs with autograd enabled: evaluation mode does not freeze trainable weights.
+
 The policy loss is:
 
 ```text
 L_RL = -mean_i[advantage_i * log_policy(trajectory_i)]
 ```
 
+`--rl-estimator importance_weighted` selects the alternative estimator. In the
+streaming training path, on-policy target/proposal ratios are one, and its
+detached rescore coefficients use normalized nonnegative reward mass minus
+uniform mass. The mean-baseline advantage formula above describes the default
+`reinforce` estimator.
+
 ### 10. Rescore in memory-safe microbatches and add the gold anchor
 
-Qwen rollout rescores are backpropagated in small microbatches, normally one
-trajectory at a time. Gradients accumulate across every sibling rollout. The
-gold reference sequence is then teacher-forced once more to calculate
-`L_gold`. Only after both RL and supervised gradients have accumulated does the
-optimizer perform one update for the training example.
+Qwen rollout rescores are backpropagated in small microbatches, controlled by
+`--rl-rescore-microbatch` (default one trajectory). Gradients accumulate across
+every sibling rollout. The gold reference sequence is then teacher-forced once
+more to calculate `L_gold`. Only after both RL and supervised gradients have
+accumulated does the optimizer perform one update for the training example.
 
 ### 11. Evaluate, select, and save the best Stage 2 epoch
 
@@ -361,6 +475,27 @@ is restored before final evaluation and saved to the configured two-stage model
 path; checkpoint metadata records the selected epoch rather than the configured
 last epoch.
 
+The Stage 2 best candidate is selected among RL epochs; the Stage 1 baseline is
+not included in that comparison, and there is no VLABench-style post-epoch
+retention gate that restores Stage 1 on regression. A best RL epoch is therefore
+not proof of an improvement over Stage 1. Default RL duration is three epochs;
+default learning rates are `1e-4` then `1e-5` for the causal-LM configuration,
+and `1e-3` then `1e-4` for smaller baselines, unless explicitly overridden.
+
+## Checkpoint contents and loading
+
+The in-memory best-epoch snapshots copy only trainable parameters. On-disk EAI
+checkpoints instead save `program.model.state_dict()` plus versioned metadata
+for the backbone, vocabulary, label-head type/rank, prompt format, stage, and
+selected epoch, with optional auxiliary provenance. The loader validates the
+architecture/vocabulary/prompt fields before restoring weights.
+
+These files do not save optimizer state, random states, or the next training
+position. `--evaluate`/`--eval-only` loads `--model` when no model was trained in
+the current run; `--two-stage` starts its training lifecycle rather than resuming
+an interrupted EAI optimizer/epoch. Legacy causal-LM checkpoints with random
+linear heads require `--causal-label-head linear`.
+
 ## How the two stages differ
 
 | Property | Stage 1 | Stage 2 |
@@ -375,26 +510,32 @@ last epoch.
 | Exploration | No | Yes, categorical sampling |
 | Checkpoint policy | Best semantic epoch restored | Best semantic RL epoch restored |
 
-Stage 1 is usually the more sample-efficient learner because every reference
-trajectory supplies many direct token targets. Stage 2 is a conservative
-semantic refinement: it can reward valid alternative plans and ordered task
-progress, but its trajectory-level signal is noisier. The supervised anchor,
+Stage 1 supplies many direct token targets per reference trajectory. Stage 2 can
+reward alternative plans and ordered task progress recognized by the abstract
+evaluator, but its trajectory-level signal is noisier. The supervised anchor,
 lower RL learning rate, limited RL epochs, and semantic checkpoint comparison
-are therefore important safeguards.
+limit drift; they do not guarantee improved goal success.
 
 ## Principal implementation locations
 
-- `dataset.py`: prompt fields, reference trajectory normalization, labels, and
-  per-task context.
-- `graph.py`: declarative generation concepts and constraints compiled to the
-  policy DFA.
-- `modules.py`: Qwen prompt encoding, pretrained label adapter, teacher forcing,
-  and batched KV-cached rollout state.
-- `reward.py`: abstract simulator, SimpleTL evaluation, recall, temporal
+- [`dataset.py`](../dataset.py): prompt fields, reference trajectory
+  normalization, labels, and per-task context.
+- [`graph.py`](../graph.py): declarative generation concepts and constraints
+  compiled to the policy DFA.
+- [`modules.py`](../modules.py): Qwen prompt encoding, pretrained label adapter,
+  teacher forcing, and batched KV-cached rollout state.
+- [`reward.py`](../reward.py): reference-dependent goal grounding and inferred
+  initial state, abstract simulation, SimpleTL evaluation, recall, temporal
   progress, and combined reward.
-- `world_graph.py`: world/trajectory concepts and action-precondition
-  constraints.
-- `rl_sequence_program.py`: rollout sampling, DFA masking, advantage calculation,
-  differentiable rescoring, supervised anchor, and gradient accumulation.
-- `main.py`: program construction, Stage 1 checkpoint selection and gate,
-  Stage 2 lifecycle, evaluation, and checkpoint saving.
+- [`world_graph.py`](../world_graph.py): world/trajectory concepts and
+  action-precondition constraints.
+- [`utils/effect_runtime.py`](../utils/effect_runtime.py) and
+  [`utils/goal_constraints.py`](../utils/goal_constraints.py): declared symbolic
+  action effects and goal-operator evaluation.
+- [`vlabench_auxiliary.py`](../vlabench_auxiliary.py): optional text-only planning
+  warm-up with a temporary adapter and shared LoRA parameters.
+- [`rl_sequence_program.py`](../rl_sequence_program.py): rollout sampling, DFA
+  masking, advantage calculation, differentiable rescoring, supervised anchor,
+  and gradient accumulation.
+- [`main.py`](../main.py): program construction, Stage 1 checkpoint selection
+  and gate, Stage 2 lifecycle, evaluation, and checkpoint saving.
