@@ -28,7 +28,9 @@ from test_regr.VLABenchAgentInterface.dataset import (
     load_planning_examples,
     OBSERVATION_MODES,
 )
-from test_regr.VLABenchAgentInterface.knowledge import add_knowledge_argument, apply_knowledge_argument
+from test_regr.VLABenchAgentInterface.knowledge import (
+    add_knowledge_argument, apply_knowledge_argument, default_task_identity, uses_predicted_task,
+)
 from test_regr.VLABenchAgentInterface.knowledge.holdout import add_holdout_arguments, apply_holdout_arguments, partition
 from test_regr.VLABenchAgentInterface.knowledge.task_classifier import predict_tasks
 from test_regr.VLABenchAgentInterface.main import _controller
@@ -264,7 +266,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     if not examples:
         raise ValueError(f"no planning examples found for split={args.split!r}")
-    if knowledge == "learned":
+    if uses_predicted_task():
         examples = predict_tasks(examples, args.task_classifier, observation_mode=getattr(args, "observation_mode", "visual"),
                                  ground_complex=getattr(args, "ground_complex", True))
     from test_regr.VLABenchAgentInterface.planning_augmentation import diagnostic_examples
@@ -305,7 +307,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "free_decoding_min_steps": int(getattr(args, "no_dfa_min_steps", 0)),
         "holdout_tasks": list(holdout),
         "declare_heldout_knowledge": bool(getattr(args, "declare_heldout_knowledge", False)),
-        "task_classifier": str(args.task_classifier) if knowledge == "learned" else None,
+        "task_identity": default_task_identity(),
+        "task_classifier": str(args.task_classifier) if uses_predicted_task() else None,
         "reference_labels": "density-material-button-v1" if getattr(args, "updated_data", False) else "as-stored",
         "updated_data": getattr(args, "updated_data", False),
         "ground_complex": getattr(args, "ground_complex", True),

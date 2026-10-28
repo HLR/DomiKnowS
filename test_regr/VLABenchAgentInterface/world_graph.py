@@ -209,6 +209,7 @@ def build_vlabench_world_graph(
     semantic_parents: Mapping[str, Any] | None = None,
     knowledge_level: str | None = None,
     task_knowledge: Any = None,
+    task_identity: str | None = None,
 ) -> VLABenchWorldGraphBundle:
     """Define the DomiKnowS plan ontology and its hard logical constraints.
 
@@ -220,8 +221,8 @@ def build_vlabench_world_graph(
     """
     from domiknows.graph import Concept, Graph
 
-    level = check_level(knowledge_level or default_level())
-    state = KnowledgeState(level)
+    state = KnowledgeState(knowledge_level or default_level(), task_identity)
+    level = state.level
     task_knowledge = task_knowledge or active_task_knowledge()
 
     build_id = next(_BUILD_IDS)
@@ -381,10 +382,16 @@ def _complex_knowledge(level):
     return LazyKnowledge(build_complex_knowledge, active=group_active(level, "task"))
 
 
-def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str) -> None:
-    """Activate the constraint groups of ``level`` in place. Recompile any DFA built from the graph afterwards."""
+def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str, task_identity: str | None = None) -> None:
+    """Activate the constraint groups of ``level`` in place. Recompile any DFA built from the graph afterwards.
+
+    ``task_identity`` (or the identity a legacy alias implies) replaces the bundle's task identity.
+    """
+    from .knowledge import split_level
     state = bundle.knowledge_state
-    state.level = check_level(level)
+    state.level, identity = split_level(level, task_identity)
+    if identity is not None:
+        state.task_identity = identity
     for group, constraints in (bundle.knowledge_groups or {}).items():
         for constraint in constraints:
             constraint.active = group_active(state.level, group)

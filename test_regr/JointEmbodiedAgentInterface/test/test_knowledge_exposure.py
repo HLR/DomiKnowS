@@ -202,19 +202,20 @@ def test_manifest_detects_changed_compiled_program_without_graph_edits(joint_fix
         check_knowledge_compatibility(before, changed)
 
 
-def test_learned_vs_task_fact_sources_are_visible_even_with_identical_active_rules(joint_fixture):
+def test_predicted_vs_oracle_task_identity_is_visible_even_with_identical_active_rules(joint_fixture):
     _, runtime = joint_fixture
     state = runtime.world.vlabench.knowledge_state
-    old = state.level
+    old = state.task_identity
     before = runtime.knowledge_manifest
     try:
-        state.level = "learned" if old != "learned" else "task"
+        state.task_identity = "predicted" if old != "predicted" else "oracle"
         after = runtime.knowledge_manifest
         assert after["definition_sha256"] == before["definition_sha256"]
         assert after["activation_sha256"] != before["activation_sha256"]
+        assert after["knowledge_settings"]["vlabench_task_identity"] == state.task_identity
         assert check_knowledge_compatibility(before, after)["activation_changed"]
     finally:
-        state.level = old
+        state.task_identity = old
 
 
 def test_explicit_vlabench_knowledge_ablation_does_not_disable_eai_checks(joint_fixture):

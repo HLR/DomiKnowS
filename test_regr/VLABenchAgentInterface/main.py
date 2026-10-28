@@ -42,7 +42,7 @@ try:
         train_controller_steps,
     )
     from .world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
-    from .knowledge import add_knowledge_argument, apply_knowledge_argument
+    from .knowledge import add_knowledge_argument, apply_knowledge_argument, default_task_identity, uses_predicted_task
     from .knowledge.task_classifier import fit_task_classifier, accuracy as task_accuracy, predict_tasks
 except ImportError:
     from agent import HierarchicalVLABenchAgent
@@ -51,7 +51,7 @@ except ImportError:
     from models import FrozenSigLIPEncoder, MultiViewController, PLANNER_MODEL_ID, QwenVLPlanner, TinyImageEncoder
     from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch, train_controller_steps
     from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
-    from knowledge import add_knowledge_argument, apply_knowledge_argument
+    from knowledge import add_knowledge_argument, apply_knowledge_argument, default_task_identity, uses_predicted_task
     from knowledge.task_classifier import fit_task_classifier, accuracy as task_accuracy, predict_tasks
 
 
@@ -1008,7 +1008,8 @@ def command_evaluate_planner(args) -> None:
                                   generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens)
         _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
                         "dfa_constrained": False, "max_new_tokens": args.max_new_tokens,
-                        "observation_mode": observation_mode, "knowledge": knowledge})
+                        "observation_mode": observation_mode, "knowledge": knowledge,
+                        "task_identity": default_task_identity()})
         return
     if not args.resume_adapter:
         raise ValueError("graph evaluation requires --resume-adapter with trained graph-decoder weights; "
@@ -1023,7 +1024,7 @@ def command_evaluate_planner(args) -> None:
             if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
             or (getattr(e, "task", None) and dim_str in str(e.task).lower())
         ]
-    if knowledge == "learned":
+    if uses_predicted_task():
         eval_examples = predict_tasks(eval_examples, args.task_classifier, observation_mode=observation_mode)
     world = build_vlabench_world_graph("vlabench_eval_world")
     vocabulary = PlanVocabulary.load(args.vocab) if args.vocab else PlanVocabulary.from_world(world, args.max_entities)
@@ -1033,7 +1034,7 @@ def command_evaluate_planner(args) -> None:
     planner = _load_planner(args, runtime.vocabulary)
     _json(evaluate_planner(planner, eval_examples, runtime)
           | {"generation_mode": "graph", "dfa_constrained": True, "observation_mode": observation_mode,
-             "knowledge": knowledge})
+             "knowledge": knowledge, "task_identity": default_task_identity()})
 
 
 def _factory(value: str):

@@ -79,12 +79,36 @@ def test_below_learned_no_task_fact_is_consulted(level):
     assert task_requirements(context, world, ENTITIES) == TaskRequirements()
 
 
-def test_learned_level_uses_only_the_predicted_task():
-    world = build_vlabench_world_graph("leak_learned", knowledge_level="learned")
+@pytest.mark.parametrize("level,identity", [("task", "predicted"), ("learned", None)])
+def test_predicted_task_identity_uses_only_the_predicted_task(level, identity):
+    world = build_vlabench_world_graph("leak_learned", knowledge_level=level, task_identity=identity)
+    assert (world.knowledge_state.level, world.knowledge_state.task_identity) == ("task", "predicted")
     context = {"task": "select_fruit", "task_skill_sequence": ("press",), "predicted_task": "select_toy"}
     requirements = task_requirements(context, world, ENTITIES)
     assert requirements.task == "select_toy" and not requirements.explicit_sequence
     assert task_requirements({"task": "select_fruit"}, world, ENTITIES).task is None
+    set_knowledge_level(world, "task", "oracle")
+    assert task_requirements(context, world, ENTITIES).task == "select_fruit"
+
+
+def test_knowledge_and_task_identity_are_separate_flags():
+    from .. import main
+    from ..knowledge import default_level, default_task_identity, set_default_level, set_default_task_identity
+    previous = default_level(), default_task_identity()
+    parse = lambda *flags: main.build_parser().parse_args(["evaluate-planner", "--planning-dir", "d", *flags])
+    try:
+        assert apply_knowledge_argument(parse("--knowledge", "task", "--task-identity", "predicted")) == "task"
+        assert default_task_identity() == "predicted"
+        assert apply_knowledge_argument(parse("--knowledge", "metadata")) == "task"
+        assert default_task_identity() == "oracle"
+        assert apply_knowledge_argument(parse("--knowledge", "learned")) == "task"
+        assert default_task_identity() == "predicted"
+        with pytest.raises(ValueError, match="implies --task-identity predicted"):
+            apply_knowledge_argument(parse("--knowledge", "learned", "--task-identity", "oracle"))
+        assert "learned" not in LEVELS and "metadata" not in LEVELS
+    finally:
+        set_default_level(previous[0])
+        set_default_task_identity(previous[1])
 
 
 def test_task_rules_are_inactive_below_learned_and_follow_set_knowledge_level():

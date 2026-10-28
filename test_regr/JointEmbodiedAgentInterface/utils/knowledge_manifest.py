@@ -196,7 +196,8 @@ def knowledge_manifest(runtime):
         ),
     )
     sources = {path: _source_definition(repo / path) for path in paths}
-    settings = {"vlabench_level": runtime.world.vlabench.knowledge_state.level}
+    state = runtime.world.vlabench.knowledge_state
+    settings = {"vlabench_level": state.level, "vlabench_task_identity": state.task_identity}
     return {
         "version": MANIFEST_VERSION,
         "components": result,

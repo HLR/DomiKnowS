@@ -11,12 +11,12 @@ from typing import Any, Mapping
 try:
     from .semantics import entity_mapping, resolve_pointer
     from .knowledge import (
-        COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, task_facts_available,
+        COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, default_task_identity, task_facts_available,
     )
 except ImportError:
     from semantics import entity_mapping, resolve_pointer
     from knowledge import (
-        COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, task_facts_available,
+        COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, default_task_identity, task_facts_available,
     )
 
 
@@ -93,11 +93,12 @@ def task_requirements(context, world, entities):
     knowledge = getattr(world, "task_knowledge", None) or DEFAULT_TASK_KNOWLEDGE
     state = getattr(world, "knowledge_state", None)
     level = state.level if state is not None else default_level()
+    predicted = (state.task_identity if state is not None else default_task_identity()) == "predicted"
     if not task_facts_available(level):
         return TaskRequirements()  # generic/scene: no task identity, sequence, target or fact is consulted
     normalize = lambda value: str(value or "").strip().lower().replace("-", "_")
     task = normalize(get("task") or get("task_name"))
-    if level == "learned":
+    if predicted:
         task = normalize(get("predicted_task"))  # the episode's own task name is not used
     elif not task and get("episode_id"):
         try:
@@ -105,7 +106,7 @@ def task_requirements(context, world, entities):
         except ImportError:
             from planning_metrics import planning_metadata
         task = planning_metadata(str(get("episode_id")))[0] or ""
-    expected = None if level == "learned" else get("task_skill_sequence")
+    expected = None if predicted else get("task_skill_sequence")
     if expected is None and isinstance(get("planning_facts"), Mapping):
         expected = get("planning_facts").get("required_skill_sequence")
     if expected is None and isinstance(get("planning_facts"), PlanningFacts):

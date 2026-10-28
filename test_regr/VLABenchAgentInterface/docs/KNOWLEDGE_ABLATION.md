@@ -2,7 +2,7 @@
 
 What each knowledge tier of the world graph contributes when the same checkpoint is evaluated on the same
 450 test episodes. Task knowledge is expressed as graph concepts and logical constraints
-(`knowledge/`, see the README source code map); `--knowledge` switches which constraint groups are active.
+(`knowledge/`, see the README source code map); `--knowledge` switches which constraint groups are active; `--task-identity` (`oracle` or `predicted`) and `--observation-mode` (`visual` or `metadata-assisted`) are separate settings of the facts those rules read. The former levels `learned` and `metadata` remain aliases (`task` with a predicted or an oracle identity).
 `causal` is a `--knowledge` level on every path: it enables only **3 DomiKnowS logical constraints**, the world graph's `causal` group for the Joint and internal graph decoders and the equivalent official causal graph for `--protocol official` (where `--constraints causal` remains an alias). It is the first cumulative tier above `grammar`, so `generic` and every higher level also keep the causal group active, and its result-table rows come from `eval_planning --knowledge causal`. Rows from `generic` up were measured before causal joined them (see Caveats).
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
@@ -58,27 +58,27 @@ What each knowledge tier of the world graph contributes when the same checkpoint
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable scene formulas and evaluate scene facts; a static fixture cannot be picked.</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--task-identity predicted</code> (alias <code style="white-space: normal; overflow-wrap: anywhere;">learned</code>)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ Task sequences, Task obligations, Complex tasks, Physics and Grounded families (rows of the source map below), with the task identity predicted</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">predicted from the instruction by a classifier fitted on the training split</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable task/grounded formulas. A predicted <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code> task makes its task concept true and requires <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code>; the classifier supplies identity, not new formulas.</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the same rules as <code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--task-identity oracle</code> (default)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the same rules; only the task identity differs</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the episode&#x27;s task name</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Keep the same formulas; episode identity can select different task-guarded requirements. Correcting a prediction from <code style="white-space: normal; overflow-wrap: anywhere;">select_chemistry_tube</code> to <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code> changes the required sequence from <code style="white-space: normal; overflow-wrap: anywhere;">pick, lift</code> to <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code>.</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">metadata</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the same rules as <code style="white-space: normal; overflow-wrap: anywhere;">task</code>, + QA property observations (<code style="white-space: normal; overflow-wrap: anywhere;">--observation-mode metadata-assisted</code>): the Physics rules then see each option&#x27;s material, shape or bound reflectance</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, oracle, <code style="white-space: normal; overflow-wrap: anywhere;">--observation-mode metadata-assisted</code> (alias <code style="white-space: normal; overflow-wrap: anywhere;">metadata</code>)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the same rules, + QA property observations (<code style="white-space: normal; overflow-wrap: anywhere;">--observation-mode metadata-assisted</code>): the Physics rules then see each option&#x27;s material, shape or bound reflectance</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">the episode&#x27;s task name</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Keep the same formulas; added property facts can change which candidates satisfy existing grounded selection requirements.</td>
     </tr>
   </tbody>
 </table>
 
-Logical constraints express the rules; concept values express the task identity and observed facts to which those rules apply. Thus `learned` enables additional constraints, while `task` and `metadata` can change accepted plans through different facts without adding constraints. The current declaration counts and concrete examples are documented in [VLABenchLogicaConstraints.md](VLABenchLogicaConstraints.md#ablation-levels).
+Logical constraints express the rules; concept values express the task identity and observed facts to which those rules apply. Thus `--knowledge task` enables additional constraints, while `--task-identity` and `--observation-mode` can change accepted plans through different facts without adding constraints. The current declaration counts and concrete examples are documented in [VLABenchLogicaConstraints.md](VLABenchLogicaConstraints.md#ablation-levels).
 
 EAI has its own activation settings and inventory: see [EAI logical constraints](../../EmbodiedAgentInterface/docs/EAILogicalConstraints.md). Its declarative action effects and goal evaluation do not change the VLABench levels or counts below.
 
@@ -143,31 +143,31 @@ before attributing scores to this refactor.
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task sequences</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/task_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_task_sequence</code>: task/interface and operation position imply the declared skill; the final position completes the sequence</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task identity, interface, position, skill-choice/final phase; explicit requests override defaults</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task obligations</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/task_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_obligations</code> and <code style="white-space: normal; overflow-wrap: anywhere;">_declare_requested_rules</code>: minimum length, all required history skills, explicit sequence/cycle choices, initial target and request completion</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">operation counts/history and explicitly supplied request arrays/targets</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grounded families</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">domiknows/generation/grounded.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">declare_predicates</code>: each known required fact must hold; holding/capacity formulas expose their Boolean conditions</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">separate requirements for capabilities, preconditions, compatibility, destinations, milestone progress, goals and preservation; raw hand/occupancy/capacity facts</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Complex tasks</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/complex_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">declare_complex</code>: 85 <code style="white-space: normal; overflow-wrap: anywhere;">ifL</code> rules generated from <code style="white-space: normal; overflow-wrap: anywhere;">knowledge/tables.py</code> (recipes, scene roles, hammer chain): allowed pick subjects, destinations, step order from performed operations, and plan-end steps and goals, relayed by <code style="white-space: normal; overflow-wrap: anywhere;">ComplexMonitor</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, named recipe, unique role bindings, foods present, book years and direction, named reagents, performed operations, final facts</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Physics</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">knowledge/physics_lcs.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">declare_physics</code>: 82 <code style="white-space: normal; overflow-wrap: anywhere;">ifL</code> rules generated from <code style="white-space: normal; overflow-wrap: anywhere;">knowledge/tables.py</code> (property tiers, instruction phrases): press-option membership, max/min, below-water and rank rules per QA task, relayed into <code style="white-space: normal; overflow-wrap: anywhere;">grounded__affordance</code> by <code style="white-space: normal; overflow-wrap: anywhere;">PhysicsMonitor</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, instruction phrases, option count, each option&#x27;s material, shape or reflectance, the pressed option. These attributes come from scene metadata, so they exist only with metadata-assisted observations (<code style="white-space: normal; overflow-wrap: anywhere;">metadata</code>); in visual mode the VLM chooses and no physics rule fires</td>
     </tr>
@@ -248,7 +248,7 @@ satisfied; a partial result still fails the gate.
 </tbody>
 </table>
 
-The official causal setting therefore enables **3 logical constraints**; its native JSON grammar adds no DomiKnowS declarations. It does not use the five grammar formulas from `graph.py` or activate the generic/scene/task world groups. The grammar/world path declares the same three rules as its `causal` group (94 declarations, all enabled at `learned` and above); with the official causal graph and the five episode-decoding formulas the inventory is **102 declarations**, rather than 102 constraints active together. Each complete formula counts once; nested operators are excluded. Full formulas and observation definitions are in the [causal constraint inventory](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
+The official causal setting therefore enables **3 logical constraints**; its native JSON grammar adds no DomiKnowS declarations. It does not use the five grammar formulas from `graph.py` or activate the generic/scene/task world groups. The grammar/world path declares the same three rules as its `causal` group (94 declarations, all enabled at `task`); with the official causal graph and the five episode-decoding formulas the inventory is **102 declarations**, rather than 102 constraints active together. Each complete formula counts once; nested operators are excluded. Full formulas and observation definitions are in the [causal constraint inventory](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
 
 The DFA still accumulates prefix observations and handles JSON bytes, pointer bounds, EOS, and operation limits. The compiled formulas decide the three causal admission rules. This refactor changes where the rules are expressed, and adds no new task or scene knowledge. Historical result tables below are unchanged.
 
@@ -256,27 +256,27 @@ The DFA still accumulates prefix observations and handles JSON bytes, pointer bo
 
 The transition rule now uses prefix progress projected from the same generation formulas, rather than a whole-plan validation flag. Each operation advances the compiled state; earlier valid transitions are not marked invalid because of a later bad transition or an unrelated pointer error. Decoding supplies the same progress observations instead of setting `allowed_transition=True` unconditionally.
 
-Two additional generic constraints require a legal first operation and a complete final subtask, including explicit empty-plan permission. Thus the current cumulative counts are grammar **5**, causal **8**, generic **32**, scene **38**, and learned/task/metadata **94**, plus the **82** physics constraints of `knowledge/physics_lcs.py` and the **85** complex-task constraints of `knowledge/complex_lcs.py` that the task group enables (**261**). This implementation change has not rerun the historical checkpoint scores below. The added checks improve direct world verification of invalid starts and incomplete/single-operation/empty plans; a fully satisfied active constraint set is still required for hard validity. Partial diagnostic scores can differ because unrelated argument errors no longer invalidate the pattern constraint.
+Two additional generic constraints require a legal first operation and a complete final subtask, including explicit empty-plan permission. Thus the current cumulative counts are grammar **5**, causal **8**, generic **32**, scene **38**, and task **94**, plus the **82** physics constraints of `knowledge/physics_lcs.py` and the **85** complex-task constraints of `knowledge/complex_lcs.py` that the task group enables (**261**). This implementation change has not rerun the historical checkpoint scores below. The added checks improve direct world verification of invalid starts and incomplete/single-operation/empty plans; a fully satisfied active constraint set is still required for hard validity. Partial diagnostic scores can differ because unrelated argument errors no longer invalidate the pattern constraint.
 
 `pattern_runtime.py` caches the structural projection. Bound-policy verification reuses that policy's progress DFA, preserving its continuation language and declared limits. The projection reads the actual graph formulas and relation paths; it does not maintain a separate table of allowed skill pairs.
 
 ### Tier activation contract
 
 `knowledge/__init__.py` remains the single source for level ordering and group
-activation: `grammar` has no world group; `generic` adds generic rules; `scene`
-adds scene rules; `learned`, `task`, and `metadata` activate all three groups.
-`learned` obtains task identity from the classifier, while `task` and `metadata`
-use episode identity. Metadata assistance changes observations, not LC groups.
+activation: `grammar` has no world group; `causal` adds the causal rules; `generic`
+adds generic rules; `scene` adds scene rules; `task` activates the task group as well.
+The task identity is a separate setting (`--task-identity`, stored with the level in
+`KnowledgeState`): `predicted` reads the classifier's task, `oracle` the episode's.
+Metadata assistance (`--observation-mode`) changes observations, not LC groups.
 The no-DFA modes bypass grammar and world enforcement entirely.
 
 All declared groups, including the eight grounded families, exist even when
 inactive. `set_knowledge_level` switches their `active` flags in place; recompile
 the DFA afterward. Building at a low level and enabling task knowledge must
 activate the same rules as building directly at task level. Request/task facts
-are not consulted below `learned`.
+are not consulted below `task`.
 
-`causal` is the second level of `knowledge/__init__.py` (`grammar < causal < generic < scene < learned < task <
-metadata`); `group_active` keeps the `causal` group active at every level from `causal` up. `--knowledge causal` selects it in
+`causal` is the second level of `knowledge/__init__.py` (`grammar < causal < generic < scene < task`); `group_active` keeps the `causal` group active at every level from `causal` up. `--knowledge causal` selects it in
 `evaluate-planner` (graph and official protocols), `eval_planning` and `train-agent`.
 
 The declaration refactor is validated with independently specified semantic
@@ -288,8 +288,8 @@ rerun the empirical score tables below.
 ## Setup
 
 - Checkpoint `joint_stage2_best.pt` (Stage 2, epoch 4), 450 test episodes, seed 42, original stored labels,
-  no generation failures at any level. Code: commit `4c04f1e1` (the `learned` and `grammar` rows were run on later commits that only add those levels; the `causal` row on `54da7bba`, 28 October 2026, where a rerun of `grammar` and `metadata` reproduced their rows), run on gpu2 (one GPU per level).
-- Command (per level; `metadata` uses `--observation-mode metadata-assisted`):
+  no generation failures at any level. Code: commit `4c04f1e1` (the predicted-identity and `grammar` rows were run on later commits that only add those settings; the `causal` row on `54da7bba`, 28 October 2026, where a rerun of `grammar` and the metadata-assisted row reproduced them), run on gpu2 (one GPU per level).
+- Command (per level; the metadata-assisted row uses `--observation-mode metadata-assisted`):
 
 ```bash
 python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning \
@@ -300,7 +300,7 @@ python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning \
   --output test_regr/JointEmbodiedAgentInterface/results/knowledge_ablation/<level>.json
 ```
 
-The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt` (see below). Raw reports: `test_regr/JointEmbodiedAgentInterface/results/knowledge_ablation/<level>.json`.
+The predicted-identity run adds `--task-identity predicted --task-classifier task_classifier.pt` (formerly `--knowledge learned`; see below). Raw reports: `test_regr/JointEmbodiedAgentInterface/results/knowledge_ablation/<level>.json`.
 
 ## Results (planning progress score, 0-100)
 
@@ -381,7 +381,7 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">39.6</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">learned</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, predicted identity</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">77.1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">78.0</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">98.2</td>
@@ -390,7 +390,7 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">50.8</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, oracle identity</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">77.1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">78.0</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">98.2</td>
@@ -399,7 +399,7 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">50.8</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">metadata</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, oracle, metadata-assisted</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.4</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">98.2</td>
@@ -489,7 +489,7 @@ Per-dimension score:
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">44.6</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">learned</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, predicted identity</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">78.9</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">72.2</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.7</td>
@@ -498,7 +498,7 @@ Per-dimension score:
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">87.4</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, oracle identity</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">78.9</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">72.2</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">81.7</td>
@@ -507,7 +507,7 @@ Per-dimension score:
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">87.4</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">metadata</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">task, oracle, metadata-assisted</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">77.8</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">75.1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">80.4</td>
@@ -518,21 +518,21 @@ Per-dimension score:
   </tbody>
 </table>
 
-## Learned task concept
+## Predicted task identity
 
-`learned` replaces the episode's task name by a classifier over the instruction (hashed word and bigram bag,
+`--task-identity predicted` replaces the episode's task name by a classifier over the instruction (hashed word and bigram bag,
 linear softmax head, `knowledge/task_classifier.py`). It is fitted on the training split only (3,600 episodes,
 45 task names, the episode ids are stored with the weights and evaluation refuses an overlapping split).
-Task-name accuracy is 95.1% on the 450 test episodes (94.2% on validation). At this level the declared
+Task-name accuracy is 95.1% on the 450 test episodes (94.2% on validation). With this identity the declared
 sequence, task targets and the facts grounded from the task name are rebuilt from the prediction.
 
 ```bash
 python -m test_regr.VLABenchAgentInterface.main fit-task-classifier   --planning-dir test_regr/VLABenchAgentInterface/data/planning --out task_classifier.pt
-python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning ... --knowledge learned   --task-classifier task_classifier.pt
+python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning ... --knowledge task --task-identity predicted --task-classifier task_classifier.pt
 ```
 
-The `learned` scores equal the `task` scores to every digit. Of the 212 test episodes whose task has declared
-knowledge, the rebuilt requirements differ from the task-level ones in 66: 60 are QA episodes where the same
+The predicted-identity scores equal the oracle-identity scores to every digit. Of the 212 test episodes whose task has declared
+knowledge, the rebuilt requirements differ from the oracle ones in 66: 60 are QA episodes where the same
 sequence is now supplied by the declared LCs instead of the dataset (same constraint), and 6 are
 `insert_bloom_flower` episodes predicted as `insert_flower`. Those 6 changed no score; I did not check
 whether their generated plans are identical. The misclassifications otherwise fall on task variants
@@ -567,7 +567,7 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
   (the obligations and sequence LCs) and PhysLaw 37.7 to 57.0 (grounded QA families). Skill recall rises
   from 89 to 98.
 - **Metadata adds about +4.3 Macro**, almost all of it PhysLaw (57.0 to 83.0), the dimension whose answer needs
-  measured property values. The `metadata` row was rerun on `1bd53605`, where the level also enforces the causal
+  measured property values. The metadata-assisted row was rerun on `1bd53605`, where the task level also enforces the causal
   rules and the physics and complex knowledge are logical constraints: 81.4 against 81.5 before causal joined the
   levels (parameter recall 72.4 to 71.6; Spatial +2.9, ComSense, M&T and Semantic about -1). The same run on
   `e358e881`, before the physics/complex conversion, gives identical metrics to full precision.
@@ -585,10 +585,10 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 - Single seed, one checkpoint; differences of about 1 point (generic vs scene) are not established.
 - `task` gives Macro 77.1 here against the 75.1 recorded in `README_checkpoint.md`; that earlier figure came
   from an older code revision. This run is the reference for the knowledge comparison.
-- The `metadata` level uses a different observation mode, so it is not a pure LC-group toggle.
-- The `generic`, `scene`, `learned` and `task` rows were measured while the causal group was not part of those
+- The metadata-assisted row changes the observation mode, not the active rules.
+- The `generic`, `scene` and both `task` identity rows were measured while the causal group was not part of those
   levels; since causal became cumulative they also enforce its three rules, and they have not been rerun. The
-  `metadata` row is the rerun on `1bd53605` (with causal). The `causal` row ran on `54da7bba`, where `grammar` and the
-  pre-fold `metadata` reproduced their earlier rows. None of the 4,500 reference plans
+  metadata-assisted row is the rerun on `1bd53605` (with causal). The `causal` row ran on `54da7bba`, where `grammar` and the
+  pre-fold metadata-assisted run reproduced their earlier rows. None of the 4,500 reference plans
   breaks its three rules, but the two rules that `generic` lacks were chosen after that check, so like the press
   question they encode benchmark knowledge.

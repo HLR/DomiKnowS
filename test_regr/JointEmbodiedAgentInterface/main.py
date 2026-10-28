@@ -23,7 +23,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     load_planning_examples,
 )
 from test_regr.VLABenchAgentInterface.simulation.assist_ablation import parse_assist_modes, run_assist_ablation
-from test_regr.VLABenchAgentInterface.knowledge import add_knowledge_argument, apply_knowledge_argument
+from test_regr.VLABenchAgentInterface.knowledge import add_knowledge_argument, apply_knowledge_argument, default_task_identity
 from test_regr.VLABenchAgentInterface.knowledge.holdout import (
     add_holdout_arguments, apply_holdout_arguments, partition,
 )
@@ -329,7 +329,8 @@ def command_train_agent(args):
             raise ValueError("--ce-only cannot run Stage 2 assist ablations")
     random.seed(args.seed)
     torch.manual_seed(args.seed)
-    _status(f"knowledge level={apply_knowledge_argument(args)} held-out tasks={apply_holdout_arguments(args)}")
+    _status(f"knowledge level={apply_knowledge_argument(args)} task identity={default_task_identity()} "
+            f"held-out tasks={apply_holdout_arguments(args)}")
     # Fail on a mistyped component or mode before loading any model.
     assist_components = parse_assist_components(getattr(args, "assist_components", "all"))
     assist_ablation_modes = None

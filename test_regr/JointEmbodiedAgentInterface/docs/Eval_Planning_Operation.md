@@ -202,7 +202,7 @@ Omit the limit for full evaluation. The current truthiness check treats zero
 as no cap, while negative values perform Python tail slicing; use positive
 values for bounded evaluations. Empty selections raise an error.
 
-For `--knowledge learned`, task prediction happens after selection, and the
+For `--task-identity predicted`, task prediction happens after selection, and the
 classifier rejects overlap with its recorded training episode IDs. Input
 probes run last, so their donor pool is the selected evaluation collection.
 
@@ -235,7 +235,7 @@ Unavailable symbolic property checks are reported as coverage limitations;
 they do not remove those episodes from answer scoring.
 
 `metadata-assisted` enables explicit property observations and qualitative
-adapters. Pair it explicitly with `--knowledge metadata` and report it
+adapters. Pair it explicitly with `--knowledge task` (the default) and report it
 separately. Visual mode is a QA property-choice contract within the broader
 scene/entity interface, not a promise to remove every metadata field from
 every task.

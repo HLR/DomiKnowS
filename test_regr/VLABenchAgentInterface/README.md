@@ -583,7 +583,7 @@ repository root; every module is also importable as `test_regr.VLABenchAgentInte
 | `physics_lcs.py` | The 82 physics logical constraints generated from the tables, and `PhysicsMonitor`, which relays them into `grounded__affordance` on every press. |
 | `complex_lcs.py` | The 85 complex-task logical constraints (pick subjects, destinations, step order, plan-end steps and goals) and `ComplexMonitor`, which relays them into the grounded families. |
 | `task_lcs.py` | Declares `task__<name>`, interface, position, history and phase concepts on the operation concept and the per-task `skill_sequence`, `completion` and `obligations` logical constraints, plus the observation values that feed them. |
-| `task_classifier.py` | The learned task concept: a classifier over the instruction fitted on the training split only, used by `--knowledge learned`. |
+| `task_classifier.py` | The learned task concept: a classifier over the instruction fitted on the training split only, used by `--task-identity predicted` (formerly `--knowledge learned`). |
 | `holdout.py` | The unseen-task test: `--holdout-tasks` removes whole tasks from training and from the declared knowledge; `heldout` evaluation split. |
 
 ### `official/` (standard VLM-planning protocol)

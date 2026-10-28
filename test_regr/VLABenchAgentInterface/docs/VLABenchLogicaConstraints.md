@@ -37,12 +37,12 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Complex task knowledge (cook, books, chemistry, hammer)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">85 (separate complex graph, relayed into the grounded families)</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above, with the task group</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, with the task group</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Physics knowledge (QA answer selection)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">82 (separate physics graph, relayed into <code style="white-space: normal; overflow-wrap: anywhere;">grounded__affordance</code>)</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above, with the task group</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, with the task group</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Episode decoding knowledge</td>
@@ -67,23 +67,23 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task world knowledge</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>World subtotal</strong></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>89</strong></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Grammar + world total</strong></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>94</strong></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
     </tr>
   <tr><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Inventory across both paths</strong></td><td style="padding: 0.55em 0.65em;"><strong>269</strong></td><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;">94 grammar/world + 82 physics + 85 complex + 3 official causal + 5 episode decoding declarations; not one active setting</td></tr>
 </tbody>
 </table>
 
-The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. The separate `causal` level declares **3 id-only logical constraints**, compiled into `CausalPlanDFA` and described below. The world graph also declares the same three rules as its `causal` group, for the graph DFA of the Joint and internal planners; the VLABench grammar/world baseline is therefore 94 declarations, all enabled at `learned` and above, and the inventory across that baseline, the physics graph (82 formulas, below), the complex-task graph (85 formulas, below), the separate causal graph and the separate decoding graph (5 formulas, below) contains **269 declarations**. These are counts of declarations, so the causal and generic anti-self-placement formulas count separately even though their rule names overlap. All 89 world constraints use `ifL` as their outermost operator. The five grammar constraints use one `atLeastAL`, one `ifL`, two `atMostAL`, and one `andL`.
+The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. The separate `causal` level declares **3 id-only logical constraints**, compiled into `CausalPlanDFA` and described below. The world graph also declares the same three rules as its `causal` group, for the graph DFA of the Joint and internal planners; the VLABench grammar/world baseline is therefore 94 declarations, all enabled at `task`, and the inventory across that baseline, the physics graph (82 formulas, below), the complex-task graph (85 formulas, below), the separate causal graph and the separate decoding graph (5 formulas, below) contains **269 declarations**. These are counts of declarations, so the causal and generic anti-self-placement formulas count separately even though their rule names overlap. All 89 world constraints use `ifL` as their outermost operator. The five grammar constraints use one `atLeastAL`, one `ifL`, two `atMostAL`, and one `andL`.
 
 ## Ablation levels
 
@@ -150,21 +150,21 @@ The grammar/world levels are cumulative. The official-protocol `causal` row is a
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">If a target is classified as a static fixture, the existing <code style="white-space: normal; overflow-wrap: anywhere;">pick_excludes_static_fixtures</code> formula rejects picking it.</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">learned</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--task-identity predicted</code> (alias <code style="white-space: normal; overflow-wrap: anywhere;">learned</code>)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups + physics + complex</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">261</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable 56 additional task/grounded constraints. A classifier&#x27;s predicted task sets task-concept values; supplied requirements provide further facts. The formulas are predefined, not learned by this classifier.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Predicting <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code> makes its task concept true. Its sequence constraint requires <code style="white-space: normal; overflow-wrap: anywhere;">place</code> at operation index 1, and its completion constraint prevents stopping after index 0.</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--task-identity oracle</code> (default)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups + physics + complex</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">261</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">No additional constraints. Use the episode task identity instead of the predicted identity; this can change which task-guarded formulas apply.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">If the classifier predicted <code style="white-space: normal; overflow-wrap: anywhere;">select_chemistry_tube</code> but the episode task is <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code>, the applicable sequence changes from <code style="white-space: normal; overflow-wrap: anywhere;">pick, lift</code> to <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code>. If the prediction was correct, this identity change has no effect.</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">metadata</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, oracle, <code style="white-space: normal; overflow-wrap: anywhere;">--observation-mode metadata-assisted</code> (alias <code style="white-space: normal; overflow-wrap: anywhere;">metadata</code>)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups + physics + complex</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">261</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">No additional constraints. Supply metadata-assisted property observations to the existing formulas.</td>
@@ -173,9 +173,9 @@ The grammar/world levels are cumulative. The official-protocol `causal` row is a
   </tbody>
 </table>
 
-The levels are cumulative: `causal` adds the three id-level causal formulas to the grammar, and every higher level keeps them. Under `--protocol official`, whose grammar DFA (`NativePlanDFA`) is not the five-constraint grammar of `graph.py`, `causal` is the highest level that can be grounded and enforces the official causal graph instead. `metadata` introduces observations, not a fourth world rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `learned`.
+The levels are cumulative: `causal` adds the three id-level causal formulas to the grammar, and every higher level keeps them. Under `--protocol official`, whose grammar DFA (`NativePlanDFA`) is not the five-constraint grammar of `graph.py`, `causal` is the highest level that can be grounded and enforces the official causal graph instead. `--observation-mode metadata-assisted` introduces observations, not a further rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `task`.
 
-The distinction is between **enabling a logical constraint** and **changing the facts evaluated by that constraint**. Moving from `scene` to `learned` enables more constraints. Moving from `learned` to `task` or `metadata` retains the same formulas but can change their applicable cases and accepted plans through different concept values. More supplied knowledge therefore need not increase the constraint count.
+The distinction is between **enabling a logical constraint** and **changing the facts evaluated by that constraint**. Moving from `scene` to `task` enables more constraints. Changing `--task-identity` (predicted or oracle) or `--observation-mode` retains the same formulas but can change their applicable cases and accepted plans through different concept values. More supplied knowledge therefore need not increase the constraint count.
 
 For example, the declared sequence formula includes `task_select_fruit(x) AND choosing_skill(x) AND position_1(x) -> place(x)` (with the interface and explicit-request guards described below). The predicted or episode task identity supplies `task_select_fruit(x)`; it does not rewrite the implication. Task identity selection is defined in [task_policy.py:59](../task_policy.py#L59), task-concept values in [knowledge/task_lcs.py:160](../knowledge/task_lcs.py#L160), and the sequence formulas in [knowledge/task_lcs.py:89](../knowledge/task_lcs.py#L89).
 
@@ -183,7 +183,7 @@ Activation is defined at [test_regr/VLABenchAgentInterface/knowledge/__init__.py
 
 ## DomiKnowS operator classes
 
-Four operator classes are used as the outermost operator of complete logical constraints. Each declaration is classified once. “Task” means the world group first enabled at `learned`. The causal column counts the world graph&#x27;s causal group (3) and the separate official-protocol causal graph (3); the episode column is the decoding graph of episode knowledge; the physics and complex columns are the physics and complex-task graphs; the inventory total includes all of them.
+Four operator classes are used as the outermost operator of complete logical constraints. Each declaration is classified once. “Task” means the world group first enabled at `task`. The causal column counts the world graph&#x27;s causal group (3) and the separate official-protocol causal graph (3); the episode column is the decoding graph of episode knowledge; the physics and complex columns are the physics and complex-task graphs; the inventory total includes all of them.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
 <colgroup><col style="width: 12%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 13%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 19%;"></colgroup>
@@ -619,7 +619,7 @@ The HMM action lookahead (`--hmm`) steers this DFA as well. It ranks only the to
 
 ## Complex task knowledge: 85 logical constraints
 
-The four bindable complex tasks are declared in `knowledge/complex_lcs.py`, generated from `knowledge/tables.py` (`RECIPES`, `COMPLEX_ROLE_FRAGMENTS`, `COMPLEX_TASK_ROLES`, `HAMMER_CHAIN`). The rules are active with the task group (`learned` and above) and are relayed by `ComplexMonitor` (through `domiknows/generation/lc_relay.py`) into the `affordance`, `destination`, `milestone_order` and `goal_completion` families, so the graph DFA and the DataNode verifier enforce them through the existing `grounded__*` constraints. Variables: `q` the request, `x` the operation's subject, `y` its destination, `e`/`c`/`v`/`w` the role-bearing entities of the scene.
+The four bindable complex tasks are declared in `knowledge/complex_lcs.py`, generated from `knowledge/tables.py` (`RECIPES`, `COMPLEX_ROLE_FRAGMENTS`, `COMPLEX_TASK_ROLES`, `HAMMER_CHAIN`). The rules are active with the task group (`task`) and are relayed by `ComplexMonitor` (through `domiknows/generation/lc_relay.py`) into the `affordance`, `destination`, `milestone_order` and `goal_completion` families, so the graph DFA and the DataNode verifier enforce them through the existing `grounded__*` constraints. Variables: `q` the request, `x` the operation's subject, `y` its destination, `e`/`c`/`v`/`w` the role-bearing entities of the scene.
 
 Observations, produced by `complex_grounding.py` and `complex_event` without any rule: the task, the recipe(s) named in the instruction, which scene entities uniquely bind each role (plate, shelf, flask, table, hammer, nail, counter, the painting the instruction names, the books with their century keys, the reagents the instruction names as solutions), which foods are present, the books' years and whether the instruction asks for the reverse order, the operation, the operations performed so far (`GroundedState.performed`, recorded only for monitors that read history) and, at the end, the final `at`, `pushed_to` and `poured_into` facts with whether each is known. Each rule's antecedent repeats the binding condition of the former template (for example, exactly one recipe named, its ingredients present, a unique plate), so an unbound episode gets no rule, as before. The skill sequences, the chemistry skill cycle and reusable formulae, and the book task's `pull` release stay planning facts generated from `COMPLEX_SKILL_TEMPLATES` and `COMPLEX_EFFECTS`: the first two are enforced by the task-sequence constraints, reuse by `no_redundant_repeated_picks`, and the release is transition dynamics checked by the holding constraints. `texas_holdem` has no rule (its winning hand cannot be inferred from inputs).
 
@@ -2699,7 +2699,7 @@ Compared with the former templates on every plan prefix the old model admitted (
 
 ## Physics knowledge: 82 logical constraints
 
-The qualitative physics of the six QA tasks is declared in `knowledge/physics_lcs.py`, generated from the tables in `knowledge/tables.py` (`PHYSICS_PROPERTIES`: an ascending order of tiers per property; `PHYSICS_PHRASES` and `PHYSICS_TASK_PHRASES`: the instruction phrases and the order in which they are read). The rules are active with the task group (`learned` and above). `RelayedKnowledge` (`domiknows/generation/lc_relay.py`) compiles them with `compile_predicate_constraints` over the variables `q` (the request), `s` (the pressed option) and `o` (every candidate option), and `PhysicsMonitor` relays each firing rule into the `affordance` requirement family on every press, so the graph DFA and the DataNode verifier enforce them through `grounded__affordance`.
+The qualitative physics of the six QA tasks is declared in `knowledge/physics_lcs.py`, generated from the tables in `knowledge/tables.py` (`PHYSICS_PROPERTIES`: an ascending order of tiers per property; `PHYSICS_PHRASES` and `PHYSICS_TASK_PHRASES`: the instruction phrases and the order in which they are read). The rules are active with the task group (`task`). `RelayedKnowledge` (`domiknows/generation/lc_relay.py`) compiles them with `compile_predicate_constraints` over the variables `q` (the request), `s` (the pressed option) and `o` (every candidate option), and `PhysicsMonitor` relays each firing rule into the `affordance` requirement family on every press, so the graph DFA and the DataNode verifier enforce them through `grounded__affordance`.
 
 Observations, produced by `physics_grounding.py` and `physics_event` without any rule: the task, which phrases occur in the instruction, the option count, each option's `material__*` and `shape__*` (from the object bound to the button) or reflectance measurement (`measured`, `measured_greater`), and which option is pressed. An option whose attribute is unknown or whose binding is ambiguous has no attribute atom, so it never causes a violation and is not counted; the relay reports such a verdict as unknown. Each rule therefore keeps the former open-world behaviour: known losers are rejected, unknown winners are not asserted.
 
@@ -5834,7 +5834,7 @@ The selection policy that the generic `SelectionRequirement` computes in Python 
 
 ## Generic world families: 24 logical constraints
 
-Every rule here first becomes active at `generic` and stays active at `scene`, `learned`, `task`, and `metadata`. Each rule is one logical constraint using `ifL` as its outermost operator.
+Every rule here first becomes active at `generic` and stays active at `scene` and `task`. Each rule is one logical constraint using `ifL` as its outermost operator.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -6340,7 +6340,7 @@ Each rule is one logical constraint using `ifL` as its outermost operator, first
 
 ## Task world families: 56 logical constraints
 
-All families in this section first become active at **`learned`**, and remain active at `task` and `metadata`. Each named rule is one logical constraint using `ifL` as its outermost operator. Task identity comes from the selected ablation level, not from the rule's name.
+All families in this section first become active at **`task`**, whatever the task identity or observation mode. Each named rule is one logical constraint using `ifL` as its outermost operator. Task identity comes from the selected ablation level, not from the rule's name.
 
 ### Caller/request rules: four logical constraints
 
