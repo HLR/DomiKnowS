@@ -103,3 +103,50 @@ PHYSICS_TASK_PHRASES: Mapping[str, tuple[tuple[str, str], ...]] = MappingProxyTy
 # On a slide-cost scale "fastest" is the smallest value and the second fastest is rank 1 from the bottom.
 PHYSICS_REVERSED = frozenset({"friction_qa"})
 PHYSICS_MAX_OPTIONS = 8
+
+
+# Complex tasks (complex_lcs.py turns these into logical constraints). Recipes are the public VLABench recipe.json.
+RECIPES: Mapping[str, tuple[str, ...]] = MappingProxyType({
+    "tomato_and_egg_stir_fry": ("tomato", "egg"),
+    "garlic_steak_with_mushroom": ("steak", "garlic", "mushroom"),
+    "broccoli_and_cheese_bake": ("broccoli", "cheese"),
+    "carrot_and_corn_salad": ("carrot", "corn"),
+    "bell_pepper_and_eggplant_stir_fry": ("bell_pepper", "eggplant", "garlic"),
+    "fish_with_garlic_and_onion": ("fish", "garlic", "onion"),
+    "sweet_potato_and_cheese_bake": ("sweet_potato", "cheese"),
+    "steak_and_potato_skillet": ("steak", "potato", "onion"),
+    "eggplant_and_tomato_stew": ("eggplant", "tomato", "garlic"),
+    "mushroom_and_broccoli_stir_fry": ("mushroom", "broccoli", "garlic"),
+    "carrot_and_sweet_potato_roast": ("carrot", "sweet_potato", "garlic"),
+    "fish_and_bell_pepper_sauté": ("fish", "bell_pepper", "onion"),
+    "corn_and_cheese_omelette": ("corn", "egg", "cheese"),
+    "tomato_and_onion_salad": ("tomato", "onion"),
+    "eggplant_and_mushroom_gratin": ("eggplant", "mushroom", "cheese"),
+})
+FOODS = tuple(sorted({food for foods in RECIPES.values() for food in foods}))
+# Scene roles bound by a unique name fragment (painting, book and reagent are bound by the instruction).
+COMPLEX_ROLE_FRAGMENTS: Mapping[str, str] = MappingProxyType({
+    "plate": "plate", "shelf": "shelf", "flask": "flask", "table": "table",
+    "hammer": "hammer", "nail": "nail", "counter": "counter",
+})
+COMPLEX_ROLES = (*COMPLEX_ROLE_FRAGMENTS, "painting", "book", "reagent")
+COMPLEX_TASK_ROLES: Mapping[str, tuple[str, ...]] = MappingProxyType({
+    "cook_dishes": ("plate",),
+    "book_rearrange": ("shelf",),
+    "take_chemistry_experiment": ("flask", "table"),
+    "hammer_nail_and_hang_picture": ("hammer", "nail", "counter", "painting"),
+})
+# Ordered steps (skill, subject role, destination role) of the hammer-and-picture task.
+HAMMER_CHAIN = (("pick", "hammer", None), ("push", "hammer", "nail"), ("place", "hammer", "counter"),
+                ("pick", "painting", None), ("push", "painting", "nail"))
+# Skill templates of the bound tasks: per bound subject, fixed, or a cycle the plan repeats.
+COMPLEX_SKILL_TEMPLATES: Mapping[str, tuple[str, tuple[str, ...]]] = MappingProxyType({
+    "cook_dishes": ("per_subject", ("pick", "place")),
+    "book_rearrange": ("per_subject", ("pick", "push", "pull")),
+    "hammer_nail_and_hang_picture": ("fixed", tuple(skill for skill, _, _ in HAMMER_CHAIN)),
+    "take_chemistry_experiment": ("cycle", ("pick", "pour", "place")),
+})
+# The public book task releases its gripper during pull.
+COMPLEX_EFFECTS: Mapping[str, dict] = MappingProxyType({"book_rearrange": {"pull": {"release_hands": ["right"]}}})
+COMPLEX_TASKS = ("cook_dishes", "book_rearrange", "take_chemistry_experiment", "hammer_nail_and_hang_picture",
+                 "texas_holdem")

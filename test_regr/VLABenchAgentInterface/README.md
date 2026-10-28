@@ -559,8 +559,8 @@ repository root; every module is also importable as `test_regr.VLABenchAgentInte
 | `constraint_compiler.py` | VLABench predicate bindings and the token/state adapter that compiles the world constraints into decoding masks. |
 | `semantics.py` | Executable world predicates (enclosed or opened containers, static fixtures, pointer resolution, operation schema errors), independent of DataNodes and token decoding. |
 | `task_policy.py` | Turns supplied task facts into the observations for the generic compiler (tier-gated); the declared sequences themselves are task LCs in `knowledge/`. |
-| `complex_grounding.py` | Complex-task requirements derived from the exposed language and scene names only. |
-| `physics_grounding.py` | Input-only adapters for the qualitative physics (QA) tasks, in `visual` and `metadata-assisted` form. |
+| `complex_grounding.py` | Complex-task observations (role bindings, named recipe, book years and direction, named reagents) from the exposed language and scene names only; the rules are in `knowledge/complex_lcs.py`. |
+| `physics_grounding.py` | Input-only adapters for the qualitative physics (QA) tasks, in `visual` and `metadata-assisted` form: button-object binding, attributes, phrases and reflectance; the rules are in `knowledge/physics_lcs.py`. |
 | `object_grounding.py` | Conservative instruction grounding from scene components, never from goal metadata; produces per-skill object-id restrictions. |
 | `planning_augmentation.py` | Entity-order augmentation that keeps scene names and target meaning. |
 | `models.py` | The compact graph-token planner (`QwenVLPlanner`), its prompt, and the model-loading and special-token helpers shared with the controller. |
@@ -579,7 +579,9 @@ repository root; every module is also importable as `test_regr.VLABenchAgentInte
 | File | Functionality |
 | --- | --- |
 | `__init__.py` | Knowledge tiers (`generic`, `scene`, `learned`, `task`, `metadata`), `--knowledge` flag helpers, and `TaskKnowledge` (the declared sequences and obligations the builder loops over). |
-| `tables.py` | The declarative per-task data: primitive, QA and planning skill sequences and the complex-task schemas. |
+| `tables.py` | The declarative per-task data: primitive, QA and planning skill sequences, the complex-task schemas, the physics property orders and phrases, and the complex-task recipes, roles, hammer chain and skill templates. |
+| `physics_lcs.py` | The 82 physics logical constraints generated from the tables, and `PhysicsMonitor`, which relays them into `grounded__affordance` on every press. |
+| `complex_lcs.py` | The 85 complex-task logical constraints (pick subjects, destinations, step order, plan-end steps and goals) and `ComplexMonitor`, which relays them into the grounded families. |
 | `task_lcs.py` | Declares `task__<name>`, interface, position, history and phase concepts on the operation concept and the per-task `skill_sequence`, `completion` and `obligations` logical constraints, plus the observation values that feed them. |
 | `task_classifier.py` | The learned task concept: a classifier over the instruction fitted on the training split only, used by `--knowledge learned`. |
 | `holdout.py` | The unseen-task test: `--holdout-tasks` removes whole tasks from training and from the declared knowledge; `heldout` evaluation split. |

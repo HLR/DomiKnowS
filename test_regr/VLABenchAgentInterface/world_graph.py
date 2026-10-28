@@ -60,6 +60,7 @@ class VLABenchWorldGraphBundle:
     knowledge_groups: Any = None
     # Relayed knowledge declared in standalone graphs (knowledge/physics_lcs.py), active with the task group.
     physics_knowledge: Any = None
+    complex_knowledge: Any = None
     facts: Any = None
     pattern_first_operation: Any = None
     pattern_start_allowed: Any = None
@@ -349,6 +350,7 @@ def build_vlabench_world_graph(
             knowledge_state=state,
             knowledge_groups=groups,
             physics_knowledge=_physics_knowledge(level) if include_default_constraints else None,
+            complex_knowledge=_complex_knowledge(level) if include_default_constraints else None,
         )
 
         if include_default_constraints:
@@ -370,6 +372,15 @@ def _physics_knowledge(level):
     return LazyKnowledge(build_physics_knowledge, active=group_active(level, "task"))
 
 
+def _complex_knowledge(level):
+    from domiknows.generation.lc_relay import LazyKnowledge
+    try:
+        from .knowledge.complex_lcs import build_complex_knowledge
+    except ImportError:
+        from knowledge.complex_lcs import build_complex_knowledge
+    return LazyKnowledge(build_complex_knowledge, active=group_active(level, "task"))
+
+
 def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str) -> None:
     """Activate the constraint groups of ``level`` in place. Recompile any DFA built from the graph afterwards."""
     state = bundle.knowledge_state
@@ -377,8 +388,9 @@ def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str) -> None:
     for group, constraints in (bundle.knowledge_groups or {}).items():
         for constraint in constraints:
             constraint.active = group_active(state.level, group)
-    if bundle.physics_knowledge is not None:
-        bundle.physics_knowledge.set_active(group_active(state.level, "task"))
+    for knowledge in (bundle.physics_knowledge, bundle.complex_knowledge):
+        if knowledge is not None:
+            knowledge.set_active(group_active(state.level, "task"))
 
 
 

@@ -93,7 +93,12 @@ def test_repeated_action_milestones_advance_from_source_state_only():
 
 def test_recipe_goals_and_unavailable_inputs():
     facts = complex_planning_facts("cook_dishes", "Prepare tomato_and_egg_stir_fry", ("plate", "tomato", "egg", "fish"))
-    assert facts["goals"]["positive"] == [["at", "tomato", "plate"], ["at", "egg", "plate"]]
+    # The goals are rules in knowledge/complex_lcs.py; the facts carry the bound recipe and plate.
+    from ..complex_grounding import bound_subjects
+    assert facts["complex_request"]["recipes"] == ["tomato_and_egg_stir_fry"]
+    assert facts["complex_request"]["roles"]["plate"] == ["plate"]
+    assert bound_subjects("cook_dishes", facts["complex_request"]) == ["tomato", "egg"]
+    assert facts["required_skill_sequence"] == ["pick", "place"] * 2
     assert complex_planning_facts("cook_dishes", "unknown dish", ("plate",))["complex_grounding_report"]["status"] == "unavailable"
     assert complex_planning_facts("texas_holdem", "win", ("card",))["complex_grounding_report"]["status"] == "unavailable"
 
@@ -106,7 +111,7 @@ def test_recipe_goals_and_unavailable_inputs():
 ])
 def test_chemical_products_are_not_reactant_goals(instruction):
     facts = complex_planning_facts("take_chemistry_experiment", instruction, ("Na2CO3", "HCl", "NaCl", "flask", "table"))
-    subjects = {goal[1] for goal in facts["goals"]["positive"]}
+    subjects = set(facts["complex_request"]["roles"]["reagent"])
     assert subjects == {"Na2CO3", "HCl"}
 
 

@@ -71,6 +71,18 @@ def knowledge_monitors(world, raw, resolve, task):
                  "attributes": {names[c]: value for c, value in (block.get("attributes") or {}).items()},
                  "measurements": {names[c]: value for c, value in (block.get("measurements") or {}).items()}}
         monitors.append(PhysicsMonitor(physics.get(), task, block))
+    block = raw.get("complex_request") if isinstance(raw, Mapping) else None
+    complex_knowledge = getattr(world, "complex_knowledge", None)
+    if block and complex_knowledge is not None and task:
+        try:
+            from .knowledge.complex_lcs import ComplexMonitor
+        except ImportError:
+            from knowledge.complex_lcs import ComplexMonitor
+        resolved = lambda names: [resolve(name) for name in names]
+        block = {**block, "entities": resolved(block["entities"]),
+                 "roles": {role: resolved(names) for role, names in block["roles"].items()},
+                 "years": {resolve(name): year for name, year in block.get("years", {}).items()}}
+        monitors.append(ComplexMonitor(complex_knowledge.get(), task, block))
     return tuple(monitors)
 
 
