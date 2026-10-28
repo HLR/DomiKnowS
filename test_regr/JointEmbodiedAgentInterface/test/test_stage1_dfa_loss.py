@@ -129,14 +129,18 @@ def test_domains_outside_the_dfa_loss_keep_plain_cross_entropy(joint_fixture):
     assert terms == {}
 
 
-def test_ce_only_command_trains_both_heads_without_dfa_or_rl(joint_fixture, monkeypatch, tmp_path):
+@pytest.mark.parametrize("mode", ["ce-only", "ce-dfa-only"])
+def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypatch, tmp_path, mode):
     from .. import main as cli
+    from .. import program as program_module
     from ..models import FreeDecoding
 
     examples, runtime = joint_fixture
     planner = make_planner(runtime)
     controller = torch.nn.Linear(1, 1)
     item = vlabench_item(runtime)
+    # Two valid targets keep a learnable choice under the DFA mask.
+    item["entities"] = item["planner_context"]["entity_table"] = ("button0", "button1")
     before = {d: planner.label_heads[d].weight.detach().clone() for d in ("eai", "vlabench")}
 
     def forbidden(*args, **kwargs):
@@ -150,19 +154,22 @@ def test_ce_only_command_trains_both_heads_without_dfa_or_rl(joint_fixture, monk
     monkeypatch.setattr(cli, "_controller", lambda *args: controller)
     monkeypatch.setattr(cli, "_control_loaders", lambda args: {"train": [None]})
     monkeypatch.setattr(cli, "load_control_task_instructions", lambda *args: {})
-    monkeypatch.setattr(JointSolverPOIProgram, "dfa_mass_report", forbidden)
-    monkeypatch.setattr(runtime, "dfa_for", forbidden)
+    if mode == "ce-only":
+        monkeypatch.setattr(JointSolverPOIProgram, "dfa_mass_report", forbidden)
+        monkeypatch.setattr(runtime, "dfa_for", forbidden)
+    monkeypatch.setattr(program_module, "PrimalDualProgram", forbidden)
     monkeypatch.setattr(cli, "JointReinforcementProgram", forbidden)
     monkeypatch.setattr(cli, "_enter_controller_reinforcement", forbidden)
     monkeypatch.setattr(JointSolverPOIProgram, "train_controller_warmup", forbidden)
 
     def evaluate_eai(*args, **kwargs):
-        assert isinstance(planner._planning_dfa("eai", {}, None), FreeDecoding)
+        assert planner.free_decoding == (mode == "ce-only")
+        assert isinstance(planner._planning_dfa("eai", {}, runtime.eai_dfa), FreeDecoding) == (mode == "ce-only")
         # Poor baseline performance must still be saved, without an RL exploration gate.
         return {"goal_success": 0.0, "goal_recall": 0.0, "positive_reward_rate": 0.0}
 
     def evaluate_vla(*args, **kwargs):
-        assert isinstance(planner._planning_dfa("vlabench", {}, None), FreeDecoding)
+        assert isinstance(planner._planning_dfa("vlabench", item["planner_context"], runtime.vlabench_dfa), FreeDecoding) == (mode == "ce-only")
         return {"exact_graph_match": 0.0, "valid": 0.0}
 
     monkeypatch.setattr(cli, "_evaluate_eai", evaluate_eai)
@@ -176,22 +183,70 @@ def test_ce_only_command_trains_both_heads_without_dfa_or_rl(joint_fixture, monk
     monkeypatch.setattr(cli, "save_joint_checkpoint", save)
     monkeypatch.setattr(cli, "load_joint_checkpoint", lambda *a, **kw: saved)
     args = cli.build_parser().parse_args([
-        "train-agent", "--ce-only", "--device", "cpu", "--output", str(tmp_path),
+        "train-agent", f"--{mode}", "--device", "cpu", "--output", str(tmp_path),
         "--stage1-epochs", "1", "--stage1-rounds-per-epoch", "1", "--stage1-eai-warmup-steps", "0",
+        "--stage1-dfa-loss", "off", "--stage1-masked-ce-domains", "none",
+        "--stage1-dfa-domains", "none", "--stage1-pmd-domains", "eai,vlabench",
+        "--stage1-pmd-weight", "10", "--stage1-dfa-mass-weight", "10",
     ])
     cli.command_train_agent(args)
-    assert cli._dfa_loss_config(args) is None
+    config = cli._dfa_loss_config(args)
+    if mode == "ce-only":
+        assert config is None
+    else:
+        assert config.masked_ce_domains == config.domains == ("eai", "vlabench")
+        assert config.pmd_domains == () and config.pmd_weight == config.mass_weight == 0.0
+        assert saved["metrics"]["dfa_mass"].keys() == {"eai", "vlabench"}
+    assert args.stage2_epochs == args.controller_warmup_steps == 0
     assert saved["stage"] == "stage1"
-    assert saved["metrics"]["training_mode"] == "ce-only"
-    assert saved["metrics"]["decoding"] == "free"
+    assert saved["metrics"]["training_mode"] == mode
+    assert saved["metrics"]["decoding"] == ("free" if mode == "ce-only" else "dfa")
     assert all(not torch.equal(before[d], planner.label_heads[d].weight) for d in before)
 
 
-def test_ce_only_and_two_stage_are_mutually_exclusive():
+@pytest.mark.parametrize("modes", [("--ce-only", "--two-stage"), ("--ce-dfa-only", "--two-stage"),
+                                  ("--ce-only", "--ce-dfa-only")])
+def test_training_modes_are_mutually_exclusive(modes):
     from ..main import build_parser
 
     with pytest.raises(SystemExit):
-        build_parser().parse_args(["train-agent", "--ce-only", "--two-stage"])
+        build_parser().parse_args(["train-agent", *modes])
+
+
+@pytest.mark.parametrize("domain", ["eai", "vlabench"])
+def test_ce_dfa_only_loss_normalizes_over_allowed_labels(joint_fixture, domain):
+    from ..main import build_parser, _dfa_loss_config
+
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    config = _dfa_loss_config(build_parser().parse_args(["train-agent", "--ce-dfa-only"]))
+    program = JointSolverPOIProgram(
+        runtime, planner, planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.05), dfa_loss=config)
+    assert program.pmd_programs == program.dual_optimizers == {}
+    item = examples[0] if domain == "eai" else vlabench_item(runtime)
+    labels = item["target_action_labels"] if domain == "eai" else item["target_plan_labels"]
+    labels = torch.as_tensor(labels)
+    labels = labels[(labels == planner.vocabulary(domain).eos_label).cumsum(-1) <= 1]
+    dfa = runtime.dfa_for(domain, item if domain == "eai" else {**item, **item["planner_context"]})
+    state = dfa.start_state
+    expected = []
+    for step, target in enumerate(labels.tolist()):
+        allowed = (dfa.allowed_tokens(state, remaining_steps=len(labels) - step - 1)
+                   if domain in config.lookahead_domains else dfa.allowed_tokens(state))
+        count = len(allowed) if target in allowed else planner.vocabulary(domain).label_count
+        expected.append(torch.tensor(float(count)).log())
+        following = dfa.step(state, target)
+        if following is not None:
+            state = following
+
+    # Uniform logits: each loss is log(number of allowed labels), rather than log(full vocabulary).
+    planner.sequence_logits = lambda d, ctx, prefix: torch.zeros(
+        1, prefix.shape[-1], planner.vocabulary(d).label_count, requires_grad=True)
+    with runtime.domain_scope(domain, parameter_policy="freeze_inactive"):
+        total, terms = program._domain_loss(domain, item)
+    assert torch.allclose(total, torch.stack(expected).mean(), atol=1e-6)
+    assert total < torch.tensor(float(planner.vocabulary(domain).label_count)).log()
+    assert terms["constraint_loss"] == 0.0
 
 
 def test_dfa_mass_report_is_a_probability_for_both_domains_and_restores_training_mode(joint_fixture):

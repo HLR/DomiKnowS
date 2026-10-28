@@ -89,6 +89,32 @@ baseline with `evaluate-planning`, include `--no-dfa` for free decoding.
 For CE training with DFA-constrained validation instead, the lower-level
 combination is `--two-stage --stage1-dfa-loss off --stage2-epochs 0`.
 
+For DFA-masked cross-entropy training on **both EAI and VLABench**, without
+RL or primal-dual training, run:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --ce-dfa-only \
+  --stage1-epochs 5 --output test_regr/JointEmbodiedAgentInterface/checkpoints_ce_dfa_only
+```
+
+`--ce-dfa-only` replaces `--two-stage` or `--ce-only`. It restricts the
+teacher-forced CE softmax to DFA-allowed labels in both domains and keeps
+DFA-constrained validation. It overrides the Stage 1 DFA-loss/domain/weight
+options to enable masked CE for both domains with zero allowed-mass and
+primal-dual weights and no primal-dual programs or multiplier optimizers.
+The existing lookahead-domain setting still applies (VLABench by default).
+If a gold target is disallowed, that step uses full-softmax CE and is counted
+in `masked_ce_misses`, as in the existing masked loss.
+
+This mode disables Stage 2 and extra controller warm-up, retains Stage 1
+controller behavior cloning, domain weighting, PCGrad, and EAI supervised
+warm-up, and rejects Stage 2 assist ablations. Checkpoint metrics record
+`training_mode: ce-dfa-only` and `decoding: dfa`; DFA-mass diagnostics remain
+available. Resume with `--ce-dfa-only --resume <stage1-checkpoint>` and a
+larger total `--stage1-epochs`. Only Stage 1 checkpoints are accepted; use a
+fresh run or a checkpoint from this mode for an entirely CE-with-DFA run.
+Evaluate the checkpoint with the default DFA decoding in `evaluate-planning`.
+
 Stage 1 constructs one `JointSolverPOIProgram(SolverPOIProgram)` with both
 sensor branches attached. Each round performs one EAI update and one VLABench
 update, giving the domains equal weight:

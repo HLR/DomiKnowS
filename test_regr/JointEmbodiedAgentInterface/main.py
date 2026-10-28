@@ -306,6 +306,12 @@ def _prepare(args, device):
 
 def _dfa_loss_config(args) -> DFALossConfig | None:
     """Stage 1 DFA loss (allowed mass on the DFA path + primal-dual constraint loss), on unless disabled."""
+    if getattr(args, "ce_dfa_only", False):
+        return DFALossConfig(
+            masked_ce_domains=("eai", "vlabench"), domains=("eai", "vlabench"),
+            mass_weight=0.0, pmd_weight=0.0, pmd_domains=(),
+            lookahead_domains=tuple(d for d in args.stage1_dfa_lookahead_domains.split(",") if d),
+        )
     if getattr(args, "stage1_dfa_loss", "on") == "off":
         return None
     return DFALossConfig(masked_ce_domains=tuple(d for d in args.stage1_masked_ce_domains.split(",") if d),
@@ -319,14 +325,18 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
 
 def command_train_agent(args):
     ce_only = getattr(args, "ce_only", False)
-    if not args.two_stage and not ce_only:
-        raise ValueError("train-agent requires --two-stage or --ce-only")
+    ce_dfa_only = getattr(args, "ce_dfa_only", False)
+    supervised_only = ce_only or ce_dfa_only
+    training_mode = "ce-only" if ce_only else "ce-dfa-only" if ce_dfa_only else "two-stage"
+    if not args.two_stage and not supervised_only:
+        raise ValueError("train-agent requires --two-stage, --ce-only or --ce-dfa-only")
     if ce_only:
         args.stage1_dfa_loss = "off"
+    if supervised_only:
         args.stage2_epochs = 0
         args.controller_warmup_steps = 0
         if getattr(args, "assist_ablation_rollouts", 0) > 0:
-            raise ValueError("--ce-only cannot run Stage 2 assist ablations")
+            raise ValueError(f"--{training_mode} cannot run Stage 2 assist ablations")
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     _status(f"knowledge level={apply_knowledge_argument(args)} task identity={default_task_identity()} "
@@ -339,7 +349,7 @@ def command_train_agent(args):
             raise ValueError("--assist-ablation-rollouts requires --resume with a trained Stage 2 checkpoint")
         assist_ablation_modes = parse_assist_modes(args.assist_ablation_modes)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
-    _status(f"starting joint {'CE-only' if ce_only else 'two-stage'} training device={device}")
+    _status(f"starting joint {training_mode} training device={device}")
     runtime, eai_train, eai_valid, vla_splits, prepared = _prepare(args, device)
     _status(
         f"prepared splits: EAI train={len(eai_train)} validation={len(eai_valid)}; "
@@ -409,8 +419,8 @@ def command_train_agent(args):
                 "language-conditioned action policy"
             )
         resume_stage = payload["stage"]
-        if ce_only and resume_stage != "stage1":
-            raise ValueError("--ce-only requires a Stage 1 checkpoint when resuming")
+        if supervised_only and resume_stage != "stage1":
+            raise ValueError(f"--{training_mode} requires a Stage 1 checkpoint when resuming")
         if assist_ablation_modes and resume_stage == "stage1":
             raise ValueError(
                 "--assist-ablation-rollouts needs a controller_warmup or stage2 checkpoint; "
@@ -494,7 +504,7 @@ def command_train_agent(args):
             if not ce_only:
                 _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} DFA mass (unmasked probability on valid labels) {dfa_mass}")
             metrics = {
-                "training_mode": "ce-only" if ce_only else "two-stage",
+                "training_mode": training_mode,
                 "decoding": "free" if ce_only else "dfa",
                 "train": train_metrics,
                 "eai": eai_metrics,
@@ -531,7 +541,7 @@ def command_train_agent(args):
             cursor = int(payload["round_robin_cursor"])
             if args.stage2_epochs <= 0:
                 _json({"stage": "stage1-complete", "checkpoint": best_stage1,
-                       "training_mode": "ce-only" if ce_only else "two-stage",
+                       "training_mode": training_mode,
                        "metrics": payload.get("metrics", {})})
                 return
             eai_metrics = payload.get("metrics", {}).get("eai")
@@ -1031,6 +1041,10 @@ def build_parser():
     mode.add_argument("--ce-only", action="store_true",
                       help="planner cross-entropy baseline: no DFA loss or decoding masks, no RL, "
                            "and no extra controller warm-up; retain Stage 1 controller behavior cloning")
+    mode.add_argument("--ce-dfa-only", action="store_true",
+                      help="DFA-masked planner cross entropy for both EAI and VLABench, with DFA decoding; "
+                           "no allowed-mass loss, primal-dual training, RL, or extra controller warm-up; "
+                           "retain Stage 1 controller behavior cloning")
     agent.add_argument("--eai-dataset", default="all")
     agent.add_argument("--eai-split", default="train")
     agent.add_argument("--eai-data-path")
