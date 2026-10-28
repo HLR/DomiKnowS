@@ -3,7 +3,7 @@
 What each knowledge tier of the world graph contributes when the same checkpoint is evaluated on the same
 450 test episodes. Task knowledge is expressed as graph concepts and logical constraints
 (`knowledge/`, see the README source code map); `--knowledge` switches which constraint groups are active.
-`causal` is a `--knowledge` level on every path: it enables only **3 DomiKnowS logical constraints**, the world graph's `causal` group for the Joint and internal graph decoders and the equivalent official causal graph for `--protocol official` (where `--constraints causal` remains an alias). It is a branch beside `generic`, not a cumulative tier, and its result-table rows have not been run for the Joint planner yet.
+`causal` is a `--knowledge` level on every path: it enables only **3 DomiKnowS logical constraints**, the world graph's `causal` group for the Joint and internal graph decoders and the equivalent official causal graph for `--protocol official` (where `--constraints causal` remains an alias). It is a branch beside `generic`, not a cumulative tier, and its result-table rows come from `eval_planning --knowledge causal`.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -267,7 +267,7 @@ rerun the empirical score tables below.
 ## Setup
 
 - Checkpoint `joint_stage2_best.pt` (Stage 2, epoch 4), 450 test episodes, seed 42, original stored labels,
-  no generation failures at any level. Code: commit `4c04f1e1` (the `learned` and `grammar` rows were run on later commits that only add those levels), run on gpu2 (one GPU per level).
+  no generation failures at any level. Code: commit `4c04f1e1` (the `learned` and `grammar` rows were run on later commits that only add those levels; the `causal` row on `54da7bba`, 28 October 2026, where a rerun of `grammar` and `metadata` reproduced their rows), run on gpu2 (one GPU per level).
 - Command (per level; `metadata` uses `--observation-mode metadata-assisted`):
 
 ```bash
@@ -275,7 +275,7 @@ python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning \
   --split test --seed 42 --device cuda:0 --allow-planning-schema-migration \
-  --observation-mode visual --knowledge <grammar|generic|scene|task> \
+  --observation-mode visual --knowledge <grammar|causal|generic|scene|task> \
   --output test_regr/JointEmbodiedAgentInterface/results/knowledge_ablation/<level>.json
 ```
 
@@ -334,12 +334,12 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">causal</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">62.0</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">65.5</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">89.4</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">51.0</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">55.8</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">37.8</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">generic</td>
@@ -442,12 +442,12 @@ Per-dimension score:
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">causal</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">76.7</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">64.3</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">76.6</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">77.9</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">37.7</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">38.5</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">generic</td>
@@ -527,8 +527,12 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 - **The generic rules are worth +6.0 Macro over the grammar alone** (60.9 to 66.9): parameter recall 51 to 62 and
   graph match 26 to 38, with gains in every dimension except PhysLaw. Skill recall is unchanged (89.4), so the gain is in
   arguments and graph structure, not in which skills are chosen.
+- **Causal knowledge alone is worth +1.1 Macro over the grammar** (60.9 to 62.0), about a sixth of what the generic
+  rules add. Almost all of it is graph match: PM rises from 25.5 to 37.8 while skill recall is unchanged and parameter
+  recall flat (51.1 to 51.0), so the three rules fix how subtasks connect rather than which skills or objects are chosen.
+  M&T, Spatial, ComSense, Semantic and Complex gain 0.6 to 2.1; PhysLaw is unchanged.
 - **Scene knowledge is worth about 1 point of Macro** (66.9 to 67.9); only Semantic moves (+3.2).
-- **Causal knowledge has only been measured in the standard protocol**, with the frozen Qwen3-VL-8B and upstream
+- **In the standard protocol causal knowledge does not help the frozen model**, measured with Qwen3-VL-8B and upstream
   total_score (another scale from the tables above): 38.20 against 38.24 for the grammar DFA alone over the 3,700
   mapped episodes. It changes 134 of 4,500 plans (16 worse, 1 better). The rules catch real errors (91 self-placements,
   34 repeated destinations, 17 picks of a former destination), but a refused id is completed to a two-digit id that is
@@ -558,6 +562,7 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 - `task` gives Macro 77.1 here against the 75.1 recorded in `README_checkpoint.md`; that earlier figure came
   from an older code revision. This run is the reference for the knowledge comparison.
 - The `metadata` level uses a different observation mode, so it is not a pure LC-group toggle.
-- The `causal` rows are not run yet for the Joint planner (`eval_planning --knowledge causal`). None of the 4,500 reference plans
+- The `causal` row ran on a later commit than the other levels; `grammar` and `metadata` rerun on that commit
+  reproduce their rows, so the comparison holds. None of the 4,500 reference plans
   breaks its three rules, but the two rules that `generic` lacks were chosen after that check, so like the press
   question they encode benchmark knowledge.
