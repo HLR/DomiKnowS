@@ -101,6 +101,16 @@ def observations(checks):
     return values
 
 
+def merged_requirements(checks):
+    """Values, labels and missing reasons of monitor checks that join one declared family."""
+    values, labels, missing = [], [], []
+    for check in checks:
+        values.extend(r.truth for r in check.requirements)
+        labels.extend(r.name for r in check.requirements)
+        missing.extend(check.missing)
+    return values, labels, missing
+
+
 def report(checks):
     rows = [{"family": c.family, "status": c.status, "missing": list(c.missing)} for c in checks]
     return {"checks": rows, "fully_grounded": not any(c.applicable and (c.satisfied is None or c.missing) for c in checks),
@@ -278,6 +288,17 @@ class PlanningFacts:
     action_destinations: tuple = ()
     skill_cycle: tuple = ()
     required_skill_sequence: tuple = ()
+    # Requirement monitors attached by an adapter after parsing. Each has ``operation(state, op)`` and
+    # ``completion(state)`` returning checks: a check of a declared family joins that family's requirements
+    # (its rules are compiled logical constraints); any other family is a diagnostic only.
+    monitors: tuple = ()
+
+    def _monitor_checks(self, call):
+        by_family, diagnostics = {}, []
+        for monitor in self.monitors:
+            for check in call(monitor):
+                (by_family.setdefault(check.family, []) if check.family in FAMILIES else diagnostics).append(check)
+        return by_family, diagnostics
 
     def destination_for(self, action, subject):
         return self._action_destination_map.get((action, subject), self._destination_map.get(subject, self.default_destination))
@@ -388,7 +409,10 @@ class PlanningFacts:
         labels = [f"goal fact {fact!r} holds" for fact in self.goals.positive]
         labels += [f"goal fact {fact!r} is false" for fact in self.goals.negative]
         labels += [f"required milestone {name!r} is completed" for name in required]
-        return combined("goal_completion", values, applicable=bool(values), labels=labels)
+        extra, _ = self._monitor_checks(lambda monitor: monitor.completion(state))
+        more, more_labels, missing = merged_requirements(extra.get("goal_completion", ()))
+        return combined("goal_completion", values + more, applicable=bool(values or more), labels=labels + more_labels,
+                        missing=missing)
 
     # The tuples above are immutable; their lookup tables are built once per instance, not once per operation.
     @cached_property
@@ -413,9 +437,13 @@ class PlanningFacts:
         held = holdings.get(op.hand)
         hand_known = op.hand in holdings
         subject = op.subject if op.subject is not None else held
+        extra, diagnostics = self._monitor_checks(lambda monitor: monitor.operation(state, replace(op, subject=subject)))
         expected = self.destination_for(op.action, subject)
-        checks = [combined("destination", [op.destination == expected] if expected is not None else [None],
-                           applicable=op.destination is not None, labels=("destination equals the requested destination",))]
+        more, more_labels, more_missing = merged_requirements(extra.get("destination", ()))
+        values = [op.destination == expected] if expected is not None else ([] if more else [None])
+        checks = [combined("destination", values + more, applicable=op.destination is not None,
+                           labels=("destination equals the requested destination",)[:len(values)] + tuple(more_labels),
+                           missing=more_missing)]
         checks.append(combined("holding", [True if op.idempotent else
                                            (held is not None and (op.subject is None or held == op.subject)) if hand_known else None],
                                applicable=op.requires_held, labels=("hand holds the required subject, or the action is idempotent",),
@@ -440,15 +468,18 @@ class PlanningFacts:
         labels = ([f"{entity!r} has capability {capability!r}" for entity, capability in op.affordances]
                   + [f"precondition {fact!r} holds" for fact in op.preconditions])
         source_values = capability_values + precondition_values
+        monitored = extra.get("affordance", ())
         summary = combined(
-            "affordance", source_values + [selection.satisfied for selection in selections],
-            applicable=bool(op.affordances or op.preconditions or selections),
-            missing=tuple(reason for selection in selections for reason in selection.missing),
+            "affordance", source_values + [selection.satisfied for selection in selections]
+            + [check.satisfied for check in monitored],
+            applicable=bool(op.affordances or op.preconditions or selections or monitored),
+            missing=tuple(reason for selection in (*selections, *monitored) for reason in selection.missing),
         )
         requirements = tuple(RequirementObservation(label, value) for label, value in zip(labels, source_values))
-        requirements += tuple(term for selection in selections for term in selection.requirements)
+        requirements += tuple(term for selection in (*selections, *monitored) for term in selection.requirements)
         checks.append(replace(summary, requirements=requirements))
         checks.extend(selections)
+        checks.extend(diagnostics)
         pairs = self._compatibility_map
         checks.append(combined("compatibility", [pairs.get((subject, op.destination))] + ([properties.get((op.destination,"container"))] if op.container_required else []),
                                applicable=op.destination is not None,
@@ -458,8 +489,11 @@ class PlanningFacts:
         enabled = [m for m in matched if set(m[4]) <= state.milestones]
         # A repeated action may describe successive milestones. One source-state
         # event advances enabled milestones only, never their future successors.
-        checks.append(combined("milestone_order", [bool(enabled)], applicable=bool(matched),
-                               labels=("a matching milestone has its required predecessor progress",)))
+        more, more_labels, more_missing = merged_requirements(extra.get("milestone_order", ()))
+        checks.append(combined("milestone_order", ([bool(enabled)] if matched else []) + more,
+                               applicable=bool(matched or more), missing=more_missing,
+                               labels=(("a matching milestone has its required predecessor progress",) if matched else ())
+                               + tuple(more_labels)))
         yes, no = set(map(tuple, positive)), set(map(tuple, negative))
         # Functional spatial updates invalidate known/required alternative locations.
         def candidate_facts():

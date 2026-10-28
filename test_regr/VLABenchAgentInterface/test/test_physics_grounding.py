@@ -7,6 +7,7 @@ import pytest
 from domiknows.generation.grounded import PlanningFacts, Operation
 from ..dataset import load_planning_examples, load_scene_planning_examples
 from ..physics_grounding import PHYSICS_PROFILE, physics_planning_facts
+from ..knowledge.physics_lcs import physics_requirement
 from .test_qa_and_pick_history import accepted, encode, runtime
 
 
@@ -24,8 +25,8 @@ def scene(materials=("stone", "metal", "wood"), shapes=("box", "sphere", "cylind
 def eligible(task, instruction, components):
     raw, profile = physics_planning_facts(task, instruction, components)
     assert profile == PHYSICS_PROFILE
-    candidates = raw["selections"][0]["candidates"]
-    requirement = PlanningFacts.parse(raw, entities=candidates).selections[0]
+    candidates = raw["physics_selection"]["candidates"]
+    requirement = physics_requirement(raw, task)
     return {name for name in candidates if requirement.check(Operation("press", name)).satisfied is True}
 
 
@@ -58,18 +59,18 @@ def test_unknown_property_and_ambiguous_associations_remain_unknown():
     components = scene()
     components[1]["material"] = "unobserved"
     raw, _ = physics_planning_facts("density_qa", "largest density", components)
-    requirement = PlanningFacts.parse(raw, entities=("button0", "button1", "button2")).selections[0]
+    requirement = physics_requirement(raw, "density_qa")
     assert requirement.check(Operation("press", "button0")).satisfied is None
     assert requirement.check(Operation("press", "button2")).satisfied is False
     components[3]["position"] = [0, .1, 0]
     raw, _ = physics_planning_facts("density_qa", "largest density", components)
-    assert raw["selections"][0]["scores"]["button0"] is None
+    assert raw["physics_selection"]["attributes"]["button0"] is None
 
 
 def test_reflectance_is_not_invented_and_explicit_measurements_take_precedence():
     components = scene()
     raw, _ = physics_planning_facts("reflection_qa", "medium reflection ratio", components)
-    assert all(value is None for value in raw["selections"][0]["scores"].values())
+    assert all(value is None for value in raw["physics_selection"]["measurements"].values())
     explicit = {"selections": [{"action": "press", "criterion": "min", "candidates": ["button0"],
                                 "scores": {"button0": .2}}]}
     actual, profile = physics_planning_facts("reflection_qa", "medium reflection ratio", components, explicit)

@@ -33,8 +33,8 @@ def supplied(values):
 
 def requirement(scene, question="medium reflection ratio", observation=None):
     facts, profile = physics_planning_facts("reflection_qa", question, scene, observations=observation)
-    parsed = PlanningFacts.parse(facts, entities=("button0", "button1", "button2"))
-    return parsed.selections[0], facts, profile
+    from ..knowledge.physics_lcs import physics_requirement
+    return physics_requirement(facts, "reflection_qa"), facts, profile
 
 
 @pytest.mark.parametrize("values", list(itertools.permutations((.2, .6, .9))))

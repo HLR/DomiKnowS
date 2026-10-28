@@ -56,6 +56,24 @@ class TaskRequirements:
         return (not self.skill_cycle or count % len(self.skill_cycle) == 0) and (expected is None or count == len(expected))
 
 
+def knowledge_monitors(world, raw, resolve, task):
+    """Requirement monitors for the declared knowledge whose observations the planning facts carry."""
+    monitors = []
+    block = raw.get("physics_selection") if isinstance(raw, Mapping) else None
+    physics = getattr(world, "physics_knowledge", None)
+    if block and physics is not None and task:
+        try:
+            from .knowledge.physics_lcs import PhysicsMonitor
+        except ImportError:
+            from knowledge.physics_lcs import PhysicsMonitor
+        names = {candidate: resolve(candidate) for candidate in block["candidates"]}
+        block = {**block, "candidates": [names[c] for c in block["candidates"]],
+                 "attributes": {names[c]: value for c, value in (block.get("attributes") or {}).items()},
+                 "measurements": {names[c]: value for c, value in (block.get("measurements") or {}).items()}}
+        monitors.append(PhysicsMonitor(physics.get(), task, block))
+    return tuple(monitors)
+
+
 def task_requirements(context, world, entities):
     """Resolve explicit task data; unknown tasks add no implicit goal rules."""
     context = context or {}
@@ -104,7 +122,9 @@ def task_requirements(context, world, entities):
         return name
     planning = PlanningFacts.parse(get("planning_facts"), entities=table.values(), resolve=resolve,
                                    default_destination=get("task_target_container"), constants=("left", "right"))
-    if knowledge.is_qa(task) and not any(s.action == "press" for s in planning.selections):
+    planning = replace(planning, monitors=knowledge_monitors(world, get("planning_facts"), resolve, task))
+    if (knowledge.is_qa(task) and not any(s.action == "press" for s in planning.selections)
+            and not any(getattr(m, "action", None) == "press" for m in planning.monitors)):
         from domiknows.generation.grounded import SelectionRequirement
         # QA action shape is known; the answer is unavailable without exposed
         # measurements, option bindings and a declared comparison requirement.

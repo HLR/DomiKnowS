@@ -70,3 +70,36 @@ COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
     "manage_study_table": ComplexTaskSchema(
         task_name="manage_study_table", required_skills=("pick", "place"), min_operations=3),
 }
+
+
+# Qualitative physics of the QA tasks (VLABench/tasks/hierarchical_tasks/primitive/physical_series). Each property
+# is an ascending order of tiers over one attribute of the object bound to a button; objects in one tier tie.
+# physics_lcs.py turns these tables into logical constraints; nothing here is consulted while decoding.
+PHYSICS_PROPERTIES: Mapping[str, tuple[str, tuple[tuple[str, ...], ...]]] = MappingProxyType({
+    "density_qa": ("material", (("wood",), ("rubber",), ("water",), ("glass",), ("stone",), ("metal",))),
+    "speed_of_sound_qa": ("material", (("rubber",), ("water",), ("wood",), ("stone",), ("glass",), ("metal",))),
+    "thermal_expansion_qa": ("material", (("glass",), ("wood",), ("stone",), ("metal",), ("rubber",))),
+    "magnetism_qa": ("material", (("wood", "rubber", "water", "glass", "stone"), ("metal",))),
+    "friction_qa": ("shape", (("sphere",), ("cylinder",), ("box",))),  # slide cost: a sphere is fastest
+    "reflection_qa": ("measurement", ()),  # explicitly bound reflectance fractions
+})
+PHYSICS_MATERIALS = ("wood", "rubber", "water", "glass", "stone", "metal")
+PHYSICS_SHAPES = ("sphere", "cylinder", "box")
+# Instruction phrases (substrings of the normalized instruction) observed for every QA episode.
+PHYSICS_PHRASES: Mapping[str, tuple[str, ...]] = MappingProxyType({
+    "non_magnetic": ("non-magnetic", "non magnetic"),
+    "magnetic": ("magnetic",),
+    "float": ("float in the water",),
+    "second_fastest": ("second fastest", "second-fastest"),
+    "medium": ("medium", "moderately"),
+    "small": ("smallest", "least", "slowest"),
+    "large": ("largest", "most", "fastest"),
+})
+# Task-specific phrases are read before the shared ones, in this order.
+PHYSICS_TASK_PHRASES: Mapping[str, tuple[tuple[str, str], ...]] = MappingProxyType({
+    "magnetism_qa": (("non_magnetic", "min"), ("magnetic", "max")),
+    "density_qa": (("float", "below:water"),),
+})
+# On a slide-cost scale "fastest" is the smallest value and the second fastest is rank 1 from the bottom.
+PHYSICS_REVERSED = frozenset({"friction_qa"})
+PHYSICS_MAX_OPTIONS = 8

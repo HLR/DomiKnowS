@@ -1,7 +1,8 @@
 """Input-only adapters for VLABench's declared qualitative physics models.
 
-These ordinal scores describe benchmark models, not physical measurements.
-Callers supply scene components only: conditions and reference plans are never
+They bind each answer button to its object and read the instruction's phrases; the
+qualitative property orders and the selection rules are logical constraints in
+knowledge/physics_lcs.py. Callers supply scene components only: conditions and reference plans are never
 arguments to this adapter. Reflection requires explicitly bound observations.
 """
 
@@ -12,30 +13,38 @@ from domiknows.generation.property_observations import PropertyObservations
 
 try:
     from .world_graph import QA_TASK_PATTERNS
+    from .knowledge.physics_lcs import instruction_phrases
 except ImportError:
     from world_graph import QA_TASK_PATTERNS
+    from knowledge.physics_lcs import instruction_phrases
 
 
 PHYSICS_PROFILE = "scene_metadata_physics_v1"
 VISUAL_QA_PROFILE = "visual_qa_v1"
-# Public models in VLABench/tasks/hierarchical_tasks/primitive/physical_series:
-# density_qa.py, sound_speed_qa.py, thermal_expansion_qa.py, friction_qa.py,
-# and magnetism_qa.py. Version these separately from physical measurements.
-MATERIAL_ORDERS = {
-    "density_qa": ("wood", "rubber", "water", "glass", "stone", "metal"),
-    "speed_of_sound_qa": ("rubber", "water", "wood", "stone", "glass", "metal"),
-    "thermal_expansion_qa": ("glass", "wood", "stone", "metal", "rubber"),
-}
-SLIDE_ORDER = ("sphere", "cylinder", "box")
-KNOWN_MATERIALS = frozenset(("wood", "rubber", "water", "glass", "stone", "metal"))
+# The qualitative property orders and the instruction phrases live in knowledge/tables.py; the rules that use
+# them are logical constraints in knowledge/physics_lcs.py. This module only reads the scene and the text.
+
+
+def option_attributes(options):
+    """Material and shape of the object bound to each button (None when the binding is unknown)."""
+    result = {}
+    for button, obj in options.items():
+        if obj is None:
+            result[button] = None
+            continue
+        shape = obj.get("geom_type")
+        if shape is None:
+            match = re.search(r"_(sphere|cylinder|box|capsule)(?:_\d+)?$", obj.get("name", ""))
+            shape = match.group(1) if match else None
+        result[button] = {"material": obj.get("material"), "shape": shape}
+    return result
 
 
 def visual_qa_planning_facts(task, instruction, components):
     """Declare action shape and unknown properties, leaving the choice to vision.
 
-    Only exposed option identities and instruction comparisons are consumed.
-    Material values, saved reflectance, sidecars and target annotations do not
-    supply answer-selection facts in this profile.
+    Only exposed option identities are consumed. Material values, saved reflectance, sidecars and target
+    annotations do not supply answer-selection facts in this profile.
     """
     candidates = [c["name"] for c in components if c.get("class") == "Button"]
     property = "reflectance_fraction" if task == "reflection_qa" else task + ":visual_property"
@@ -47,31 +56,8 @@ def visual_qa_planning_facts(task, instruction, components):
     }}
     if candidates:
         facts["selections"] = [{"action": "press", "argument": "subject", "property": property,
-                                 "candidates": candidates, "scores": dict.fromkeys(candidates),
-                                 **comparison(task, instruction, len(candidates))}]
+                                 "candidates": candidates, "scores": dict.fromkeys(candidates)}]
     return facts, VISUAL_QA_PROFILE
-
-
-def comparison(task, instruction, candidate_count):
-    text = " ".join(instruction.lower().split())
-    if task == "magnetism_qa":
-        if "non-magnetic" in text or "non magnetic" in text:
-            return {"criterion": "min"}
-        if "magnetic" in text:
-            return {"criterion": "max"}
-    if task == "density_qa" and "float in the water" in text:
-        return {"criterion": "below", "threshold": MATERIAL_ORDERS[task].index("water")}
-    if ("second fastest" in text or "second-fastest" in text) and candidate_count >= 2:
-        # Slide cost is ascending from fastest, sound speed from slowest.
-        rank = 1 if task == "friction_qa" else candidate_count - 2
-        return {"criterion": "rank", "rank": rank}
-    if any(word in text for word in ("medium", "moderately")):
-        return {"criterion": "rank", "rank": candidate_count // 2} if candidate_count % 2 else {}
-    small = any(word in text for word in ("smallest", "least", "slowest"))
-    large = any(word in text for word in ("largest", "most", "fastest"))
-    if task == "friction_qa":
-        small, large = large, small
-    return {"criterion": "min" if small else "max"} if small != large else {}
 
 
 def _xy(component):
@@ -177,34 +163,13 @@ def physics_planning_facts(task, instruction, components, existing=None, observa
                                            "reasons": ["reflection candidate universe unavailable"]}
             return facts, "reflection_unavailable_v1"
         return facts or None, PHYSICS_PROFILE
+    block = {"action": "press", "argument": "subject", "candidates": list(options),
+             "phrases": list(instruction_phrases(instruction))}
     if task == "reflection_qa":
-        scores, report = reflection_observations(components, tuple(options), observations)
+        measurements, report = reflection_observations(components, tuple(options), observations)
         facts["observation_report"] = report
-        facts["selections"] = [*facts.get("selections", ()), {
-            "action": "press", "argument": "subject", "candidates": list(options),
-            "scores": scores, "property": "reflectance_fraction",
-            **comparison(task, instruction, len(options)),
-        }]
+        facts["physics_selection"] = {**block, "measurements": measurements, "property": "reflectance_fraction"}
         return facts, "reflection_observations_v1" if report["sources"] else "reflection_unavailable_v1"
-    scores = {}
-    for button, obj in options.items():
-        value = None
-        if obj is not None:
-            material = obj.get("material")
-            if task in MATERIAL_ORDERS and material in MATERIAL_ORDERS[task]:
-                value = MATERIAL_ORDERS[task].index(material)
-            elif task == "magnetism_qa" and material in KNOWN_MATERIALS:
-                value = int(material == "metal")
-            elif task == "friction_qa":
-                shape = obj.get("geom_type")
-                if shape is None:
-                    match = re.search(r"_(sphere|cylinder|box|capsule)(?:_\d+)?$", obj.get("name", ""))
-                    shape = match.group(1) if match else None
-                if shape in SLIDE_ORDER:
-                    value = SLIDE_ORDER.index(shape)
-        scores[button] = value
-    requirement = {"action": "press", "argument": "subject", "candidates": list(options),
-                   "scores": scores, "property": f"{task}:qualitative_model_v1",
-                   **comparison(task, instruction, len(options))}
-    facts["selections"] = [*facts.get("selections", ()), requirement]
+    facts["physics_selection"] = {**block, "attributes": option_attributes(options),
+                                  "property": f"{task}:qualitative_model_v1"}
     return facts, PHYSICS_PROFILE
