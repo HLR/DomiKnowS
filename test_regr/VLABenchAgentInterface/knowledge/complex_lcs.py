@@ -126,11 +126,11 @@ def declare_complex(rules):
         return [*guard("take_chemistry_experiment"), existsL(roles["reagent"]("v"))]
     rules.rule("complex__chemistry__pick", "affordance",
                lambda: andL(*chemistry(), ops["pick"]("q")), lambda: roles["reagent"]("x"))
-    for skill, role in (("pour", "flask"), ("place", "table")):
+    for skill, role, past in (("pour", "flask", "poured"), ("place", "table", "placed")):
         rules.rule(f"complex__chemistry__{skill}_destination", "destination",
                    lambda s=skill: andL(*chemistry(), ops[s]("q"), roles["reagent"]("x")),
                    lambda r=role: roles[r]("y"))
-        rules.rule(f"complex__chemistry__{skill}ed", "goal_completion",
+        rules.rule(f"complex__chemistry__{past}", "goal_completion",
                    lambda: andL(*chemistry(), ending("q"), roles["reagent"]("e")),
                    lambda s=skill, r=role: placed("e", s, r, "c"))
     rules.rule("complex__chemistry__return_after_pour", "milestone_order",

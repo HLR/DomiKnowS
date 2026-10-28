@@ -635,15 +635,2065 @@ Observations, produced by `complex_grounding.py` and `complex_event` without any
 </tbody>
 </table>
 
-For example, the book-order rule is:
+### Every complex-task rule
 
-```text
-ifL(andL(task__book_rearrange('q'), role_bound__shelf('q'), books_keyed('q'), op__pick('q'),
-         role__book('x'), notL(done__pick('x')), role__book('c'),
-         orL(andL(notL(asks_reverse('q')), earlier_year('c', 'x')), andL(asks_reverse('q'), earlier_year('x', 'c')))),
-    existsL(andL(role__shelf('v'), done__push('c', 'v'))),
-    name='complex__book__order')
-```
+Each of the 85 rules with its formula, printed from the declared constraint. `q` is the request, `x` the operation's subject, `y` its destination, `e`, `c`, `v`, `w` scene entities; `existsL` binds its variable locally.
+
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+<colgroup><col style="width: 27%;"><col style="width: 12%;"><col style="width: 38%;"><col style="width: 23%;"></colgroup>
+<thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Rule</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Requirement family</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Meaning</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Definition</th></tr></thead>
+<tbody>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_egg_stir_fry__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_egg_stir_fry</code>: A pick takes an ingredient of the named recipe (tomato, egg).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__tomato(&#x27;x&#x27;), food__egg(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__tomato_and_egg_stir_fry__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_egg_stir_fry__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_egg_stir_fry</code>: An ingredient (tomato, egg) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        orL(food__tomato(&#x27;x&#x27;), food__egg(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__tomato_and_egg_stir_fry__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_egg_stir_fry__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_egg_stir_fry</code>: At the end every ingredient (tomato, egg) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__tomato(&#x27;e&#x27;), food__egg(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__tomato_and_egg_stir_fry__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_egg_stir_fry__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_egg_stir_fry</code>: At the end every ingredient (tomato, egg) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__tomato(&#x27;e&#x27;), food__egg(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__tomato_and_egg_stir_fry__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__garlic_steak_with_mushroom__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>garlic_steak_with_mushroom</code>: A pick takes an ingredient of the named recipe (steak, garlic, mushroom).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__garlic_steak_with_mushroom(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__steak(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;), food__mushroom(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__garlic_steak_with_mushroom__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__garlic_steak_with_mushroom__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>garlic_steak_with_mushroom</code>: An ingredient (steak, garlic, mushroom) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__garlic_steak_with_mushroom(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        orL(food__steak(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;), food__mushroom(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__garlic_steak_with_mushroom__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__garlic_steak_with_mushroom__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>garlic_steak_with_mushroom</code>: At the end every ingredient (steak, garlic, mushroom) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__garlic_steak_with_mushroom(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__steak(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;), food__mushroom(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__garlic_steak_with_mushroom__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__garlic_steak_with_mushroom__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>garlic_steak_with_mushroom</code>: At the end every ingredient (steak, garlic, mushroom) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__garlic_steak_with_mushroom(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__steak(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;), food__mushroom(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__garlic_steak_with_mushroom__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__broccoli_and_cheese_bake__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>broccoli_and_cheese_bake</code>: A pick takes an ingredient of the named recipe (broccoli, cheese).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__broccoli_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__broccoli(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__broccoli_and_cheese_bake__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__broccoli_and_cheese_bake__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>broccoli_and_cheese_bake</code>: An ingredient (broccoli, cheese) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__broccoli_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        orL(food__broccoli(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__broccoli_and_cheese_bake__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__broccoli_and_cheese_bake__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>broccoli_and_cheese_bake</code>: At the end every ingredient (broccoli, cheese) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__broccoli_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__broccoli(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__broccoli_and_cheese_bake__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__broccoli_and_cheese_bake__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>broccoli_and_cheese_bake</code>: At the end every ingredient (broccoli, cheese) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__broccoli_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__broccoli(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__broccoli_and_cheese_bake__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_corn_salad__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_corn_salad</code>: A pick takes an ingredient of the named recipe (carrot, corn).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_corn_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__carrot(&#x27;x&#x27;), food__corn(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__carrot_and_corn_salad__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_corn_salad__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_corn_salad</code>: An ingredient (carrot, corn) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_corn_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        orL(food__carrot(&#x27;x&#x27;), food__corn(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__carrot_and_corn_salad__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_corn_salad__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_corn_salad</code>: At the end every ingredient (carrot, corn) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_corn_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__carrot(&#x27;e&#x27;), food__corn(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__carrot_and_corn_salad__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_corn_salad__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_corn_salad</code>: At the end every ingredient (carrot, corn) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_corn_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__carrot(&#x27;e&#x27;), food__corn(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__carrot_and_corn_salad__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__bell_pepper_and_eggplant_stir_fry__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>bell_pepper_and_eggplant_stir_fry</code>: A pick takes an ingredient of the named recipe (bell_pepper, eggplant, garlic).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__bell_pepper(&#x27;x&#x27;), food__eggplant(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__bell_pepper_and_eggplant_stir_fry__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__bell_pepper_and_eggplant_stir_fry__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>bell_pepper_and_eggplant_stir_fry</code>: An ingredient (bell_pepper, eggplant, garlic) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        orL(food__bell_pepper(&#x27;x&#x27;), food__eggplant(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__bell_pepper_and_eggplant_stir_fry__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__bell_pepper_and_eggplant_stir_fry__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>bell_pepper_and_eggplant_stir_fry</code>: At the end every ingredient (bell_pepper, eggplant, garlic) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__bell_pepper(&#x27;e&#x27;), food__eggplant(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__bell_pepper_and_eggplant_stir_fry__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__bell_pepper_and_eggplant_stir_fry__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>bell_pepper_and_eggplant_stir_fry</code>: At the end every ingredient (bell_pepper, eggplant, garlic) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__bell_pepper(&#x27;e&#x27;), food__eggplant(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__bell_pepper_and_eggplant_stir_fry__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_with_garlic_and_onion__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_with_garlic_and_onion</code>: A pick takes an ingredient of the named recipe (fish, garlic, onion).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_with_garlic_and_onion(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__fish(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__fish_with_garlic_and_onion__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_with_garlic_and_onion__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_with_garlic_and_onion</code>: An ingredient (fish, garlic, onion) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_with_garlic_and_onion(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        orL(food__fish(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__fish_with_garlic_and_onion__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_with_garlic_and_onion__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_with_garlic_and_onion</code>: At the end every ingredient (fish, garlic, onion) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_with_garlic_and_onion(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__fish(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__fish_with_garlic_and_onion__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_with_garlic_and_onion__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_with_garlic_and_onion</code>: At the end every ingredient (fish, garlic, onion) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_with_garlic_and_onion(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__fish(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__fish_with_garlic_and_onion__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__sweet_potato_and_cheese_bake__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>sweet_potato_and_cheese_bake</code>: A pick takes an ingredient of the named recipe (sweet_potato, cheese).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__sweet_potato(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__sweet_potato_and_cheese_bake__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__sweet_potato_and_cheese_bake__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>sweet_potato_and_cheese_bake</code>: An ingredient (sweet_potato, cheese) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        orL(food__sweet_potato(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__sweet_potato_and_cheese_bake__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__sweet_potato_and_cheese_bake__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>sweet_potato_and_cheese_bake</code>: At the end every ingredient (sweet_potato, cheese) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__sweet_potato(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__sweet_potato_and_cheese_bake__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__sweet_potato_and_cheese_bake__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>sweet_potato_and_cheese_bake</code>: At the end every ingredient (sweet_potato, cheese) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__sweet_potato(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__sweet_potato_and_cheese_bake__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__steak_and_potato_skillet__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>steak_and_potato_skillet</code>: A pick takes an ingredient of the named recipe (steak, potato, onion).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__steak_and_potato_skillet(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__potato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__steak(&#x27;x&#x27;), food__potato(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__steak_and_potato_skillet__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__steak_and_potato_skillet__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>steak_and_potato_skillet</code>: An ingredient (steak, potato, onion) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__steak_and_potato_skillet(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__potato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        orL(food__steak(&#x27;x&#x27;), food__potato(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__steak_and_potato_skillet__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__steak_and_potato_skillet__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>steak_and_potato_skillet</code>: At the end every ingredient (steak, potato, onion) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__steak_and_potato_skillet(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__potato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__steak(&#x27;e&#x27;), food__potato(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__steak_and_potato_skillet__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__steak_and_potato_skillet__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>steak_and_potato_skillet</code>: At the end every ingredient (steak, potato, onion) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__steak_and_potato_skillet(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__steak(&#x27;v&#x27;)),
+        existsL(food__potato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__steak(&#x27;e&#x27;), food__potato(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__steak_and_potato_skillet__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_tomato_stew__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_tomato_stew</code>: A pick takes an ingredient of the named recipe (eggplant, tomato, garlic).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_tomato_stew(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__eggplant(&#x27;x&#x27;), food__tomato(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__eggplant_and_tomato_stew__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_tomato_stew__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_tomato_stew</code>: An ingredient (eggplant, tomato, garlic) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_tomato_stew(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        orL(food__eggplant(&#x27;x&#x27;), food__tomato(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__eggplant_and_tomato_stew__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_tomato_stew__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_tomato_stew</code>: At the end every ingredient (eggplant, tomato, garlic) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_tomato_stew(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__eggplant(&#x27;e&#x27;), food__tomato(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__eggplant_and_tomato_stew__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_tomato_stew__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_tomato_stew</code>: At the end every ingredient (eggplant, tomato, garlic) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_tomato_stew(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__eggplant(&#x27;e&#x27;), food__tomato(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__eggplant_and_tomato_stew__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__mushroom_and_broccoli_stir_fry__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>mushroom_and_broccoli_stir_fry</code>: A pick takes an ingredient of the named recipe (mushroom, broccoli, garlic).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__mushroom(&#x27;x&#x27;), food__broccoli(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__mushroom_and_broccoli_stir_fry__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__mushroom_and_broccoli_stir_fry__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>mushroom_and_broccoli_stir_fry</code>: An ingredient (mushroom, broccoli, garlic) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        orL(food__mushroom(&#x27;x&#x27;), food__broccoli(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__mushroom_and_broccoli_stir_fry__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__mushroom_and_broccoli_stir_fry__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>mushroom_and_broccoli_stir_fry</code>: At the end every ingredient (mushroom, broccoli, garlic) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__mushroom(&#x27;e&#x27;), food__broccoli(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__mushroom_and_broccoli_stir_fry__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__mushroom_and_broccoli_stir_fry__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>mushroom_and_broccoli_stir_fry</code>: At the end every ingredient (mushroom, broccoli, garlic) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__broccoli(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__mushroom(&#x27;e&#x27;), food__broccoli(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__mushroom_and_broccoli_stir_fry__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_sweet_potato_roast__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_sweet_potato_roast</code>: A pick takes an ingredient of the named recipe (carrot, sweet_potato, garlic).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__carrot(&#x27;x&#x27;), food__sweet_potato(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__carrot_and_sweet_potato_roast__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_sweet_potato_roast__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_sweet_potato_roast</code>: An ingredient (carrot, sweet_potato, garlic) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        orL(food__carrot(&#x27;x&#x27;), food__sweet_potato(&#x27;x&#x27;), food__garlic(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__carrot_and_sweet_potato_roast__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_sweet_potato_roast__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_sweet_potato_roast</code>: At the end every ingredient (carrot, sweet_potato, garlic) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__carrot(&#x27;e&#x27;), food__sweet_potato(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__carrot_and_sweet_potato_roast__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__carrot_and_sweet_potato_roast__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>carrot_and_sweet_potato_roast</code>: At the end every ingredient (carrot, sweet_potato, garlic) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__carrot(&#x27;v&#x27;)),
+        existsL(food__sweet_potato(&#x27;v&#x27;)),
+        existsL(food__garlic(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__carrot(&#x27;e&#x27;), food__sweet_potato(&#x27;e&#x27;), food__garlic(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__carrot_and_sweet_potato_roast__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_and_bell_pepper_sauté__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_and_bell_pepper_sauté</code>: A pick takes an ingredient of the named recipe (fish, bell_pepper, onion).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__fish(&#x27;x&#x27;), food__bell_pepper(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__fish_and_bell_pepper_sauté__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_and_bell_pepper_sauté__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_and_bell_pepper_sauté</code>: An ingredient (fish, bell_pepper, onion) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        orL(food__fish(&#x27;x&#x27;), food__bell_pepper(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__fish_and_bell_pepper_sauté__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_and_bell_pepper_sauté__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_and_bell_pepper_sauté</code>: At the end every ingredient (fish, bell_pepper, onion) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__fish(&#x27;e&#x27;), food__bell_pepper(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__fish_and_bell_pepper_sauté__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__fish_and_bell_pepper_sauté__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>fish_and_bell_pepper_sauté</code>: At the end every ingredient (fish, bell_pepper, onion) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__fish(&#x27;v&#x27;)),
+        existsL(food__bell_pepper(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__fish(&#x27;e&#x27;), food__bell_pepper(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__fish_and_bell_pepper_sauté__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__corn_and_cheese_omelette__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>corn_and_cheese_omelette</code>: A pick takes an ingredient of the named recipe (corn, egg, cheese).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__corn_and_cheese_omelette(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__corn(&#x27;x&#x27;), food__egg(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__corn_and_cheese_omelette__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__corn_and_cheese_omelette__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>corn_and_cheese_omelette</code>: An ingredient (corn, egg, cheese) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__corn_and_cheese_omelette(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        orL(food__corn(&#x27;x&#x27;), food__egg(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__corn_and_cheese_omelette__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__corn_and_cheese_omelette__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>corn_and_cheese_omelette</code>: At the end every ingredient (corn, egg, cheese) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__corn_and_cheese_omelette(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__corn(&#x27;e&#x27;), food__egg(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__corn_and_cheese_omelette__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__corn_and_cheese_omelette__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>corn_and_cheese_omelette</code>: At the end every ingredient (corn, egg, cheese) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__corn_and_cheese_omelette(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__corn(&#x27;v&#x27;)),
+        existsL(food__egg(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__corn(&#x27;e&#x27;), food__egg(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__corn_and_cheese_omelette__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_onion_salad__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_onion_salad</code>: A pick takes an ingredient of the named recipe (tomato, onion).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_onion_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__tomato(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__tomato_and_onion_salad__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_onion_salad__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_onion_salad</code>: An ingredient (tomato, onion) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_onion_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        orL(food__tomato(&#x27;x&#x27;), food__onion(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__tomato_and_onion_salad__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_onion_salad__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_onion_salad</code>: At the end every ingredient (tomato, onion) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_onion_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__tomato(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__tomato_and_onion_salad__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__tomato_and_onion_salad__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>tomato_and_onion_salad</code>: At the end every ingredient (tomato, onion) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__tomato_and_onion_salad(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;)),
+        existsL(food__tomato(&#x27;v&#x27;)),
+        existsL(food__onion(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__tomato(&#x27;e&#x27;), food__onion(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__tomato_and_onion_salad__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_mushroom_gratin__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_mushroom_gratin</code>: A pick takes an ingredient of the named recipe (eggplant, mushroom, cheese).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L93">knowledge/complex_lcs.py:93</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(food__eggplant(&#x27;x&#x27;), food__mushroom(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    name=&#x27;complex__cook__eggplant_and_mushroom_gratin__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_mushroom_gratin__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_mushroom_gratin</code>: An ingredient (eggplant, mushroom, cheese) goes to the plate.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L95">knowledge/complex_lcs.py:95</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        orL(food__eggplant(&#x27;x&#x27;), food__mushroom(&#x27;x&#x27;), food__cheese(&#x27;x&#x27;)),
+    ),
+    role__plate(&#x27;y&#x27;),
+    name=&#x27;complex__cook__eggplant_and_mushroom_gratin__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_mushroom_gratin__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_mushroom_gratin</code>: At the end every ingredient (eggplant, mushroom, cheese) has been placed on the plate (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L97">knowledge/complex_lcs.py:97</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__eggplant(&#x27;e&#x27;), food__mushroom(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+    ),
+    existsL(andL(role__plate(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__cook__eggplant_and_mushroom_gratin__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__cook__eggplant_and_mushroom_gratin__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>eggplant_and_mushroom_gratin</code>: At the end every ingredient (eggplant, mushroom, cheese) is on the plate when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L100">knowledge/complex_lcs.py:100</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__cook_dishes(&#x27;q&#x27;),
+        role_bound__plate(&#x27;q&#x27;),
+        recipe__eggplant_and_mushroom_gratin(&#x27;q&#x27;),
+        notL(recipe__tomato_and_egg_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__garlic_steak_with_mushroom(&#x27;q&#x27;)),
+        notL(recipe__broccoli_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_corn_salad(&#x27;q&#x27;)),
+        notL(recipe__bell_pepper_and_eggplant_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__fish_with_garlic_and_onion(&#x27;q&#x27;)),
+        notL(recipe__sweet_potato_and_cheese_bake(&#x27;q&#x27;)),
+        notL(recipe__steak_and_potato_skillet(&#x27;q&#x27;)),
+        notL(recipe__eggplant_and_tomato_stew(&#x27;q&#x27;)),
+        notL(recipe__mushroom_and_broccoli_stir_fry(&#x27;q&#x27;)),
+        notL(recipe__carrot_and_sweet_potato_roast(&#x27;q&#x27;)),
+        notL(recipe__fish_and_bell_pepper_sauté(&#x27;q&#x27;)),
+        notL(recipe__corn_and_cheese_omelette(&#x27;q&#x27;)),
+        notL(recipe__tomato_and_onion_salad(&#x27;q&#x27;)),
+        existsL(food__eggplant(&#x27;v&#x27;)),
+        existsL(food__mushroom(&#x27;v&#x27;)),
+        existsL(food__cheese(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        orL(food__eggplant(&#x27;e&#x27;), food__mushroom(&#x27;e&#x27;), food__cheese(&#x27;e&#x27;)),
+        role__plate(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__cook__eggplant_and_mushroom_gratin__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__book__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A pick takes a book.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L108">knowledge/complex_lcs.py:108</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__book_rearrange(&#x27;q&#x27;), role_bound__shelf(&#x27;q&#x27;), books_keyed(&#x27;q&#x27;), op__pick(&#x27;q&#x27;)),
+    role__book(&#x27;x&#x27;),
+    name=&#x27;complex__book__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__book__destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A book goes to the shelf.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L109">knowledge/complex_lcs.py:109</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__book_rearrange(&#x27;q&#x27;), role_bound__shelf(&#x27;q&#x27;), books_keyed(&#x27;q&#x27;), role__book(&#x27;x&#x27;)),
+    role__shelf(&#x27;y&#x27;),
+    name=&#x27;complex__book__destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__book__order</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">milestone_order</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A book is picked only after every book before it, in the requested direction, was pushed to the shelf.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L111">knowledge/complex_lcs.py:111</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__book_rearrange(&#x27;q&#x27;),
+        role_bound__shelf(&#x27;q&#x27;),
+        books_keyed(&#x27;q&#x27;),
+        op__pick(&#x27;q&#x27;),
+        role__book(&#x27;x&#x27;),
+        notL(done__pick(&#x27;x&#x27;)),
+        role__book(&#x27;c&#x27;),
+        orL(
+            andL(notL(asks_reverse(&#x27;q&#x27;)), earlier_year(&#x27;c&#x27;, &#x27;x&#x27;)),
+            andL(asks_reverse(&#x27;q&#x27;), earlier_year(&#x27;x&#x27;, &#x27;c&#x27;)),
+        ),
+    ),
+    existsL(andL(role__shelf(&#x27;v&#x27;), done__push(&#x27;c&#x27;, &#x27;v&#x27;))),
+    name=&#x27;complex__book__order&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__book__shelve_after_pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">milestone_order</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A book is pushed to the shelf only after it was picked.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L115">knowledge/complex_lcs.py:115</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__book_rearrange(&#x27;q&#x27;),
+        role_bound__shelf(&#x27;q&#x27;),
+        books_keyed(&#x27;q&#x27;),
+        op__push(&#x27;q&#x27;),
+        role__book(&#x27;x&#x27;),
+        role__shelf(&#x27;y&#x27;),
+        notL(done__push(&#x27;x&#x27;, &#x27;y&#x27;)),
+    ),
+    done__pick(&#x27;x&#x27;),
+    name=&#x27;complex__book__shelve_after_pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__book__shelved</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end every book was picked and pushed to the shelf (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L119">knowledge/complex_lcs.py:119</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__book_rearrange(&#x27;q&#x27;),
+        role_bound__shelf(&#x27;q&#x27;),
+        books_keyed(&#x27;q&#x27;),
+        at_completion(&#x27;q&#x27;),
+        role__book(&#x27;e&#x27;),
+    ),
+    andL(done__pick(&#x27;e&#x27;), existsL(andL(role__shelf(&#x27;c&#x27;), done__push(&#x27;e&#x27;, &#x27;c&#x27;)))),
+    name=&#x27;complex__book__shelved&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__book__pushed_to</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end every book is pushed to the shelf when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L122">knowledge/complex_lcs.py:122</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__book_rearrange(&#x27;q&#x27;),
+        role_bound__shelf(&#x27;q&#x27;),
+        books_keyed(&#x27;q&#x27;),
+        at_completion(&#x27;q&#x27;),
+        role__book(&#x27;e&#x27;),
+        role__shelf(&#x27;c&#x27;),
+    ),
+    orL(notL(known__pushed_to(&#x27;e&#x27;, &#x27;c&#x27;)), final__pushed_to(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__book__pushed_to&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A pick takes a reagent the instruction names as a solution.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L127">knowledge/complex_lcs.py:127</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        op__pick(&#x27;q&#x27;),
+    ),
+    role__reagent(&#x27;x&#x27;),
+    name=&#x27;complex__chemistry__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__pour_destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A reagent is poured into the flask.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L130">knowledge/complex_lcs.py:130</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        op__pour(&#x27;q&#x27;),
+        role__reagent(&#x27;x&#x27;),
+    ),
+    role__flask(&#x27;y&#x27;),
+    name=&#x27;complex__chemistry__pour_destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__poured</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end every reagent was poured into the flask (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L133">knowledge/complex_lcs.py:133</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        role__reagent(&#x27;e&#x27;),
+    ),
+    existsL(andL(role__flask(&#x27;c&#x27;), done__pour(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__chemistry__poured&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__place_destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A reagent is placed on the table.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L130">knowledge/complex_lcs.py:130</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        op__place(&#x27;q&#x27;),
+        role__reagent(&#x27;x&#x27;),
+    ),
+    role__table(&#x27;y&#x27;),
+    name=&#x27;complex__chemistry__place_destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__placed</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end every reagent was placed on the table (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L133">knowledge/complex_lcs.py:133</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        role__reagent(&#x27;e&#x27;),
+    ),
+    existsL(andL(role__table(&#x27;c&#x27;), done__place(&#x27;e&#x27;, &#x27;c&#x27;))),
+    name=&#x27;complex__chemistry__placed&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__return_after_pour</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">milestone_order</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A reagent returns to the table only after it was poured into the flask.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L136">knowledge/complex_lcs.py:136</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        op__place(&#x27;q&#x27;),
+        role__reagent(&#x27;x&#x27;),
+        role__table(&#x27;y&#x27;),
+        notL(done__place(&#x27;x&#x27;, &#x27;y&#x27;)),
+    ),
+    existsL(andL(role__flask(&#x27;v&#x27;), done__pour(&#x27;x&#x27;, &#x27;v&#x27;))),
+    name=&#x27;complex__chemistry__return_after_pour&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__poured_into</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end every reagent is in the flask when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L140">knowledge/complex_lcs.py:140</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        role__reagent(&#x27;e&#x27;),
+        role__flask(&#x27;c&#x27;),
+    ),
+    orL(notL(known__poured_into(&#x27;e&#x27;, &#x27;c&#x27;)), final__poured_into(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__chemistry__poured_into&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__chemistry__at</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end every reagent is on the table when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L141">knowledge/complex_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__take_chemistry_experiment(&#x27;q&#x27;),
+        role_bound__flask(&#x27;q&#x27;),
+        role_bound__table(&#x27;q&#x27;),
+        existsL(role__reagent(&#x27;v&#x27;)),
+        at_completion(&#x27;q&#x27;),
+        role__reagent(&#x27;e&#x27;),
+        role__table(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__chemistry__at&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__pick</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A pick takes the hammer or the painting.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L152">knowledge/complex_lcs.py:152</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__pick(&#x27;q&#x27;),
+    ),
+    orL(role__hammer(&#x27;x&#x27;), role__painting(&#x27;x&#x27;)),
+    name=&#x27;complex__hammer__pick&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__push_hammer_destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The hammer pushes the nail.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L155">knowledge/complex_lcs.py:155</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__push(&#x27;q&#x27;),
+        role__hammer(&#x27;x&#x27;),
+    ),
+    role__nail(&#x27;y&#x27;),
+    name=&#x27;complex__hammer__push_hammer_destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__place_hammer_destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The hammer is placed on the counter.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L155">knowledge/complex_lcs.py:155</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__place(&#x27;q&#x27;),
+        role__hammer(&#x27;x&#x27;),
+    ),
+    role__counter(&#x27;y&#x27;),
+    name=&#x27;complex__hammer__place_hammer_destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__push_painting_destination</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">destination</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The painting is pushed to the nail.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L155">knowledge/complex_lcs.py:155</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__push(&#x27;q&#x27;),
+        role__painting(&#x27;x&#x27;),
+    ),
+    role__nail(&#x27;y&#x27;),
+    name=&#x27;complex__hammer__push_painting_destination&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__step2_after_step1</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">milestone_order</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Step 2 (push hammer to the nail) only after step 1 (pick hammer).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L165">knowledge/complex_lcs.py:165</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__push(&#x27;q&#x27;),
+        role__hammer(&#x27;x&#x27;),
+        role__nail(&#x27;y&#x27;),
+        notL(done__push(&#x27;x&#x27;, &#x27;y&#x27;)),
+    ),
+    existsL(andL(role__hammer(&#x27;v&#x27;), done__pick(&#x27;v&#x27;))),
+    name=&#x27;complex__hammer__step2_after_step1&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__step3_after_step2</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">milestone_order</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Step 3 (place hammer to the counter) only after step 2 (push hammer to the nail).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L165">knowledge/complex_lcs.py:165</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__place(&#x27;q&#x27;),
+        role__hammer(&#x27;x&#x27;),
+        role__counter(&#x27;y&#x27;),
+        notL(done__place(&#x27;x&#x27;, &#x27;y&#x27;)),
+    ),
+    existsL(andL(role__hammer(&#x27;v&#x27;), existsL(andL(role__nail(&#x27;w&#x27;), done__push(&#x27;v&#x27;, &#x27;w&#x27;))))),
+    name=&#x27;complex__hammer__step3_after_step2&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__step4_after_step3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">milestone_order</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Step 4 (pick painting) only after step 3 (place hammer to the counter).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L165">knowledge/complex_lcs.py:165</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__pick(&#x27;q&#x27;),
+        role__painting(&#x27;x&#x27;),
+        role__painting(&#x27;x&#x27;),
+        notL(done__pick(&#x27;x&#x27;)),
+    ),
+    existsL(andL(role__hammer(&#x27;v&#x27;), existsL(andL(role__counter(&#x27;w&#x27;), done__place(&#x27;v&#x27;, &#x27;w&#x27;))))),
+    name=&#x27;complex__hammer__step4_after_step3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__step5_after_step4</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">milestone_order</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Step 5 (push painting to the nail) only after step 4 (pick painting).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L165">knowledge/complex_lcs.py:165</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        op__push(&#x27;q&#x27;),
+        role__painting(&#x27;x&#x27;),
+        role__nail(&#x27;y&#x27;),
+        notL(done__push(&#x27;x&#x27;, &#x27;y&#x27;)),
+    ),
+    existsL(andL(role__painting(&#x27;v&#x27;), done__pick(&#x27;v&#x27;))),
+    name=&#x27;complex__hammer__step5_after_step4&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__steps_done</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end all five steps of the chain are done (hard).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L168">knowledge/complex_lcs.py:168</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        at_completion(&#x27;q&#x27;),
+    ),
+    andL(
+        existsL(andL(role__hammer(&#x27;v&#x27;), done__pick(&#x27;v&#x27;))),
+        existsL(andL(role__hammer(&#x27;v&#x27;), existsL(andL(role__nail(&#x27;w&#x27;), done__push(&#x27;v&#x27;, &#x27;w&#x27;))))),
+        existsL(andL(role__hammer(&#x27;v&#x27;), existsL(andL(role__counter(&#x27;w&#x27;), done__place(&#x27;v&#x27;, &#x27;w&#x27;))))),
+        existsL(andL(role__painting(&#x27;v&#x27;), done__pick(&#x27;v&#x27;))),
+        existsL(andL(role__painting(&#x27;v&#x27;), existsL(andL(role__nail(&#x27;w&#x27;), done__push(&#x27;v&#x27;, &#x27;w&#x27;))))),
+    ),
+    name=&#x27;complex__hammer__steps_done&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__at_counter</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end the hammer is on the counter when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L171">knowledge/complex_lcs.py:171</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        at_completion(&#x27;q&#x27;),
+        role__hammer(&#x27;e&#x27;),
+        role__counter(&#x27;c&#x27;),
+    ),
+    orL(notL(known__at(&#x27;e&#x27;, &#x27;c&#x27;)), final__at(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__hammer__at_counter&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>complex__hammer__pushed_to_nail</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">goal_completion</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At the end the painting is pushed to the nail when that fact is known (open-world).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/complex_lcs.py#L172">knowledge/complex_lcs.py:172</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__hammer_nail_and_hang_picture(&#x27;q&#x27;),
+        role_bound__hammer(&#x27;q&#x27;),
+        role_bound__nail(&#x27;q&#x27;),
+        role_bound__counter(&#x27;q&#x27;),
+        role_bound__painting(&#x27;q&#x27;),
+        at_completion(&#x27;q&#x27;),
+        role__painting(&#x27;e&#x27;),
+        role__nail(&#x27;c&#x27;),
+    ),
+    orL(notL(known__pushed_to(&#x27;e&#x27;, &#x27;c&#x27;)), final__pushed_to(&#x27;e&#x27;, &#x27;c&#x27;)),
+    name=&#x27;complex__hammer__pushed_to_nail&#x27;,
+)</code></pre></td></tr>
+</tbody>
+</table>
 
 Compared with the former templates on every plan prefix the old model admitted (book, reversed book, cook, chemistry, hammer and an unbound episode; up to 6,000 prefixes each), both reject exactly the same operations and the same plan endings. The old pick `selection` diagnostic rows are gone from coverage reports; pick subjects are now an `affordance` rule.
 
@@ -664,14 +2714,3121 @@ Observations, produced by `physics_grounding.py` and `physics_event` without any
 </tbody>
 </table>
 
-For example, the density rule for "largest" is generated as:
+### Every physics rule
 
-```text
-ifL(andL(task__density_qa('q'), not consumed earlier phrases('q'), phrase__large('q'), notL(phrase__small('q')),
-         selected('s'), candidate('o')),
-    notL(orL(andL(material__rubber('o'), material__wood('s')), andL(material__water('o'), material__wood('s')), ...)),
-    name='physics__density_qa__large__max')
-```
+Each of the 82 rules with its formula, printed from the declared constraint. `q` is the request, `s` the pressed option, `o` every candidate option; inside `atMostL` the candidate variable `o` is local. A phrase read earlier in the task&#x27;s order excludes the later ones, which is why later antecedents contain `notL(...)` terms.
+
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+<colgroup><col style="width: 27%;"><col style="width: 12%;"><col style="width: 38%;"><col style="width: 23%;"></colgroup>
+<thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Rule</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Requirement family</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Meaning</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Definition</th></tr></thead>
+<tbody>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__press_option_membership</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The pressed entity is one of the answer buttons.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L112">knowledge/physics_lcs.py:112</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(selected(&#x27;s&#x27;), candidate(&#x27;s&#x27;), name=&#x27;physics__press_option_membership&#x27;)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__float__below</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;float in the water&quot;: the pressed object&#x27;s material is below water in density.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L129">knowledge/physics_lcs.py:129</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__density_qa(&#x27;q&#x27;), phrase__float(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    orL(
+        notL(
+            orL(
+                material__wood(&#x27;s&#x27;),
+                material__rubber(&#x27;s&#x27;),
+                material__water(&#x27;s&#x27;),
+                material__glass(&#x27;s&#x27;),
+                material__stone(&#x27;s&#x27;),
+                material__metal(&#x27;s&#x27;),
+            ),
+        ),
+        orL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;s&#x27;)),
+    ),
+    name=&#x27;physics__density_qa__float__below&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__second_fastest__n2</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;second fastest&quot;, 2 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__2(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__second_fastest__n2&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__second_fastest__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;second fastest&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__second_fastest__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__second_fastest__n4</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;second fastest&quot;, 4 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__4(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__second_fastest__n4&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__second_fastest__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;second fastest&quot;, 5 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__second_fastest__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__second_fastest__n6</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;second fastest&quot;, 6 options: the pressed one has ascending rank 4 (at most 4 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__6(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=4,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__second_fastest__n6&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__second_fastest__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;second fastest&quot;, 7 options: the pressed one has ascending rank 5 (at most 5 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=5,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__second_fastest__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__second_fastest__n8</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;second fastest&quot;, 8 options: the pressed one has ascending rank 6 (at most 6 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__8(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=6,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__second_fastest__n8&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__medium__n1</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;medium&quot;/&quot;moderately&quot;, 1 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 0 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__1(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+    ),
+    name=&#x27;physics__density_qa__medium__n1&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__medium__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;medium&quot;/&quot;moderately&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__density_qa__medium__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__medium__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;medium&quot;/&quot;moderately&quot;, 5 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 2 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+    ),
+    name=&#x27;physics__density_qa__medium__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__medium__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;medium&quot;/&quot;moderately&quot;, 7 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 3 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+    ),
+    name=&#x27;physics__density_qa__medium__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__small__min</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;smallest&quot;/&quot;least&quot;/&quot;slowest&quot; (and no large word): no known candidate is strictly below the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        phrase__small(&#x27;q&#x27;),
+        notL(phrase__large(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__water(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__density_qa__small__min&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__density_qa__large__max</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">density_qa, &quot;largest&quot;/&quot;most&quot;/&quot;fastest&quot; (and no small word): no known candidate is strictly above the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__density_qa(&#x27;q&#x27;),
+        notL(phrase__float(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        notL(andL(phrase__small(&#x27;q&#x27;), notL(phrase__large(&#x27;q&#x27;)))),
+        phrase__large(&#x27;q&#x27;),
+        notL(phrase__small(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__water(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__density_qa__large__max&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__second_fastest__n2</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;second fastest&quot;, 2 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__speed_of_sound_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__2(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__second_fastest__n2&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__second_fastest__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;second fastest&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__speed_of_sound_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__3(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__second_fastest__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__second_fastest__n4</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;second fastest&quot;, 4 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__speed_of_sound_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__4(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__second_fastest__n4&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__second_fastest__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;second fastest&quot;, 5 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__speed_of_sound_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__5(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__second_fastest__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__second_fastest__n6</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;second fastest&quot;, 6 options: the pressed one has ascending rank 4 (at most 4 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__speed_of_sound_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__6(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=4,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__second_fastest__n6&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__second_fastest__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;second fastest&quot;, 7 options: the pressed one has ascending rank 5 (at most 5 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__speed_of_sound_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__7(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=5,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__second_fastest__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__second_fastest__n8</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;second fastest&quot;, 8 options: the pressed one has ascending rank 6 (at most 6 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__speed_of_sound_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__8(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=6,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__second_fastest__n8&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__medium__n1</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;medium&quot;/&quot;moderately&quot;, 1 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 0 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__speed_of_sound_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__1(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__medium__n1&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__medium__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;medium&quot;/&quot;moderately&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__speed_of_sound_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__medium__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__medium__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;medium&quot;/&quot;moderately&quot;, 5 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 2 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__speed_of_sound_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__medium__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__medium__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;medium&quot;/&quot;moderately&quot;, 7 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 3 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__speed_of_sound_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__medium__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__small__min</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;smallest&quot;/&quot;least&quot;/&quot;slowest&quot; (and no large word): no known candidate is strictly below the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__speed_of_sound_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        phrase__small(&#x27;q&#x27;),
+        notL(phrase__large(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(material__water(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__wood(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__wood(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__glass(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__glass(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+            andL(material__glass(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__glass(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__rubber(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__water(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__small__min&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__speed_of_sound_qa__large__max</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">speed_of_sound_qa, &quot;largest&quot;/&quot;most&quot;/&quot;fastest&quot; (and no small word): no known candidate is strictly above the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__speed_of_sound_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        notL(andL(phrase__small(&#x27;q&#x27;), notL(phrase__large(&#x27;q&#x27;)))),
+        phrase__large(&#x27;q&#x27;),
+        notL(phrase__small(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(material__water(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__wood(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__wood(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__glass(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__glass(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+            andL(material__glass(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__glass(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__rubber(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__water(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__speed_of_sound_qa__large__max&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__second_fastest__n2</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;second fastest&quot;, 2 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__thermal_expansion_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__2(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__second_fastest__n2&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__second_fastest__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;second fastest&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__thermal_expansion_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__3(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__second_fastest__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__second_fastest__n4</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;second fastest&quot;, 4 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__thermal_expansion_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__4(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__second_fastest__n4&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__second_fastest__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;second fastest&quot;, 5 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__thermal_expansion_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__5(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__second_fastest__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__second_fastest__n6</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;second fastest&quot;, 6 options: the pressed one has ascending rank 4 (at most 4 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__thermal_expansion_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__6(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=4,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__second_fastest__n6&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__second_fastest__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;second fastest&quot;, 7 options: the pressed one has ascending rank 5 (at most 5 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__thermal_expansion_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__7(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=5,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__second_fastest__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__second_fastest__n8</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;second fastest&quot;, 8 options: the pressed one has ascending rank 6 (at most 6 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__thermal_expansion_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__8(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=6,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__second_fastest__n8&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__medium__n1</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;medium&quot;/&quot;moderately&quot;, 1 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 0 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__thermal_expansion_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__1(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__medium__n1&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__medium__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;medium&quot;/&quot;moderately&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__thermal_expansion_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__medium__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__medium__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;medium&quot;/&quot;moderately&quot;, 5 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 2 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__thermal_expansion_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__medium__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__medium__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;medium&quot;/&quot;moderately&quot;, 7 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 3 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__thermal_expansion_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+                    andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+                    andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__medium__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__small__min</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;smallest&quot;/&quot;least&quot;/&quot;slowest&quot; (and no large word): no known candidate is strictly below the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__thermal_expansion_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        phrase__small(&#x27;q&#x27;),
+        notL(phrase__large(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(material__wood(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+            andL(material__stone(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__metal(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+            andL(material__rubber(&#x27;s&#x27;), material__glass(&#x27;o&#x27;)),
+            andL(material__rubber(&#x27;s&#x27;), material__wood(&#x27;o&#x27;)),
+            andL(material__rubber(&#x27;s&#x27;), material__stone(&#x27;o&#x27;)),
+            andL(material__rubber(&#x27;s&#x27;), material__metal(&#x27;o&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__small__min&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__thermal_expansion_qa__large__max</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">thermal_expansion_qa, &quot;largest&quot;/&quot;most&quot;/&quot;fastest&quot; (and no small word): no known candidate is strictly above the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__thermal_expansion_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        notL(andL(phrase__small(&#x27;q&#x27;), notL(phrase__large(&#x27;q&#x27;)))),
+        phrase__large(&#x27;q&#x27;),
+        notL(phrase__small(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(material__wood(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+            andL(material__stone(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__metal(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+            andL(material__rubber(&#x27;o&#x27;), material__glass(&#x27;s&#x27;)),
+            andL(material__rubber(&#x27;o&#x27;), material__wood(&#x27;s&#x27;)),
+            andL(material__rubber(&#x27;o&#x27;), material__stone(&#x27;s&#x27;)),
+            andL(material__rubber(&#x27;o&#x27;), material__metal(&#x27;s&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__thermal_expansion_qa__large__max&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__non_magnetic__min</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;non-magnetic&quot;: no known candidate is strictly below the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__magnetism_qa(&#x27;q&#x27;), phrase__non_magnetic(&#x27;q&#x27;), selected(&#x27;s&#x27;), candidate(&#x27;o&#x27;)),
+    notL(
+        andL(
+            material__metal(&#x27;s&#x27;),
+            orL(
+                material__wood(&#x27;o&#x27;),
+                material__rubber(&#x27;o&#x27;),
+                material__water(&#x27;o&#x27;),
+                material__glass(&#x27;o&#x27;),
+                material__stone(&#x27;o&#x27;),
+            ),
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__non_magnetic__min&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__magnetic__max</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;magnetic&quot;: no known candidate is strictly above the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        phrase__magnetic(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        andL(
+            material__metal(&#x27;o&#x27;),
+            orL(
+                material__wood(&#x27;s&#x27;),
+                material__rubber(&#x27;s&#x27;),
+                material__water(&#x27;s&#x27;),
+                material__glass(&#x27;s&#x27;),
+                material__stone(&#x27;s&#x27;),
+            ),
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__magnetic__max&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__second_fastest__n2</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;second fastest&quot;, 2 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__2(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__second_fastest__n2&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__second_fastest__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;second fastest&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__second_fastest__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__second_fastest__n4</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;second fastest&quot;, 4 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__4(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__second_fastest__n4&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__second_fastest__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;second fastest&quot;, 5 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__second_fastest__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__second_fastest__n6</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;second fastest&quot;, 6 options: the pressed one has ascending rank 4 (at most 4 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__6(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=4,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__second_fastest__n6&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__second_fastest__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;second fastest&quot;, 7 options: the pressed one has ascending rank 5 (at most 5 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=5,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__second_fastest__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__second_fastest__n8</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;second fastest&quot;, 8 options: the pressed one has ascending rank 6 (at most 6 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        phrase__second_fastest(&#x27;q&#x27;),
+        option_count__8(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=6,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__second_fastest__n8&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__medium__n1</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;medium&quot;/&quot;moderately&quot;, 1 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 0 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__1(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=0,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__medium__n1&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__medium__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;medium&quot;/&quot;moderately&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__medium__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__medium__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;medium&quot;/&quot;moderately&quot;, 5 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 2 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=2,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__medium__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__medium__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;medium&quot;/&quot;moderately&quot;, 7 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 3 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;s&#x27;),
+                    orL(
+                        material__wood(&#x27;o&#x27;),
+                        material__rubber(&#x27;o&#x27;),
+                        material__water(&#x27;o&#x27;),
+                        material__glass(&#x27;o&#x27;),
+                        material__stone(&#x27;o&#x27;),
+                    ),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                andL(
+                    material__metal(&#x27;o&#x27;),
+                    orL(
+                        material__wood(&#x27;s&#x27;),
+                        material__rubber(&#x27;s&#x27;),
+                        material__water(&#x27;s&#x27;),
+                        material__glass(&#x27;s&#x27;),
+                        material__stone(&#x27;s&#x27;),
+                    ),
+                ),
+            ),
+            limit=3,
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__medium__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__small__min</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;smallest&quot;/&quot;least&quot;/&quot;slowest&quot; (and no large word): no known candidate is strictly below the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        phrase__small(&#x27;q&#x27;),
+        notL(phrase__large(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        andL(
+            material__metal(&#x27;s&#x27;),
+            orL(
+                material__wood(&#x27;o&#x27;),
+                material__rubber(&#x27;o&#x27;),
+                material__water(&#x27;o&#x27;),
+                material__glass(&#x27;o&#x27;),
+                material__stone(&#x27;o&#x27;),
+            ),
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__small__min&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__magnetism_qa__large__max</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">magnetism_qa, &quot;largest&quot;/&quot;most&quot;/&quot;fastest&quot; (and no small word): no known candidate is strictly above the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__magnetism_qa(&#x27;q&#x27;),
+        notL(phrase__non_magnetic(&#x27;q&#x27;)),
+        notL(phrase__magnetic(&#x27;q&#x27;)),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        notL(andL(phrase__small(&#x27;q&#x27;), notL(phrase__large(&#x27;q&#x27;)))),
+        phrase__large(&#x27;q&#x27;),
+        notL(phrase__small(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        andL(
+            material__metal(&#x27;o&#x27;),
+            orL(
+                material__wood(&#x27;s&#x27;),
+                material__rubber(&#x27;s&#x27;),
+                material__water(&#x27;s&#x27;),
+                material__glass(&#x27;s&#x27;),
+                material__stone(&#x27;s&#x27;),
+            ),
+        ),
+    ),
+    name=&#x27;physics__magnetism_qa__large__max&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__second_fastest__n2</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;second fastest&quot;, 2 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 0 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__friction_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__2(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__second_fastest__n2&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__second_fastest__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;second fastest&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__friction_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__3(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__second_fastest__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__second_fastest__n4</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;second fastest&quot;, 4 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 2 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__friction_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__4(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__second_fastest__n4&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__second_fastest__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;second fastest&quot;, 5 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 3 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__friction_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__5(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__second_fastest__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__second_fastest__n6</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;second fastest&quot;, 6 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 4 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__friction_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__6(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=4,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__second_fastest__n6&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__second_fastest__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;second fastest&quot;, 7 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 5 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__friction_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__7(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=5,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__second_fastest__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__second_fastest__n8</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;second fastest&quot;, 8 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 6 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__friction_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__8(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=6,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__second_fastest__n8&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__medium__n1</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;medium&quot;/&quot;moderately&quot;, 1 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 0 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__friction_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__1(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=0,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__medium__n1&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__medium__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;medium&quot;/&quot;moderately&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__friction_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=1,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__medium__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__medium__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;medium&quot;/&quot;moderately&quot;, 5 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 2 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__friction_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=2,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__medium__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__medium__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;medium&quot;/&quot;moderately&quot;, 7 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 3 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__friction_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+                    andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+        atMostL(
+            andL(
+                candidate(&#x27;o&#x27;),
+                orL(
+                    andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+                    andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+                ),
+            ),
+            limit=3,
+        ),
+    ),
+    name=&#x27;physics__friction_qa__medium__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__small__max</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;smallest&quot;/&quot;least&quot;/&quot;slowest&quot; (and no large word): no known candidate is strictly above the pressed one (slide-cost scale: the fastest is the minimum).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__friction_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        phrase__small(&#x27;q&#x27;),
+        notL(phrase__large(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(shape__cylinder(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+            andL(shape__box(&#x27;o&#x27;), shape__sphere(&#x27;s&#x27;)),
+            andL(shape__box(&#x27;o&#x27;), shape__cylinder(&#x27;s&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__friction_qa__small__max&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__friction_qa__large__min</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">friction_qa, &quot;largest&quot;/&quot;most&quot;/&quot;fastest&quot; (and no small word): no known candidate is strictly below the pressed one (slide-cost scale: the fastest is the minimum).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__friction_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        notL(andL(phrase__small(&#x27;q&#x27;), notL(phrase__large(&#x27;q&#x27;)))),
+        phrase__large(&#x27;q&#x27;),
+        notL(phrase__small(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(
+        orL(
+            andL(shape__cylinder(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+            andL(shape__box(&#x27;s&#x27;), shape__sphere(&#x27;o&#x27;)),
+            andL(shape__box(&#x27;s&#x27;), shape__cylinder(&#x27;o&#x27;)),
+        ),
+    ),
+    name=&#x27;physics__friction_qa__large__min&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__second_fastest__n2</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;second fastest&quot;, 2 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__reflection_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__2(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=0),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__second_fastest__n2&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__second_fastest__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;second fastest&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__reflection_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__3(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=1),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__second_fastest__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__second_fastest__n4</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;second fastest&quot;, 4 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__reflection_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__4(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=2),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__second_fastest__n4&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__second_fastest__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;second fastest&quot;, 5 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__reflection_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__5(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=3),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__second_fastest__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__second_fastest__n6</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;second fastest&quot;, 6 options: the pressed one has ascending rank 4 (at most 4 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__reflection_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__6(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=4),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__second_fastest__n6&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__second_fastest__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;second fastest&quot;, 7 options: the pressed one has ascending rank 5 (at most 5 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__reflection_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__7(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=5),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__second_fastest__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__second_fastest__n8</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;second fastest&quot;, 8 options: the pressed one has ascending rank 6 (at most 6 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(task__reflection_qa(&#x27;q&#x27;), phrase__second_fastest(&#x27;q&#x27;), option_count__8(&#x27;q&#x27;), selected(&#x27;s&#x27;)),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=6),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__second_fastest__n8&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__medium__n1</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;medium&quot;/&quot;moderately&quot;, 1 options: the pressed one has ascending rank 0 (at most 0 known candidates below, at most 0 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__reflection_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__1(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=0),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=0),
+    ),
+    name=&#x27;physics__reflection_qa__medium__n1&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__medium__n3</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;medium&quot;/&quot;moderately&quot;, 3 options: the pressed one has ascending rank 1 (at most 1 known candidates below, at most 1 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__reflection_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__3(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=1),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=1),
+    ),
+    name=&#x27;physics__reflection_qa__medium__n3&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__medium__n5</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;medium&quot;/&quot;moderately&quot;, 5 options: the pressed one has ascending rank 2 (at most 2 known candidates below, at most 2 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__reflection_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__5(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=2),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=2),
+    ),
+    name=&#x27;physics__reflection_qa__medium__n5&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__medium__n7</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;medium&quot;/&quot;moderately&quot;, 7 options: the pressed one has ascending rank 3 (at most 3 known candidates below, at most 3 above).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L141">knowledge/physics_lcs.py:141</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__reflection_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        phrase__medium(&#x27;q&#x27;),
+        option_count__7(&#x27;q&#x27;),
+        selected(&#x27;s&#x27;),
+    ),
+    andL(
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)), limit=3),
+        atMostL(andL(candidate(&#x27;o&#x27;), measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)), limit=3),
+    ),
+    name=&#x27;physics__reflection_qa__medium__n7&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__small__min</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;smallest&quot;/&quot;least&quot;/&quot;slowest&quot; (and no large word): no known candidate is strictly below the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__reflection_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        phrase__small(&#x27;q&#x27;),
+        notL(phrase__large(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(measured_greater(&#x27;s&#x27;, &#x27;o&#x27;)),
+    name=&#x27;physics__reflection_qa__small__min&#x27;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>physics__reflection_qa__large__max</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">affordance</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">reflection_qa, &quot;largest&quot;/&quot;most&quot;/&quot;fastest&quot; (and no small word): no known candidate is strictly above the pressed one.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../knowledge/physics_lcs.py#L121">knowledge/physics_lcs.py:121</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(
+        task__reflection_qa(&#x27;q&#x27;),
+        notL(andL(phrase__second_fastest(&#x27;q&#x27;), notL(option_count__1(&#x27;q&#x27;)))),
+        notL(phrase__medium(&#x27;q&#x27;)),
+        notL(andL(phrase__small(&#x27;q&#x27;), notL(phrase__large(&#x27;q&#x27;)))),
+        phrase__large(&#x27;q&#x27;),
+        notL(phrase__small(&#x27;q&#x27;)),
+        selected(&#x27;s&#x27;),
+        candidate(&#x27;o&#x27;),
+    ),
+    notL(measured_greater(&#x27;o&#x27;, &#x27;s&#x27;)),
+    name=&#x27;physics__reflection_qa__large__max&#x27;,
+)</code></pre></td></tr>
+</tbody>
+</table>
 
 The selection policy that the generic `SelectionRequirement` computes in Python (minimum, maximum, rank, threshold) remains for selections supplied explicitly in planning facts and for the visual-profile placeholder; for the physics QA tasks it is replaced by these rules.
 
