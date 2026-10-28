@@ -90,7 +90,7 @@ class NativePlanDFA:
     """
 
     def __init__(self, token_bytes, eos_id, *, entity_count, max_operations=None,
-                 grammar_profile="benchmark", object_constraints=None, patterns=None):
+                 grammar_profile="benchmark", patterns=None):
         self.eos_label = int(eos_id)
         self.grammar_profile = grammar_profile
         self.skill_arguments, self.patterns = native_schema(grammar_profile)
@@ -102,7 +102,6 @@ class NativePlanDFA:
         if self.max_operations < 1 or entity_count < 0:
             raise ValueError("positive operation budget and nonnegative entity count required")
         self.entity_count = min(entity_count, 64) if grammar_profile == "legacy" else entity_count
-        self.object_constraints = object_constraints or ObjectConstraints()
         self.states = frozenset()  # lazily projected states
         self.start_state = (0, ((),), "start", 0, "")
         self.token_bytes = token_bytes
@@ -118,10 +117,9 @@ class NativePlanDFA:
         self.end_action = {}
         node_actions = [set()]
         for skill, roles in self.skill_arguments.items():
-            values = self.object_constraints.ids(skill, roles[0], self.entity_count) if roles else [None]
+            # Object candidates from the instruction are an LC (official/decoding_graph.py), not an inventory filter.
+            values = range(self.entity_count) if roles else [None]
             for pointer in values:
-                if pointer is not None and (isinstance(pointer, bool) or not 0 <= pointer < self.entity_count):
-                    raise ValueError("object constraint ID is outside the scene table")
                 action = len(self.actions)
                 self.actions.append((skill, pointer))
                 self.action_index[(skill, pointer)] = action
@@ -506,9 +504,13 @@ class FrozenNativePlanner:
                 grounding = grounding_for_example(example, object_constraints)
                 key = (len(example.entities), max_operations, grammar_profile, grounding.restrictions)
                 if key not in self.dfas:
-                    self.dfas[key] = NativePlanDFA(self.token_bytes, self.tokenizer.eos_token_id,
-                        entity_count=key[0], max_operations=max_operations, grammar_profile=grammar_profile,
-                        object_constraints=grounding)
+                    common = dict(entity_count=key[0], max_operations=max_operations, grammar_profile=grammar_profile)
+                    if grounding.restrictions:
+                        from .official.knowledge_dfa import KnowledgePlanDFA
+                        self.dfas[key] = KnowledgePlanDFA(self.token_bytes, self.tokenizer.eos_token_id, causal=False,
+                                                          object_candidates=grounding, **common)
+                    else:
+                        self.dfas[key] = NativePlanDFA(self.token_bytes, self.tokenizer.eos_token_id, **common)
                 constraint = NativeConstraintProcessor(self.dfas[key], length, max_tokens,
                     hmm=hmm, weight=weight, table=self.tables.get(key))
                 cache_path, cache_identity = None, None

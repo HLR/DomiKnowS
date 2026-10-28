@@ -589,6 +589,10 @@ repository root; every module is also importable as `test_regr.VLABenchAgentInte
 | File | Functionality |
 | --- | --- |
 | `official_protocol.py` | The standard protocol: upstream prompt layout, parsing, differential scoring, resumable runs, and the grammar-DFA generator with its press-question, scene-ids, pattern-first and HMM options. |
+| `causal_graph.py` | Three id-only DomiKnowS causal constraints and their generic predicate compilation. |
+| `causal_dfa.py` | Integrates the compiled causal formulas with native JSON decoding, using prefix observations to prune ids and operation closures. |
+| `decoding_graph.py` | Five episode-knowledge DomiKnowS constraints: the press answer, the scene-id bound, the named subtask patterns and the instruction's object candidates. |
+| `knowledge_dfa.py` | `KnowledgePlanDFA`: grounds the model's answers and the instruction candidates as observations and admits operations and plan endings through the compiled causal and episode formulas. |
 | `official_vlm_prompt_en.txt` | The vendored upstream prompt (hash-checked at load). |
 | `official_hmm.py` | The label-free HMM pipeline: corpus sampling, canonical plan text, HMM loading and decoding labels, validation weight selection and the held-out report. |
 | `official_adapt.py` | Per-instance emission adaptation: expected counts by scaled forward-backward and the mixed emission matrix. |

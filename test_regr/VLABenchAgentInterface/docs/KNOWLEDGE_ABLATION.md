@@ -3,6 +3,7 @@
 What each knowledge tier of the world graph contributes when the same checkpoint is evaluated on the same
 450 test episodes. Task knowledge is expressed as graph concepts and logical constraints
 (`knowledge/`, see the README source code map); `--knowledge` switches which constraint groups are active.
+The `causal` setting belongs to the standard VLABench protocol (`--protocol official --constraints causal`). It compiles a separate graph of **3 DomiKnowS logical constraints** into the native grammar DFA. It is not a cumulative world-knowledge tier, and its result-table rows are not run for the Joint planner.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -37,6 +38,12 @@ What each knowledge tier of the world graph contributes when the same checkpoint
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">plan grammar DFA only: the token syntax of a plan, the nine skills, any of the 64 entity ids, the end token, the operation budget and the language of allowed skill patterns; no constraint group</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">none</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable grammar formulas; an incomplete subtask cannot terminate.</td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ three id-only DomiKnowS ifL constraints over the ids the plan writes: a destination is never the object picked in its subtask (anti-self-placement), a subtask never repeats a destination, an object that has served as a destination is never picked later; no entity table, so any of the 64 ids remains allowed</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">none</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Compile the three causal formulas into the DFA (<code style="white-space: normal; overflow-wrap: anywhere;">--protocol official --constraints causal</code>); placing the picked object on itself is rejected without any scene table. Standard protocol only: it is not a <code style="white-space: normal; overflow-wrap: anywhere;">--knowledge</code> level of the Joint planner.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
@@ -85,6 +92,8 @@ a non-empty output; it is still ungrammatical and is the more informative of the
 model trained without the grammar. The frozen VLM in the standard protocol is a different system and is not comparable
 with these numbers.
 
+The causal declaration refactor expresses the three existing admission rules as logical constraints and preserves the recorded historical scores; it does not rerun those evaluations. Candidate skill concepts and prefix equality/history observations ground the formulas; changing or removing a formula changes acceptance after rebuilding the DFA. It adds no scene facts or task identity. See the [three complete causal formulas](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
+
 ## Executable knowledge and source map
 
 The declaration refactor keeps the levels and the historical results below.
@@ -110,6 +119,11 @@ before attributing scores to this refactor.
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">graph.py</code>: EOS existence/closure, token/operation limits, one-hot progress concepts, legal starts, skill patterns and ordered/optional arguments</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">token labels and request-specific continuation roots</td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Causal</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">official/causal_graph.py</code> declares three readable <code>ifL</code> formulas, compiled by the generic predicate compiler and evaluated by <code>official/causal_dfa.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">CausalPlanDFA</code>: the grammar DFA plus anti-self-placement (as in generic), distinct destinations within a subtask and no pick of a former destination. It drops generic&#x27;s pointer validity (no entity table) and repeated-pick rule (all 100 <code style="white-space: normal; overflow-wrap: anywhere;">take_chemistry_experiment</code> references pick an object twice). A pick or press starts a subtask; ids are pruned as soon as no admitted action can follow, and whitespace before a refused closing brace is refused, so pretty-printed JSON has no dead end</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">only the ids the plan writes: the subject of the current subtask, its destinations so far and every earlier destination</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic</td>
@@ -182,6 +196,41 @@ nodes rather than operation nodes, so partial diagnostic percentages can differ.
 The reward and validity gate remain unchanged: every active rule must be fully
 satisfied; a partial result still fails the gate.
 
+### Causal logical constraints (official protocol)
+
+`official/causal_graph.py` declares **3 constraints**, all using `ifL` as the outermost operator. `CausalPlanDFA` compiles the actual formulas with `compile_predicate_constraints` and evaluates them while pruning partial ids and when closing each operation. Names do not supply policy semantics. Removing, disabling, or editing a formula changes acceptance after rebuilding the DFA; existing compiled DFAs keep their previous snapshot.
+
+`pick`, `place`, `insert`, `pour`, and `push` denote skill concepts under the operation concept. The string `"operation"` binds the candidate operation consistently throughout each formula. The candidate skill and three Boolean observations ground the formulas before the candidate executes: `target_is_subject` compares the target id with the current picked subject; `target_used_in_subtask` checks the current subtask's destination history; `target_was_destination` checks the entire earlier plan's destination history. Pick/press start a new subtask and reset local history; earlier destinations remain in plan-wide history. These observations require no entity names, scene table, task identity, or gold plan.
+
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+<colgroup><col style="width: 25%;"><col style="width: 10%;"><col style="width: 38%;"><col style="width: 27%;"></colgroup>
+<thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Rule family</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Count at causal</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Example and effect</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Definition</th></tr></thead>
+<tbody>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>anti_self_placement</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>pick 2, place 2</code>: Reject a destination equal to the current picked subject. The guard covers place, insert, pour and push.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/causal_graph.py#L52">official/causal_graph.py:52</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    orL(place(&quot;operation&quot;), insert(&quot;operation&quot;), pour(&quot;operation&quot;), push(&quot;operation&quot;)),
+    notL(target_is_subject(&quot;operation&quot;)),
+    name=&quot;anti_self_placement&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>distinct_subtask_destinations</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>pick 2, pour 3, place 3</code>: Reject reuse of destination 3 within one subtask. A later subtask may use 3 again.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/causal_graph.py#L58">official/causal_graph.py:58</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    orL(place(&quot;operation&quot;), insert(&quot;operation&quot;), pour(&quot;operation&quot;), push(&quot;operation&quot;)),
+    notL(target_used_in_subtask(&quot;operation&quot;)),
+    name=&quot;distinct_subtask_destinations&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>destinations_stay_put</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>pick 2, place 3, pick 3, place 4</code>: Reject picking 3 after it served as a destination in an earlier operation.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/causal_graph.py#L64">official/causal_graph.py:64</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    pick(&quot;operation&quot;),
+    notL(target_was_destination(&quot;operation&quot;)),
+    name=&quot;destinations_stay_put&quot;,
+)</code></pre></td></tr>
+</tbody>
+</table>
+
+The official causal setting therefore enables **3 logical constraints**; its native JSON grammar adds no DomiKnowS declarations. It does not use the five grammar formulas from `graph.py` or activate the generic/scene/task world groups. The separate grammar/world path still totals **91**; the inventory across both paths is **94 declarations**, rather than 94 constraints active together. Each complete formula counts once; nested operators are excluded. Full formulas and observation definitions are in the [causal constraint inventory](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
+
+The DFA still accumulates prefix observations and handles JSON bytes, pointer bounds, EOS, and operation limits. The compiled formulas decide the three causal admission rules. This refactor changes where the rules are expressed, and adds no new task or scene knowledge. Historical result tables below are unchanged.
+
 ### Subtask progress and diagnostic changes
 
 The transition rule now uses prefix progress projected from the same generation formulas, rather than a whole-plan validation flag. Each operation advances the compiled state; earlier valid transitions are not marked invalid because of a later bad transition or an unrelated pointer error. Decoding supplies the same progress observations instead of setting `allowed_transition=True` unconditionally.
@@ -204,6 +253,9 @@ inactive. `set_knowledge_level` switches their `active` flags in place; recompil
 the DFA afterward. Building at a low level and enabling task knowledge must
 activate the same rules as building directly at task level. Request/task facts
 are not consulted below `learned`.
+
+`causal` has no entry in `knowledge/__init__.py`: it needs neither the world graph nor an entity table, and it is
+switched on by `--constraints causal` of `--protocol official` instead of by `--knowledge`.
 
 The declaration refactor is validated with independently specified semantic
 counterexamples, edits to actual formulas, tier-toggle equivalence, preservation
@@ -278,6 +330,15 @@ The `learned` run adds `--knowledge learned --task-classifier task_classifier.pt
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">51.1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">55.2</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">25.5</td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">causal</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">generic</td>
@@ -379,6 +440,15 @@ Per-dimension score:
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">37.9</td>
     </tr>
     <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">causal</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">not run</td>
+    </tr>
+    <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">generic</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">85.0</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">71.2</td>
@@ -457,6 +527,13 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
   graph match 26 to 38, with gains in every dimension except PhysLaw. Skill recall is unchanged (89.4), so the gain is in
   arguments and graph structure, not in which skills are chosen.
 - **Scene knowledge is worth about 1 point of Macro** (66.9 to 67.9); only Semantic moves (+3.2).
+- **Causal knowledge has only been measured in the standard protocol**, with the frozen Qwen3-VL-8B and upstream
+  total_score (another scale from the tables above): 38.20 against 38.24 for the grammar DFA alone over the 3,700
+  mapped episodes. It changes 134 of 4,500 plans (16 worse, 1 better). The rules catch real errors (91 self-placements,
+  34 repeated destinations, 17 picks of a former destination), but a refused id is completed to a two-digit id that is
+  not in the scene (34, 44), so the repair does not reach a real object. With `--scene-ids` (the model reads the largest
+  tag number, 6.7 on average, and ids are bounded by it) causal scores 38.26 against 38.24 for grammar with the same
+  bound: 134 plans change, 22 better and 18 worse. The bound alone changes no grammar plan. The rules are about neutral.
 - **The task tier is the large step, +9.2 Macro**, and it comes from two dimensions: Complex 44.6 to 87.4
   (the obligations and sequence LCs) and PhysLaw 37.7 to 57.0 (grounded QA families). Skill recall rises
   from 89 to 98.
@@ -477,3 +554,6 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
 - `task` gives Macro 77.1 here against the 75.1 recorded in `README_checkpoint.md`; that earlier figure came
   from an older code revision. This run is the reference for the knowledge comparison.
 - The `metadata` level uses a different observation mode, so it is not a pure LC-group toggle.
+- The `causal` rows are not run: the level exists only for the standard protocol. None of the 4,500 reference plans
+  breaks its three rules, but the two rules that `generic` lacks were chosen after that check, so like the press
+  question they encode benchmark knowledge.

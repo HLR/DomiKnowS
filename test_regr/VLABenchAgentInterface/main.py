@@ -915,8 +915,6 @@ def command_evaluate_official(args) -> None:
         raise ValueError("--few-shot-num must be nonnegative and --max-new-tokens positive")
     if (args.press_question or args.hmm or args.scene_ids or args.pattern_first) and args.constraints == "none":
         raise ValueError("--press-question, --scene-ids and --hmm extend the grammar DFA; add --constraints grammar")
-    if args.hmm and args.constraints == "causal":
-        raise ValueError("--hmm is not supported with --constraints causal")
     from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
     from test_regr.VLABenchAgentInterface.official.official_protocol import (
         load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,

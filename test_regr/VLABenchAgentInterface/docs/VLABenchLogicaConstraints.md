@@ -1,10 +1,10 @@
 # VLABench logical constraints
 
-Inventory of the current local declarations, checked on **2026-10-22**. This document covers both meanings of a constraint class: the DomiKnowS operator class and the named knowledge/rule family built from those operators. It complements [KNOWLEDGE_ABLATION.md](KNOWLEDGE_ABLATION.md); its counts describe declarations, not new ablation scores.
+Inventory of the current local declarations, checked on **2026-10-27**. This document covers both meanings of a constraint class: the DomiKnowS operator class and the named knowledge/rule family built from those operators. It complements [KNOWLEDGE_ABLATION.md](KNOWLEDGE_ABLATION.md); its counts describe declarations, not new ablation scores.
 
 ## Scope and counting
 
-The baseline is one standalone `build_vlabench_world_graph(knowledge_level="task")` and one `create_planner_generation_graph(world)` with the default task tables, no excluded tasks or custom constraint builders, 64 entity pointers, `max_operations=12`, and no request-specific language override. All counts below are for that build.
+The baseline is one standalone `build_vlabench_world_graph(knowledge_level="task")` and one `create_planner_generation_graph(world)` with the default task tables, no excluded tasks or custom constraint builders, 64 entity pointers, `max_operations=12`, and no request-specific language override. Grammar/world counts refer to that build. The official-protocol causal graph is counted separately: one default `build_causal_graph()` declares three additional formulas and one default `build_decoding_graph()` five more. Together they contain 99 declarations, while the enabled count depends on the selected protocol and level.
 
 A **logical constraint** is one complete declared formula enforced as a rule. For example, `ifL(A, andL(B, C))` counts as **one logical constraint**. Operators within that formula are not counted separately. Concept calls, relation declarations, DFA states, auxiliary progress concepts, input facts, and decoder transitions do not add logical constraints.
 
@@ -30,6 +30,16 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">grammar</code></td>
     </tr>
     <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Causal (id-only) DFA rules</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">3 (separate official-protocol graph)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code>, standard protocol only</td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Episode decoding knowledge</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5 (separate decoding graph)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">--press-question</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--scene-ids</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--pattern-first</code>; instruction object candidates of the internal frozen-VLM DFA</td>
+    </tr>
+    <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic world knowledge</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
@@ -50,18 +60,19 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above</td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Combined total</strong></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Grammar + world total</strong></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>91</strong></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">learned</code> and above</td>
     </tr>
-  </tbody>
+  <tr><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Inventory across both paths</strong></td><td style="padding: 0.55em 0.65em;"><strong>99</strong></td><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;">91 grammar/world + 3 official causal + 5 episode decoding declarations; not one active setting</td></tr>
+</tbody>
 </table>
 
-The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. All 86 world constraints use `ifL` as their outermost operator. The five grammar constraints use one `atLeastAL`, one `ifL`, two `atMostAL`, and one `andL`.
+The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. The separate `causal` level declares **3 id-only logical constraints**, compiled into `CausalPlanDFA` and described below. The VLABench grammar/world baseline remains 91; the inventory across that baseline, the separate causal graph and the separate decoding graph (5 formulas, below) contains **99 declarations**. These are counts of declarations, so the causal and generic anti-self-placement formulas count separately even though their rule names overlap. All 86 world constraints use `ifL` as their outermost operator. The five grammar constraints use one `atLeastAL`, one `ifL`, two `atMostAL`, and one `andL`.
 
 ## Ablation levels
 
-These are cumulative activation levels. Inactive world constraints still exist in the graph; the table below counts only the logical constraints enabled at each level, including both grammar and world constraints.
+The grammar/world levels are cumulative. The official-protocol `causal` row is a separate decoding path. Inactive world constraints still exist in the graph; the table counts only enabled logical constraints. The official native grammar is procedural and contributes no DomiKnowS declarations, so `causal` enables 3, not 5 + 3.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -103,6 +114,13 @@ These are cumulative activation levels. Inactive world constraints still exist i
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code> may complete a subtask; EOS after an incomplete <code style="white-space: normal; overflow-wrap: anywhere;">pick</code> subtask is rejected.</td>
     </tr>
     <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Official grammar DFA + causal logical constraints</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">3</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Three compiled ifL constraints over observed plan ids; no scene world graph (<code style="white-space: normal; overflow-wrap: anywhere;">--protocol official --constraints causal</code>). No entity table and no task identity are supplied.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">In a subtask that picks 2, placing into 2 is refused, as by generic&#x27;s anti_self_placement; a later pick of an object that was already a destination is refused. Any id 0–63 remains allowed.</td>
+    </tr>
+    <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + generic</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">29</td>
@@ -140,7 +158,7 @@ These are cumulative activation levels. Inactive world constraints still exist i
   </tbody>
 </table>
 
-`metadata` introduces observations, not a fourth world rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `learned`.
+`causal` is not cumulative with the levels around it in this table: it belongs to the standard protocol, whose grammar DFA (`NativePlanDFA`) is not the five-constraint grammar of `graph.py`, and it enforces three separate id-only logical constraints. It does not enable the generic/scene/task world groups. `metadata` introduces observations, not a fourth world rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `learned`.
 
 The distinction is between **enabling a logical constraint** and **changing the facts evaluated by that constraint**. Moving from `scene` to `learned` enables more constraints. Moving from `learned` to `task` or `metadata` retains the same formulas but can change their applicable cases and accepted plans through different concept values. More supplied knowledge therefore need not increase the constraint count.
 
@@ -150,68 +168,21 @@ Activation is defined at [test_regr/VLABenchAgentInterface/knowledge/__init__.py
 
 ## DomiKnowS operator classes
 
-Four operator classes are used as the outermost operator of complete logical constraints. Counts below classify each logical constraint once. “Task” means the world group first enabled at `learned`.
+Four operator classes are used as the outermost operator of complete logical constraints. Each declaration is classified once. “Task” means the world group first enabled at `learned`. The causal and episode columns are the separate official-protocol causal graph and the decoding graph of episode knowledge; the inventory total includes all of them.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
-  <colgroup>
-    <col style="width: 12%;">
-    <col style="width: 7%;">
-    <col style="width: 7%;">
-    <col style="width: 7%;">
-    <col style="width: 7%;">
-    <col style="width: 13%;">
-    <col style="width: 47%;">
-  </colgroup>
-  <thead>
-    <tr>
-      <th scope="col" width="12%" style="width: 12%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Class</th>
-      <th scope="col" width="7%" style="width: 7%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</th>
-      <th scope="col" width="7%" style="width: 7%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic</th>
-      <th scope="col" width="7%" style="width: 7%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Scene</th>
-      <th scope="col" width="7%" style="width: 7%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task</th>
-      <th scope="col" width="13%" style="width: 13%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Total logical constraints</th>
-      <th scope="col" width="47%" style="width: 47%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Class definition</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">ifL</code></td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">87</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1331">domiknows/graph/logicalConstrain.py:1331</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">andL</code></td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1307">domiknows/graph/logicalConstrain.py:1307</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">atLeastAL</code></td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1528">domiknows/graph/logicalConstrain.py:1528</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">atMostAL</code></td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">2</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">2</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1527">domiknows/graph/logicalConstrain.py:1527</a></td>
-    </tr>
-  </tbody>
+<colgroup><col style="width: 12%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 13%;"><col style="width: 33%;"></colgroup>
+<thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Class</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Scene</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Causal</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Episode</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Inventory total</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Class definition</th></tr></thead>
+<tbody>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>ifL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">3</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">95</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1331">logicalConstrain.py:1331</a></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>andL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1307">logicalConstrain.py:1307</a></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>atLeastAL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1528">logicalConstrain.py:1528</a></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>atMostAL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">2</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">2</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1527">logicalConstrain.py:1527</a></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Total</strong></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">3</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>99</strong></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Across both decoding paths; not simultaneously enabled.</td></tr>
+</tbody>
 </table>
+
+The grammar/world subtotal is **87 ifL + 1 andL + 1 atLeastAL + 2 atMostAL = 91**. The official causal graph adds **3 ifL** declarations and the decoding graph **5 ifL**, giving **95 ifL + 1 andL + 1 atLeastAL + 2 atMostAL = 99**. Nested `orL` and `notL` do not add declarations.
 
 `orL`, `notL`, and `exactL` are also used to express parts of these formulas. They do not create separately counted logical constraints in this inventory. The examples below explain all seven operators used in the formulas.
 
@@ -278,7 +249,7 @@ Examples below use the descriptive aliases explained under “Reading the formul
   </tbody>
 </table>
 
-`exactL` counts the alternatives at a bound position/operation; the `AL` operators accumulate across token positions. The total remains 91 logical constraints; the operators inside each formula do not increase that count.
+The separate `causal` graph uses three `ifL` formulas, with nested `orL` and `notL`; the decoding graph uses five, with nested `andL`. `exactL` counts the alternatives at a bound position/operation; the `AL` operators accumulate across token positions. The grammar/world subtotal remains 91, the separate causal graph contributes 3 and the decoding graph 5, giving an inventory of 99 declarations. Operators inside a formula do not increase its count.
 
 ### Reading the formula examples
 
@@ -315,7 +286,7 @@ The aliases correspond to source concepts as follows:
 </tbody>
 </table>
 
-The examples expand the skill-schema and exact-position helpers so their conditions are visible. The grammar examples spell out disjunctions with `orL`; a disjunction containing one alternative has that alternative's meaning. Names such as `required_skills_supported` and `entity_value_usable` remain observed concepts, with their grounding described in the source map. The total remains **91 logical constraints**.
+The examples expand the skill-schema and exact-position helpers so their conditions are visible. The grammar examples spell out disjunctions with `orL`; a disjunction containing one alternative has that alternative's meaning. Names such as `required_skills_supported` and `entity_value_usable` remain observed concepts, with their grounding described in the source map. The examples cover **91 grammar/world constraints and 3 separate causal constraints**, or **94 declarations** across the two paths.
 
 ## Grammar rule families: five logical constraints
 
@@ -537,6 +508,88 @@ The 13 declared subtask skill patterns are defined at [test_regr/VLABenchAgentIn
 - `press`
 
 Skill role data are defined at [test_regr/VLABenchAgentInterface/world_domain.py:123](../world_domain.py#L123). A pointer within the 64-label vocabulary is syntactically legal; whether it resolves to a supplied scene entity is checked by world knowledge. Labels outside the generation vocabulary cannot match the declared token alternatives. The baseline does not allow an empty plan. Task-specific continuation declarations can alter roots, patterns, repetition, bounds, and empty-plan permission, so the resulting formulas can differ from this baseline.
+
+## Causal (id-only) DFA rules: 3 logical constraints
+
+These rules are active only at `causal`, in the standard VLABench protocol. `official/causal_graph.py` declares three formulas and compiles them with the generic DomiKnowS predicate compiler. `CausalPlanDFA.admits` evaluates that compiled program at both partial-id reachability checks and operation closure. Rule names are labels: changing a formula, removing it, or making it inactive changes the language after creating a new DFA. An already compiled DFA retains its snapshot.
+
+Each formula binds `operation` to the candidate operation. `pick`, `place`, `insert`, `pour`, and `push` are skill concepts under the graph's operation concept; the grammar already determines the skill. `target_is_subject` observes equality with the object picked in the current subtask; `target_used_in_subtask` observes membership in its earlier destinations; `target_was_destination` observes membership in all earlier destinations. These are comparisons of plan ids, computed before the candidate executes, without scene metadata or task identity. They are not precomputed legality flags.
+
+The prefix state stores `(subject, local_destinations, former_destinations)`. Pick/press start a subtask, reset local destinations, and set the subject to the picked id or to none for press. A destination operation appends its id to local and plan-wide history. This state update accumulates observations; it does not refuse actions. Native JSON syntax, operation limits, EOS, byte-token projection, and this observation lifecycle remain runtime responsibilities. No additional state-update logical constraints are counted.
+
+Ids are pruned as soon as no grammatical operation satisfies the compiled formulas; whitespace before a refused closing brace is also refused. Existing checks found no violations in the 4,500 reference plans; this declaration refactor was validated locally without rerunning that dataset evaluation.
+
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+<colgroup><col style="width: 25%;"><col style="width: 9%;"><col style="width: 39%;"><col style="width: 27%;"></colgroup>
+<thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Rule family</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Logical constraints</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Example and meaning</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Definition</th></tr></thead>
+<tbody>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>anti_self_placement</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Reject a destination equal to the current picked subject. The guard covers place, insert, pour and push. Example: <code>pick 2, place 2</code>.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/causal_graph.py#L52">official/causal_graph.py:52</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    orL(place(&quot;operation&quot;), insert(&quot;operation&quot;), pour(&quot;operation&quot;), push(&quot;operation&quot;)),
+    notL(target_is_subject(&quot;operation&quot;)),
+    name=&quot;anti_self_placement&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>distinct_subtask_destinations</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Reject reuse of destination 3 within one subtask. A later subtask may use 3 again. Example: <code>pick 2, pour 3, place 3</code>.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/causal_graph.py#L58">official/causal_graph.py:58</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    orL(place(&quot;operation&quot;), insert(&quot;operation&quot;), pour(&quot;operation&quot;), push(&quot;operation&quot;)),
+    notL(target_used_in_subtask(&quot;operation&quot;)),
+    name=&quot;distinct_subtask_destinations&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>destinations_stay_put</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Reject picking 3 after it served as a destination in an earlier operation. Example: <code>pick 2, place 3, pick 3, place 4</code>.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/causal_graph.py#L64">official/causal_graph.py:64</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    pick(&quot;operation&quot;),
+    notL(target_was_destination(&quot;operation&quot;)),
+    name=&quot;destinations_stay_put&quot;,
+)</code></pre></td></tr>
+</tbody>
+</table>
+
+The official protocol still does not enforce scene-based pointer classification or the generic repeated-pick rule. Repeated picks of a non-destination stay permitted, including chemistry-experiment patterns. Pointer bounds remain the native grammar's configured `entity_count` (64 in the official setup) unless `--scene-ids` is set; then the `scene_ids_bound_targets` formula below bounds them. The three declarations are independent of the generic/scene/task world groups; their counts are not cumulative with those groups.
+
+## Episode decoding knowledge: 5 logical constraints
+
+The model's answers to the official protocol's stage-one questions, and the internal frozen-VLM path's instruction object candidates, are observations of one episode. `official/decoding_graph.py` declares the formulas that decide what they allow, and `KnowledgePlanDFA` (`official/knowledge_dfa.py`) compiles them with the same predicate compiler as the causal graph, together with the causal formulas when `--constraints causal` is set. The answers never configure the grammar directly: the DFA keeps the full grammar (64 ids, all benchmark patterns, the operation budget) and the compiled program refuses operations and plan endings. Each restriction was checked against the former procedural DFA on every bounded plan and on every prefix of a compact and a pretty-printed plan; removing or deactivating a formula changes acceptance after the DFA is rebuilt.
+
+Operation observations: `press`, `first_operation`, `press_answer_yes` (the model answered Yes to the press question), `has_target`, `scene_bound_read` and `target_within_scene_bound` (the id is at most the largest tag number the model read), `patterns_chosen` and `continues_chosen_pattern` (the operation extends a named pattern that still fits the remaining budget), `instruction_candidates_known` and `target_is_instruction_candidate`. Plan observations, at the closing bracket: `plan_patterns_chosen` and `chosen_patterns_complete`. The DFA tracks the named-pattern prefixes as a fourth state field; like the causal fields, it stores facts and refuses nothing.
+
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+<colgroup><col style="width: 25%;"><col style="width: 9%;"><col style="width: 39%;"><col style="width: 27%;"></colgroup>
+<thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Rule family</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Logical constraints</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Example and meaning</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Definition</th></tr></thead>
+<tbody>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>press_answer_single_press</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A Yes to the press question allows only one operation, a press (<code>--press-question</code>). Example: after Yes, <code>pick 2, place 3</code> and <code>press 0, press 1</code> are refused.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/decoding_graph.py#L58">official/decoding_graph.py:58</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    press_answer_yes(&quot;operation&quot;),
+    andL(press(&quot;operation&quot;), first_operation(&quot;operation&quot;)),
+    name=&quot;press_answer_single_press&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>scene_ids_bound_targets</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Every object id is at most the largest tag number the model read (<code>--scene-ids</code>). Example: with 6 read, <code>press 7</code> is refused and the prefix <code>3</code> cannot grow into <code>34</code>.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/decoding_graph.py#L62">official/decoding_graph.py:62</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(scene_bound_read(&quot;operation&quot;), has_target(&quot;operation&quot;)),
+    target_within_scene_bound(&quot;operation&quot;),
+    name=&quot;scene_ids_bound_targets&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>chosen_patterns_continue</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Each operation extends a subtask pattern the model named and that still fits the operation budget (<code>--pattern-first</code>). Example: with only <code>press</code> named, the prefix <code>pi</code> of <code>pick</code> is refused at once.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/decoding_graph.py#L66">official/decoding_graph.py:66</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    patterns_chosen(&quot;operation&quot;),
+    continues_chosen_pattern(&quot;operation&quot;),
+    name=&quot;chosen_patterns_continue&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>chosen_patterns_complete</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The plan ends on a complete named pattern. Example: with <code>pick, pour, place</code> named, <code>pick 0, pour 1</code> cannot close. This formula alone fixes the accepted plans; the continuation formula prunes earlier.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/decoding_graph.py#L68">official/decoding_graph.py:68</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    plan_patterns_chosen(&quot;plan&quot;),
+    chosen_patterns_complete(&quot;plan&quot;),
+    name=&quot;chosen_patterns_complete&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>instruction_candidates_bound_targets</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">When the instruction grounds candidates for a skill and role (<code>object_grounding.instruction_object_constraints</code>, internal frozen-VLM <code>dfa</code>/<code>hmm</code> modes), the id must be one of them. Example: for <code>Put the apple into the plate_seen</code>, <code>pick</code> must name the apple.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/decoding_graph.py#L71">official/decoding_graph.py:71</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    instruction_candidates_known(&quot;operation&quot;),
+    target_is_instruction_candidate(&quot;operation&quot;),
+    name=&quot;instruction_candidates_bound_targets&quot;,
+)</code></pre></td></tr>
+</tbody>
+</table>
+
+The HMM action lookahead (`--hmm`) steers this DFA as well. It ranks only the tokens the compiled formulas leave legal, but its action inventory and pattern automaton are those of the full grammar, so its scores can differ slightly from runs made when the answers restricted the grammar itself.
 
 ## Generic world families: 24 logical constraints
 
@@ -2146,6 +2199,16 @@ The following modules supply data, compile formulas, or evaluate them; their hel
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/generation/dfa/auxiliary.py#L94">domiknows/generation/dfa/auxiliary.py:94</a></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Projects valid progress assignments onto tokens by reading formulas/relations; no extra knowledge rule family.</td>
     </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Causal (id-only) DFA</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/causal_dfa.py#L37">test_regr/VLABenchAgentInterface/official/causal_dfa.py:37</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Compiled id-only logical constraints for the <code style="white-space: normal; overflow-wrap: anywhere;">causal</code> level; three formulas in official/causal_graph.py and prefix observations in official/causal_dfa.py.</td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Episode decoding knowledge DFA</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/decoding_graph.py#L50">test_regr/VLABenchAgentInterface/official/decoding_graph.py:50</a>; <a href="../official/knowledge_dfa.py#L26">official/knowledge_dfa.py:26</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Declares the five episode formulas; the DFA grounds the model's answers, the named-pattern prefixes and the instruction candidates as observations and admits operations and plan endings through the compiled programs.</td>
+    </tr>
   <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Compiled subtask progress</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../pattern_runtime.py#L110">pattern_runtime.py:110</a></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Cached skill projection of the generation formulas; supplies per-transition progress and start/completion observations.</td></tr>
 </tbody>
 </table>
@@ -2154,7 +2217,7 @@ The generation graph provides syntax and finite language membership. World verif
 
 ## Checking and interpreting counts
 
-The inventory was checked against the complete declared formulas in the current graph build: **5 grammar logical constraints and 86 world logical constraints**, with world groups **generic=24, scene=6, task=56**. Each logical constraint is classified by its outermost operator in the operator-class table.
+The inventory was checked against the complete declared formulas in the current graph build: **5 grammar logical constraints and 86 world logical constraints**, with world groups **generic=24, scene=6, task=56**. The separate official-protocol `causal` graph declares three additional `ifL` formulas; its grammar remains NativePlanDFA, so its count is 3, not 5 + 3. The separate decoding graph declares five more `ifL` formulas. Across the paths there are **99 declarations**, classified by their outermost operator in the operator-class table; no current level enables all 99 together.
 
 Counts can change with custom task knowledge/excluded tasks, custom constraint builders, disabling default constraints, or changes that add or remove complete declared formulas. Changing entity vocabulary size, `max_operations`, or continuation data can change a formula's alternatives and limits without adding a logical constraint. Actual active groundings also depend on plan length, task guards, and supplied requirements. Source lines are the local snapshot cited here and can move after code edits.
 

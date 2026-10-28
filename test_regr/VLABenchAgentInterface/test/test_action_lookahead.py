@@ -289,10 +289,15 @@ def decode(dfa, table, hmm, weight, seed, max_tokens=1200, score="joint"):
     {"max_operations": 4},
     {"patterns": (("pick", "place"), ("press",))},
     {"patterns": (("press",),), "max_operations": 1},
-    {"object_constraints": ObjectConstraints(restrictions=(("pick", "target_entity_name", (1,)),))},
+    {"object_candidates": ObjectConstraints(restrictions=(("pick", "target_entity_name", (1,)),))},
 ])
 def test_plans_decoded_with_the_lookahead_satisfy_every_grammar_constraint(kwargs, weight):
-    dfa = character_dfa(**kwargs)
+    if "object_candidates" in kwargs:
+        from ..official.knowledge_dfa import KnowledgePlanDFA
+        tokens = {byte: bytes([byte]) for byte in [9, 10, 13, *range(32, 127)]}
+        dfa = KnowledgePlanDFA(tokens, EOS, entity_count=2, max_operations=6, causal=False, **kwargs)
+    else:
+        dfa = character_dfa(**kwargs)
     hmm = random_hmm(8, VOCABULARY, seed=5)
     table = table_for(dfa, hmm)
     for seed in range(4):
@@ -305,14 +310,14 @@ def test_plans_decoded_with_the_lookahead_satisfy_every_grammar_constraint(kwarg
         assert len(plan) <= dfa.max_operations
         assert decomposes([operation["name"] for operation in plan], dfa.patterns)
         for operation in plan:
-            if operation["name"] == "pick" and "object_constraints" in kwargs:
+            if operation["name"] == "pick" and "object_candidates" in kwargs:
                 assert operation["params"]["target_entity_name"] == 1
 
 
 def test_the_lookahead_is_built_from_the_dfa_it_steers():
-    restricted = character_dfa(object_constraints=ObjectConstraints(restrictions=(("pick", "target_entity_name", (1,)),)))
+    restricted = character_dfa(patterns=(("press",),))
     full = character_dfa()
-    assert len(restricted.actions) == len(full.actions) - 1
+    assert len(restricted.actions) < len(full.actions)
     table = table_for(restricted, random_hmm(4, VOCABULARY, seed=0))
     assert table.core.group_of.numel() == len(restricted.actions)
 

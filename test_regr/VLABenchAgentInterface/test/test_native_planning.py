@@ -212,7 +212,8 @@ def test_grounding_is_skill_role_specific_and_independent_of_goals():
     config['task']['conditions']={'target_entity':'apple_tag'}
     assert grounding==instruction_object_constraints('Put the apple into the plate_seen',scene_objects(config,entities))
     tokens={byte:bytes([byte]) for byte in range(32,127)}
-    dfa=NativePlanDFA(tokens,133,entity_count=5,object_constraints=grounding)
+    from ..official.knowledge_dfa import KnowledgePlanDFA
+    dfa=KnowledgePlanDFA(tokens,133,entity_count=5,causal=False,object_candidates=grounding)
     assert dfa.accepts(labels(plan(1,3)))
     assert not dfa.accepts(labels(plan(2,3)))
     assert not dfa.accepts(labels(plan(1,0)))

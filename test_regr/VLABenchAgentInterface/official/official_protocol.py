@@ -440,14 +440,16 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     the unchanged official parser applies. A generation the DFA cannot complete within
     the token budget is returned unfenced and counts as a format error.
 
-    ``press_question`` first asks the model :data:`PRESS_QUESTION`. On "Yes" the language is
-    restricted to a single ``press``; otherwise the full grammar applies. The decision is
+    ``press_question`` first asks the model :data:`PRESS_QUESTION`, ``scene_ids`` reads the largest tag
+    number and ``pattern_first`` asks for the subtask patterns. The answers are observations of the
+    LCs in :mod:`.decoding_graph` (a Yes allows one ``press``; ids stay within the tags read; the plan
+    is made of the named patterns), compiled into a :class:`.knowledge_dfa.KnowledgePlanDFA`. The decision is
     recorded in an HTML comment ahead of the fence. ``hmm`` is an ``(initial, transition,
     emission)`` tuple; with ``weight`` > 0 its action-level lookahead (``native_lookahead``) adds
     ``weight * (log HMM mass - best log HMM mass)`` to the DFA-legal tokens that decide an action.
     The DFA stays the only authority on which tokens are legal, and the comment
     ``hmm-action: changed=x scored=y steps=z`` records how often the lookahead changed the greedy token.
-    ``causal`` adds the id-only causal rules of :mod:`.causal_dfa` to the grammar (not with ``hmm``).
+    ``causal`` adds the id-only causal LCs of :mod:`.causal_graph` to the same DFA.
     """
     import torch
     from transformers import LogitsProcessorList
@@ -460,15 +462,10 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         from native_lookahead import DFAActionLookahead
     from domiknows.generation.applications.action_lookahead import TokenOperators
 
-    if causal and hmm is not None and weight > 0:
-        raise ValueError("the causal DFA does not support the HMM lookahead")
-    if causal:
-        try:
-            from .causal_dfa import CausalPlanDFA as PlanDFA
-        except ImportError:  # pragma: no cover - flat-module execution
-            from causal_dfa import CausalPlanDFA as PlanDFA
-    else:
-        PlanDFA = NativePlanDFA
+    try:
+        from .knowledge_dfa import KnowledgePlanDFA
+    except ImportError:  # pragma: no cover - flat-module execution
+        from knowledge_dfa import KnowledgePlanDFA
     operators = TokenOperators(hmm[1], hmm[2]) if hmm is not None and weight > 0 else None
     adapting = operators is not None and adapt is not None and adapt.get("samples", 0) > 0 and adapt.get("lam", 0) > 0
     if adapting:
@@ -477,14 +474,18 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         except ImportError:  # pragma: no cover - flat-module execution
             from official_adapt import adapt_emission, episode_seed, sample_plans
 
-    def language(press_only: bool, ids: int, patterns: tuple = ()):
-        key = ("official-causal" if causal else "official-grammar", ids, 1 if press_only else max_operations,
-               press_only, patterns)
+    def language(press_only: bool, bound: int | None, patterns: tuple = ()):
+        """The grammar DFA, with the episode's answers and the causal rules applied only through compiled LCs."""
+        knowledge = causal or press_only or bound is not None or bool(patterns)
+        key = ("official-knowledge" if knowledge else "official-grammar", causal, press_only, bound, patterns,
+               entity_cap, max_operations)
         if key not in planner.dfas:
-            planner.dfas[key] = PlanDFA(
-                planner.token_bytes, planner.tokenizer.eos_token_id, entity_count=ids,
-                max_operations=1 if press_only else max_operations, grammar_profile="benchmark",
-                patterns=(("press",),) if press_only else (patterns or None))
+            common = dict(entity_count=entity_cap, max_operations=max_operations, grammar_profile="benchmark")
+            planner.dfas[key] = (KnowledgePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, causal=causal,
+                                                  press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,
+                                                  **common)
+                                 if knowledge else
+                                 NativePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, **common))
         return key, planner.dfas[key]
 
     def lookahead_for(key, dfa):
@@ -532,9 +533,9 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     @torch.no_grad()
     def generate(items: list[list[Any]]) -> str:
         press_only = press_question and says_yes(items)
-        ids = read_entity_count(items) if scene_ids else entity_cap
+        bound = read_entity_count(items) if scene_ids else None
         chosen = choose_patterns(items) if pattern_first and not press_only else ()
-        key, dfa = language(press_only, ids, tuple(sorted(chosen)))
+        key, dfa = language(press_only, bound, tuple(sorted(chosen)))
         steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
         try:
@@ -572,7 +573,7 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
             if pattern_first:
                 notes.append("<!-- pattern-first: " + json.dumps(["+".join(pattern) for pattern in chosen]) + " -->")
             if scene_ids:
-                notes.append(f"<!-- scene-ids: {ids} -->")
+                notes.append(f"<!-- scene-ids: {bound} -->")
             if constraint.session is not None:
                 stats = constraint.session.stats
                 notes.append(f"<!-- hmm-action: changed={stats['changed']} scored={stats['scored_steps']} steps={stats['steps']} -->")
