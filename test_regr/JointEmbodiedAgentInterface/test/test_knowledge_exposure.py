@@ -103,7 +103,7 @@ def test_manifest_is_stable_across_build_names_and_role_ids(joint_fixture):
     json.dumps(runtime.knowledge_manifest)  # the inspectable manifest also supports JSON reports
     assert runtime.knowledge_manifest["components"]["joint"]["constraint_count"] == 0
     assert runtime.knowledge_manifest["components"]["eai_world"]["constraint_count"] == 62
-    assert runtime.knowledge_manifest["components"]["vlabench_world"]["constraint_count"] == 86
+    assert runtime.knowledge_manifest["components"]["vlabench_world"]["constraint_count"] == 89
 
 
 def test_manifest_distinguishes_definitions_from_activation_and_labels(joint_fixture):
@@ -264,3 +264,39 @@ def test_encoded_context_facade_binds_keyword_facts_before_sampling(monkeypatch)
         generation_entity_types=("cup",),
     )
     assert labels == [0]
+
+
+@pytest.mark.parametrize("level,plan,expected", [
+    ("causal", [("pick", 0), ("place", 1)], True),
+    ("causal", [("pick", 0), ("place", 0)], False),
+    ("causal", [("pick", 0), ("pour", 1), ("place", 1)], False),
+    ("causal", [("pick", 0), ("place", 1), ("pick", 1), ("place", 2)], False),
+    ("causal", [("pick", 0), ("place", 1), ("pick", 0), ("place", 1)], True),
+    ("generic", [("pick", 0), ("place", 1), ("pick", 0), ("place", 1)], False),
+])
+def test_joint_planner_dfa_enforces_the_causal_level(level, plan, expected):
+    from test_regr.VLABenchAgentInterface.graph import plan_to_tokens
+    from test_regr.VLABenchAgentInterface.knowledge import default_level, set_default_level
+    from .test_joint_pipeline import dummy_dataset, TokenVocabulary
+
+    previous = default_level()
+    set_default_level(level)
+    try:
+        examples = dummy_dataset(max_steps=4)
+        world = build_joint_world_graph(f"joint_causal_{level}")
+        runtime = build_joint_runtime(
+            world, TokenVocabulary(examples[0]["generation_vocab"], eos_token="<eos>"), max_eai_steps=4,
+            eai_object_tokens=examples[0]["object_tokens"], eai_action_tokens=examples[0]["action_tokens"],
+            eai_action_sequence_tokens=examples[0]["action_tokens"],
+            eai_openable_object_tokens=examples[0]["openable_object_tokens"],
+            max_vlabench_entities=3, max_vlabench_operations=4,
+        )
+        assert world.vlabench.knowledge_state.level == level
+        entities = ("apple", "bowl", "cup")
+        role = {"pick": "target_entity_name"}
+        operations = [{"name": skill, "params": {role.get(skill, "target_container_name"): pointer}} for skill, pointer in plan]
+        vocabulary = runtime.vlabench_vocabulary
+        labels = [vocabulary.label_for_token(token) for token in plan_to_tokens(operations, entities, world=world.vlabench)]
+        assert runtime.dfa_for("vlabench", {"entities": entities}).accepts(labels) == expected
+    finally:
+        set_default_level(previous)

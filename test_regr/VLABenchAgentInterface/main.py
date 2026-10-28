@@ -905,8 +905,25 @@ def command_train_agent(args) -> None:
         })
 
 
+OFFICIAL_KNOWLEDGE = ("grammar", "causal")
+
+
+def official_constraints(args) -> str:
+    """The official protocol's decoder from ``--knowledge`` (``grammar`` or ``causal``); ``--constraints`` is its alias."""
+    knowledge, constraints = getattr(args, "knowledge", None), getattr(args, "constraints", "none")
+    if knowledge is None:
+        return constraints
+    if knowledge not in OFFICIAL_KNOWLEDGE:
+        raise ValueError("--protocol official shows no entity table and no task, so --knowledge must be grammar or "
+                         f"causal, not {knowledge!r}")
+    if constraints not in ("none", knowledge):
+        raise ValueError(f"--knowledge {knowledge} conflicts with --constraints {constraints}")
+    return knowledge
+
+
 def command_evaluate_official(args) -> None:
     """Standard VLABench VLM-planning protocol: every episode, official prompt and scoring."""
+    args.constraints = official_constraints(args)
     if args.resume_adapter or args.vocab:
         raise ValueError("--protocol official evaluates a frozen base VLM; omit --resume-adapter and --vocab")
     if getattr(args, "observation_mode", "visual") != "visual":
@@ -914,7 +931,7 @@ def command_evaluate_official(args) -> None:
     if args.few_shot_num < 0 or args.max_new_tokens <= 0:
         raise ValueError("--few-shot-num must be nonnegative and --max-new-tokens positive")
     if (args.press_question or args.hmm or args.scene_ids or args.pattern_first) and args.constraints == "none":
-        raise ValueError("--press-question, --scene-ids and --hmm extend the grammar DFA; add --constraints grammar")
+        raise ValueError("--press-question, --scene-ids and --hmm extend the grammar DFA; add --knowledge grammar")
     from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
     from test_regr.VLABenchAgentInterface.official.official_protocol import (
         load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
@@ -1412,19 +1429,18 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--few-shot-num", type=int, default=0, help="official protocol: in-context examples")
     evaluate.add_argument("--with-cot", action="store_true", help="official protocol: ask for step-by-step analysis")
     evaluate.add_argument("--constraints", choices=["none", "grammar", "causal"], default="none",
-                          help="official protocol: grammar adds the DomiKnowS grammar DFA (skills, roles, subtask patterns, "
-                               "integer ids); causal adds id-only causal knowledge (no self-placement, distinct "
-                               "destinations, destinations are not picked); neither uses scene information")
+                          help="official protocol: alias of --knowledge grammar|causal (grammar: the DomiKnowS grammar "
+                               "DFA; causal: plus the id-only causal LCs); neither uses scene information")
     evaluate.add_argument("--press-question", action="store_true",
-                          help="official protocol with --constraints grammar: the model first says whether the instruction is a "
+                          help="official protocol with --knowledge grammar or causal: the model first says whether the instruction is a "
                                "choose-one-and-press question; if so the plan is restricted to one press")
     evaluate.add_argument("--pattern-first", action="store_true",
-                          help="official protocol with --constraints grammar: the model first names the subtask pattern(s) "
+                          help="official protocol with --knowledge grammar or causal: the model first names the subtask pattern(s) "
                                "from the official prompt's list and the grammar is limited to them")
     evaluate.add_argument("--scene-ids", action="store_true",
-                          help="official protocol with --constraints grammar: the model first reads the largest tag number in "
+                          help="official protocol with --knowledge grammar or causal: the model first reads the largest tag number in "
                                "the number-labeled image and object ids are limited to 0..that number")
-    evaluate.add_argument("--hmm", help="official protocol with --constraints grammar: label-free HMM checkpoint (best.pt from official_hmm)")
+    evaluate.add_argument("--hmm", help="official protocol with --knowledge grammar or causal: label-free HMM checkpoint (best.pt from official_hmm)")
     evaluate.add_argument("--hmm-weight", type=float, default=1.0, help="lookahead weight used with --hmm")
     evaluate.add_argument("--tasks", nargs="+", help="official protocol: restrict to these tasks (marks the run non-standard)")
     evaluate.add_argument("--official-output-dir", type=Path, help="official protocol: resumable outputs and summary.json")

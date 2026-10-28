@@ -14,6 +14,10 @@ from domiknows.generation.grounded import GroundedState, PlanningFacts, Operatio
 from typing import Any, Mapping, Sequence
 
 
+# Every benchmark subtask pattern begins with a pick or a press; its destinations are tracked from there.
+SUBTASK_STARTS = frozenset({"pick", "press"})
+DESTINATION_SKILLS = frozenset({"place", "insert", "pour", "push"})
+
 ENCLOSED_CONTAINER_KEYWORDS = (
     "cooler", "fridge", "refrigerator", "drawer", "microwave", "blender", "oven", "cabinet",
 )
@@ -94,6 +98,8 @@ class PlanSemanticState:
     completed_operations: int = 0
     completed_skills: frozenset[str] = frozenset()
     visited_picks: frozenset[str] = frozenset()
+    subtask_destinations: tuple[str, ...] = ()  # destinations since the current subtask's pick or press
+    former_destinations: frozenset[str] = frozenset()  # every destination so far
 
 
 @dataclass(frozen=True)
@@ -242,6 +248,8 @@ class PlanSemantics:
             "planning_facts_supplied": self.planning.supplied,
             "open_observed_false": state.grounded.facts.truth(("open", container)) is False,
             "closed_observed_true": state.grounded.facts.truth(("closed", container)) is True,
+            "destination_used_in_subtask": container is not None and container in state.subtask_destinations,
+            "target_was_destination": entity is not None and entity in state.former_destinations,
         }
 
     def advance(self, state: PlanSemanticState, skill: str, params: Mapping[str, Any]) -> PlanSemanticState:
@@ -263,7 +271,11 @@ class PlanSemantics:
                        previous_skill=skill, previous_entity=entity,
                        completed_operations=state.completed_operations + 1,
                        completed_skills=state.completed_skills | {skill},
-                       visited_picks=state.visited_picks | ({entity} if skill == "pick" and entity is not None else set()))
+                       visited_picks=state.visited_picks | ({entity} if skill == "pick" and entity is not None else set()),
+                       subtask_destinations=(() if skill in SUBTASK_STARTS else state.subtask_destinations)
+                       + ((container,) if skill in DESTINATION_SKILLS and container is not None else ()),
+                       former_destinations=state.former_destinations
+                       | ({container} if skill in DESTINATION_SKILLS and container is not None else set()))
 
     @staticmethod
     def premature_composite_eos(state: PlanSemanticState, *, min_operations=None, required_skills=None) -> bool:

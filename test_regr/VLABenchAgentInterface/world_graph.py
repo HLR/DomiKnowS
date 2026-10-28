@@ -80,7 +80,7 @@ class VLABenchWorldGraphBundle:
 WORLD_FACT_DOMAINS = {
     **dict.fromkeys(("entity_value_usable", "container_value_usable", "entity_resolves", "container_resolves",
                      "entity_is_button", "container_is_button", "subject_equals_destination",
-                     "entity_is_static_fixture"), "operation"),
+                     "entity_is_static_fixture", "destination_used_in_subtask", "target_was_destination"), "operation"),
     **dict.fromkeys(("next_is_pick", "next_is_placement", "next_has_entity", "next_has_destination",
                      "target_previously_picked", "target_reusable", "expected_destination_known",
                      "destination_matches_expected", "destination_is_enclosed", "destination_was_opened",
@@ -155,6 +155,24 @@ def _declare_generic_rules(world, level):
                  f"skill_argument__{skill}__{role}")
 
 
+def _declare_causal_rules(world, level):
+    """Id-level causal rules, active only at ``causal`` (a branch beside ``generic``, not below it).
+
+    They read only prefix comparisons of the plan's own targets: the subject picked in the current
+    subtask, its earlier destinations, and every earlier destination. A pick or press starts a subtask.
+    """
+    from domiknows.graph.logicalConstrain import andL, notL, orL
+    rule = lambda a, b, name: _record_rule(world, "causal", a, b, name, level)
+    op, skills, facts = world.operation, world.skills, world.facts
+    destination = lambda: andL(world.has_target_container("op"),
+                               orL(*(skills[s]("op") for s in ("place", "insert", "pour", "push"))))
+    rule(op("op"), notL(andL(destination(), facts["subject_equals_destination"]("op"))), "causal__anti_self_placement")
+    rule(op("op"), notL(andL(destination(), facts["destination_used_in_subtask"]("op"))),
+         "causal__distinct_subtask_destinations")
+    rule(op("op"), notL(andL(skills["pick"]("op"), world.has_target_entity("op"), facts["target_was_destination"]("op"))),
+         "causal__destinations_stay_put")
+
+
 def _declare_scene_rules(world, level):
     """Scene observations constrain references, targets and container access."""
     from domiknows.graph.logicalConstrain import andL, ifL, notL, orL
@@ -191,8 +209,9 @@ def build_vlabench_world_graph(
 ) -> VLABenchWorldGraphBundle:
     """Define the DomiKnowS plan ontology and its hard logical constraints.
 
-    Every rule is a concept plus logical constraints, in three groups: ``generic`` (schema, patterns, causal
-    rules), ``scene`` (rules that need an entity table) and ``task`` (task facts and the ``task__<name>``
+    Every rule is a concept plus logical constraints, in four groups: ``causal`` (id-level causal rules of the
+    ``causal`` branch), ``generic`` (schema, patterns, causal rules), ``scene`` (rules that need an entity table)
+    and ``task`` (task facts and the ``task__<name>``
     rules of ``knowledge.task_lcs``). ``knowledge_level`` (default: ``knowledge.default_level()``) decides which
     groups are active; :func:`set_knowledge_level` changes it later.
     """
@@ -272,7 +291,7 @@ def build_vlabench_world_graph(
         task_concepts = declare_task_concepts(
             operation, skills, task_knowledge, active=group_active(level, "task"),
             constraints=include_default_constraints)
-        groups = {"generic": [], "scene": [], "task": list(task_concepts.constraints)}
+        groups = {"causal": [], "generic": [], "scene": [], "task": list(task_concepts.constraints)}
         groups["task"].extend(grounded_constraints.constraints)
         facts = {
             name: (operation if domain == "operation" else transition)(name=f"fact__{name}")
@@ -330,6 +349,7 @@ def build_vlabench_world_graph(
         )
 
         if include_default_constraints:
+            _declare_causal_rules(bundle, level)
             _declare_generic_rules(bundle, level)
             _declare_scene_rules(bundle, level)
 
