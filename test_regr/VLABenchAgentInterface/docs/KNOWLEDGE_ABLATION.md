@@ -534,6 +534,9 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
   not in the scene (34, 44), so the repair does not reach a real object. With `--scene-ids` (the model reads the largest
   tag number, 6.7 on average, and ids are bounded by it) causal scores 38.26 against 38.24 for grammar with the same
   bound: 134 plans change, 22 better and 18 worse. The bound alone changes no grammar plan. The rules are about neutral.
+  With the label-free HMM lookahead (weight 0.5) on the LC-compiled DFA, causal scores 37.96 against 38.02 for grammar
+  (4 better, 22 worse) and 38.01 against 38.02 with `--scene-ids`; grammar + `--scene-ids` + HMM reproduces the earlier
+  grammar + HMM plans exactly.
 - **The task tier is the large step, +9.2 Macro**, and it comes from two dimensions: Complex 44.6 to 87.4
   (the obligations and sequence LCs) and PhysLaw 37.7 to 57.0 (grounded QA families). Skill recall rises
   from 89 to 98.
