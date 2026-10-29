@@ -1,5 +1,12 @@
 # Knowledge ablation of the champion Joint planner
 
+**Implementation update, 29 October 2026 (`2dab4db3`):** syntax validation is stricter,
+explicit initial-observation visibility is a scene-level logical constraint, and
+action-budget goal reachability is available as a separate search/decoding option.
+The measured results below predate these additions and have not been rerun. See
+[Syntax, visibility and reachability](#syntax-visibility-and-reachability) for the
+current behavior and the controls needed for a new ablation.
+
 What each knowledge tier of the world graph contributes when the same checkpoint is evaluated on the same
 450 test episodes. Task knowledge is expressed as graph concepts and logical constraints
 (`knowledge/`, see the README source code map); `--knowledge` switches which constraint groups are active; `--task-identity` (`oracle` or `predicted`) and `--observation-mode` (`visual` or `metadata-assisted`) are separate settings of the facts those rules read. The former levels `learned` and `metadata` remain aliases (`task` with a predicted or an oracle identity).
@@ -53,9 +60,9 @@ What each knowledge tier of the world graph contributes when the same checkpoint
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">scene</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ Scene: scene-grounded rules (buttons, fixtures, containers, open-before-place)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">+ Scene: scene-grounded rules (buttons, fixtures, containers, open-before-place), plus explicit initial-observation visibility when supplied</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">none</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable scene formulas and evaluate scene facts; a static fixture cannot be picked.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable scene formulas and evaluate scene facts; a static fixture cannot be picked. With explicit visibility evidence, an inventory entity unsupported by the initial observation cannot be referenced.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--task-identity predicted</code> (alias <code style="white-space: normal; overflow-wrap: anywhere;">learned</code>)</td>
@@ -132,14 +139,14 @@ before attributing scores to this refactor.
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">world_graph.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_generic_rules</code>: exactly one skill, each skill&#x27;s required/forbidden roles, usable argument values, declared subtask membership, distinct subject/destination, controlled object reuse</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">world_graph.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_generic_rules</code>: exactly one skill, each skill&#x27;s required/forbidden roles, usable argument values, no undeclared argument keys, declared subtask membership, distinct subject/destination, controlled object reuse</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">skill labels, role presence, pointer resolution, subject equality and pick history</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Scene</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">scene</code></td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">world_graph.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_scene_rules</code>: pointers resolve, button targets require press and vice versa, picks exclude fixtures, destinations match supplied requirements, enclosed destinations require opening when access is known</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">scene classifications, destination equality, opened entities and explicit open/closed observations</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">world_graph.py</code>, <code style="white-space: normal; overflow-wrap: anywhere;">_declare_scene_rules</code>: pointers resolve, supplied visibility supports all referenced subjects/destinations, button targets require press and vice versa, picks exclude fixtures, destinations match supplied requirements, enclosed destinations require opening when access is known</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">scene classifications, explicit initial-observation support ids, destination equality, opened entities and explicit open/closed observations</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task sequences</td>
@@ -209,9 +216,9 @@ existing grounding report records incomplete evidence. The old aggregate
 `applicable/satisfied` observations remain available to custom rules and the
 EAI adapter, but do not determine VLABench's default detailed enforcement.
 
-The current default world graph has **89 logical constraints**: 3 causal, 24 generic, 6 scene,
+The current default world graph has **90 logical constraints**: 3 causal, 24 generic, 7 scene,
 and 56 task constraints (including the eight grounded families). With the five
-grammar constraints, the total is **94**; the causal group is active from `causal` upwards. Counts refer to complete logical
+grammar constraints, the total is **95**; the causal group is active from `causal` upwards. Counts refer to complete logical
 constraints, not operators within their formulas. Grounded per-rule satisfaction percentages now average requirement
 nodes rather than operation nodes, so partial diagnostic percentages can differ.
 The reward and validity gate remain unchanged: every active rule must be fully
@@ -248,7 +255,7 @@ satisfied; a partial result still fails the gate.
 </tbody>
 </table>
 
-The official causal setting therefore enables **3 logical constraints**; its native JSON grammar adds no DomiKnowS declarations. It does not use the five grammar formulas from `graph.py` or activate the generic/scene/task world groups. The grammar/world path declares the same three rules as its `causal` group (94 declarations, all enabled at `task`); with the official causal graph and the five episode-decoding formulas the inventory is **102 declarations**, rather than 102 constraints active together. Each complete formula counts once; nested operators are excluded. Full formulas and observation definitions are in the [causal constraint inventory](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
+The official causal setting therefore enables **3 logical constraints**; its native JSON grammar adds no DomiKnowS declarations. It does not use the five grammar formulas from `graph.py` or activate the generic/scene/task world groups. The grammar/world path declares the same three rules as its `causal` group (95 declarations, all enabled at `task`); with the official causal graph and the six episode-decoding formulas the inventory is **104 declarations**, excluding the separate physics and complex graphs. Including their 82 and 85 formulas gives **271 declarations across paths**, not 271 constraints active together. The sixth episode-decoding formula enforces explicit initial-observation visibility. Each complete formula counts once; nested operators are excluded. Full formulas and observation definitions are in the [causal constraint inventory](VLABenchLogicaConstraints.md#causal-id-only-dfa-rules-3-logical-constraints).
 
 The DFA still accumulates prefix observations and handles JSON bytes, pointer bounds, EOS, and operation limits. The compiled formulas decide the three causal admission rules. This refactor changes where the rules are expressed, and adds no new task or scene knowledge. Historical result tables below are unchanged.
 
@@ -256,7 +263,7 @@ The DFA still accumulates prefix observations and handles JSON bytes, pointer bo
 
 The transition rule now uses prefix progress projected from the same generation formulas, rather than a whole-plan validation flag. Each operation advances the compiled state; earlier valid transitions are not marked invalid because of a later bad transition or an unrelated pointer error. Decoding supplies the same progress observations instead of setting `allowed_transition=True` unconditionally.
 
-Two additional generic constraints require a legal first operation and a complete final subtask, including explicit empty-plan permission. Thus the current cumulative counts are grammar **5**, causal **8**, generic **32**, scene **38**, and task **94**, plus the **82** physics constraints of `knowledge/physics_lcs.py` and the **85** complex-task constraints of `knowledge/complex_lcs.py` that the task group enables (**261**). This implementation change has not rerun the historical checkpoint scores below. The added checks improve direct world verification of invalid starts and incomplete/single-operation/empty plans; a fully satisfied active constraint set is still required for hard validity. Partial diagnostic scores can differ because unrelated argument errors no longer invalidate the pattern constraint.
+Two additional generic constraints require a legal first operation and a complete final subtask, including explicit empty-plan permission. With the new scene visibility formula, the current cumulative counts are grammar **5**, causal **8**, generic **32**, scene **39**, and task **95**, plus the **82** physics constraints of `knowledge/physics_lcs.py` and the **85** complex-task constraints of `knowledge/complex_lcs.py` that the task group enables (**262**). These implementation changes have not rerun the historical checkpoint scores below. The progress checks improve direct world verification of invalid starts and incomplete/single-operation/empty plans; a fully satisfied active constraint set is still required for hard validity. Partial diagnostic scores can differ because unrelated argument errors no longer invalidate the pattern constraint.
 
 `pattern_runtime.py` caches the structural projection. Bound-policy verification reuses that policy's progress DFA, preserving its continuation language and declared limits. The projection reads the actual graph formulas and relation paths; it does not maintain a separate table of allowed skill pairs.
 
@@ -274,7 +281,54 @@ All declared groups, including the eight grounded families, exist even when
 inactive. `set_knowledge_level` switches their `active` flags in place; recompile
 the DFA afterward. Building at a low level and enabling task knowledge must
 activate the same rules as building directly at task level. Request/task facts
-are not consulted below `task`.
+are not consulted below `task`, except for scene observations such as explicit
+`visible_entities`, which are independent of task identity and enforced from `scene`.
+
+### Syntax, visibility and reachability
+
+Commit `2dab4db3` adds the following behavior without introducing a new knowledge
+tier or changing the recorded result tables:
+
+- **Syntax:** the generic `operation_schema_is_valid` formula now rejects
+  undeclared argument keys. Canonical parsing rejects duplicate JSON members and
+  non-string skill names, and argument validation rejects unsupported value
+  types. Symbolic token encoding checks syntax before serialization so invalid
+  arguments cannot disappear. Parser/encoder validation is shared preprocessing,
+  separate from the knowledge-tier switch. Native decoding retains its exact JSON
+  grammar. These fixes add no logical constraint declarations.
+- **Visibility:** `observation_supported_references` adds one world scene formula
+  and one separate native episode-decoding formula. Every explicitly referenced
+  subject/destination, including optional roles, must belong to `visible_entities`
+  when evidence is supplied. An entity inventory, instruction candidate or
+  `--scene-ids` largest-tag bound does not establish visibility. `None` means
+  unavailable evidence; an empty collection establishes an empty support set.
+  The support set stays fixed across the plan. Initial-view segmentation masks
+  can supply it through explicit label-to-entity bindings; no gold plans or
+  target annotations supply support.
+- **Reachability:** `policy.action_reachability()` performs cached bounded search
+  over complete actions using the existing compiled grammar, world LCs and state
+  effects. Native generation can opt in through
+  `planner.generate(..., reachability_policy=policy)`. This is a separate decoding
+  control, not an additional LC or an automatic change to the Joint ablation
+  command below. Completion must satisfy the bound policy's active goals and
+  obligations; no supplied goal means no independent claim of task success.
+  Strict mode distinguishes missing required grounding (`None`) from proven
+  unreachability (`False`); search-limit exhaustion raises an error. Existing HMM
+  guidance still ranks the feasible set and does not add CLAMP's separate
+  zero-HMM-mass exclusion.
+
+For a new ablation, hold the checkpoint, episodes, seed, action/token budgets,
+entity inventory, task identity and property observations fixed. To isolate the
+visibility formula, supply the same initial-observation support in both runs and
+toggle only that formula before rebuilding the policy. To isolate reachability,
+keep the same active LCs and episode facts and vary only the search/decoding
+option; record strictness, the expansion cap, missing-grounding outcomes and
+search-limit failures separately. Neither feature has a new score row in this
+document. Existing official runs receive no new support set automatically, and
+`--observation-mode visual` alone does not populate `visible_entities`.
+
+See [Syntax and initial-observation visibility](SYNTAX_AND_VISIBILITY.md) and
+[Action-budget goal reachability](GOAL_REACHABILITY.md) for APIs and examples.
 
 `causal` is the second level of `knowledge/__init__.py` (`grammar < causal < generic < scene < task`); `group_active` keeps the `causal` group active at every level from `causal` up. `--knowledge causal` selects it in
 `evaluate-planner` (graph and official protocols), `eval_planning` and `train-agent`.
@@ -578,6 +632,11 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
   predictions plus generic rules already match what the task LCs enforce.
 
 ## Caveats
+
+- The recorded scores have not been rerun on `2dab4db3`. They do not measure the
+  syntax fixes, explicit visibility constraint or action-budget reachability.
+  The historical `--scene-ids` results use an ID bound, not the new support-set
+  constraint. Current declaration counts describe the updated implementation.
 
 - The checkpoint was trained with task-tier inputs, so the `generic` and `scene` rows mix the removal of
   knowledge with a train/test mismatch. They are a lower bound for a model trained at that level; Phase D
