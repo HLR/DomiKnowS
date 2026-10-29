@@ -293,7 +293,14 @@ def command_build_vocab(args) -> None:
 
 
 def _control_loaders(args):
-    tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
+    info_path = Path(args.control_source) / "meta" / "info.json"
+    info = json.loads(info_path.read_text()) if info_path.is_file() else {}
+    composite = "observation.state.eef" in info.get("features", {})
+    if composite and args.task != "all":
+        raise ValueError("Use --task all for the composite control dataset; language task IDs are not primitive skill labels")
+    if composite and not (Path(args.control_source) / "download_complete.json").is_file():
+        raise ValueError("Composite download has not passed completeness validation; see vlabench_dataset_fix_20261029/download_status.json")
+    tasks = [None] if composite else list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     split_parts = {"train": [], "validation": [], "test": []}
     for task_index, task in enumerate(tasks, start=1):
         _status(f"loading control task {task_index}/{len(tasks)}: {task}")
@@ -311,7 +318,7 @@ def _control_loaders(args):
             # it with a primitive skill-pattern ID makes different requested
             # objects indistinguishable to the controller.
             condition_index=None,
-            plan_pattern=PRIMITIVE_TASK_PATTERNS[task],
+            plan_pattern=() if composite else PRIMITIVE_TASK_PATTERNS[task],
             video_decoder_cache_size=getattr(args, "video_decoder_cache_size", 8),
         )
         _status(
@@ -352,6 +359,7 @@ def _controller(args, device):
         action_horizon=args.action_horizon,
         hidden_dim=args.hidden_dim,
         max_views=args.max_views,
+        task_count=max(load_control_task_instructions(args.control_source)) + 1 if getattr(args, "control_source", None) else 128,
     ).to(device)
     return model
 
@@ -396,6 +404,8 @@ def _save_planner_epoch(path: Path, planner, optimizer, epoch: int, metrics) -> 
 
 
 def command_train_planner(args) -> None:
+    from .dataset_protocol import guard_training_dataset
+    guard_training_dataset(args.planning_dir, getattr(args, 'output', None), resume=getattr(args, 'resume', None))
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
     splits = deterministic_split(examples, seed=args.seed)
     world = build_vlabench_world_graph("vlabench_train_world")
@@ -425,6 +435,8 @@ def command_train_planner(args) -> None:
 
 def command_train_agent(args) -> None:
     """Canonical graph-first supervised -> joint reinforcement pipeline."""
+    from .dataset_protocol import guard_training_dataset
+    guard_training_dataset(args.planning_dir, getattr(args, 'output', None), resume=getattr(args, 'resume', None))
     if not args.two_stage:
         raise ValueError("train-agent requires --two-stage")
     random.seed(args.seed)
@@ -969,6 +981,8 @@ def command_evaluate_official(args) -> None:
 
 def command_fit_task_classifier(args) -> None:
     """Fit the learned task concept on the training split only and report held-out accuracy."""
+    from .dataset_protocol import guard_training_dataset
+    guard_training_dataset(args.planning_dir, getattr(args, 'output', None), resume=getattr(args, 'resume', None))
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
     splits = deterministic_split(examples, seed=args.seed)
     classifier = fit_task_classifier(splits["train"], seed=args.seed)

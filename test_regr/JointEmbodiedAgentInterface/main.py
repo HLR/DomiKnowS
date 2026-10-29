@@ -324,6 +324,8 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
 
 
 def command_train_agent(args):
+    from test_regr.VLABenchAgentInterface.dataset_protocol import guard_training_dataset
+    guard_training_dataset(args.vlabench_planning_dir, args.output, resume=getattr(args, "resume", None))
     ce_only = getattr(args, "ce_only", False)
     ce_dfa_only = getattr(args, "ce_dfa_only", False)
     supervised_only = ce_only or ce_dfa_only
@@ -1053,7 +1055,7 @@ def build_parser():
     agent.add_argument("--eai-reward-mode", choices=["binary", "dense"], default="dense")
     add_knowledge_argument(agent)
     add_holdout_arguments(agent)
-    agent.add_argument("--vlabench-planning-dir", default=str(DEFAULT_VLABENCH_PLANNING))
+    agent.add_argument("--vlabench-planning-dir", default=str(DEFAULT_VLABENCH_PLANNING.parent / "planning_train"))
     agent.add_argument("--control-source", default=str(DEFAULT_VLABENCH_CONTROL))
     agent.add_argument("--vlabench-limit", type=int)
     agent.add_argument("--output", default=str(DEFAULT_OUTPUT))

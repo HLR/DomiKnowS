@@ -745,6 +745,15 @@ def load_hf_control_records(
         raise RuntimeError("install the project dev extra to load Hugging Face datasets") from exc
     source_path = Path(source)
     if source_path.exists():
+        info_path = source_path / "meta" / "info.json"
+        info = _read_json(info_path) if info_path.is_file() else {}
+        if "observation.state.eef" in info.get("features", {}):
+            if task not in (None, "all"):
+                raise ValueError("Composite control snapshots require task=all; instruction IDs are preserved without inventing primitive configurations")
+            files = sorted((source_path / "data").rglob("*.parquet"))
+            if not files:
+                raise FileNotFoundError(f"No composite action parquet files under {source_path}")
+            return load_dataset("parquet", data_files={split: [str(p) for p in files]}, split=split, streaming=streaming)
         # A complete Hub snapshot carries named dataset configurations in its
         # metadata. Let ``datasets`` honor those and preserve Video features
         # before falling back to raw parquet discovery.
@@ -981,7 +990,7 @@ class LeRobotWindowDataset(Dataset):
         obs_rows = [self.records[indices[position]] for position in obs_offsets]
         action_rows = [self.records[indices[position]] for position in action_offsets]
         state = torch.stack([
-            _tensor(self._value(row, "state", "observation.state", "q_state")).reshape(-1)[:7]
+            _tensor(self._value(row, "state", "observation.state", "observation.state.eef", "q_state")).reshape(-1)[:7]
             for row in obs_rows
         ])
         images = torch.stack([self._images(row) for row in obs_rows])
