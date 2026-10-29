@@ -389,6 +389,8 @@ class NativeConstraintProcessor:
         remaining = self.max_tokens - len(labels) - 1
         allowed = self.dfa.allowed_tokens(self.state, remaining_steps=remaining)
         if not allowed:
+            if hasattr(self.dfa, "can_reach_goal") and self.dfa.can_reach_goal(self.state) is None:
+                raise NativePlanFailure("goal reachability is undetermined: required world observations are missing", tokens=labels)
             raise NativePlanFailure("native DFA has no completion within the token budget", tokens=labels)
         result = torch.full_like(scores, -torch.inf)
         for label in allowed:
@@ -482,7 +484,18 @@ class FrozenNativePlanner:
 
     @torch.no_grad()
     def generate(self, example, *, mode="raw", max_tokens=768, max_operations=16, seed=42, sample=False,
-                 hmm=None, weight=0, grammar_profile="benchmark", object_constraints="instruction"):
+                 hmm=None, weight=0, grammar_profile="benchmark", object_constraints="instruction",
+                 reachability_policy=None, reachability_strict=True, max_state_expansions=10000,
+                 visible_entities=None):
+        """Generate with optional action-budget reachability from a bound world policy.
+
+        Supply runtime.dfa_for("vlabench", context) as reachability_policy.
+        Strict mode requires known observations for applicable grounded rules.
+        """
+        if reachability_policy is not None and mode == "raw":
+            raise ValueError("reachability_policy requires constrained generation")
+        if visible_entities is not None and mode == "raw":
+            raise ValueError("visible_entities requires constrained generation")
         from PIL import Image
         from transformers import LogitsProcessorList
         paths = example.segmented_image_paths or example.image_paths
@@ -502,19 +515,33 @@ class FrozenNativePlanner:
             constraint = None
             if mode != "raw":
                 grounding = grounding_for_example(example, object_constraints)
-                key = (len(example.entities), max_operations, grammar_profile, grounding.restrictions)
+                from .visibility import visible_entity_ids
+                supplied = visible_entities if visible_entities is not None else getattr(example, "visible_entities", None)
+                visible = visible_entity_ids(supplied, example.entities)
+                key = (len(example.entities), max_operations, grammar_profile, grounding.restrictions, visible)
+                if reachability_policy is not None:
+                    bound_entities = reachability_policy.adapter.entities
+                    if bound_entities != dict(enumerate(example.entities)):
+                        raise ValueError("example entities differ from the bound reachability policy")
+                    key += (reachability_policy, reachability_strict, max_state_expansions)
                 if key not in self.dfas:
                     common = dict(entity_count=key[0], max_operations=max_operations, grammar_profile=grammar_profile)
-                    if grounding.restrictions:
+                    if reachability_policy is not None:
+                        from .reachability import ReachablePlanDFA
+                        self.dfas[key] = ReachablePlanDFA(self.token_bytes, self.tokenizer.eos_token_id,
+                            policy=reachability_policy, strict=reachability_strict,
+                            max_state_expansions=max_state_expansions, causal=False,
+                            object_candidates=grounding, visible_entities=visible, **common)
+                    elif grounding.restrictions or visible is not None:
                         from .official.knowledge_dfa import KnowledgePlanDFA
                         self.dfas[key] = KnowledgePlanDFA(self.token_bytes, self.tokenizer.eos_token_id, causal=False,
-                                                          object_candidates=grounding, **common)
+                                                          object_candidates=grounding, visible_entities=visible, **common)
                     else:
                         self.dfas[key] = NativePlanDFA(self.token_bytes, self.tokenizer.eos_token_id, **common)
                 constraint = NativeConstraintProcessor(self.dfas[key], length, max_tokens,
                     hmm=hmm, weight=weight, table=self.tables.get(key))
                 cache_path, cache_identity = None, None
-                if constraint.table is not None and self.dp_cache_directory:
+                if constraint.table is not None and self.dp_cache_directory and reachability_policy is None:
                     cache_identity = (self.dp_cache_identity, self.checksum, key, max_tokens,
                         hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
                     key_hash = hashlib.sha256(repr(key).encode()).hexdigest()
@@ -553,7 +580,8 @@ def grounding_for_example(example, mode="instruction"):
     return instruction_object_constraints(example.instruction, scene_objects(config, example.entities))
 
 
-def validate_native_plan(plan, entities, *, grammar_profile="benchmark", max_operations=None, grounding=None):
+def validate_native_plan(plan, entities, *, grammar_profile="benchmark", max_operations=None, grounding=None,
+                         visible_entities=None):
     """Independent symbolic protocol diagnostic; graph validity remains separate."""
     from .world_graph import validate_plan
     def unique_members(pairs):
@@ -575,6 +603,8 @@ def validate_native_plan(plan, entities, *, grammar_profile="benchmark", max_ope
                 or not isinstance(operation["params"], dict) or not isinstance(operation["name"], str)):
             return False, ["native operations require exactly name and params members"]
     arguments, patterns = native_schema(grammar_profile)
+    from .visibility import visible_entity_ids
+    visible = visible_entity_ids(visible_entities, entities)
     if max_operations is None:
         max_operations = 8 if grammar_profile == "legacy" else 16
     entity_count = min(len(entities), 64) if grammar_profile == "legacy" else len(entities)
@@ -590,4 +620,6 @@ def validate_native_plan(plan, entities, *, grammar_profile="benchmark", max_ope
                 errors.append(f"operation {index}: native object IDs must be in-range integers")
             elif grounding is not None and pointer not in grounding.ids(operation["name"], role, len(entities)):
                 errors.append(f"operation {index}: violates instruction object candidates")
+            if visible is not None and type(pointer) is int and pointer not in visible:
+                errors.append(f"operation {index}: entity {pointer} is unsupported by the initial observation")
     return not errors, errors

@@ -9,11 +9,13 @@ from domiknows.generation.grounded import PlanningFacts
 from typing import Any, Mapping
 
 try:
+    from .visibility import visible_entity_ids
     from .semantics import entity_mapping, resolve_pointer
     from .knowledge import (
         COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, default_task_identity, task_facts_available,
     )
 except ImportError:
+    from visibility import visible_entity_ids
     from semantics import entity_mapping, resolve_pointer
     from knowledge import (
         COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, default_task_identity, task_facts_available,
@@ -33,6 +35,7 @@ class TaskRequirements:
     task: str | None = None
     interface: str = "full"
     explicit_sequence: bool = False
+    visible_entities: frozenset[int] | None = None
 
     def skill_allowed(self, index, skill):
         # A declared (graph) sequence is enforced by the task LCs; only explicit facts are checked here.
@@ -90,12 +93,13 @@ def task_requirements(context, world, entities):
     """Resolve explicit task data; unknown tasks add no implicit goal rules."""
     context = context or {}
     get = context.get if isinstance(context, Mapping) else lambda k, default=None: getattr(context, k, default)
+    visible = visible_entity_ids(get("visible_entities"), entities)
     knowledge = getattr(world, "task_knowledge", None) or DEFAULT_TASK_KNOWLEDGE
     state = getattr(world, "knowledge_state", None)
     level = state.level if state is not None else default_level()
     predicted = (state.task_identity if state is not None else default_task_identity()) == "predicted"
     if not task_facts_available(level):
-        return TaskRequirements()  # generic/scene: no task identity, sequence, target or fact is consulted
+        return TaskRequirements(visible_entities=visible)  # Visibility is independent of task identity.
     normalize = lambda value: str(value or "").strip().lower().replace("-", "_")
     task = normalize(get("task") or get("task_name"))
     if predicted:
@@ -163,7 +167,8 @@ def task_requirements(context, world, entities):
     if any(skill not in world.skill_arguments for skill in cycle):
         raise ValueError("skill_cycle contains an unknown skill")
     return TaskRequirements(expected, target, knowledge.schema(task), planning, skill_cycle=cycle,
-                            task=task or None, interface=interface, explicit_sequence=explicit_sequence)
+                            task=task or None, interface=interface, explicit_sequence=explicit_sequence,
+                            visible_entities=visible)
 
 
 

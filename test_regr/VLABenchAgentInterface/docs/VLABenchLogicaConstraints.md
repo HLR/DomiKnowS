@@ -1,5 +1,12 @@
 # VLABench logical constraints
 
+**2026-10-29 update:** [Syntax and visibility](SYNTAX_AND_VISIBILITY.md) strengthens
+the existing schema formula and adds `observation_supported_references` to the
+world scene group and the native decoding graph. These add two `ifL` declarations
+to the snapshot below: scene=7, decoding=6, and 271 declarations across paths.
+The detailed counts and historical ablation figures below retain their stated
+2026-10-27 baseline; the new visibility rule requires explicit observation support.
+
 Inventory of the current local declarations, checked on **2026-10-27**. This document covers both meanings of a constraint class: the DomiKnowS operator class and the named knowledge/rule family built from those operators. It complements [KNOWLEDGE_ABLATION.md](KNOWLEDGE_ABLATION.md); its counts describe declarations, not new ablation scores.
 
 ## Scope and counting

@@ -12,6 +12,10 @@ the default graph combines the primitive observations in logical constraints.
 from dataclasses import dataclass, replace
 from domiknows.generation.grounded import GroundedState, PlanningFacts, Operation
 from typing import Any, Mapping, Sequence
+try:
+    from .visibility import visible_entity_ids, reference_is_visible
+except ImportError:
+    from visibility import visible_entity_ids, reference_is_visible
 
 
 # Every benchmark subtask pattern begins with a pick or a press; its destinations are tracked from there.
@@ -67,7 +71,7 @@ def operation_schema_errors(skill, params, skill_arguments, entity_table=None, *
             errors.append(f"operation {index} ({skill}) requires {key}")
         else:
             value = params[key]
-            valid = value is not None and value != "" and not isinstance(value, bool)
+            valid = type(value) is int or (isinstance(value, str) and bool(value.strip()))
             if valid and entities is not None:
                 valid = resolve_pointer(value, entities)[1]
             if not valid:
@@ -79,11 +83,13 @@ def operation_schema_errors(skill, params, skill_arguments, entity_table=None, *
     optional = set(OPTIONAL_SKILL_ARGUMENTS.get(skill, ()))
     for key in optional & params.keys():
         value = params[key]
-        if value is None or isinstance(value, bool) or (entities is not None and not resolve_pointer(value, entities)[1]):
+        if not (type(value) is int or (isinstance(value, str) and bool(value.strip()))) or (entities is not None and not resolve_pointer(value, entities)[1]):
             errors.append(f"operation {index} ({skill}) has invalid {key}={value!r}")
     for key in sorted({"target_entity_name", "target_container_name"} - required - optional):
         if key in params:
             errors.append(f"operation {index} ({skill}) forbids {key}")
+    for key in params.keys() - required - optional - {"target_entity_name", "target_container_name"}:
+        errors.append(f"operation {index} ({skill}) has undeclared argument {key!r}")
     return tuple(errors)
 
 
@@ -120,10 +126,11 @@ class OperationPredicates:
 class PlanSemantics:
     """Scene-bound predicate meanings reusable by verification and decoding."""
 
-    def __init__(self, entity_table, skill_arguments, planning_facts=None):
+    def __init__(self, entity_table, skill_arguments, planning_facts=None, *, visible_entities=None):
         self.entities = entity_mapping(entity_table)
         self.skill_arguments = skill_arguments
         self.planning = planning_facts or PlanningFacts()
+        self.visible_entities = visible_entity_ids(visible_entities, self.entities)
 
     def initial_state(self):
         initial = self.planning.initial
@@ -221,12 +228,21 @@ class PlanSemantics:
         entity, container = self._arguments(params)
         subject = entity if entity is not None else state.held_entity
         expected = self.planning.destination_for(skill, subject)
+        try:
+            from .world_domain import OPTIONAL_SKILL_ARGUMENTS
+        except ImportError:
+            from world_domain import OPTIONAL_SKILL_ARGUMENTS
+        allowed = set(self.skill_arguments.get(skill, ())) | set(OPTIONAL_SKILL_ARGUMENTS.get(skill, ()))
 
         def usable(key):
             value = params.get(key)
             return value is not None and value != "" and not isinstance(value, bool) and resolve_pointer(value, self.entities)[1]
 
         return {
+            "has_undeclared_argument": bool(params.keys() - allowed),
+            "visibility_supplied": self.visible_entities is not None,
+            "entity_seen_initially": reference_is_visible(params.get("target_entity_name"), self.entities, self.visible_entities),
+            "container_seen_initially": reference_is_visible(params.get("target_container_name"), self.entities, self.visible_entities),
             "entity_value_usable": usable("target_entity_name"),
             "container_value_usable": usable("target_container_name"),
             "entity_resolves": resolve_pointer(params.get("target_entity_name"), self.entities)[1],

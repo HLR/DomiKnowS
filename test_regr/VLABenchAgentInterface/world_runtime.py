@@ -121,7 +121,12 @@ def materialize_plan(
         prefix_viable, pattern_complete = trace_progress(progress, (operation["name"] for operation in plan))
         _truth(root, bundle.pattern_complete, pattern_complete)
         from domiknows.generation.grounded import observations, report
-        semantics = PlanSemantics(entities, bundle.skill_arguments, requirements.planning)
+        semantics = PlanSemantics(entities, bundle.skill_arguments, requirements.planning,
+                                   visible_entities=requirements.visible_entities)
+        root.attributes["visibility_report"] = {
+            "status": "unavailable" if requirements.visible_entities is None else "supplied",
+            "visible_ids": None if requirements.visible_entities is None else sorted(requirements.visible_entities),
+        }
         state = semantics.initial_state()
         grounded_operations, grounded_checks = [], []
         operation_predicates, primitive_observations = [], []

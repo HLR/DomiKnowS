@@ -81,6 +81,7 @@ class VLABenchWorldGraphBundle:
 # Primitive facts are observations, not precomputed policy verdicts. The same
 # bindings feed ordinary DataNode verification and incremental DFA monitoring.
 WORLD_FACT_DOMAINS = {
+    **dict.fromkeys(("has_undeclared_argument", "visibility_supplied", "entity_seen_initially", "container_seen_initially"), "operation"),
     **dict.fromkeys(("entity_value_usable", "container_value_usable", "entity_resolves", "container_resolves",
                      "entity_is_button", "container_is_button", "subject_equals_destination",
                      "entity_is_static_fixture", "destination_used_in_subtask", "target_was_destination"), "operation"),
@@ -130,7 +131,8 @@ def _declare_generic_rules(world, level):
 
     # An operation denotes exactly one skill, with that skill's argument schema.
     rule(op("op"), exactL(*(skill("op") for skill in skills.values()), 1), "operation_exactly_one_skill")
-    rule(op("op"), _any(_skill_schema(world, skill) for skill in skills), "operation_schema_is_valid")
+    rule(op("op"), andL(notL(facts["has_undeclared_argument"]("op")),
+                       _any(_skill_schema(world, skill) for skill in skills)), "operation_schema_is_valid")
     # Progress is projected from graph.py's formulas, separately from argument
     # validity. A transition extends the current prefix, not just a skill pair.
     rule(edge("edge"), world.allowed_transition("edge"), "transition_matches_subtask_pattern")
@@ -181,6 +183,10 @@ def _declare_scene_rules(world, level):
     from domiknows.graph.logicalConstrain import andL, ifL, notL, orL
     rule = lambda a, b, name: _record_rule(world, "scene", a, b, name, level)
     op, edge, facts = world.operation, world.transition, world.facts
+    rule(andL(op("op"), facts["visibility_supplied"]("op")), andL(
+        ifL(world.has_target_entity("op"), facts["entity_seen_initially"]("op")),
+        ifL(world.has_target_container("op"), facts["container_seen_initially"]("op")),
+    ), "observation_supported_references")
     rule(op("op"), andL(
         ifL(world.has_target_entity("op"), facts["entity_resolves"]("op")),
         ifL(world.has_target_container("op"), facts["container_resolves"]("op")),

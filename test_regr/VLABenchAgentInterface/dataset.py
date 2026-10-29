@@ -334,6 +334,8 @@ class PlanningExample:
     planning_interface: str = "compact"
     # Task identity predicted from the instruction (``--knowledge learned``); never the episode's own task name.
     predicted_task: str | None = None
+    # Explicit initial-image support supplied by perception; never inferred from the entity inventory.
+    visible_entities: tuple[str | int, ...] | None = None
 
     def as_reward_item(self) -> dict[str, Any]:
         return {
@@ -351,6 +353,7 @@ class PlanningExample:
             "planning_observation_profile": self.planning_observation_profile,
             "planning_interface": self.planning_interface,
             "predicted_task": self.predicted_task,
+            "visible_entities": self.visible_entities,
         }
 
 

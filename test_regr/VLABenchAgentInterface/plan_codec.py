@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 try:
+    from .semantics import operation_schema_errors
     from .world_graph import (
         EOS_TOKEN,
         VLABENCH_DOMAIN_CHECKSUM,
@@ -20,6 +21,7 @@ try:
         validate_plan,
     )
 except ImportError:
+    from semantics import operation_schema_errors
     from world_graph import (
         EOS_TOKEN,
         VLABENCH_DOMAIN_CHECKSUM,
@@ -184,6 +186,9 @@ def plan_to_tokens(value: Any, entity_table=None, *, world: VLABenchWorldGraphBu
     skill_arguments = world.skill_arguments
     tokens: list[str] = []
     for operation in canonicalize_plan(value):
+        errors = operation_schema_errors(operation["name"], operation["params"], skill_arguments)
+        if errors:
+            raise ValueError("; ".join(errors))
         tokens.append(f"skill:{operation['name']}")
         for key in skill_arguments.get(operation["name"], ()):
             tokens.extend((f"arg:{key}", f"obj:{_pointer_index(operation['params'][key], entity_table)}"))

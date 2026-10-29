@@ -237,8 +237,15 @@ def _json_payload(value: str) -> str:
 def canonicalize_plan(value: Any) -> list[dict[str, Any]]:
     """Parse wire JSON and normalize it into the graph-owned plan shape."""
     if isinstance(value, str):
+        def unique_members(pairs):
+            result = {}
+            for key, item in pairs:
+                if key in result:
+                    raise PlanSchemaError(f"duplicate JSON member {key!r}")
+                result[key] = item
+            return result
         try:
-            value = json.loads(_json_payload(value))
+            value = json.loads(_json_payload(value), object_pairs_hook=unique_members)
         except json.JSONDecodeError as exc:
             raise PlanSchemaError(f"invalid plan JSON: {exc.msg}") from exc
     if isinstance(value, Mapping):
@@ -252,7 +259,9 @@ def canonicalize_plan(value: Any) -> list[dict[str, Any]]:
     for index, raw in enumerate(value):
         if not isinstance(raw, Mapping):
             raise PlanSchemaError(f"operation {index} must be an object")
-        name = str(raw.get("name", "")).strip().lower().replace("-", "_")
+        if not isinstance(raw.get("name"), str):
+            raise PlanSchemaError(f"operation {index} name must be a string")
+        name = raw["name"].strip().lower().replace("-", "_")
         params = raw.get("params", {})
         if not name:
             raise PlanSchemaError(f"operation {index} has no name")
@@ -313,6 +322,7 @@ def validate_plan(
     require_pattern: bool = True,
     policy: Any = None,
     requirements: Any = None,
+    visible_entities=None,
 ) -> PlanValidation:
     errors: list[str] = []
     try:
@@ -322,6 +332,19 @@ def validate_plan(
     if requirements is None and policy is not None:
         from test_regr.VLABenchAgentInterface.constraint_compiler import requirements_for_policy
         requirements = requirements_for_policy(policy)
+    try:
+        from .visibility import visible_entity_ids, reference_is_visible
+    except ImportError:
+        from visibility import visible_entity_ids, reference_is_visible
+    supplied = visible_entities if visible_entities is not None else getattr(requirements, "visible_entities", None)
+    if policy is not None and visible_entities is None:
+        from domiknows.generation.dfa.predicate_monitor import find_predicate_monitor
+        monitor = find_predicate_monitor(policy)
+        if monitor is not None and not any(r.name == "observation_supported_references" for r in monitor.program.rules):
+            supplied = None
+    if supplied is not None and entity_table is None:
+        raise ValueError("visibility validation requires an entity table")
+    visible = visible_entity_ids(supplied, entity_table or ())
     allowed = getattr(requirements, "allowed_sequences", None)
     if not plan and (allowed is None or () not in allowed):
         errors.append("plan is empty")
@@ -329,6 +352,11 @@ def validate_plan(
         errors.extend(operation_schema_errors(
             operation["name"], operation["params"], skill_arguments, entity_table, index=index,
         ))
+        if visible is not None:
+            table = _entity_mapping(entity_table)
+            for key in ("target_entity_name", "target_container_name"):
+                if key in operation["params"] and not reference_is_visible(operation["params"][key], table, visible):
+                    errors.append(f"operation {index}: {key} is unsupported by the initial observation")
     if require_pattern and plan and ((tuple(op["name"] for op in plan) not in allowed) if allowed is not None else split_subtasks([op["name"] for op in plan], patterns) is None):
         errors.append("skill sequence is not a complete VLABench subtask pattern")
     return PlanValidation(not errors, tuple(errors), tuple(plan))

@@ -25,6 +25,8 @@ OPERATION_OBSERVATIONS = (
     "continues_chosen_pattern",          # it extends a named pattern that still fits the operation budget
     "instruction_candidates_known",      # the instruction grounds candidates for this skill and role
     "target_is_instruction_candidate",   # its id is one of them
+    "visibility_supplied",              # explicit support set from the initial observation
+    "target_seen_initially",            # this id belongs to that set (not merely to an id range)
 )
 PLAN_OBSERVATIONS = (
     "plan_patterns_chosen",              # the model named subtask patterns for this episode
@@ -70,4 +72,6 @@ def build_decoding_graph(name="vlabench_decoding_knowledge"):
         # An object the instruction grounds for a skill and role must be one of its candidates.
         ifL(o["instruction_candidates_known"]("operation"), o["target_is_instruction_candidate"]("operation"),
             name="instruction_candidates_bound_targets")
+        ifL(andL(o["visibility_supplied"]("operation"), o["has_target"]("operation")),
+            o["target_seen_initially"]("operation"), name="observation_supported_references")
     return DecodingGraph(graph, o, p)

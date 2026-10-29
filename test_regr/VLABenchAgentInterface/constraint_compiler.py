@@ -96,7 +96,8 @@ class VLABenchPredicateAdapter:
         except ImportError:
             from task_policy import TaskRequirements
         self.requirements = requirements or TaskRequirements(schema=schema)
-        self.semantics = PlanSemantics(entities, world.skill_arguments, self.requirements.planning)
+        self.semantics = PlanSemantics(entities, world.skill_arguments, self.requirements.planning,
+                                       visible_entities=self.requirements.visible_entities)
         self.schema = self.requirements.schema
         self.entities = self.semantics.entities
         self.pattern_dfa = pattern_dfa if pattern_dfa is not None else pattern_progress_for(world, self.requirements)
@@ -226,6 +227,15 @@ class WorldConstraintDFA(PredicateMonitorDFA):
         super().__init__(base_dfa, program, adapter,
                          completion_bound=None if bounds is None else lambda state: bounds(state.grammar[1]))
 
+    def action_reachability(self, *, strict=True, max_state_expansions=10000):
+        """Create an episode-local, cached action-budget goal search.
+
+        Unlike can_reach_accepting's token horizon, this search counts complete
+        operations. None means missing required grounding, not impossibility.
+        """
+        from .reachability import WorldActionReachability
+        return WorldActionReachability(self, strict=strict, max_state_expansions=max_state_expansions)
+
 
 def task_completion_bounds(base_dfa, vocabulary, adapter, program):
     """Relax entity-dependent rules, retaining observable task LCs exactly.
@@ -320,6 +330,8 @@ def bind_task_policy(policy, vocabulary, context):
     world = monitor.adapter.world
     previous = monitor.adapter.requirements
     requirements = task_requirements(context, world, monitor.adapter.entities)
+    if "visible_entities" not in context:
+        requirements = replace(requirements, visible_entities=previous.visible_entities)
     if "planning_facts" not in context:
         requirements = replace(requirements, planning=previous.planning, allowed_sequences=previous.allowed_sequences)
     if not context.get("task") and not context.get("task_name"):

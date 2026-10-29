@@ -12,10 +12,12 @@ from functools import lru_cache
 from domiknows.generation.dfa.predicate_monitor import PredicateConstraintProgram, PredicateEvent
 
 try:
+    from ..visibility import visible_entity_ids
     from ..object_grounding import ObjectConstraints
     from .causal_dfa import CausalPlanDFA
     from .decoding_graph import build_decoding_graph
 except ImportError:  # pragma: no cover - flat-module execution
+    from visibility import visible_entity_ids
     from object_grounding import ObjectConstraints
     from causal_dfa import CausalPlanDFA
     from decoding_graph import build_decoding_graph
@@ -33,7 +35,7 @@ class KnowledgePlanDFA(CausalPlanDFA):
     """
 
     def __init__(self, *args, causal=True, causal_graph=None, decoding_graph=None, press_answer=False,
-                 scene_bound=None, chosen_patterns=(), object_candidates=None, **kwargs):
+                 scene_bound=None, chosen_patterns=(), object_candidates=None, visible_entities=None, **kwargs):
         super().__init__(*args, causal_graph=causal_graph, **kwargs)
         if not causal:
             self.causal_program = PredicateConstraintProgram()
@@ -43,6 +45,7 @@ class KnowledgePlanDFA(CausalPlanDFA):
         self.scene_bound = scene_bound
         self.chosen_patterns = tuple(tuple(pattern) for pattern in chosen_patterns)
         self.object_candidates = object_candidates or ObjectConstraints()
+        self.visible_entities = visible_entity_ids(visible_entities, range(self.entity_count))
         self.start_state = self.start_state + (START_PATTERN_PREFIXES,)
 
     @lru_cache(maxsize=None)
@@ -70,6 +73,8 @@ class KnowledgePlanDFA(CausalPlanDFA):
         candidates = next((ids for s, r, ids in self.object_candidates.restrictions
                            if roles and (s, r) == (skill, roles[0])), None)
         return PredicateEvent("operation", {
+            "visibility_supplied": self.visible_entities is not None,
+            "target_seen_initially": self.visible_entities is not None and pointer in self.visible_entities,
             "press": skill == "press",
             "first_operation": count == 0,
             "press_answer_yes": self.press_answer,
