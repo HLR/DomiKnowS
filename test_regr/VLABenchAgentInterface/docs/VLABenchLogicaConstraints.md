@@ -1,5 +1,14 @@
 # VLABench logical constraints
 
+**Eleven-skill domain update (29 October 2026):** [practical constraints](PRACTICAL_CONSTRAINTS.md)
+adds `close_door` and `open_laptop`, terminal articulation goals and poker selection.
+Current counts: world=91 (causal=3, generic=28, scene=7, task=53), grammar=5;
+physics=82, complex=85, articulation=4, poker=11; official causal=3 and decoding=6.
+Across paths this is 287 formulas, excluding ten auxiliary poker classification
+queries and relay applies/decided views. General native generation defaults to the
+eleven-skill `world` profile; the explicit official/legacy languages stay fixed.
+The dated inventories and scores below describe earlier schema revisions.
+
 **2026-10-29 update:** [Syntax and visibility](SYNTAX_AND_VISIBILITY.md) strengthens
 the existing schema formula and adds `observation_supported_references` to the
 world scene group and the native decoding graph. These add two `ifL` declarations

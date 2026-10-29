@@ -131,6 +131,10 @@ def task_requirements(context, world, entities):
         target, valid = resolve_pointer(target, entity_mapping(entities))
         if not valid:
             raise ValueError("task target is absent from the current scene")
+    # These tasks bind their subject in final-state LCs. Opening an access
+    # door before picking that subject must not fail the first-operation rule.
+    if task in ("cool_drink", "set_study_table", "manage_study_table") and task in knowledge.tasks():
+        target = None
     table = entity_mapping(entities)
     def resolve(value):
         name, valid = resolve_pointer(value, table)
@@ -140,6 +144,26 @@ def task_requirements(context, world, entities):
     planning = PlanningFacts.parse(get("planning_facts"), entities=table.values(), resolve=resolve,
                                    default_destination=get("task_target_container"), constants=("left", "right"))
     planning = replace(planning, monitors=knowledge_monitors(world, get("planning_facts"), resolve, task))
+    raw = get("planning_facts")
+    if raw is None or isinstance(raw, Mapping):
+        try:
+            from .articulation import articulation_monitor
+        except ImportError:
+            from articulation import articulation_monitor
+        raw = raw or {}
+        if world.articulation_knowledge is not None:
+            articulation = articulation_monitor(world, task if task in knowledge.tasks() else None,
+                                                raw, resolve, context, tuple(table.values()))
+            if articulation is not None:
+                planning = replace(planning, initial=articulation.initial(planning.initial, raw, resolve),
+                                   monitors=(*planning.monitors, articulation))
+        if task in ("texas_holdem", "texas_holdem_explore") and task in knowledge.tasks() and world.poker_knowledge is not None:
+            try:
+                from .knowledge.poker_lcs import PokerMonitor, parse_poker_selection
+            except ImportError:
+                from knowledge.poker_lcs import PokerMonitor, parse_poker_selection
+            poker = PokerMonitor(world.poker_knowledge.get(), parse_poker_selection(raw.get("poker_selection"), resolve))
+            planning = replace(planning, monitors=(*planning.monitors, poker))
     if (knowledge.is_qa(task) and not any(s.action == "press" for s in planning.selections)
             and not any(getattr(m, "action", None) == "press" for m in planning.monitors)):
         from domiknows.generation.grounded import SelectionRequirement

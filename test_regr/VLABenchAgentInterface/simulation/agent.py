@@ -212,7 +212,9 @@ class HierarchicalVLABenchAgent:
 
         while reward.steps < max_steps:
             numbered, entities = numbered_views_from_observation(env, observation, max_views=self.camera_views)
-            decision = self.plan(instruction, numbered, entities, task_context=task_context)
+            from ..articulation import refreshed_articulation_context
+            fresh_context = refreshed_articulation_context(env, task_context, entities)
+            decision = self.plan(instruction, numbered, entities, task_context=fresh_context)
             plans.append(decision)
             for image in numbered:
                 image.close()

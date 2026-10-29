@@ -380,7 +380,7 @@ def main():
     ev.add_argument("--weight", type=float, default=0)
     ev.add_argument("--max-tokens", type=int, default=768)
     ev.add_argument("--max-operations", type=int, default=16)
-    ev.add_argument("--grammar-profile", choices=["benchmark", "legacy"], default="benchmark")
+    ev.add_argument("--grammar-profile", choices=["world", "benchmark", "legacy"], default="world")
     ev.add_argument("--object-constraints", choices=["instruction", "none"], default="instruction")
     ev.add_argument("--seed", type=int, default=42)
     ev.add_argument("--limit", type=int)

@@ -61,6 +61,8 @@ class VLABenchWorldGraphBundle:
     # Relayed knowledge declared in standalone graphs (knowledge/physics_lcs.py), active with the task group.
     physics_knowledge: Any = None
     complex_knowledge: Any = None
+    articulation_knowledge: Any = None
+    poker_knowledge: Any = None
     facts: Any = None
     pattern_first_operation: Any = None
     pattern_start_allowed: Any = None
@@ -358,6 +360,8 @@ def build_vlabench_world_graph(
             knowledge_groups=groups,
             physics_knowledge=_physics_knowledge(level) if include_default_constraints else None,
             complex_knowledge=_complex_knowledge(level) if include_default_constraints else None,
+            articulation_knowledge=_extra_knowledge("articulation", level) if include_default_constraints else None,
+            poker_knowledge=_extra_knowledge("poker", level) if include_default_constraints else None,
         )
 
         if include_default_constraints:
@@ -388,6 +392,18 @@ def _complex_knowledge(level):
     return LazyKnowledge(build_complex_knowledge, active=group_active(level, "task"))
 
 
+def _extra_knowledge(kind, level):
+    from importlib import import_module
+    from domiknows.generation.lc_relay import LazyKnowledge
+    if kind == "articulation":
+        module = import_module("test_regr.VLABenchAgentInterface.articulation")
+        factory = module.build_articulation_knowledge
+    else:
+        module = import_module("test_regr.VLABenchAgentInterface.knowledge.poker_lcs")
+        factory = module.build_poker_knowledge
+    return LazyKnowledge(factory, active=group_active(level, "task"))
+
+
 def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str, task_identity: str | None = None) -> None:
     """Activate the constraint groups of ``level`` in place. Recompile any DFA built from the graph afterwards.
 
@@ -401,7 +417,7 @@ def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str, task_ident
     for group, constraints in (bundle.knowledge_groups or {}).items():
         for constraint in constraints:
             constraint.active = group_active(state.level, group)
-    for knowledge in (bundle.physics_knowledge, bundle.complex_knowledge):
+    for knowledge in (bundle.physics_knowledge, bundle.complex_knowledge, bundle.articulation_knowledge, bundle.poker_knowledge):
         if knowledge is not None:
             knowledge.set_active(group_active(state.level, "task"))
 

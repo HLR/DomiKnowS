@@ -160,8 +160,10 @@ class PlanSemantics:
         capabilities = []
         if skill == "pick":
             capabilities.append((entity, "graspable"))
-        if skill == "open_door":
+        if skill in ("open_door", "open_laptop"):
             capabilities.append((entity, "openable"))
+        if skill == "close_door":
+            capabilities.append((entity, "closeable"))
         if skill == "pour":
             capabilities.append((subject, "pourable"))
         op = Operation(skill, subject, container, "right", grasp=skill == "pick",
@@ -175,12 +177,25 @@ class PlanSemantics:
         if places and subject is not None and container is not None:
             relation = "poured_into" if skill == "pour" else "inside" if skill == "insert" else "at"
             yes.append((relation, subject, container))
+            if skill == "place" and is_enclosed_container(container):
+                yes.append(("inside", subject, container))
             if skill != "pour":
                 clear = [(r, subject) for r in ("at", "inside", "ontop", "inserted")]
         if skill == "open_door" and entity is not None:
             yes.extend(("open", name) for name in self.entities.values()
                        if is_container_opened(name, (entity,)))
             no.extend(("closed", fact[1]) for fact in yes if fact[0] == "open")
+        if skill == "close_door" and entity is not None:
+            yes.extend(("closed", name) for name in self.entities.values()
+                       if is_container_opened(name, (entity,)))
+            no.extend(("open", fact[1]) for fact in yes if fact[0] == "closed")
+        for monitor in self.planning.monitors:
+            effects = getattr(monitor, "effects", None)
+            if callable(effects):
+                yes.extend(effects(skill, entity))
+            for fact in getattr(monitor, "tracked_locations", ()):
+                if fact[1] == subject and (skill == "pick" or (places and fact[2] != container)):
+                    no.append(fact)
         if skill == "push" and subject is not None and container is not None:
             yes.append(("pushed_to", subject, container))
         return self.planning.evaluate(state.grounded, op, positive=yes, negative=no, clear_relations=clear,
@@ -280,6 +295,8 @@ class PlanSemantics:
         opened = state.opened_entities
         if skill == "open_door" and entity is not None:
             opened = opened | {entity}
+        if skill == "close_door" and entity is not None:
+            opened = frozenset(name for name in opened if grounded.facts.truth(("closed", name)) is not True)
         # Explicit release effects override the legacy held-object mirror.
         held = dict(grounded.holdings).get("right", held)
         return replace(state, grounded=grounded, held_entity=held, opened_entities=frozenset(opened),

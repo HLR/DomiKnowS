@@ -10,11 +10,12 @@ from pathlib import Path
 import torch
 
 from .world_graph import SKILL_ARGUMENTS, SUBTASK_PATTERNS
+from .world_domain import LEGACY_SKILL_ARGUMENTS, LEGACY_SUBTASK_PATTERNS
 from .planning_metrics import BENCHMARK_PATTERNS
 from .object_grounding import ObjectConstraints, scene_objects, instruction_object_constraints
 
 # Native benchmark protocol is independent of graph checkpoint vocabulary.
-BENCHMARK_ARGUMENTS = {**SKILL_ARGUMENTS, "push": ("target_container_name",)}
+BENCHMARK_ARGUMENTS = {**LEGACY_SKILL_ARGUMENTS, "push": ("target_container_name",)}
 NATIVE_LANGUAGE_VERSION = "benchmark_json_grounding_v2"
 
 
@@ -22,7 +23,9 @@ def native_schema(profile):
     if profile == "benchmark":
         return BENCHMARK_ARGUMENTS, BENCHMARK_PATTERNS
     if profile == "legacy":
-        return SKILL_ARGUMENTS, SUBTASK_PATTERNS
+        return LEGACY_SKILL_ARGUMENTS, LEGACY_SUBTASK_PATTERNS
+    if profile == "world":
+        return {**SKILL_ARGUMENTS, "push": ("target_container_name",)}, SUBTASK_PATTERNS
     raise ValueError(f"unknown native grammar profile {profile!r}")
 
 
@@ -98,7 +101,7 @@ class NativePlanDFA:
             self.patterns = tuple(tuple(pattern) for pattern in patterns)
             used = {skill for pattern in self.patterns for skill in pattern}
             self.skill_arguments = {skill: roles for skill, roles in self.skill_arguments.items() if skill in used}
-        self.max_operations = max_operations if max_operations is not None else (16 if grammar_profile == "benchmark" else 8)
+        self.max_operations = max_operations if max_operations is not None else (8 if grammar_profile == "legacy" else 16)
         if self.max_operations < 1 or entity_count < 0:
             raise ValueError("positive operation budget and nonnegative entity count required")
         self.entity_count = min(entity_count, 64) if grammar_profile == "legacy" else entity_count
@@ -125,7 +128,7 @@ class NativePlanDFA:
                 self.action_index[(skill, pointer)] = action
                 params = {role: pointer for role in roles}
                 variants = [{"name": skill, "params": params}]
-                if grammar_profile == "benchmark":
+                if grammar_profile != "legacy":
                     variants.append({"params": params, "name": skill})
                 for value in variants:
                     text = json.dumps(value, separators=(",", ":"))
@@ -189,7 +192,7 @@ class NativePlanDFA:
 
     def byte_step(self, state, byte):
         count, prefixes, phase, node, pending = state
-        flexible = self.grammar_profile == "benchmark"
+        flexible = self.grammar_profile != "legacy"
         if flexible and phase == "operation" and pending.startswith("escape"):
             if pending == "escape":
                 if byte == ord("u"):
@@ -409,7 +412,7 @@ class NativeConstraintProcessor:
         return result
 
 
-def native_prompt(instruction, entities, grammar_profile="benchmark"):
+def native_prompt(instruction, entities, grammar_profile="world"):
     arguments, _ = native_schema(grammar_profile)
     return (
         ("Return only a compact JSON array of VLABench operations, with no explanation or markdown. "
@@ -449,7 +452,7 @@ class FrozenNativePlanner:
         return cls(model, processor)
 
     @torch.no_grad()
-    def generate_teacher_batch(self, examples, *, seed=42, max_tokens=768, grammar_profile="benchmark"):
+    def generate_teacher_batch(self, examples, *, seed=42, max_tokens=768, grammar_profile="world"):
         """Batch teacher sampling only; evaluation configurations remain single-example."""
         from PIL import Image
         images, texts = [], []
@@ -484,7 +487,7 @@ class FrozenNativePlanner:
 
     @torch.no_grad()
     def generate(self, example, *, mode="raw", max_tokens=768, max_operations=16, seed=42, sample=False,
-                 hmm=None, weight=0, grammar_profile="benchmark", object_constraints="instruction",
+                 hmm=None, weight=0, grammar_profile="world", object_constraints="instruction",
                  reachability_policy=None, reachability_strict=True, max_state_expansions=10000,
                  visible_entities=None):
         """Generate with optional action-budget reachability from a bound world policy.
@@ -580,7 +583,7 @@ def grounding_for_example(example, mode="instruction"):
     return instruction_object_constraints(example.instruction, scene_objects(config, example.entities))
 
 
-def validate_native_plan(plan, entities, *, grammar_profile="benchmark", max_operations=None, grounding=None,
+def validate_native_plan(plan, entities, *, grammar_profile="world", max_operations=None, grounding=None,
                          visible_entities=None):
     """Independent symbolic protocol diagnostic; graph validity remains separate."""
     from .world_graph import validate_plan

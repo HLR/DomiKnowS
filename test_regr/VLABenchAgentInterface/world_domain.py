@@ -17,7 +17,7 @@ ABSENT_ENTITY = "__absent_plan_argument__"
 
 # Domain declarations live here.  All codecs, generation vocabularies, data
 # validation, rewards, and policies derive from the world graph bundle.
-SUBTASK_PATTERNS: tuple[tuple[str, ...], ...] = (
+LEGACY_SUBTASK_PATTERNS: tuple[tuple[str, ...], ...] = (
     ("pick", "lift", "pull"),
     ("pick", "lift", "place"),
     ("pick", "pour", "place"),
@@ -32,6 +32,7 @@ SUBTASK_PATTERNS: tuple[tuple[str, ...], ...] = (
     ("pick", "open_door"),
     ("press",),
 )
+SUBTASK_PATTERNS = (*LEGACY_SUBTASK_PATTERNS, ("open_door",), ("close_door",), ("open_laptop",))
 
 # The task tables are declarations. world_graph builds their task concepts
 # and knowledge.task_lcs declares the associated sequence/obligation formulas.
@@ -120,7 +121,7 @@ def task_contract_for(task: str) -> TaskContract | None:
     return TASK_CONTRACTS.get(normalized)
 
 
-SKILL_ARGUMENTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
+LEGACY_SKILL_ARGUMENTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "pick": ("target_entity_name",),
     "place": ("target_container_name",),
     "insert": ("target_container_name",),
@@ -131,6 +132,8 @@ SKILL_ARGUMENTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "open_door": ("target_entity_name",),
     "press": ("target_entity_name",),
 })
+SKILL_ARGUMENTS = MappingProxyType({**LEGACY_SKILL_ARGUMENTS,
+    "close_door": ("target_entity_name",), "open_laptop": ("target_entity_name",)})
 
 # Optional symbolic roles are independent of simulator motion parameters.
 OPTIONAL_SKILL_ARGUMENTS = MappingProxyType({"push": ("target_container_name",)})
@@ -364,7 +367,7 @@ def validate_plan(
 
 def _domain_checksum(*, legacy=False) -> str:
     payload = {
-        "version": 3,
+        "version": 4,
         "optional_arguments": dict(OPTIONAL_SKILL_ARGUMENTS),
         "planning_tasks": dict(PLANNING_TASK_PATTERNS),
         "skills": {name: list(arguments) for name, arguments in SKILL_ARGUMENTS.items()},
@@ -374,6 +377,8 @@ def _domain_checksum(*, legacy=False) -> str:
     }
     if legacy:
         payload["version"] = 2
+        payload["skills"] = {name: list(arguments) for name, arguments in LEGACY_SKILL_ARGUMENTS.items()}
+        payload["patterns"] = list(LEGACY_SUBTASK_PATTERNS)
         payload.pop("optional_arguments")
         payload.pop("planning_tasks")
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))

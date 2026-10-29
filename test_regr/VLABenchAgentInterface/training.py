@@ -840,7 +840,8 @@ def load_joint_checkpoint(
             "resume the evaluated supervised checkpoint or an eligible RL checkpoint"
         )
     if payload.get("domain_checksum") != runtime.world_bundle.domain_checksum:
-        raise ValueError("checkpoint domain checksum differs from the current world graph")
+        raise ValueError("checkpoint domain checksum differs from the current eleven-skill world graph; "
+                         "nine-skill checkpoints require retraining, not automatic weight remapping")
     if payload.get("vocabulary_checksum") != runtime.vocabulary.checksum:
         raise ValueError("checkpoint vocabulary checksum differs from the current graph vocabulary")
     if int(checkpoint_version) >= STANDALONE_CHECKPOINT_VERSION:

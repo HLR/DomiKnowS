@@ -58,7 +58,7 @@ class ComplexTaskSchema:
 
 COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
     "cook_dishes": ComplexTaskSchema(task_name="cook_dishes", required_skills=("pick", "place"), min_operations=4),
-    "cool_drink": ComplexTaskSchema(task_name="cool_drink", required_skills=("pick", "place"), min_operations=2),
+    "cool_drink": ComplexTaskSchema(task_name="cool_drink", required_skills=(), min_operations=0),
     "make_juice": ComplexTaskSchema(task_name="make_juice", required_skills=("pick", "place"), min_operations=2),
     "hammer_nail_and_hang_picture": ComplexTaskSchema(
         task_name="hammer_nail_and_hang_picture", required_skills=("pick", "place", "push"), min_operations=3),
@@ -66,9 +66,11 @@ COMPLEX_TASK_SCHEMAS: Mapping[str, ComplexTaskSchema] = {
         task_name="take_chemistry_experiment", required_skills=("pick", "place", "pour"), min_operations=3),
     "book_rearrange": ComplexTaskSchema(
         task_name="book_rearrange", required_skills=("pick", "push", "pull"), min_operations=3),
-    "texas_holdem": ComplexTaskSchema(task_name="texas_holdem", required_skills=("pick", "place"), min_operations=2),
+    "texas_holdem": ComplexTaskSchema(task_name="texas_holdem", required_skills=(), min_operations=0),
+    "texas_holdem_explore": ComplexTaskSchema(task_name="texas_holdem_explore", required_skills=(), min_operations=0),
     "manage_study_table": ComplexTaskSchema(
-        task_name="manage_study_table", required_skills=("pick", "place"), min_operations=3),
+        task_name="manage_study_table", required_skills=(), min_operations=0),
+    "set_study_table": ComplexTaskSchema(task_name="set_study_table", required_skills=(), min_operations=0),
 }
 
 

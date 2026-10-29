@@ -166,7 +166,8 @@ class PlanVocabulary:
         if checksum is not None and checksum != value.checksum:
             raise ValueError(f"vocabulary checksum mismatch for {path}")
         if value.domain_checksum != VLABENCH_DOMAIN_CHECKSUM:
-            raise ValueError("vocabulary domain checksum differs from the current world graph")
+            raise ValueError("vocabulary domain checksum differs from the current eleven-skill world graph; "
+                             "nine-skill checkpoints require retraining, not automatic weight remapping")
         return value
 
 

@@ -8,6 +8,7 @@ from typing import Sequence
 import torch
 from torch import nn
 from torch.nn import functional as F
+from ..world_domain import CONTROLLER_SKILLS
 
 from ..models import (
     VISION_MODEL_ID, load_sanitized_auto_config, sanitize_special_token_ids, special_token_id_summary,
@@ -172,7 +173,7 @@ class MultiViewController(nn.Module):
         hidden_dim: int = 256,
         max_views: int = 4,
         task_count: int = 128,
-        controller_skill_count: int = 10,
+        controller_skill_count: int = len(CONTROLLER_SKILLS),
         controller_entity_count: int = 65,
         controller_operation_count: int = 17,
     ):

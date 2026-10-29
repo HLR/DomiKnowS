@@ -83,6 +83,10 @@ def complex_planning_facts(task, instruction, entities, existing=None):
     if task not in COMPLEX_TASKS:
         return existing
     facts = deepcopy(existing or {})
+    if task == "texas_holdem" and "poker_selection" in facts:
+        facts["complex_grounding_report"] = {"profile": "observed_poker_v1", "status": "supplied",
+            "reasons": ["card faces and ordering are evaluated by poker logical constraints; no winning targets imported"]}
+        return facts
     if any(key in facts for key in ("goals", "milestones", "completed_skill_prefix")):
         return facts
     block = complex_observations(task, instruction, entities)

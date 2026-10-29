@@ -1,5 +1,7 @@
 # VLABench hierarchical agent
 
+The default internal domain now has eleven skills. See [articulated goals, poker rules, and checkpoint compatibility](docs/PRACTICAL_CONSTRAINTS.md) before loading nine-skill checkpoints or comparing historical results.
+
 This package trains and evaluates the graph-first VLABench planner/controller.
 
 ## Plan graph and compilation
