@@ -44,12 +44,20 @@ def diagnostic_examples(examples, mode="original", seed=42):
         return examples
     rng = random.Random(seed)
     result = []
-    donors = list(examples)
-    rng.shuffle(donors)
+    donor_indices = list(range(len(examples)))
+    rng.shuffle(donor_indices)
+    if len(donor_indices) > 1:
+        for index in range(len(donor_indices)):
+            if donor_indices[index] == index:
+                other = (index + 1) % len(donor_indices)
+                donor_indices[index], donor_indices[other] = donor_indices[other], donor_indices[index]
+    donors = [examples[index] for index in donor_indices]
     for example, donor in zip(examples, donors):
         if mode == "permuted-entities":
             order = list(range(len(example.entities)))
             rng.shuffle(order)
+            if len(order) > 1 and order == list(range(len(order))):
+                order = order[1:] + order[:1]
             context, plan = permute_entities(example.as_reward_item(), example.operation_sequence, order)
             result.append(replace(example, entities=context["entity_table"], operation_sequence=tuple(plan),
                                   planning_facts=context.get("planning_facts"), task_skill_sequence=context.get("task_skill_sequence"),

@@ -49,6 +49,7 @@ DEFAULT_OUTPUT = PACKAGE_DIR / "checkpoints"
 
 
 from .utils.planner_context import planner_context
+from .utils.evaluation_protocol import training_data_protocol
 
 def _ordered_union(examples, key):
     vocabulary = examples[0]["generation_vocab"] if examples else ()
@@ -100,8 +101,11 @@ def _factory(value: str):
 
 def stage1_selection_key(metrics):
     eai, vla = metrics["eai"], metrics["vlabench"]
-    minimum = min(float(eai["goal_success"]), float(vla["exact_graph_match"]))
-    mean = (float(eai["goal_success"]) + float(vla["exact_graph_match"])) / 2.0
+    # Legacy checkpoints retain their historical interpretation when inspected.
+    # New evaluations select on binary complete-plan equality, not partial PM.
+    plan_accuracy = float(vla["strict_plan_match"] if "strict_plan_match" in vla else vla["exact_graph_match"])
+    minimum = min(float(eai["goal_success"]), plan_accuracy)
+    mean = (float(eai["goal_success"]) + plan_accuracy) / 2.0
     return (
         minimum,
         mean,
@@ -481,7 +485,8 @@ def command_train_agent(args):
             stage1.train_eai_warmup(eai_train, steps=args.stage1_eai_warmup_steps)
         best_key = (
             stage1_selection_key(resume_payload["metrics"])
-            if resume_stage == "stage1" and resume_payload is not None else None
+            if resume_stage == "stage1" and resume_payload is not None
+            and "strict_plan_match" in resume_payload.get("metrics", {}).get("vlabench", {}) else None
         )
         for epoch in range(start_stage1, args.stage1_epochs):
             _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} training")
@@ -506,6 +511,7 @@ def command_train_agent(args):
             metrics = {
                 "training_mode": training_mode,
                 "decoding": "free" if ce_only else "dfa",
+                "training_data_protocol": training_data_protocol(args, resume_payload),
                 "train": train_metrics,
                 "eai": eai_metrics,
                 "vlabench": vla_metrics,
@@ -1331,6 +1337,9 @@ def build_parser():
     add_knowledge_argument(eval_planning)
     eval_planning.add_argument("--no-dfa", action="store_true")
     eval_planning.add_argument("--no-dfa-min-steps", type=int, default=0)
+    eval_planning.add_argument("--input-probe", choices=("original", "permuted-entities", "no-images", "shuffled-images", "shuffled-instructions"), default="original")
+    eval_planning.add_argument("--audit-probes", action="store_true",
+                               help="also score paired no-images, shuffled-images and permuted-entities inputs")
     add_holdout_arguments(eval_planning)
     eval_planning.add_argument("--limit", type=int, default=None)
     eval_planning.add_argument("--output", type=Path, default=None)

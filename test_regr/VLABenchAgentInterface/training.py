@@ -15,7 +15,7 @@ import torch
 from PIL import Image
 
 try:
-    from .planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics
+    from .planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics, strict_plan_match
     from .diagnostics import ControllerMetrics
     from .plan_codec import PlanVocabulary, plan_to_tokens
     from .generation_runtime import bind_vlabench_contextual_dfa, compile_planner_dfa
@@ -25,7 +25,7 @@ try:
     from .reward import make_vlabench_reward_function, score_vlabench_plan
     from .world_graph import build_vlabench_world_graph
 except ImportError:
-    from planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics
+    from planning_metrics import PlanningMetrics, planning_metadata, score_planning_metrics, strict_plan_match
     from diagnostics import ControllerMetrics
     from plan_codec import PlanVocabulary, plan_to_tokens
     from generation_runtime import bind_vlabench_contextual_dfa, compile_planner_dfa
@@ -539,6 +539,8 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
         "entity_match": 0.0,
         "skill_with_entity_match": 0.0,
         "exact_graph_match": 0.0,
+        "graph_pm": 0.0,
+        "strict_plan_match": 0.0,
         "valid": 0.0,
     }
     count = 0
@@ -549,6 +551,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
     observation_profiles = {}
     observation_reports = []
     complex_grounding_reports = []
+    strict_dimensions = {}
     total_examples = len(examples) if hasattr(examples, "__len__") else None
     observer_owner = getattr(planner, "joint", planner)
     previous_observer = getattr(observer_owner, "decision_observer", None)
@@ -612,6 +615,17 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 entity_table=_example_value(example, "entities", ()),
             )
             inferred_task, inferred_dimension = planning_metadata(_example_value(example, "episode_id", ""))
+            strict = strict_plan_match(output, _example_value(example, "operation_sequence"),
+                                       entity_table=_example_value(example, "entities", ()))
+            # A generation failure must never become a successful empty-plan match.
+            if not native and generation_errors and generation_errors[-1]["example"] == count:
+                strict = 0.0
+            totals["strict_plan_match"] += strict
+            totals["graph_pm"] += scores["PM"] / 100.0
+            dimension = _example_value(example, "dimension") or inferred_dimension or "unknown"
+            dimension_totals = strict_dimensions.setdefault(dimension, {"matches": 0, "examples": 0})
+            dimension_totals["matches"] += int(strict)
+            dimension_totals["examples"] += 1
             planning_metrics.update(
                 scores,
                 task=_example_value(example, "task") or inferred_task,
@@ -645,6 +659,15 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
             error["error_type"] == "SemanticSearchLimitExceeded" for error in generation_errors
         ),
         "generation_errors": generation_errors,
+        "strict_plan_match_by_dimension": {
+            name: values | {"rate": values["matches"] / values["examples"]}
+            for name, values in strict_dimensions.items()
+        },
+        "metric_definitions": {
+            "strict_plan_match": "fraction of complete ordered canonical plans equal after scene-entity grounding",
+            "graph_pm": "mean partial dependency-graph match (PM), scaled to [0, 1]; extra actions may receive full credit",
+            "exact_graph_match": "legacy reward-side graph PM name; not binary full-plan accuracy",
+        },
         "grounding_coverage": grounding_coverage,
         "observation_profiles": observation_profiles,
         "observation_reports": observation_reports,

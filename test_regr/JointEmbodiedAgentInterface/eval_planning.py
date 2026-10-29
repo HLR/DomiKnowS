@@ -44,6 +44,7 @@ from .main import (
 )
 from .models import DEFAULT_MODEL_ID, JointQwenVLPlanner
 from .program import _runtime_adapter
+from .utils.evaluation_protocol import evaluation_protocol
 
 
 def build_eval_parser() -> argparse.ArgumentParser:
@@ -76,6 +77,8 @@ def build_eval_parser() -> argparse.ArgumentParser:
                         help="with --no-dfa: withhold the end label for this many steps (0 = fully free)")
     parser.add_argument("--no-dfa", action="store_true",
                         help="decode without the grammar DFA or any constraint (baseline below --knowledge grammar)")
+    parser.add_argument("--audit-probes", action="store_true",
+                        help="also score paired no-images, shuffled-images and permuted-entities inputs")
     parser.add_argument("--updated-data", "--updated-labels", action="store_true",
                         help="score against corrected density labels computed in memory; default uses labels stored in --planning-dir")
     parser.add_argument(
@@ -207,6 +210,8 @@ def _prepare_eval(args, device):
 
 
 def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
+    if getattr(args, "audit_probes", False) and getattr(args, "input_probe", "original") != "original":
+        raise ValueError("--audit-probes requires --input-probe original for its paired reference")
     checkpoint_path = Path(args.checkpoint).resolve()
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"checkpoint not found: {checkpoint_path}")
@@ -266,6 +271,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     if not examples:
         raise ValueError(f"no planning examples found for split={args.split!r}")
+    if getattr(args, "audit_probes", False) and len(examples) < 2:
+        raise ValueError("--audit-probes requires at least two episodes for image shuffling")
     if uses_predicted_task():
         examples = predict_tasks(examples, args.task_classifier, observation_mode=getattr(args, "observation_mode", "visual"),
                                  ground_complex=getattr(args, "ground_complex", True))
@@ -288,6 +295,23 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
                 **({"decision_trace": trace} if trace is not None else {}),
             )
 
+    input_audit = {}
+    if getattr(args, "audit_probes", False):
+        for mode in ("no-images", "shuffled-images", "permuted-entities"):
+            print(f"[eval-planning] Paired input audit: {mode}", flush=True)
+            probe_examples = diagnostic_examples(examples, mode, args.seed)
+            with runtime.domain_scope("vlabench"):
+                probed = evaluate_planner(planner.for_domain("vlabench"),
+                    probe_examples, _runtime_adapter(runtime, "vlabench"))
+            def changed(original, modified):
+                if mode == "permuted-entities":
+                    return original.entities != modified.entities
+                return (original.segmented_image_paths or original.image_paths) != (
+                    modified.segmented_image_paths or modified.image_paths)
+            input_audit[mode] = {"metrics": probed,
+                "changed_input_examples": sum(changed(a, b) for a, b in zip(examples, probe_examples)),
+                "strict_plan_match_drop": metrics["strict_plan_match"] - probed["strict_plan_match"]}
+
     planning_metrics = metrics.get("planning_metrics", {})
     overall = planning_metrics.get("overall", {})
     dimensions = planning_metrics.get("dimensions", {})
@@ -299,6 +323,10 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "stage": payload.get("stage"),
         "epoch": payload.get("epoch"),
         "split": args.split,
+        "evaluation_protocol": evaluation_protocol(args, payload),
+        "strict_plan_match": metrics.get("strict_plan_match"),
+        "graph_pm": metrics.get("graph_pm"),
+        "input_audit": input_audit,
         "observation_mode": getattr(args, "observation_mode", "visual"),
         "knowledge": knowledge,
         "knowledge_manifest": getattr(runtime, "knowledge_manifest", None),
@@ -329,6 +357,13 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     print("=" * 70)
     print(f" Split: {args.split}  |  Examples: {len(examples)}  |  Stage: {payload.get('stage')} (Epoch {payload.get('epoch')})")
     print(f" Reference labels: {report['reference_labels']}  |  Observation mode: {report['observation_mode']}")
+    print(f" Evaluation scope: {report['evaluation_protocol']['scope']}")
+    print(f" Task exclusion from joint training verified: {report['evaluation_protocol']['excluded_from_joint_training_verified']}")
+    strict = report["strict_plan_match"]
+    print(" Strict complete-plan equality: " + (f"{100 * strict:.2f}%" if strict is not None else "unavailable"))
+    for mode, audit in input_audit.items():
+        print(f" Input audit {mode}: strict equality={100 * audit['metrics']['strict_plan_match']:.2f}% "
+              f"(drop={100 * audit['strict_plan_match_drop']:.2f} percentage points)")
     print(f" Generation failures: {metrics.get('generation_failures', 0)}"
           f" (semantic search limit: {metrics.get('semantic_search_limit_failures', 0)})")
     unknown_tasks = planning_metrics.get("unknown_task_count", 0)

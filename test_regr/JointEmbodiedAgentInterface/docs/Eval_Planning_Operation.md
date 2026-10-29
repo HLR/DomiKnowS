@@ -365,7 +365,12 @@ errors instead of being silently assigned zero.
 `score_vlabench_plan()` separately validates operation schemas, pointer/task
 restrictions, and applicable world constraints. It produces `reward`, `valid`,
 `skill_match`, `entity_match`, `skill_with_entity_match`, and
-`exact_graph_match` averages in `detailed_metrics`.
+`strict_plan_match` (complete ordered plan equality) and `graph_pm` (partial
+dependency-graph match) averages in `detailed_metrics`. The legacy
+`exact_graph_match` name denotes reward-side partial PM, not binary plan
+accuracy. `--audit-probes` adds paired no-image, shuffled-image, and
+entity-permutation checks; reports also distinguish episode splits from task
+holdouts and state whether task exclusion from joint training is verified.
 
 Invalid plans receive zero gated reward. Component matches can remain nonzero,
 so a high planning score and a lower validity-gated reward are compatible.

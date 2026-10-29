@@ -64,6 +64,27 @@ def _read_plan(value: Any) -> list[dict[str, Any]]:
     return plan
 
 
+def strict_plan_match(prediction: Any, reference: Any, entity_table: Any = None) -> float:
+    """Binary equality of complete canonical operation lists, including order and every parameter.
+
+    Unlike benchmark PM, extra, missing, or reordered operations fail. Object
+    pointers and names are compared after grounding in the same scene table.
+    This scores parsed plans, not raw decoder tokens or simulator execution.
+    """
+    try:
+        expected = _read_plan(reference)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid reference VLABench plan: {exc}") from exc
+    try:
+        actual = _read_plan(prediction)
+    except (TypeError, ValueError):
+        return 0.0
+    if entity_table:
+        actual = _ground_plan_entities(actual, entity_table)
+        expected = _ground_plan_entities(expected, entity_table)
+    return float(actual == expected)
+
+
 def _graph(plan, dependency) -> nx.DiGraph:
     graph = nx.DiGraph()
     graph.add_node(0, signature=("START", None, None))

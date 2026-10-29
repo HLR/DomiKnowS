@@ -144,9 +144,52 @@ controller is updated only during the VLABench turn. An epoch defaults to the
 larger planner loader length, covering both domains and cycling/reshuffling
 the smaller domain while preserving one update per domain per round; override it
 with `--stage1-rounds-per-epoch`. Stage 1 checkpoint selection first maximizes
-the minimum of EAI goal success and VLABench exact graph match, then their
+the minimum of EAI goal success and VLABench strict complete-plan equality, then their
 mean, EAI recall, VLABench validity, and validation loss. The EAI exploration
 gate is checked before Stage 2.
+
+### Interpreting planning accuracy and generalization
+
+`strict_plan_match` is the fraction of complete ordered canonical plans that
+equal the reference after grounding object pointers to scene names. Extra,
+missing, reordered operations and changed parameters fail this metric.
+It measures parsed plan equality; simulator success and raw token equality
+are separate questions.
+
+`graph_pm` is mean partial dependency-graph match in `[0, 1]`, corresponding
+to benchmark PM on a `[0, 100]` scale. PM can award full credit to a prediction
+with extra actions. The historical `exact_graph_match` field remains for old
+consumers as the reward-side PM score; do not call it complete-plan accuracy.
+Official benchmark components and weights are unchanged. Newly evaluated
+Stage 1 checkpoints are ranked using `strict_plan_match`; legacy partial-PM
+metrics are not compared against strict metrics when resuming training.
+
+The default deterministic episode split shares tasks and often plan templates
+between training and validation. Use task holdouts for an unseen-task study,
+starting with a fresh training run:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --ce-only \
+  --holdout-tasks default --stage1-epochs 5 --output checkpoints_ce_holdout
+python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint checkpoints_ce_holdout/joint_stage1_epoch_004.pt \
+  --holdout-tasks default --split heldout --no-dfa --audit-probes \
+  --output heldout_audit.json
+```
+
+Use the selected checkpoint reported at training completion in place of the
+last-epoch example above. `--audit-probes` evaluates the same selected episodes
+with original inputs, no images, shuffled images, and permuted entity tables
+(with reference pointers remapped). Reports include strict scores and drops
+relative to original inputs. Small or zero drops warrant investigating text,
+entity-name and template shortcuts; these probes alone do not prove leakage.
+
+Reports label the evaluation scope and record whether the requested tasks
+were verifiably excluded throughout joint training. Requesting `--split heldout`
+at evaluation does not establish that fact for a checkpoint previously trained
+on those tasks. Legacy checkpoints and unverified resume histories remain
+explicitly unverified. These are statements about joint fine-tuning, not the
+backbone's pretraining data.
 
 After the selected Stage 1 checkpoint is restored, the controller receives a
 dedicated behavior-cloning warm-up (20,000 updates by default) without changing
