@@ -111,6 +111,10 @@ DFA-constrained validation. It overrides the Stage 1 DFA-loss/domain/weight
 options to enable masked CE for both domains with zero allowed-mass and
 primal-dual weights and no primal-dual programs or multiplier optimizers.
 The existing lookahead-domain setting still applies (VLABench by default).
+Lookahead uses the same total generation budget as decoding (EAI max steps,
+or `max_operations * 5 + 1` for VLABench), even for shorter gold plans.
+It does not use the known gold-plan length to force EOS during training;
+the model must learn to prefer stopping over any legal continuation.
 If a gold target is disallowed, that step uses full-softmax CE and is counted
 in `masked_ce_misses`, as in the existing masked loss.
 

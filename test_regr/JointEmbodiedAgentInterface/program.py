@@ -275,7 +275,8 @@ class JointSolverPOIProgram(SolverPOIProgram):
         masked = domain in self.dfa_loss.masked_ce_domains
         steps = None if masked or not cap or kept <= cap else sorted(random.sample(range(kept), cap))
         sets = allowed_label_sets(dfa, targets, self.planner_head.vocabulary(domain).label_count, score_steps=steps,
-                                  lookahead=domain in self.dfa_loss.lookahead_domains)
+                                  lookahead=domain in self.dfa_loss.lookahead_domains,
+                                  max_steps=_runtime_adapter(self.runtime, domain).max_tokens)
         misses = 0
         if masked:
             ce, misses = masked_cross_entropy(kept_logits, targets, sets)

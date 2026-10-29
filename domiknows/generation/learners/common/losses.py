@@ -144,19 +144,25 @@ def allowed_label_sets(
     *,
     score_steps: Sequence[int] | None = None,
     lookahead: bool = True,
+    max_steps: int | None = None,
 ) -> dict[int, list[int]]:
     """Labels the DFA allows at each step along ``path`` (step -> sorted labels; steps with none are omitted).
 
     The state advances along ``path`` at every step; ``score_steps`` restricts which steps compute a set and
     ``lookahead=False`` takes the labels valid at the step without searching for a completion.
+    With lookahead, ``max_steps`` is the decoder's total generation budget, not the gold path length.
+    Omitting it preserves the legacy path-length budget for existing callers.
     """
     labels = [int(label) for label in (path.tolist() if torch.is_tensor(path) else path)]
+    budget = len(labels) if max_steps is None else int(max_steps)
+    if budget < len(labels):
+        raise ValueError("max_steps cannot be shorter than the teacher-forced path")
     wanted = None if score_steps is None else {int(step) for step in score_steps}
     state = dfa.start_state
     sets: dict[int, list[int]] = {}
     for step, label in enumerate(labels):
         if wanted is None or step in wanted:
-            valid = (dfa.allowed_tokens(state, remaining_steps=len(labels) - step - 1) if lookahead
+            valid = (dfa.allowed_tokens(state, remaining_steps=budget - step - 1) if lookahead
                      else dfa.allowed_tokens(state))
             allowed = sorted(int(item) for item in valid if 0 <= int(item) < label_count)
             if allowed:

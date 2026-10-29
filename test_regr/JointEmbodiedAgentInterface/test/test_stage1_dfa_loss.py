@@ -231,7 +231,8 @@ def test_ce_dfa_only_loss_normalizes_over_allowed_labels(joint_fixture, domain):
     state = dfa.start_state
     expected = []
     for step, target in enumerate(labels.tolist()):
-        allowed = (dfa.allowed_tokens(state, remaining_steps=len(labels) - step - 1)
+        budget = runtime.max_eai_steps if domain == "eai" else runtime.max_vlabench_operations * 5 + 1
+        allowed = (dfa.allowed_tokens(state, remaining_steps=budget - step - 1)
                    if domain in config.lookahead_domains else dfa.allowed_tokens(state))
         count = len(allowed) if target in allowed else planner.vocabulary(domain).label_count
         expected.append(torch.tensor(float(count)).log())
