@@ -488,6 +488,8 @@ class QwenVLPlanner(nn.Module):
             if int(label) != self.eos_label
         )
         prompt = planner_prompt(context["instruction"], context.get("entity_table", ()), self.vocabulary)
+        from .research.prompt import observation_prompt
+        prompt += observation_prompt(context)
         if prefix:
             prompt += " " + prefix
         images = list(context.get("images", ()))
@@ -607,6 +609,8 @@ class QwenVLPlanner(nn.Module):
         return F.cross_entropy(logits, labels)
 
     def sample_labels(self, context: Mapping[str, Any], dfa, *, max_steps: int | None = None, deterministic: bool = False, stop_policy: StopPolicy | None = None):
+        from .research.runtime import policy_context
+        context=policy_context(dfa,context)
         policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
         dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         context_vector = self.encode_context(context)
@@ -650,6 +654,8 @@ class QwenVLPlanner(nn.Module):
                 raise RuntimeError("planner DFA has no productive transition")
             indices = torch.tensor(sorted(int(label) for label in allowed), device=logits.device)
             mask[indices] = logits[indices]
+            from .research.runtime import joint_log_bias
+            for choice,bias in joint_log_bias(dfa,state,allowed).items():mask[choice]+=bias
             distribution = torch.distributions.Categorical(logits=mask)
             label = torch.argmax(mask) if deterministic else distribution.sample()
             observer = getattr(self, "decision_observer", None)
@@ -701,6 +707,8 @@ class QwenVLPlanner(nn.Module):
             masked = torch.full_like(logits, float("-inf"))
             indices = torch.tensor(sorted(int(value) for value in allowed), device=logits.device)
             masked[indices] = logits[indices]
+            from .research.runtime import joint_log_bias
+            for choice,bias in joint_log_bias(dfa,state,allowed).items():masked[choice]+=bias
             distribution = torch.distributions.Categorical(logits=masked)
             label = torch.tensor(label_value, dtype=torch.long, device=logits.device)
             logprob = logprob + distribution.log_prob(label)
@@ -749,6 +757,8 @@ class QwenVLPlanner(nn.Module):
             max_steps = 41
         encoded_context = kwargs.get("encoded_context")
         context = {**{k: v for k, v in kwargs.items() if k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence")}, "instruction": instruction, "images": images, "entity_table": entity_table}
+        from .research.runtime import policy_context
+        context=policy_context(dfa,context)
         dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         if encoded_context is None:
             labels, logprob = self.sample_labels(context, dfa, max_steps=max_steps, stop_policy=stop_policy)
@@ -778,6 +788,8 @@ class QwenVLPlanner(nn.Module):
             target / "graph_decoder.pt",
         )
         self.vocabulary.save(target / "vocab.json")
+        from .research.checkpoint import save_adapter_metadata
+        save_adapter_metadata(target,self)
 
     def compute_parameter_ownership_checksum(self) -> str:
         """Compute a deterministic checksum of standalone planner parameter structure and shapes."""

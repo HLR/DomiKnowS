@@ -332,6 +332,7 @@ def _compatibility(runtime: JointDomainRuntime, planner, controller) -> Mapping[
         ),
         "model_configuration": _model_configuration(planner),
         "controller_configuration": _controller_configuration(controller),
+        "controller_instruction_fingerprint":getattr(controller,"_instruction_fingerprint",None),
     }
     if hasattr(planner, "compute_parameter_ownership_checksum"):
         payload["parameter_ownership_checksum"] = planner.compute_parameter_ownership_checksum()
@@ -378,6 +379,8 @@ def save_joint_checkpoint(
         if int(next_round) < 0:
             raise ValueError("next Stage 2 round cannot be negative")
         payload["next_round"] = int(next_round)
+    from test_regr.VLABenchAgentInterface.research.checkpoint import checkpoint_metadata
+    payload.update(checkpoint_metadata(runtime.world.vlabench,planner))
     torch.save(payload, temporary)
     os.replace(temporary, target)
     return target
@@ -402,6 +405,7 @@ def load_joint_checkpoint(
         weights_only=False,
     )
     checkpoint_version = payload.get("joint_checkpoint_version")
+    from test_regr.VLABenchAgentInterface.research.checkpoint import restore_metadata
     if checkpoint_version not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
         raise ValueError("unsupported or standalone checkpoint; a joint checkpoint is required")
     stage = payload.get("stage")
@@ -422,6 +426,8 @@ def load_joint_checkpoint(
         )
     expected = _compatibility(runtime, planner, controller)
     actual = payload.get("compatibility", {})
+    if actual.get("controller_instruction_fingerprint") is not None and expected.get("controller_instruction_fingerprint") is not None and actual["controller_instruction_fingerprint"]!=expected["controller_instruction_fingerprint"]:
+        raise ValueError("joint checkpoint controller instruction vocabulary differs from the current dataset")
     migrating_planning = False
     if allow_planning_schema_migration:
         validate_planning_schema_migration(actual, expected)
@@ -455,6 +461,7 @@ def load_joint_checkpoint(
                 f"joint checkpoint {key} differs from the current runtime: "
                 f"saved={saved_value!r}, current={current_value!r}"
             )
+    restore_metadata(payload,runtime.world.vlabench,planner,training=planner_optimizer is not None or controller_optimizer is not None)
     from .utils.knowledge_manifest import check_knowledge_compatibility
     if payload.get("knowledge_manifest_version") is not None and not actual.get("knowledge_manifest"):
         raise ValueError("joint checkpoint is missing its declared knowledge manifest")

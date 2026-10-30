@@ -39,6 +39,8 @@ class GroundedState:
     milestones: frozenset = frozenset()
     # (action, subject, destination) of every executed operation; kept only for monitors that read history.
     performed: frozenset = frozenset()
+    # Optional immutable adapter-monitor states. Empty preserves legacy/EAI semantics.
+    monitor_state: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -538,7 +540,11 @@ class PlanningFacts:
         performed = state.performed
         if any(getattr(monitor, "tracks_history", False) for monitor in self.monitors):
             performed = performed | {(op.action, subject, op.destination)}
-        successor = GroundedState(next_facts, tuple(sorted(holdings.items())), frozenset(done), frozenset(performed))
+        successor = GroundedState(next_facts, tuple(sorted(holdings.items())), frozenset(done), frozenset(performed), state.monitor_state)
+        for monitor in self.monitors:
+            transition = getattr(monitor, "transition", None)
+            if callable(transition):
+                successor = transition(state, successor, replace(op, subject=subject))
         changed_subjects = {f[1] for f in yes if len(f) > 1 and state.facts.truth(f) is not True}
         changed_subjects.update(f[1] for f in no if len(f) > 1 and state.facts.truth(f) is not False)
         protected = [False for entity in set(op.writes) | changed_subjects if entity in self.protected]

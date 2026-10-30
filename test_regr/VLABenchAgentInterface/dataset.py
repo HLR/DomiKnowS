@@ -336,6 +336,8 @@ class PlanningExample:
     predicted_task: str | None = None
     # Explicit initial-image support supplied by perception; never inferred from the entity inventory.
     visible_entities: tuple[str | int, ...] | None = None
+    scene_group: str | None = None
+    research_split: str | None = None
 
     def as_reward_item(self) -> dict[str, Any]:
         return {
@@ -632,9 +634,18 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None,
         planning_facts, observation_profile = ground_planning_facts(
             task, instruction, config, entities, input_dir, observation_mode=observation_mode,
             ground_complex=ground_complex)
+        research_input=input_dir / "research_observations.json"
+        if research_input.is_file():
+            research=_read_json(research_input)
+            permitted={"evidence","grounding","freshness","spatial","temporal","events","executed_operations","duration_upper_steps","sensors","sensor_profile","spatial_effects"}
+            if not isinstance(research,Mapping) or set(research)-permitted:
+                raise ValueError("research input contains supervision or unsupported fields")
+            planning_facts={**(planning_facts or {}),"research":research}
         dependency = payload.get("dependency", config.get("dependency", default_dependency(task))) if isinstance(payload, Mapping) else config.get("dependency", default_dependency(task))
         examples.append(PlanningExample(
             episode_id=episode_id,
+            scene_group=(_read_json(example_dir/"provenance/research.json").get("scene_group") if (example_dir/"provenance/research.json").is_file() else None),
+            research_split=(_read_json(example_dir/"provenance/research.json").get("split") if (example_dir/"provenance/research.json").is_file() else None),
             instruction=instruction,
             operation_sequence=tuple(canonicalize_plan(plan_payload)),
             image_paths=image_paths,
@@ -680,6 +691,9 @@ def deterministic_split(
     train_fraction: float = 0.8,
     validation_fraction: float = 0.1,
 ) -> dict[str, list[Any]]:
+    if items and any(getattr(item,"scene_group",None) is not None for item in items):
+        from .research.data import grouped_split
+        return grouped_split(items,seed)
     if not 0 < train_fraction < 1 or not 0 <= validation_fraction < 1:
         raise ValueError("split fractions are invalid")
     if train_fraction + validation_fraction >= 1:

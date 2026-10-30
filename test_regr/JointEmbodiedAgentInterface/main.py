@@ -308,8 +308,10 @@ def _prepare(args, device):
     return runtime, eai_train, eai_valid or eai_examples[:1], vlabench_splits, prepared
 
 
-def _dfa_loss_config(args) -> DFALossConfig | None:
+def _base_dfa_loss_config(args) -> DFALossConfig | None:
     """Stage 1 DFA loss (allowed mass on the DFA path + primal-dual constraint loss), on unless disabled."""
+    if getattr(args,"ce_only",False):
+        return None
     if getattr(args, "ce_dfa_only", False):
         return DFALossConfig(
             masked_ce_domains=("eai", "vlabench"), domains=("eai", "vlabench"),
@@ -327,9 +329,24 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
                          pmd_domains=tuple(d for d in args.stage1_pmd_domains.split(",") if d))
 
 
+def _dfa_loss_config(args) -> DFALossConfig | None:
+    config=_base_dfa_loss_config(args)
+    if config is None or getattr(args,"constraint_profile","baseline")!="research_v1":return config
+    from dataclasses import replace
+    mode=getattr(args,"research_supervised_mode","full")
+    if mode=="ce":return replace(config,domains=tuple(d for d in config.domains if d!="vlabench"))
+    if mode=="masked-ce":
+        # The per-domain loss branch suppresses auxiliary terms for this VLABench ablation.
+        return replace(config,masked_ce_domains=tuple(sorted(set(config.masked_ce_domains)|{"vlabench"})),
+            pmd_domains=tuple(d for d in config.pmd_domains if d!="vlabench"))
+    return config
+
+
 def command_train_agent(args):
     from test_regr.VLABenchAgentInterface.dataset_protocol import guard_training_dataset
-    guard_training_dataset(args.vlabench_planning_dir, args.output, resume=getattr(args, "resume", None))
+    guard_training_dataset(args.vlabench_planning_dir, args.output, resume=getattr(args, "resume", None) or getattr(args,"resume_adapter",None))
+    if (getattr(args,"constraint_profile","baseline")=="research_v1" or getattr(args,"research_rollout_manifest",None)) and not (Path(args.control_source)/"research_control.json").is_file():
+        raise ValueError("Research agent training requires measured, explicitly segmented control data")
     ce_only = getattr(args, "ce_only", False)
     ce_dfa_only = getattr(args, "ce_dfa_only", False)
     supervised_only = ce_only or ce_dfa_only
@@ -372,6 +389,11 @@ def command_train_agent(args):
         decoder_hidden_size=args.planner_decoder_hidden_dim,
     )
     _status("planner backbone and graph-token decoders ready")
+    from test_regr.VLABenchAgentInterface.research.checkpoint import data_fingerprints
+    planner._research_data_fingerprints=data_fingerprints(args)
+    if args.resume_adapter:
+        from test_regr.VLABenchAgentInterface.research.checkpoint import load_adapter_metadata
+        load_adapter_metadata(args.resume_adapter,planner,training=True)
     planner.free_decoding = ce_only
     _status(f"loading controller vision encoder {args.vision_model if not args.tiny_vision else 'tiny'}")
     controller = _controller(args, device)
@@ -588,10 +610,21 @@ def command_train_agent(args):
                 _status(
                     f"controller behavior-cloning warm-up steps={args.controller_warmup_steps}"
                 )
-                warmup_metrics = stage1.train_controller_warmup(
-                    control_loaders["train"],
-                    steps=args.controller_warmup_steps,
-                )
+                if getattr(args,"controller_warmup_units","batches")=="updates" or getattr(args,"constraint_profile","baseline")=="research_v1":
+                    from test_regr.VLABenchAgentInterface.research.control_warmup import warm_controller
+                    phases=[("segmented",control_loaders["train"],args.controller_warmup_steps)]
+                    if "warmup_official" in control_loaders:
+                        first=args.controller_warmup_steps//2
+                        phases=[("official",control_loaders["warmup_official"],first),
+                            ("segmented",control_loaders["warmup_segmented"],args.controller_warmup_steps-first)]
+                    warmup_metrics=warm_controller(controller,controller_optimizer,phases,output=output,device=device,
+                        grad_accumulation=1,data_fingerprints=getattr(planner,"_research_data_fingerprints",{}),trainer=stage1._controller_step)
+                elif "warmup_official" in control_loaders:
+                    first=args.controller_warmup_steps//2
+                    warmup_metrics={"official":stage1.train_controller_warmup(control_loaders["warmup_official"],steps=first),
+                        "segmented":stage1.train_controller_warmup(control_loaders["warmup_segmented"],steps=args.controller_warmup_steps-first)}
+                else:
+                    warmup_metrics=stage1.train_controller_warmup(control_loaders["train"],steps=args.controller_warmup_steps)
                 warmup_metrics["validation"] = evaluate_controller(
                     controller,
                     control_loaders["validation"],
@@ -663,6 +696,15 @@ def command_train_agent(args):
         )
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     descriptors = [{"task": task, "env_kwargs": {}} for task in tasks]
+    evaluation_descriptors=descriptors
+    if getattr(args,"research_rollout_manifest",None):
+        from test_regr.VLABenchAgentInterface.research.experiments import rollout_descriptors
+        descriptors=rollout_descriptors(args.research_rollout_manifest,"train")
+        evaluation_descriptors=rollout_descriptors(args.research_rollout_manifest,"validation")
+        if getattr(args,"research_eval_episodes_per_family",0):
+            from test_regr.VLABenchAgentInterface.research.experiments import family_episodes
+            evaluation_descriptors=family_episodes(evaluation_descriptors,args.research_eval_episodes_per_family,args.seed)
+            args.stage2_eval_rollouts_per_task=1
     stage2 = JointReinforcementProgram(
         runtime,
         planner,
@@ -739,7 +781,7 @@ def command_train_agent(args):
             f"VLABench rollouts={args.stage2_eval_rollouts_per_task} per task"
         )
         baseline = stage2.evaluate_rollouts(
-            descriptors,
+            evaluation_descriptors,
             rollouts_per_task=args.stage2_eval_rollouts_per_task,
             seed=args.seed + 100000,
         )
@@ -892,7 +934,7 @@ def command_train_agent(args):
             }
             metrics["vlabench_training"] = metrics["vlabench"]
             metrics["vlabench"] = stage2.evaluate_rollouts(
-                descriptors,
+                evaluation_descriptors,
                 rollouts_per_task=args.stage2_eval_rollouts_per_task,
                 seed=args.seed + 100000,
             )
@@ -1366,11 +1408,15 @@ def build_parser():
     eval_planning.add_argument("--hidden-dim", type=int, default=256)
     eval_planning.add_argument("--max-views", type=int, default=4)
     eval_planning.set_defaults(handler=command_evaluate_planning)
+    from test_regr.VLABenchAgentInterface.research.config import add_research_subcommands
+    add_research_subcommands(parser)
     return parser
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
+    apply_research_arguments(args)
     args.handler(args)
     return 0
 

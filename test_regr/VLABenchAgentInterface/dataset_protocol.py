@@ -6,7 +6,7 @@ import os
 
 ROLE_FILE = "dataset_role.json"
 SIMULATOR_TRACKS = Path("/opt/dominows/VLABench/VLABench/configs/evaluation/tracks")
-OFFICIAL_EVALUATION = Path(__file__).resolve().parent / "data" / "planning"
+OFFICIAL_EVALUATION = Path(os.environ.get("VLABENCH_OFFICIAL_EVALUATION_ROOT",Path(__file__).resolve().parent / "data" / "planning"))
 
 def _json_digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
@@ -23,7 +23,10 @@ def episode_fingerprint(episode):
             instruction=str(value.get("instruction",value.get("text",""))) if isinstance(value,dict) else str(value)
         else: instruction=p.read_text()
         break
-    return _json_digest({"scene":json.loads(configs[0].read_text()),"instruction":instruction.strip()})
+    value={"scene":json.loads(configs[0].read_text()),"instruction":instruction.strip()}
+    research=episode/"input/research_observations.json"
+    if research.is_file():value["research_observations"]=json.loads(research.read_text())
+    return _json_digest(value)
 
 def scene_fingerprint(episode):
     configs=sorted((Path(episode)/"env_config").glob("*.json"))
@@ -39,6 +42,17 @@ def config_scene_fingerprint(config):
 
 def dataset_episodes(root):
     return sorted(p.parent for p in Path(root).rglob("output") if p.is_dir() and list(p.glob("*.json")))
+
+
+def protected_scene_fingerprints():
+    if os.environ.get("VLABENCH_OFFICIAL_EVALUATION_ROOT") and not OFFICIAL_EVALUATION.is_dir():
+        raise ValueError("Configured official evaluation reservation is unavailable")
+    scenes={scene_fingerprint(p) for p in dataset_episodes(OFFICIAL_EVALUATION)} if OFFICIAL_EVALUATION.exists() else set()
+    if SIMULATOR_TRACKS.exists():
+        for path in sorted(SIMULATOR_TRACKS.glob("*.json")):
+            for configs in json.loads(path.read_text()).values():
+                scenes.update(config_scene_fingerprint(config) for config in configs)
+    return scenes
 
 def assert_training_dataset(root, *, protected_root=None, simulator_root=None):
     root=Path(root).resolve()

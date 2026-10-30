@@ -63,6 +63,8 @@ class VLABenchWorldGraphBundle:
     complex_knowledge: Any = None
     articulation_knowledge: Any = None
     poker_knowledge: Any = None
+    research_knowledge: Any = None
+    research_config: Any = None
     facts: Any = None
     pattern_first_operation: Any = None
     pattern_start_allowed: Any = None
@@ -362,6 +364,8 @@ def build_vlabench_world_graph(
             complex_knowledge=_complex_knowledge(level) if include_default_constraints else None,
             articulation_knowledge=_extra_knowledge("articulation", level) if include_default_constraints else None,
             poker_knowledge=_extra_knowledge("poker", level) if include_default_constraints else None,
+            research_knowledge=_extra_knowledge("research", level) if include_default_constraints else None,
+            research_config=__import__("test_regr.VLABenchAgentInterface.research.config", fromlist=["default_config"]).default_config(),
         )
 
         if include_default_constraints:
@@ -398,9 +402,12 @@ def _extra_knowledge(kind, level):
     if kind == "articulation":
         module = import_module("test_regr.VLABenchAgentInterface.articulation")
         factory = module.build_articulation_knowledge
-    else:
+    elif kind == "poker":
         module = import_module("test_regr.VLABenchAgentInterface.knowledge.poker_lcs")
         factory = module.build_poker_knowledge
+    else:
+        module = import_module("test_regr.VLABenchAgentInterface.knowledge.research_lcs")
+        factory = module.build_research_knowledge
     return LazyKnowledge(factory, active=group_active(level, "task"))
 
 
@@ -417,7 +424,7 @@ def set_knowledge_level(bundle: VLABenchWorldGraphBundle, level: str, task_ident
     for group, constraints in (bundle.knowledge_groups or {}).items():
         for constraint in constraints:
             constraint.active = group_active(state.level, group)
-    for knowledge in (bundle.physics_knowledge, bundle.complex_knowledge, bundle.articulation_knowledge, bundle.poker_knowledge):
+    for knowledge in (bundle.physics_knowledge, bundle.complex_knowledge, bundle.articulation_knowledge, bundle.poker_knowledge, bundle.research_knowledge):
         if knowledge is not None:
             knowledge.set_active(group_active(state.level, "task"))
 

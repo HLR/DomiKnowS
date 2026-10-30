@@ -808,3 +808,13 @@ on-disk update. `--restore --apply --backup-dir BACKUP` restores dataset files
 byte for byte after preflighting the full manifest. Backup corruption or unrelated
 file edits reject restoration before writes. The corrected upstream generator is
 preserved. Neither operation changes historical evaluation artifacts.
+# Optional research constraints
+
+The `research_v1` task-tier extension declares fifteen logical constraints in
+`knowledge/research_lcs.py` using `RelayedKnowledge`: three freshness rules, two
+each for spatial/event/geometry requirements, and six grounding rules. A separate
+model-dependent projection LC connects their compiled admissible choices to
+planner probabilities during primal-dual training. See
+[contracts, formulas and main-command configuration](RESEARCH_CONSTRAINTS.md).
+This addition has no historical benchmark score; static observations cannot
+establish measured execution freshness or interval preservation.

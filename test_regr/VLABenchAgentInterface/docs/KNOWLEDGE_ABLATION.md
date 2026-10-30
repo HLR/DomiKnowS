@@ -1,5 +1,17 @@
 # Knowledge ablation of the champion Joint planner
 
+**Optional research profile, 29 October 2026:** `research_v1` adds declarative
+ambiguous-grounding, evidence-freshness and spatial/event constraints to the
+VLABench task tier. Robust is its default grounding policy; joint and abstain are
+explicit alternatives. Both main training entry points carry observation evidence
+through the forward pass and replay. The full loss connects compiled admission
+to model probabilities through a DomiKnowS primal-dual projection. Explicit CE and
+masked-CE ablations remain available. Profile-off eleven-skill behavior is retained.
+See [research configuration, contracts and ablation procedure](RESEARCH_CONSTRAINTS.md).
+**None of the historical scores in this document evaluates this profile.**
+Freshness over execution, measured event intervals and geometry must be reported
+unavailable for static fixtures, rather than counted as successful checks.
+
 **Default-domain expansion, 29 October 2026:** the internal domain now has eleven
 skills, articulated-object terminal goals and benchmark-compatible poker rules.
 The `world` native profile is the general default; explicitly selected official

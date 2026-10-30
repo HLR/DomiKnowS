@@ -1377,7 +1377,7 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
 
 def test_vlabench_contextual_dfa_restricts_button_tasks(joint_fixture):
     _examples, runtime = joint_fixture
-    context = {"entities": ("table", "button1")}
+    context = {"entities": ("table", "button1"),"task":"select_painting"}
     dfa = runtime.dfa_for("vlabench", context)
 
     press_label = runtime.vlabench_vocabulary.label_for_token("skill:press")
@@ -1455,7 +1455,7 @@ def test_joint_domain_facade_accepts_shared_stop_policy(joint_fixture):
     from domiknows.generation.dfa.stop_policy import StopPolicy
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)
-    context = {"instruction": "Press the button", "images": (), "entity_table": ("table", "button1")}
+    context = {"instruction": "Press the button", "images": (), "entity_table": ("table", "button1"),"task":"select_painting"}
     dfa = runtime.dfa_for("vlabench", context)
     facade = planner.for_domain("vlabench")
     policy = StopPolicy(max_steps=4)

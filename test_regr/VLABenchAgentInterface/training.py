@@ -212,6 +212,17 @@ def prepare_planner_program_examples(examples: Iterable[Any], runtime: PlannerCo
             "instruction": _example_value(example, "instruction", ""),
             "entities": entity_table,
         }
+        # Exactly the same observation context is consumed by training masks, replay and evaluation.
+        # Do not copy operation_sequence/target labels into the model's observation context.
+        from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context
+        item["planner_context"] = planner_context("vlabench",example,context=item["planner_context"])
+        if getattr(getattr(runtime.world_bundle,"research_config",None),"enabled",False):
+            item["planner_context"].setdefault("research_config",runtime.world_bundle.research_config.as_dict())
+        from .research.config import observation_context
+        item["planner_context"]=observation_context(item["planner_context"],runtime.world_bundle.research_config)
+        for key in ("planning_facts","task","planning_interface","predicted_task","visible_entities","research_config"):
+            if key in item["planner_context"]:
+                item[key]=item["planner_context"][key]
         item["reward_function"] = make_vlabench_reward_function(
             item,
             mode="dense",
@@ -551,6 +562,7 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
     observation_profiles = {}
     observation_reports = []
     complex_grounding_reports = []
+    research_records = []
     strict_dimensions = {}
     total_examples = len(examples) if hasattr(examples, "__len__") else None
     observer_owner = getattr(planner, "joint", planner)
@@ -642,6 +654,10 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 policy=None if native else dfa,
             )
             totals["reward"] += result.total
+            from .research.evaluation import static_record
+            from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context
+            research_records.append(None if native else static_record(planner_context("vlabench",example),runtime.world_bundle,output,
+                valid=result.valid,generation_error=next((e["error_type"] for e in reversed(generation_errors) if e["example"]==count),None)))
             for check in (getattr(result, "grounding_report", None) or {}).get("checks", ()):
                 statuses = grounding_coverage.setdefault(check["family"], {})
                 statuses[check["status"]] = statuses.get(check["status"], 0) + 1
@@ -669,6 +685,9 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
             "exact_graph_match": "legacy reward-side graph PM name; not binary full-plan accuracy",
         },
         "grounding_coverage": grounding_coverage,
+        "research": __import__("test_regr.VLABenchAgentInterface.research.evaluation",fromlist=["summarize"]).summarize(research_records),
+        "research_checkpoint_profile":getattr(planner,"_research_checkpoint_profile",None),
+        "research_evaluation_override":getattr(planner,"research_evaluation_override",False),
         "observation_profiles": observation_profiles,
         "observation_reports": observation_reports,
         "complex_grounding_reports": complex_grounding_reports,
@@ -782,6 +801,8 @@ def save_joint_checkpoint(
         "vocabulary_checksum": runtime.vocabulary.checksum,
         "planner_configuration": _planner_configuration(planner),
         "controller_configuration": _controller_configuration(controller),
+        "controller_instruction_fingerprint":getattr(controller,"_instruction_fingerprint",None),
+        "data_fingerprints":getattr(planner,"_research_data_fingerprints",{}),
         "planner": _planner_trainable_state(planner),
         "controller": controller.state_dict(),
         "planner_optimizer": planner_optimizer.state_dict() if planner_optimizer is not None else None,
@@ -798,6 +819,8 @@ def save_joint_checkpoint(
         if int(next_round) < 0:
             raise ValueError("next reinforcement round cannot be negative")
         payload["next_round"] = int(next_round)
+    from .research.checkpoint import checkpoint_metadata
+    payload.update(checkpoint_metadata(runtime.world_bundle,planner))
     torch.save(payload, temporary)
     os.replace(temporary, path)
     return path
@@ -819,6 +842,7 @@ def load_joint_checkpoint(
         weights_only=False,
     )
     checkpoint_version = payload.get("standalone_checkpoint_version")
+    from .research.checkpoint import restore_metadata
     if checkpoint_version not in SUPPORTED_STANDALONE_CHECKPOINT_VERSIONS:
         raise ValueError(
             "checkpoint predates the efficient standalone graph decoder; restart Stage 1"
@@ -844,6 +868,11 @@ def load_joint_checkpoint(
                          "nine-skill checkpoints require retraining, not automatic weight remapping")
     if payload.get("vocabulary_checksum") != runtime.vocabulary.checksum:
         raise ValueError("checkpoint vocabulary checksum differs from the current graph vocabulary")
+    saved_instructions=payload.get("controller_instruction_fingerprint")
+    current_instructions=getattr(controller,"_instruction_fingerprint",None)
+    if saved_instructions is not None and current_instructions is not None and saved_instructions!=current_instructions:
+        raise ValueError("checkpoint controller instruction vocabulary differs from the current dataset")
+    restore_metadata(payload,runtime.world_bundle,planner,training=planner_optimizer is not None or controller_optimizer is not None)
     if int(checkpoint_version) >= STANDALONE_CHECKPOINT_VERSION:
         saved_checksum = payload.get("parameter_ownership_checksum")
         if saved_checksum is None:

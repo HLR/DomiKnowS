@@ -124,7 +124,7 @@ The policy and this DFA must describe the same entity ids and action schemas.
     def __init__(self, *args, policy, strict=True, max_state_expansions=10000, **kwargs):
         super().__init__(*args, **kwargs)
         self.world_reachability = WorldActionReachability(
-            policy, strict=strict, max_state_expansions=max_state_expansions)
+            policy, strict=strict, max_state_expansions=min(max_state_expansions,getattr(policy,"research_search_limit",10000)))
         adapter = policy.adapter
         if set(adapter.entities) != set(range(self.entity_count)):
             raise ValueError("native entity ids must match the bound world policy")

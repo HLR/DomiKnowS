@@ -293,6 +293,9 @@ def command_build_vocab(args) -> None:
 
 
 def _control_loaders(args):
+    if (Path(args.control_source)/"research_control.json").is_file():
+        from .research.data import build_control_loaders
+        return build_control_loaders(args)
     info_path = Path(args.control_source) / "meta" / "info.json"
     info = json.loads(info_path.read_text()) if info_path.is_file() else {}
     composite = "observation.state.eef" in info.get("features", {})
@@ -318,7 +321,7 @@ def _control_loaders(args):
             # it with a primitive skill-pattern ID makes different requested
             # objects indistinguishable to the controller.
             condition_index=None,
-            plan_pattern=() if composite else PRIMITIVE_TASK_PATTERNS[task],
+            plan_pattern=() if composite or getattr(args,"constraint_profile","baseline")=="research_v1" else PRIMITIVE_TASK_PATTERNS[task],
             video_decoder_cache_size=getattr(args, "video_decoder_cache_size", 8),
         )
         _status(
@@ -361,6 +364,9 @@ def _controller(args, device):
         max_views=args.max_views,
         task_count=max(load_control_task_instructions(args.control_source)) + 1 if getattr(args, "control_source", None) else 128,
     ).to(device)
+    if getattr(args,"control_source",None):
+        import hashlib
+        model._instruction_fingerprint=hashlib.sha256(json.dumps(load_control_task_instructions(args.control_source),sort_keys=True).encode()).hexdigest()
     return model
 
 
@@ -386,7 +392,7 @@ def command_train_controller(args) -> None:
 
 
 def _load_planner(args, vocabulary):
-    return QwenVLPlanner.from_pretrained(
+    planner=QwenVLPlanner.from_pretrained(
         vocabulary,
         args.planner_model,
         use_lora=True,
@@ -395,6 +401,12 @@ def _load_planner(args, vocabulary):
         gradient_checkpointing=True,
         decoder_hidden_size=args.planner_decoder_hidden_dim,
     )
+    from .research.checkpoint import data_fingerprints
+    planner._research_data_fingerprints=data_fingerprints(args)
+    if args.resume_adapter:
+        from .research.checkpoint import load_adapter_metadata
+        load_adapter_metadata(args.resume_adapter,planner,training=str(getattr(args,"command","")).startswith("train"))
+    return planner
 
 
 def _save_planner_epoch(path: Path, planner, optimizer, epoch: int, metrics) -> None:
@@ -405,7 +417,7 @@ def _save_planner_epoch(path: Path, planner, optimizer, epoch: int, metrics) -> 
 
 def command_train_planner(args) -> None:
     from .dataset_protocol import guard_training_dataset
-    guard_training_dataset(args.planning_dir, getattr(args, 'output', None), resume=getattr(args, 'resume', None))
+    guard_training_dataset(args.planning_dir, getattr(args, 'output', None), resume=getattr(args, 'resume', None) or getattr(args,'resume_adapter',None))
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
     splits = deterministic_split(examples, seed=args.seed)
     world = build_vlabench_world_graph("vlabench_train_world")
@@ -436,7 +448,9 @@ def command_train_planner(args) -> None:
 def command_train_agent(args) -> None:
     """Canonical graph-first supervised -> joint reinforcement pipeline."""
     from .dataset_protocol import guard_training_dataset
-    guard_training_dataset(args.planning_dir, getattr(args, 'output', None), resume=getattr(args, 'resume', None))
+    guard_training_dataset(args.planning_dir, getattr(args, 'output', None), resume=getattr(args, 'resume', None) or getattr(args,'resume_adapter',None))
+    if (getattr(args,"constraint_profile","baseline")=="research_v1" or getattr(args,"research_rollout_manifest",None)) and not (Path(args.control_source)/"research_control.json").is_file():
+        raise ValueError("Research agent training requires measured, explicitly segmented control data")
     if not args.two_stage:
         raise ValueError("train-agent requires --two-stage")
     random.seed(args.seed)
@@ -527,15 +541,24 @@ def command_train_agent(args) -> None:
                 "positive --controller-warmup-steps or --controller-epochs"
             )
         controller_metrics = {}
-        if args.controller_warmup_steps > 0:
-            controller_metrics = train_controller_steps(
-                controller,
-                loaders["train"],
-                controller_optimizer,
-                steps=args.controller_warmup_steps,
-                device=device,
-                grad_accumulation=args.grad_accumulation,
-            )
+        if getattr(args,"warm_controller_from",None):
+            from .research.checkpoint import clone_warmed_controller
+            clone_warmed_controller(args.warm_controller_from,controller,controller_optimizer,runtime,args.control_source)
+            controller_metrics={"cloned_warm_controller":args.warm_controller_from}
+        elif args.controller_warmup_steps > 0:
+            phases=[("segmented",loaders["train"],args.controller_warmup_steps)]
+            if "warmup_official" in loaders:
+                first=args.controller_warmup_steps//2
+                phases=[("official",loaders["warmup_official"],first),
+                        ("segmented",loaders["warmup_segmented"],args.controller_warmup_steps-first)]
+            if getattr(args,"controller_warmup_units","batches")=="updates":
+                from .research.control_warmup import warm_controller
+                controller_metrics=warm_controller(controller,controller_optimizer,phases,output=output,device=device,
+                    grad_accumulation=args.grad_accumulation,data_fingerprints=getattr(planner,"_research_data_fingerprints",{}))
+            else:
+                for name,loader,steps in phases:
+                    controller_metrics[name]=train_controller_steps(controller,loader,controller_optimizer,
+                        steps=steps,device=device,grad_accumulation=args.grad_accumulation)
         else:
             for epoch in range(args.controller_epochs):
                 controller_metrics = train_controller_epoch(
@@ -594,6 +617,15 @@ def command_train_agent(args) -> None:
         )
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     descriptors = [{"task": task, "env_kwargs": {}} for task in tasks]
+    evaluation_descriptors=descriptors
+    if getattr(args,"research_rollout_manifest",None):
+        from .research.experiments import rollout_descriptors
+        descriptors=rollout_descriptors(args.research_rollout_manifest,"train")
+        evaluation_descriptors=rollout_descriptors(args.research_rollout_manifest,"validation")
+        if getattr(args,"research_eval_episodes_per_family",0):
+            from .research.experiments import family_episodes
+            evaluation_descriptors=family_episodes(evaluation_descriptors,args.research_eval_episodes_per_family,args.seed)
+            args.eval_rollouts_per_task=1
     stage2 = create_stage2_program(
         runtime,
         planner,
@@ -663,7 +695,7 @@ def command_train_agent(args) -> None:
         and resume_stage != "reinforcement"
     ):
         baseline = stage2.evaluate_rollouts(
-            descriptors,
+            evaluation_descriptors,
             rollouts_per_task=args.eval_rollouts_per_task,
             seed=args.seed + 100000,
         )
@@ -807,7 +839,7 @@ def command_train_agent(args) -> None:
             metrics = {
                 "training": training_metrics,
                 "evaluation": stage2.evaluate_rollouts(
-                    descriptors,
+                    evaluation_descriptors,
                     rollouts_per_task=args.eval_rollouts_per_task,
                     seed=args.seed + 100000,
                 ),
@@ -935,6 +967,8 @@ def official_constraints(args) -> str:
 
 def command_evaluate_official(args) -> None:
     """Standard VLABench VLM-planning protocol: every episode, official prompt and scoring."""
+    if getattr(args,"constraint_profile","baseline")=="research_v1":
+        raise ValueError("research_v1 requires the internal/world constraint runtime; official benchmark evaluation stays profile-off")
     args.constraints = official_constraints(args)
     if args.resume_adapter or args.vocab:
         raise ValueError("--protocol official evaluates a frozen base VLM; omit --resume-adapter and --vocab")
@@ -999,6 +1033,8 @@ def command_evaluate_planner(args) -> None:
     observation_mode = getattr(args, "observation_mode", "visual")
     knowledge = apply_knowledge_argument(args)
     if args.generation_mode == "frozen-vlm":
+        if getattr(args,"constraint_profile","baseline")=="research_v1":
+            raise ValueError("Unconstrained frozen-vlm generation does not enforce research_v1; select graph generation")
         if observation_mode != "visual":
             raise ValueError("frozen-vlm evaluation uses visual observation mode; metadata-assisted requires graph generation")
         if args.resume_adapter or args.vocab:
@@ -1151,8 +1187,24 @@ def command_rollout(args) -> None:
         load_checkpoint(args.controller_checkpoint, model=controller, map_location=device)
     else:
         raise ValueError("rollout requires --agent-checkpoint or --controller-checkpoint")
+    if getattr(args,"research_rollout_manifest",None):
+        from .research.experiments import rollout_descriptors,family_episodes
+        if not args.control_source:raise ValueError("Manifest rollouts require the trained controller instruction vocabulary")
+        descriptors=rollout_descriptors(args.research_rollout_manifest,args.research_rollout_split)
+        if args.research_eval_episodes_per_family:
+            descriptors=family_episodes(descriptors,args.research_eval_episodes_per_family,args.seed)
+        evaluation=create_stage2_program(runtime,planner,controller,
+            planner_optimizer=torch.optim.SGD((p for p in planner.parameters() if p.requires_grad),lr=0.),
+            controller_optimizer=torch.optim.SGD((p for p in controller.parameters() if p.requires_grad),lr=0.),
+            env_factory=_factory(args.env_factory),controller_task_instructions=load_control_task_instructions(args.control_source),
+            execute_horizon=args.execute_horizon,max_steps=args.max_steps,device=device,execution_assistance="off")
+        result=evaluation.evaluate_rollouts(descriptors,rollouts_per_task=1,seed=args.seed)
+        _json({"measured_end_to_end_success":(result.get("research") or {}).get("measured_end_to_end_success"),
+            "split":args.research_rollout_split,"research_evaluation_override":getattr(planner,"research_evaluation_override",False),**result})
+        return
     env = _factory(args.env_factory)(**json.loads(args.env_kwargs))
-    agent = HierarchicalVLABenchAgent(planner, controller, runtime, device=device)
+    agent = HierarchicalVLABenchAgent(planner, controller, runtime, device=device,
+        controller_task_instructions=load_control_task_instructions(args.control_source) if args.control_source else None)
     result = agent.rollout(env, args.instruction, max_steps=args.max_steps)
     _json({
         "reward": result.reward,
@@ -1247,6 +1299,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--planner-model", default=PLANNER_MODEL_ID)
     agent.add_argument("--resume-adapter")
     agent.add_argument("--resume", help="standalone agent .pt checkpoint")
+    agent.add_argument("--warm-controller-from",help="clone a verified controller BC checkpoint for a matched condition")
     agent.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
     agent.add_argument("--device")
     agent.add_argument("--limit", type=int)
@@ -1462,6 +1515,9 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.set_defaults(handler=command_evaluate_planner)
 
     rollout = sub.add_parser("rollout")
+    rollout.add_argument("--seed",type=int,default=42)
+    rollout.add_argument("--execute-horizon",type=int,default=4)
+    rollout.add_argument("--control-source",help="same instruction vocabulary used to train the controller")
     rollout.add_argument("--env-factory", required=True)
     rollout.add_argument("--env-kwargs", default="{}")
     rollout.add_argument("--instruction", required=True)
@@ -1511,11 +1567,15 @@ def build_parser() -> argparse.ArgumentParser:
     diagnostic.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.simulation.environment:create_environment")
     diagnostic.add_argument("--replay-steps", type=int, default=32)
     diagnostic.set_defaults(handler=command_diagnose_controller)
+    from .research.config import add_research_subcommands
+    add_research_subcommands(parser)
     return parser
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    from .research.config import apply_research_arguments
+    apply_research_arguments(args)
     args.handler(args)
     return 0
 

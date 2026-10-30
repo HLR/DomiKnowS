@@ -92,6 +92,8 @@ def knowledge_monitors(world, raw, resolve, task):
 def task_requirements(context, world, entities):
     """Resolve explicit task data; unknown tasks add no implicit goal rules."""
     context = context or {}
+    from .research.config import observation_context
+    context = observation_context(context,getattr(world,"research_config",None))
     get = context.get if isinstance(context, Mapping) else lambda k, default=None: getattr(context, k, default)
     visible = visible_entity_ids(get("visible_entities"), entities)
     knowledge = getattr(world, "task_knowledge", None) or DEFAULT_TASK_KNOWLEDGE
@@ -144,6 +146,12 @@ def task_requirements(context, world, entities):
     planning = PlanningFacts.parse(get("planning_facts"), entities=table.values(), resolve=resolve,
                                    default_destination=get("task_target_container"), constants=("left", "right"))
     planning = replace(planning, monitors=knowledge_monitors(world, get("planning_facts"), resolve, task))
+    from .research.config import ResearchConfig
+    research_config = ResearchConfig.parse(get("research_config") or getattr(world,"research_config",None))
+    if research_config.enabled and getattr(world,"research_knowledge",None) is not None:
+        from .research.monitor import ResearchMonitor
+        block = (get("planning_facts") or {}).get("research",{}) if isinstance(get("planning_facts"),Mapping) else {}
+        planning = replace(planning,monitors=(*planning.monitors,ResearchMonitor(world.research_knowledge.get(),block,research_config,resolve)))
     raw = get("planning_facts")
     if raw is None or isinstance(raw, Mapping):
         try:

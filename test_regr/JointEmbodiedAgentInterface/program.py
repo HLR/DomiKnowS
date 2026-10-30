@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import torch
 
 from domiknows.generation.latent.losses import GenerationLossWeights, compute_generation_training_loss
+from domiknows.generation.dfa.productive import SemanticSearchLimitExceeded
 from domiknows.generation.learners.common.losses import (
     allowed_label_sets, allowed_log_mass, allowed_mass_loss, masked_cross_entropy,
 )
@@ -224,6 +225,23 @@ class JointSolverPOIProgram(SolverPOIProgram):
         self.pmd_programs: dict[str, PrimalDualProgram] = {}
         self.dual_optimizers: dict[str, torch.optim.Optimizer] = {}
         self.dfa_loss_rounds = 0
+        self.research_projectors = {}
+        config=getattr(runtime.vlabench_world,"research_config",None) if hasattr(runtime,"vlabench_world") else None
+        if config is None:
+            config=getattr(_runtime_adapter(runtime,"vlabench").world_bundle,"research_config",None)
+        if getattr(config,"enabled",False):
+            planner._research_world=_runtime_adapter(runtime,"vlabench").world_bundle
+            from test_regr.VLABenchAgentInterface.research.losses import ProjectedPrimalDual
+            self.research_projectors["vlabench"]=ProjectedPrimalDual(device,
+                dual_lr=dfa_loss.dual_lr if dfa_loss else .05,
+                dual_warmup=dfa_loss.dual_warmup if dfa_loss else 10,
+                dual_every=dfa_loss.dual_every if dfa_loss else 10)
+            restored=getattr(planner,"_research_restored_training_state",None)
+            if restored:
+                self.research_projectors["vlabench"].load_state_dict(restored["projector"])
+                self.research_projectors["vlabench"].optimizer.load_state_dict(restored["dual_optimizer"])
+            planner._research_training_state_provider=lambda:{"projector":self.research_projectors["vlabench"].state_dict(),
+                "dual_optimizer":self.research_projectors["vlabench"].optimizer.state_dict()}
         if dfa_loss is not None:
             planner.capture_logits = True
             for domain, graph, view in (
@@ -249,6 +267,19 @@ class JointSolverPOIProgram(SolverPOIProgram):
     def _domain_loss(self, domain: str, item: Mapping[str, Any]) -> tuple[torch.Tensor, dict[str, float]]:
         """Planner loss of one item; with ``dfa_loss`` the CE is combined with the DFA terms in one forward."""
         context = _context(item, domain)
+        if domain=="vlabench" and getattr(self,"research_projectors",{}):
+            from test_regr.VLABenchAgentInterface.research.runtime import admission
+            decision=admission(context,_runtime_adapter(self.runtime,domain).world_bundle)
+            if decision.accepted:
+                from test_regr.VLABenchAgentInterface.research.runtime import blocked_admission,Admission
+                try:
+                    policy=self.runtime.dfa_for(domain,context)
+                    if not policy.allowed_tokens(policy.start_state,remaining_steps=_runtime_adapter(self.runtime,domain).max_tokens):
+                        decision=blocked_admission(context,_runtime_adapter(self.runtime,domain).world_bundle)
+                except SemanticSearchLimitExceeded:decision=Admission("budget_exhausted")
+            if not decision.accepted:
+                parameter=next(p for p in self.planner_head.parameters() if p.requires_grad)
+                return parameter.reshape(-1)[:1].sum()*0,{"blocked_samples":1.,"admission":decision.status}
         labels = _labels(item, domain).to(self.planner_head.device)
         if self.dfa_loss is None or domain not in self.dfa_loss.domains:
             return self.planner_head.supervised_loss(domain, context=context, target_labels=labels), {}
@@ -274,9 +305,18 @@ class JointSolverPOIProgram(SolverPOIProgram):
         # The masked cross entropy needs every step's set; a mass term alone is scored on a random subset.
         masked = domain in self.dfa_loss.masked_ce_domains
         steps = None if masked or not cap or kept <= cap else sorted(random.sample(range(kept), cap))
-        sets = allowed_label_sets(dfa, targets, self.planner_head.vocabulary(domain).label_count, score_steps=steps,
-                                  lookahead=domain in self.dfa_loss.lookahead_domains,
-                                  max_steps=_runtime_adapter(self.runtime, domain).max_tokens)
+        try:
+            sets = allowed_label_sets(dfa, targets, self.planner_head.vocabulary(domain).label_count, score_steps=steps,
+                                      lookahead=domain in self.dfa_loss.lookahead_domains,
+                                      max_steps=_runtime_adapter(self.runtime, domain).max_tokens)
+        except SemanticSearchLimitExceeded:
+            if domain not in getattr(self,"research_projectors",{}):raise
+            return kept_logits.sum()*0,{"blocked_samples":1.,"admission":"budget_exhausted"}
+        if domain in getattr(self,"research_projectors",{}):
+            if any(step not in sets for step in (steps if steps is not None else range(len(targets)))):
+                return kept_logits.sum()*0,{"blocked_samples":1.,"admission":"needs_observation"}
+            if self.dfa_loss.pmd_weight>0 and domain in self.dfa_loss.pmd_domains:
+                pmd=pmd+self.research_projectors[domain](kept_logits,sets)
         misses = 0
         if masked:
             ce, misses = masked_cross_entropy(kept_logits, targets, sets)
@@ -287,7 +327,9 @@ class JointSolverPOIProgram(SolverPOIProgram):
         breakdown = compute_generation_training_loss(
             supervised_loss=ce, pmd_loss=pmd, allowed_mass_loss_value=mass,
             weights=GenerationLossWeights(supervised=1.0, pmd=self.dfa_loss.pmd_weight,
-                                          allowed_mass=self.dfa_loss.mass_weight),
+                                          allowed_mass=(0. if domain=="vlabench" and getattr(self,"research_projectors",{})
+                                              and __import__("test_regr.VLABenchAgentInterface.research.config",fromlist=["default_loss_mode"]).default_loss_mode()=="masked-ce"
+                                              else self.dfa_loss.mass_weight)),
         )
         self._dual_grads(domain, pmd)
         terms = {k: v for k, v in breakdown.as_float_dict().items() if k != "total_loss"}
@@ -340,6 +382,8 @@ class JointSolverPOIProgram(SolverPOIProgram):
 
     def _dual_step(self) -> None:
         """Gradient ascent on the multipliers (sign-reversed gradients), on the ``PrimalDualProgram`` schedule."""
+        for projector in getattr(self,"research_projectors",{}).values():
+            projector.step_dual()
         self.dfa_loss_rounds += 1
         cfg = self.dfa_loss
         if cfg is None or self.dfa_loss_rounds <= cfg.dual_warmup or self.dfa_loss_rounds % cfg.dual_every:
@@ -360,6 +404,8 @@ class JointSolverPOIProgram(SolverPOIProgram):
         self.planner_head.train()
         with self.runtime.domain_scope(domain, parameter_policy="freeze_inactive"):
             loss, _terms = self._domain_loss(domain, item)
+            if _terms.get("blocked_samples"):
+                return 0.0
             self.planner_optimizer.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.planner_head.parameters(), 1.0)

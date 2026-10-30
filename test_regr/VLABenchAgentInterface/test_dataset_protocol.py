@@ -50,16 +50,22 @@ def test_duplicate_scene_rejected(tmp_path):
     train=tmp_path/"training";episode(train,"a");episode(train,"b");role(train)
     with pytest.raises(ValueError,match="Duplicate"):assert_training_dataset(train,protected_root=tmp_path/"unused")
 
-def test_joint_training_rejects_official_data_before_models(tmp_path):
+def test_joint_training_rejects_official_data_before_models(tmp_path,monkeypatch):
     from test_regr.JointEmbodiedAgentInterface.main import command_train_agent
+    from test_regr.VLABenchAgentInterface import dataset_protocol
+    official=tmp_path/"official";episode(official,"ep")
+    monkeypatch.setattr(dataset_protocol,"OFFICIAL_EVALUATION",official)
     with pytest.raises(ValueError,match="Official VLABench"):
-        command_train_agent(SimpleNamespace(vlabench_planning_dir="/workspace/test_regr/VLABenchAgentInterface/data/planning",output=str(tmp_path)))
+        command_train_agent(SimpleNamespace(vlabench_planning_dir=str(official),output=str(tmp_path)))
 
 @pytest.mark.parametrize("name",["command_train_agent","command_train_planner","command_fit_task_classifier"])
-def test_standalone_training_rejects_official_data_before_models(tmp_path,name):
+def test_standalone_training_rejects_official_data_before_models(tmp_path,name,monkeypatch):
     from test_regr.VLABenchAgentInterface import main
+    from test_regr.VLABenchAgentInterface import dataset_protocol
+    official=tmp_path/"official";episode(official,"ep")
+    monkeypatch.setattr(dataset_protocol,"OFFICIAL_EVALUATION",official)
     with pytest.raises(ValueError,match="Official VLABench"):
-        getattr(main,name)(SimpleNamespace(planning_dir="/workspace/test_regr/VLABenchAgentInterface/data/planning",output=str(tmp_path)))
+        getattr(main,name)(SimpleNamespace(planning_dir=str(official),output=str(tmp_path)))
 
 def test_composite_uses_end_effector_state_and_preserves_language_id():
     from test_regr.VLABenchAgentInterface.dataset import LeRobotWindowDataset

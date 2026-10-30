@@ -154,6 +154,10 @@ def attach_planner_sensors(runtime, planner, *, device="cpu"):
 
 def build_stage1_program(runtime, planner, *, device="cpu"):
     """Build the EAI-equivalent SolverPOI exact-match program."""
+    from ..research.config import default_compiled_loss
+    if getattr(getattr(runtime.world_bundle,"research_config",None),"enabled",False) or default_compiled_loss():
+        from ..research.stage1 import ResearchStage1Program
+        return ResearchStage1Program(runtime,planner,device)
     from domiknows.program import SolverPOIProgram
     from domiknows.program.metric import MacroAverageTracker
 
@@ -1019,6 +1023,8 @@ def _live_task_pour_quaternion(env: Any, attribute: str) -> np.ndarray | None:
 
 def _set_live_task_entity_pose(env: Any, attribute: str, position: np.ndarray, quaternion: np.ndarray | None = None) -> bool:
     """Set an upstream free entity pose after a sustained physical grasp."""
+    if getattr(env,"_research_unassisted",False):
+        return False
     task = getattr(env, "task", None)
     name = getattr(task, attribute, None)
     entities = getattr(task, "entities", None)
@@ -1418,15 +1424,28 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         return self._plan_rejection_reason(plan, entities, dfa=dfa) is None
 
     def collect_episode(self, descriptor: Mapping[str, Any]) -> JointEpisode:
+        from ..research.runtime import config_for,reconcile,admit_with_refresh,admission,geometry_admission,record_measured_completion
+        from ..research.sensors import attach_sensor_adapter
+        research_config=config_for(descriptor,self.runtime.world_bundle)
+        measured_execution=research_config.enabled or descriptor.get("research_matched",False)
+        descriptor={**descriptor,"research_config":research_config.as_dict()}
+        research_context=descriptor
+        research_decisions=[]
+        planning_refresh_steps=set()
+        research_started=time.monotonic()
         base_assistance_enabled = (
             self._execution_assistance_override
             if self._execution_assistance_override is not None
             else self.execution_assistance in {"train-only", "on"}
         )
+        if measured_execution:
+            base_assistance_enabled=False
         base_alpha = self.compute_assistance_factor()
         if self.shadow_dagger:
             base_alpha = 0.0
             base_assistance_enabled = True
+        if measured_execution:
+            base_assistance_enabled=False
         
         assist_components = (
             self._assist_components_override
@@ -1434,7 +1453,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             else self.assist_components
         )
         
-        handover_active = self.handover_distance is not None
+        handover_active = self.handover_distance is not None and not measured_execution
         
         def _get_active_assistance():
             curr_alpha = 1.0 if handover_active else base_alpha
@@ -1557,6 +1576,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             reset_reward_tracking(env)
             _refresh_kinematics(env)
             observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
+            if measured_execution:
+                env._research_unassisted=True
+                attach_sensor_adapter(env,descriptor)
+                research_context=reconcile(env,descriptor,step=0,changed=("reset",),observation=observation)
             # The official control dataset stores absolute EE poses relative to
             # the robot base. Keep policy inputs/outputs in that learned frame
             # and cross into simulator world coordinates only at the IK edge.
@@ -1620,8 +1643,20 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     )
                     last_progress_report = now
                 views, entities = numbered_views_from_observation(env, observation)
-                sampling_dfa = self._dfa_for_entities(entities, instruction=instruction, task=descriptor.get("task"), task_context=descriptor)
-                if expected_pattern is not None:
+                if measured_execution:
+                    research_context={**research_context,"entities":entities,"entity_table":entities}
+                    research_context,preflight=admit_with_refresh(env,research_context,self.runtime.world_bundle,step=steps)
+                    research_decisions.append(preflight.as_dict())
+                    if not preflight.accepted:
+                        for image in views:image.close()
+                        valid=False;termination_reason=preflight.status;break
+                from domiknows.generation.dfa.productive import SemanticSearchLimitExceeded
+                try:
+                    sampling_dfa = self._dfa_for_entities(entities, instruction=instruction, task=descriptor.get("task"), task_context=research_context)
+                except SemanticSearchLimitExceeded:
+                    for image in views:image.close()
+                    valid=False;termination_reason="budget_exhausted";break
+                if expected_pattern is not None and not measured_execution:
                     target_name = descriptor.get("task_target_entity", next(
                         (str(name) for name, values in diagnostics.targets.items()
                          if int(values.get("samples", 0)) > 0),
@@ -1637,6 +1672,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 sampling_dfa = ProductiveDFA(sampling_dfa)
                 selected_plan = None
                 selected_logprob = None
+                selected_witness_score=float("-inf")
                 rejection_counts: dict[str, int] = {}
                 try:
                     encoded_context = None
@@ -1649,6 +1685,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         "images": views,
                         "entity_table": entities,
                     }
+                    from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context as bind_context
+                    planner_context=bind_context("vlabench",research_context,context=planner_context)
                     if callable(prepare_replay) and callable(encode_replay):
                         prepared_context = prepare_replay(planner_context)
                         # Collection needs sampled labels, not a retained Qwen
@@ -1687,9 +1725,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             continue
                         reason = self._plan_rejection_reason(candidate, entities, dfa=sampling_dfa)
                         if reason is None:
-                            if selected_plan is None:
+                            score=0.
+                            if research_config.enabled and research_config.grounding_policy=="joint":
+                                # Sampling/replay already includes the supplied grounding prior.
+                                score=float(candidate_logprob.detach()) if torch.is_tensor(candidate_logprob) else float(candidate_logprob)
+                            if selected_plan is None or (research_config.enabled and research_config.grounding_policy=="joint" and score>selected_witness_score):
                                 selected_plan = candidate
                                 selected_logprob = candidate_evidence
+                                selected_witness_score=score
                         else:
                             rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
                             # Constraint-invalid samples are useful negative
@@ -1707,7 +1750,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         f"VLABench planner rejected all {self.num_samples} candidates: {details}"
                     )
                     valid = False
-                    termination_reason = "invalid_plan"
+                    termination_reason = "budget_exhausted" if any("SemanticSearchLimitExceeded" in r for r in rejection_counts) else "invalid_plan"
+                    if research_config.enabled and termination_reason!="budget_exhausted":
+                        from ..research.runtime import blocked_admission
+                        blocked=blocked_admission(research_context,self.runtime.world_bundle)
+                        research_decisions.append(blocked.as_dict());termination_reason=blocked.status
+                        if blocked.status in ("needs_observation","needs_clarification") and steps not in planning_refresh_steps:
+                            planning_refresh_steps.add(steps)
+                            if hasattr(env,"get_observation"):observation=env.get_observation(require_pcd=False)
+                            research_context=reconcile(env,research_context,step=steps,observation=observation)
+                            research_decisions.append({"status":"refresh_requested","refreshed":True})
+                            valid=True;termination_reason="max_steps";continue
                     break
                 plan = selected_plan
                 planner_logprobs.append(selected_logprob)
@@ -1752,6 +1805,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         int(steps * max(1, len(plan)) / max(1, self.max_steps)),
                     )
                 operation_cursor = max(operation_cursor, phase_cursor)
+                if measured_execution:
+                    # A fresh plan is a continuation from measured state, not an elapsed-time skill schedule.
+                    operation_cursor=0
                 if (
                     task_type.__module__.startswith("VLABench.")
                     and descriptor.get("task") == "add_condiment"
@@ -1761,6 +1817,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     # intention can change before physical contact is stable.
                     operation_cursor = 0
                     condiment_pour_phase = -1
+                active_controller_context=controller_plan_context(plan,operation_cursor)
+                if measured_execution:
+                    from ..research.runtime import controller_context
+                    active_controller_context=controller_context(plan,operation_cursor,entities)
                 inputs = _controller_inputs(
                     observations,
                     task_index,
@@ -1771,7 +1831,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     # here selects otherwise untrained embedding rows.  The
                     # language task id and images retain object identity while
                     # skill and operation position remain graph-conditioned.
-                    plan_context=controller_plan_context(plan, operation_cursor),
+                    plan_context=active_controller_context,
                     robot_frame=controller_robot_frame,
                     selected_camera_indices=selected_cameras,
                 )
@@ -3058,6 +3118,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             )
                         except (AttributeError, KeyError, TypeError, ValueError):
                             pass
+                    if measured_execution:
+                        research_context,committed=admit_with_refresh(env,research_context,self.runtime.world_bundle,
+                            operation=plan[operation_cursor],step=steps,execution=True)
+                        research_decisions.append(committed.as_dict())
+                        if not committed.accepted:
+                            valid=False;termination_reason=committed.status;break
+                        research_context,path_check=geometry_admission(env,research_context,self.runtime.world_bundle,command)
+                        if not path_check.accepted:
+                            research_decisions.append(path_check.as_dict());valid=False;termination_reason=path_check.status;break
                     timestep = env.step(command)
                     _refresh_kinematics(env)
                     previous_finger_positions = finger_positions
@@ -3132,6 +3201,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     executed += 1
                     observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
                     observations.append(observation)
+                    measured_completion=False
+                    if measured_execution:
+                        research_context=reconcile(env,research_context,step=steps,changed=("robot","camera"),observation=observation)
+                        research_context,measured_completion=record_measured_completion(research_context,plan[operation_cursor])
                     if initial_entity_pos is None:
                         t_pos = _live_task_entity_position(env, "target_entity")
                         if t_pos is not None:
@@ -3294,7 +3367,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         active_skill == "pull" and pull_progress >= 0.30
                     )
                     if (
-                        not chunk_advanced
+                        not chunk_advanced and not measured_execution
                         and (
                             grasp_advance
                             or skill_assist_complete
@@ -3329,6 +3402,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if _last(timestep):
                         termination_reason = "terminal"
                         break
+                    if measured_completion:break
                     if steps >= self.max_steps:
                         break
                 # Keep a fully rejected sampled action as separate feasibility
@@ -3372,6 +3446,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     break
 
             final_progress = previous_progress
+            if measured_execution:
+                final_admission=admission(research_context,self.runtime.world_bundle,completion=True,execution=True)
+                research_decisions.append(final_admission.as_dict())
+                if not final_admission.accepted:
+                    success=False;valid=False;termination_reason=final_admission.status
             final_intention = previous_intention
             efficiency = max(0.0, 1.0 - steps / max(1, self.max_steps)) if success else 0.0
             ik_penalty = 0.20 if (ik_truncated or termination_reason == "ik_failure") else 0.0
@@ -3444,8 +3523,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     hindsight_transitions.extend(segment)
                 transitions.extend(hindsight_transitions)
                 
+            from ..research.evidence import EvidenceLedger
+            research_ledger=EvidenceLedger.parse(research_context.get("planning_facts",{}).get("research",{}).get("evidence"))
             diagnostic_result = {
                 **diagnostics.result(),
+                "research": {"configuration":research_config.as_dict(),"decisions":research_decisions,
+                    "measured_execution":bool(measured_execution),"measured_task_success":_task_success(env),
+                    "family":descriptor.get("research_family",descriptor.get("task","unknown")),
+                    "termination_reason":termination_reason,"wrong_object_actions":None,
+                    "elapsed_seconds":time.monotonic()-research_started,
+                    "evidence_records":len(research_ledger.records),
+                    "fresh_records":sum(research_ledger.fresh(r.id) for r in research_ledger.records),
+                    "observation_profile":research_context.get("planning_facts",{}).get("research",{}).get("sensor_profile","supplied")},
                 "task_contract": (
                     task_contract.as_dict()
                     if (task_contract := task_contract_for(str(descriptor.get("task", ""))))
@@ -4297,6 +4386,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             ) / count,
             "per_task": per_task,
             "evaluation_seed": int(seed),
+            "research":__import__("test_regr.VLABenchAgentInterface.research.evaluation",fromlist=["summarize_execution"]).summarize_execution(episodes),
             "episode_diagnostics": [
                 {"task": name, "termination_reason": episode.termination_reason,
                  "success": bool(episode.success), "return": float(episode.total_return),

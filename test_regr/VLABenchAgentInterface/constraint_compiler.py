@@ -224,7 +224,12 @@ class WorldConstraintDFA(PredicateMonitorDFA):
         adapter = VLABenchPredicateAdapter(vocabulary, world, entities, schema, requirements,
                                            pattern_dfa=getattr(base_dfa, "pattern_dfa", None))
         bounds = task_completion_bounds(base_dfa, vocabulary, adapter, program)
+        from .research.runtime import config_for
+        self.research_search_limit=config_for(world=world).max_state_expansions
+        for monitor in adapter.requirements.planning.monitors:
+            if getattr(monitor,"key",None)=="research_v1":self.research_search_limit=monitor.config.max_state_expansions
         super().__init__(base_dfa, program, adapter,
+                         max_state_expansions=self.research_search_limit,
                          completion_bound=None if bounds is None else lambda state: bounds(state.grammar[1]))
 
     def action_reachability(self, *, strict=True, max_state_expansions=10000):
@@ -234,7 +239,7 @@ class WorldConstraintDFA(PredicateMonitorDFA):
         operations. None means missing required grounding, not impossibility.
         """
         from .reachability import WorldActionReachability
-        return WorldActionReachability(self, strict=strict, max_state_expansions=max_state_expansions)
+        return WorldActionReachability(self, strict=strict, max_state_expansions=min(max_state_expansions,self.research_search_limit))
 
 
 def task_completion_bounds(base_dfa, vocabulary, adapter, program):

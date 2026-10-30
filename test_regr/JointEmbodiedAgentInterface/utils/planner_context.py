@@ -9,6 +9,9 @@ from collections.abc import Mapping
 
 KNOWLEDGE_CONTEXT_FIELDS = (
     "planning_facts",
+    "research_config",
+    "research_matched",
+    "visible_entities",
     "task_target_container",
     "task_target_entity",
     "task",
@@ -59,4 +62,7 @@ def planner_context(domain, source=None, *, context=None):
         if not isinstance(context, Mapping):
             raise TypeError("planner context must be a mapping")
         result.update(context)
+    if domain=="vlabench":
+        from test_regr.VLABenchAgentInterface.research.config import observation_context
+        result=observation_context(result)
     return result

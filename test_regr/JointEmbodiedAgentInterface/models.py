@@ -199,6 +199,9 @@ class JointQwenVLPlanner(nn.Module):
         else:
             planner.initialize_semantic_embeddings("eai")
             planner.initialize_semantic_embeddings("vlabench")
+        if adapter_path:
+            from test_regr.VLABenchAgentInterface.research.checkpoint import load_adapter_metadata
+            load_adapter_metadata(adapter_path,planner)
         return planner
 
     def initialize_semantic_embeddings(self, domain: str) -> None:
@@ -334,7 +337,8 @@ class JointQwenVLPlanner(nn.Module):
                 f"Use only: {allowed}.\nInstruction: {instruction}\nGoal: {goal}\nPlan:"
             )
         else:
-            return planner_prompt(
+            from test_regr.VLABenchAgentInterface.research.prompt import observation_prompt
+            return observation_prompt(context)+planner_prompt(
                 context.get("instruction", ""),
                 context.get("entity_table", ()),
                 vocabulary,
@@ -571,6 +575,9 @@ class JointQwenVLPlanner(nn.Module):
         """Sample a valid plan autoregressively through the causal transformer with DFA constraints."""
         policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
         dfa = self._planning_dfa(domain, context, dfa)
+        if domain=="vlabench":
+            from test_regr.VLABenchAgentInterface.research.runtime import policy_context
+            context=policy_context(dfa,context)
         vocabulary = self.vocabulary(domain)
         eos_label = int(vocabulary.eos_label)
         state = dfa.start_state
@@ -604,6 +611,9 @@ class JointQwenVLPlanner(nn.Module):
             masked = torch.full_like(logits, float("-inf"))
             indices = torch.tensor(sorted(int(label) for label in allowed), device=logits.device)
             masked[indices] = logits[indices]
+            if domain=="vlabench":
+                from test_regr.VLABenchAgentInterface.research.runtime import joint_log_bias
+                for choice,bias in joint_log_bias(dfa,state,allowed).items():masked[choice]+=bias
             distribution = torch.distributions.Categorical(logits=masked)
             label = torch.argmax(masked) if deterministic else distribution.sample()
             observer = getattr(self, "decision_observer", None)
@@ -703,6 +713,10 @@ class JointQwenVLPlanner(nn.Module):
             indices = torch.tensor(sorted(int(lbl) for lbl in allowed), device=logits.device)
             masked[indices] = logits[indices]
             dist = torch.distributions.Categorical(logits=masked)
+            if domain=="vlabench":
+                from test_regr.VLABenchAgentInterface.research.runtime import joint_log_bias
+                for choice,bias in joint_log_bias(dfa,state,allowed).items():masked[choice]+=bias
+                dist = torch.distributions.Categorical(logits=masked)
             target = torch.tensor(label_value, dtype=torch.long, device=logits.device)
             logprob = logprob + dist.log_prob(target)
             state = dfa.step(state, label_value)
@@ -755,6 +769,8 @@ class JointQwenVLPlanner(nn.Module):
             },
             target / "joint_causal_decoder.pt",
         )
+        from test_regr.VLABenchAgentInterface.research.checkpoint import save_adapter_metadata
+        save_adapter_metadata(target,self)
 
 
 class JointPlannerDomainView(nn.Module):

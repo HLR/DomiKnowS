@@ -156,4 +156,11 @@ def bind_vlabench_contextual_dfa(base_dfa, vocabulary, context):
             max_operations=base_dfa.max_operations, operation_dfa=operation_dfa,
             pattern_dfa=pattern_dfa,
         )
-    return WorldConstraintDFA(grammar, vocabulary, world, base_dfa.constraint_program, entities, requirements=requirements)
+    policy=WorldConstraintDFA(grammar, vocabulary, world, base_dfa.constraint_program, entities, requirements=requirements)
+    from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context
+    policy.research_context=planner_context("vlabench",context)
+    if getattr(getattr(world,"research_config",None),"enabled",False):
+        policy.research_context.setdefault("research_config",world.research_config.as_dict())
+    from .research.config import observation_context
+    policy.research_context=observation_context(policy.research_context,world.research_config)
+    return policy
