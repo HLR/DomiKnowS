@@ -68,7 +68,7 @@ cymem==2.0.11
     #   thinc
 dnspython==2.8.0
     # via domiknows
-filelock==3.19.1
+filelock==4.2.1
     # via
     #   huggingface-hub
     #   torch

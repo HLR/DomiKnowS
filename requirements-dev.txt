@@ -100,7 +100,7 @@ execnet==2.1.1
     # via pytest-xdist
 executing==2.2.1
     # via stack-data
-filelock==3.19.1
+filelock==4.2.1
     # via
     #   datasets
     #   huggingface-hub
