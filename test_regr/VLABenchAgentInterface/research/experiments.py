@@ -101,6 +101,7 @@ def command_matrix(manifest,*,pilot=False):
                 "--seed",str(seed),"--sft-epochs","1" if pilot else "3","--controller-warmup-steps","200" if pilot else "20000",
                 "--rl-epochs","1" if pilot else "3","--constraint-profile",profile,"--grounding-policy","robust",
                 "--use-compiled-planner-loss",
+                "--research-perception","image-vlm",
                 "--controller-warmup-units","updates",
                 "--execution-assistance","off","--research-rollout-manifest",manifest["rollout_manifest"],
                 "--eval-rollouts-per-task","1","--research-eval-episodes-per-family","2" if pilot else "10",
@@ -109,6 +110,10 @@ def command_matrix(manifest,*,pilot=False):
             if manifest.get("resolved_backbone") or manifest.get("planner_model"):
                 args.extend(["--planner-model",manifest.get("resolved_backbone",manifest.get("planner_model"))])
             args.extend(manifest.get("common_arguments",[]))
+            # Profile-dependent auto would give the two matched conditions different inputs.
+            for index,argument in enumerate(args):
+                if argument=="--research-perception" and args[index+1]=="auto":args[index+1]="image-vlm"
+                elif argument=="--research-perception=auto":args[index]="--research-perception=image-vlm"
             forbidden=("--resume","--resume-adapter","--constraint-profile","--controller-warmup-steps","--controller-warmup-units","--sft-epochs","--rl-epochs","--seed","--planner-model")
             if any(arg.split("=",1)[0] in forbidden for arg in manifest.get("common_arguments",[])):
                 raise ValueError("Common arguments cannot override matched initialization, profile or budgets")

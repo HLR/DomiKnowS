@@ -59,7 +59,12 @@ and shares its resulting facts with training masks, losses, decoding and checks.
 Inference responses are cached by model configuration, image pixels and instruction;
 the observation ledger is freshly stamped at each actual capture.
 
-Perception defaults to `off`, preserving existing behavior and checkpoints.
+The default `--research-perception auto` enables image perception for `research_v1`
+and leaves it off for the ordinary baseline. `--research-perception off` explicitly
+selects supplied-evidence runs, including resume of older research checkpoints
+without image perception. Matched experiment commands explicitly enable it in both
+conditions, preserving identical observation inputs. `--perception-model` defaults
+to the original `--planner-model` backbone, loaded as a separate frozen model.
 An explicit matched baseline may use
 `--constraint-profile baseline --use-compiled-planner-loss --research-perception image-vlm`.
 It receives the same visual evidence. Enabled research formulas still depend on

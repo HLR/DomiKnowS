@@ -3,8 +3,10 @@
 `research_v1` is optional. The normal eleven-skill domain, vocabulary, continuous
 controller loss and explicitly selected official nine-skill languages are unchanged.
 The default profile remains `baseline`; the research grounding default is `robust`.
-The optional [image perception adapter](IMAGE_PERCEPTION.md) can now generate visual
-evidence from the raw image, numbered image and instruction for both main pipelines.
+The [image perception adapter](IMAGE_PERCEPTION.md) is enabled by default inside
+`research_v1`, generating visual evidence from the raw image, numbered image and
+instruction for both main pipelines. Use `--research-perception off` for supplied
+observations or older research checkpoints without perception.
 These changes do not establish an improvement in benchmark performance. Historical
 evaluation-exposed weights must not initialize the matched experiments.
 

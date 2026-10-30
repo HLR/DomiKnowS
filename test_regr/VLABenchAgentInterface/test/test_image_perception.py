@@ -257,3 +257,25 @@ def test_perception_configuration_is_explicit_and_checkpointed():
         with pytest.raises(ValueError,match="perception"):restore_metadata(saved,world,planner,training=True)
     finally:
         config._DEFAULT.set(old[0]);config._PERCEPTION_OPTIONS.set(old[1]);config._COMPILED_LOSS.set(old[2]);config._TRAIN_OPTIONS.set(old[3])
+
+
+@pytest.mark.parametrize("joint",[False,True])
+@pytest.mark.parametrize("profile,selection,expected",[
+    ("baseline",None,"off"),("research_v1",None,"image-vlm"),
+    ("research_v1","off","off"),("baseline","image-vlm","image-vlm")])
+def test_profile_aware_perception_default_in_both_main_commands(joint,profile,selection,expected):
+    from contextvars import copy_context
+    from importlib import import_module
+    module="test_regr.JointEmbodiedAgentInterface.main" if joint else "test_regr.VLABenchAgentInterface.main"
+    base=["train-agent","--two-stage"] if joint else ["train-planner","--planning-dir","data","--output","out"]
+    flags=["--constraint-profile",profile,"--planner-model","/original/backbone"]
+    if selection is not None:flags.extend(["--research-perception",selection])
+    if profile=="baseline" and expected=="image-vlm":flags.append("--use-compiled-planner-loss")
+    def check():
+        args=import_module(module).build_parser().parse_args([*base,*flags])
+        config.apply_research_arguments(args)
+        assert args.research_perception==expected
+        options=config.default_perception_options()
+        if expected=="off":assert options is None
+        else:assert options["model_id"]=="/original/backbone"
+    copy_context().run(check)

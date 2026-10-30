@@ -33,6 +33,7 @@ def test_matched_commands_parse_and_keep_budgets_and_fixed_checkpoints(tmp_path)
         train=parser.parse_args(row["arguments"][3:])
         assert train.sft_epochs==3 and train.controller_warmup_steps==20000 and train.rl_epochs==3
         assert train.controller_warmup_units=="updates" and train.research_eval_episodes_per_family==10
+        assert train.research_perception=="image-vlm"
         assert train.eval_rollouts_per_task==1 and train.rl_preflight_min_successful_tasks==1
         evaluations=evaluation_matrix(row,spec)
         assert len(evaluations)==(18 if row["profile"]=="research_v1" else 1)
@@ -40,11 +41,16 @@ def test_matched_commands_parse_and_keep_budgets_and_fixed_checkpoints(tmp_path)
         for evaluation in evaluations:
             args=parser.parse_args(evaluation["arguments"][3:]);paths.add(args.agent_checkpoint)
             assert args.research_rollout_split=="test" and args.research_eval_episodes_per_family==10
+            assert args.research_perception==train.research_perception
         assert len(paths)==1
     pilot=command_matrix(spec,pilot=True)
     assert len(pilot)==2
     args=parser.parse_args(pilot[0]["arguments"][3:])
     assert args.sft_epochs==1 and args.controller_warmup_steps==200 and args.research_eval_episodes_per_family==2
+    for selection in ("auto","off"):
+        changed={**spec,"common_arguments":["--research-perception",selection]}
+        values={parser.parse_args(r["arguments"][3:]).research_perception for r in command_matrix(changed,pilot=True)}
+        assert values==({"image-vlm"} if selection=="auto" else {"off"})
 
 
 def test_warmup_counts_optimizer_updates_and_resumes_without_replaying_committed_updates(tmp_path,monkeypatch):

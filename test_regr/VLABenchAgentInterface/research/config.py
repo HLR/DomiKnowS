@@ -79,8 +79,9 @@ def add_research_arguments(parser):
     parser.add_argument("--use-compiled-planner-loss",action="store_true",help="use the shared full/masked/CE builder for a matched baseline")
     parser.add_argument("--controller-warmup-units",choices=("batches","updates"),default="batches")
     import argparse
-    parser.add_argument("--research-perception",choices=("off","image-vlm"),default="off")
-    parser.add_argument("--perception-model",default="Qwen/Qwen3-VL-8B-Instruct")
+    parser.add_argument("--research-perception",choices=("auto","off","image-vlm"),default="auto",
+        help="auto enables image perception for research_v1; off preserves supplied-evidence runs")
+    parser.add_argument("--perception-model",help="original perception backbone; defaults to --planner-model")
     parser.add_argument("--perception-confidence",type=float,default=.85)
     parser.add_argument("--perception-bbox-margin",type=float,default=.01)
     parser.add_argument("--perception-max-new-tokens",type=int,default=2048)
@@ -109,14 +110,19 @@ def apply_research_arguments(args):
     from dataclasses import replace
     config=replace(config,disabled_formulas=tuple(getattr(args,"research_disable_formula",())))
     perception=None
-    if getattr(args,"research_perception","off")=="image-vlm":
+    mode=getattr(args,"research_perception","auto")
+    if mode=="auto":mode="image-vlm" if config.enabled else "off"
+    args.research_perception=mode
+    if mode=="image-vlm":
         from .perception import PerceptionConfig
         from dataclasses import asdict
         if not (config.enabled or getattr(args,"use_compiled_planner_loss",False)):
             raise ValueError("Image perception requires research_v1 or an explicitly matched compiled baseline")
-        perception=asdict(PerceptionConfig(model_id=args.perception_model,confidence=args.perception_confidence,
-            bbox_margin=args.perception_bbox_margin,max_new_tokens=args.perception_max_new_tokens,camera=args.perception_camera,
-            load_in_4bit=args.perception_load_in_4bit,local_files_only=args.perception_local_files_only))
+        model=getattr(args,"perception_model",None) or getattr(args,"planner_model",None) or PerceptionConfig.model_id
+        perception=asdict(PerceptionConfig(model_id=model,confidence=getattr(args,"perception_confidence",.85),
+            bbox_margin=getattr(args,"perception_bbox_margin",.01),max_new_tokens=getattr(args,"perception_max_new_tokens",2048),
+            camera=getattr(args,"perception_camera",0),load_in_4bit=getattr(args,"perception_load_in_4bit",False),
+            local_files_only=getattr(args,"perception_local_files_only",True)))
     _PERCEPTION_OPTIONS.set(perception)
     _DEFAULT.set(config)
     _COMPILED_LOSS.set(config.enabled or getattr(args,"use_compiled_planner_loss",False))
