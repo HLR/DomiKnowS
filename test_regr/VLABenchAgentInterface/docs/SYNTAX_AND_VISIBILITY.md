@@ -68,8 +68,14 @@ context["visible_entities"] = visible_ids
 The adapter unions pixel-supported ids across initial views. Unobserved bindings
 and unbound background/robot labels do not contribute support. For real images,
 a perception system must supply canonical id/name bindings; this feature does not
-infer identity from tag order, object metadata or a reference plan. Existing
-official-protocol runs keep their current behavior unless explicit support is
-passed to `KnowledgePlanDFA`.
+infer identity from tag order, object metadata or a reference plan. Segmentation
+masks are simulator data, so this adapter is not an input of the official protocol.
+
+Under `--protocol official`, `--constraint-profile research_v1` supplies the support
+set from image perception: the tags a frozen VLM confidently sees in the episode's
+unlabeled and number-labeled images, as tag ids with no entity table
+([Image perception, official protocol](IMAGE_PERCEPTION.md#official-protocol)).
+Without perception, official runs supply no support set and visibility is not
+enforced.
 
 Run `python -m pytest test_regr/VLABenchAgentInterface/test/test_syntax_visibility.py -q`.

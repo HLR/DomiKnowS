@@ -65,7 +65,11 @@ many objects and long horizons; the explicit cap bounds state expansions.
 This feature is Boolean action reachability. Existing HMM guidance still ranks
 tokens inside the hard feasible set. It does not add CLAMP's separate exclusion
 of zero-HMM-mass continuations. The existing native token horizon remains separate
-from the action horizon. Standard official-protocol runs have no bound symbolic
-world/goal inputs and retain their existing behavior.
+from the action horizon. Official-protocol runs have no bound symbolic world/goal
+inputs: entity names, goals, destinations, capacities and properties are metadata or
+task knowledge, which that protocol does not expose. Image perception does not supply
+them either; it reports visible tags, predicted object kinds and role hypotheses. So
+official decoding keeps only the comma-level reachability of its grammar, causal and
+perception constraints (`CausalPlanDFA.reachable`), not this world search.
 
 Validation: `python -m pytest test_regr/VLABenchAgentInterface/test/test_action_reachability.py -q`
