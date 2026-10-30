@@ -9,6 +9,11 @@ queries and relay applies/decided views. General native generation defaults to t
 eleven-skill `world` profile; the explicit official/legacy languages stay fixed.
 The dated inventories and scores below describe earlier schema revisions.
 
+**2026-10-30 update:** the [official protocol with image perception](IMAGE_PERCEPTION.md#official-protocol)
+adds `official/selection_graph.py`: nine formulas (`ordinal_rank_1` .. `ordinal_rank_8`, `named_card_face`)
+grounded by perceived boxes and card faces, giving 296 formulas across paths. See
+[Official selection knowledge](#official-selection-knowledge-9-logical-constraints).
+
 **2026-10-29 update:** [Syntax and visibility](SYNTAX_AND_VISIBILITY.md) strengthens
 the existing schema formula and adds `observation_supported_references` to the
 world scene group and the native decoding graph. These add two `ifL` declarations
@@ -632,6 +637,29 @@ Operation observations: `press`, `first_operation`, `press_answer_yes` (the mode
 </table>
 
 The HMM action lookahead (`--hmm`) steers this DFA as well. It ranks only the tokens the compiled formulas leave legal, but its action inventory and pattern automaton are those of the full grammar, so its scores can differ slightly from runs made when the answers restricted the grammar itself.
+
+## Official selection knowledge: 9 logical constraints
+
+Ordinal and named-card instructions under `--protocol official` with image perception ("Please pick the 2nd poker from left to right", "fetch the second book from the left on the bottom layer", "Please pick the the 2nd largest poker", "Please pick the poker jack of spades"). `official/selection_graph.py` declares the formulas in a standalone graph and compiles them with `compile_predicate_constraints` over three variables: the request `q`, the tag being chosen `s` and the counted tags `o`. `official/selection_observations.py` supplies the observations: `rank_1` .. `rank_8` and `face_requested` from the instruction; `member` (the predicted kind names the group noun, or the tag shows a card face), `selection_precedes` (strictly ordered image boxes, viewer's left and bottom, or card values with ace high) and `face_matches` from perception. `SelectionGraph.admitted` grounds the program once per visible tag, and the admitted tags become `pick` candidates of `instruction_candidates_bound_targets`. Any unsure observation (an object below the confidence threshold, overlapping boxes, an unread or tied value, more than eight members) supplies no request, so nothing is restricted. Deactivating a formula and calling `recompiled()` removes it.
+
+<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+<colgroup><col style="width: 25%;"><col style="width: 9%;"><col style="width: 39%;"><col style="width: 27%;"></colgroup>
+<thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Rule family</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Logical constraints</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Example and meaning</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Definition</th></tr></thead>
+<tbody>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>ordinal_rank_1</code> .. <code>ordinal_rank_8</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">8</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The chosen tag is a group member with exactly k &minus; 1 members before it, a counting (<code>exactL</code>) constraint per k. Example: pokers at x = 0.1, 0.35 and 0.6, "2nd poker from left to right": only the middle tag is admitted.</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/selection_graph.py#L73">official/selection_graph.py:73</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(rank_k(&quot;q&quot;), chosen(&quot;s&quot;)),
+    andL(member(&quot;s&quot;), exactL(andL(member(&quot;o&quot;), selection_precedes(&quot;o&quot;, &quot;s&quot;)), limit=k - 1)),
+    name=&quot;ordinal_rank_k&quot;,
+)</code></pre></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>named_card_face</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A named card request admits only tags whose read face matches. Example: "Please pick the poker jack of clubs" admits the tag read as (11, clubs).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/selection_graph.py#L76">official/selection_graph.py:76</a></td></tr>
+<tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
+    andL(face_requested(&quot;q&quot;), chosen(&quot;s&quot;)),
+    face_matches(&quot;s&quot;),
+    name=&quot;named_card_face&quot;,
+)</code></pre></td></tr>
+</tbody>
+</table>
 
 ## Complex task knowledge: 85 logical constraints
 

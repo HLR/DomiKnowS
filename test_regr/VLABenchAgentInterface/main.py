@@ -1027,6 +1027,7 @@ def command_evaluate_official(args) -> None:
     grammar = args.constraints in ("grammar", "causal")
     causal = args.constraints == "causal"
     perception = None
+    grounding_policy = getattr(args, "grounding_policy", None) or GROUNDING_POLICY
     if perception_options is not None:
         from test_regr.VLABenchAgentInterface.research.perception import ImagePerceptionModel, PerceptionConfig
         # The same frozen VLM perceives when it is the planner model; no second copy is loaded.
@@ -1043,13 +1044,14 @@ def command_evaluate_official(args) -> None:
     decoding = "greedy"
     if grammar:
         from test_regr.VLABenchAgentInterface.official.official_hmm import decoding_label
-        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "") + ("+image-perception" if perception is not None else "")
-    suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + ("_perception" if perception is not None else "")
+        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "") + (f"+image-perception-{grounding_policy}" if perception is not None else "")
+    suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + (f"_perception_{grounding_policy}" if perception is not None else "")
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
     generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question, scene_ids=args.scene_ids,
                                            pattern_first=args.pattern_first,
                                            hmm=hmm, weight=args.hmm_weight, causal=causal, perception=perception,
-                                           disabled_formulas=getattr(args, "research_disable_formula", ())) if grammar
+                                           disabled_formulas=getattr(args, "research_disable_formula", ()),
+                                           grounding_policy=grounding_policy) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
         examples, generate, output_dir=output_dir,
@@ -1058,7 +1060,7 @@ def command_evaluate_official(args) -> None:
         perception=None if perception is None else {
             "inputs": "unlabeled image, number-labeled image, instruction; no entity table",
             "config": perception_options, "fingerprint": perception.config.fingerprint,
-            "grounding_policy": GROUNDING_POLICY, "calibration": perception_calibration(args)})
+            "grounding_policy": grounding_policy, "calibration": perception_calibration(args)})
     _json(summary | {"output_dir": str(output_dir), "load_in_4bit": args.load_in_4bit,
                      "max_new_tokens": args.max_new_tokens})
 

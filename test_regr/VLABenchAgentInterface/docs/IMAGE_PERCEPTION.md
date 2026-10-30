@@ -21,7 +21,7 @@ accuracy, physical success, or calibrated confidence is claimed.
 | Existing constraint | Image perception contribution |
 |---|---|
 | Visibility | Confident, visibly numbered object IDs populate `visible_entities`; metadata membership alone supplies no visibility. |
-| Object kind | Each confidently visible object gets a predicted `category`, a short lowercase noun read from its appearance ("tomato", "flask"), recorded as `visual_category:<id>` and in the audit's `visible_categories`. It is free text from pixels, not a scene-table name, and `null` when the kind cannot be read. Under `--protocol official` it grounds the instruction's candidates (below). |
+| Object kind | Each confidently visible object gets a predicted `category`, a short lowercase noun read from its appearance ("tomato", "flask"), recorded as `visual_category:<id>` and in the audit's `visible_categories`. It is free text from pixels, not a scene-table name, and `null` when the kind cannot be read. Under `--protocol official` it grounds the instruction's candidates (below). A readable playing card also reports its `card` face (rank and suit), recorded as `visual_card:<id>`. |
 | Ambiguous grounding/selection | Candidate role bindings and relative weights inferred from pixels and instruction; multiple interpretations remain explicit. |
 | Freshness | Each capture is stamped with episode, runtime step and dependency revisions. A failed refresh removes same-step visual evidence. |
 | Open/closed affordances | Confident explicit visual states populate initial positive/negative facts; they remain noisy visual estimates. |
@@ -103,7 +103,9 @@ their existing roles; they are not inputs to this perception network.
 `--protocol official` accepts the perception with `--knowledge grammar` or `causal`:
 
 ```bash
-python -m test_regr.VLABenchAgentInterface.main evaluate-planner --protocol official   --knowledge causal --constraint-profile research_v1 --research-perception image-vlm   --planner-model /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct --load-in-4bit
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --protocol official \
+  --knowledge causal --constraint-profile research_v1 --research-perception image-vlm \
+  --planner-model /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct --load-in-4bit
 ```
 
 The run stays within the protocol's inputs and scoring:
@@ -128,20 +130,63 @@ The facts reach the plan only through compiled logical constraints:
   plural ("red apple" matches "apples"). Tags whose kind could not be read stay candidates, so only tags seen as
   another kind are excluded. Negation, spatial or ordinal wording and source relations ("from the plate") abstain,
   as in the scene-name filter;
+- ordinal and named-card requests ground the selection formulas of `official/selection_graph.py`, and the tags they
+  admit join the same candidate LC for `pick` (see below);
 - the role hypotheses ground the research grounding formulas (`knowledge/research_lcs.py`), evaluated by the same
-  `ResearchMonitor` as the internal runtime and compiled into `KnowledgePlanDFA`. Each operation must keep at least one
-  hypothesis consistent with every id the plan has written (`research__grounding_joint`). Only the joint policy is used:
-  robust and abstain refuse to act under ambiguity, which in a planning-only benchmark is a format error.
+  `ResearchMonitor` as the internal runtime and compiled into `KnowledgePlanDFA`. With the default joint policy each
+  operation must keep at least one hypothesis consistent with every id the plan has written
+  (`research__grounding_joint`). `--grounding-policy robust` or `abstain` selects the stricter formulas
+  (`_robust`, `_unique`, `_abstain_match`, `_complete`); they refuse to act when the hypotheses disagree or the
+  grounding is incomplete, and such an episode ends as a format error. The policy is part of the run's decoding label.
+
+When several sources bound the same skill and role, a tag must satisfy all of them; if they leave no tag in common,
+that role is left unrestricted.
+
+### Ordinal and named-card selection
+
+Each confidently visible object may also report a `card` face (`rank` 2..10, jack, queen, king or ace; `suit`
+spades, clubs, diamonds or hearts), recorded as `visual_card:<id>`. `official/selection_observations.py` parses
+these requests from the instruction:
+
+| Request | Example | Group | Order |
+|---|---|---|---|
+| Spatial ordinal | "Please pick the 2nd poker from left to right", "Add 3rd condiment from bottom to the dish" | Tags whose predicted kind the noun names; for poker or card, also tags showing a face | Image boxes, strictly separated along the axis |
+| Spatial ordinal on a shelf layer | "fetch the second book from the left on the bottom layer" | The group's lowest (or highest) cluster of vertically overlapping boxes | As above |
+| Card value | "Please pick the 2nd largest poker", "the smallest poker" | Tags showing a face | Card rank 2..14, ace high |
+| Named card | "Please pick the poker jack of spades" | Tags showing a face | — |
+
+`official/selection_graph.py` declares nine formulas: `ordinal_rank_1` .. `ordinal_rank_8` (the chosen tag is a
+group member with exactly k − 1 members before it, an `exactL` count) and `named_card_face`. The compiled program is
+grounded for every visible tag, and the admitted tags become `pick` candidates.
+
+"Left" and "bottom" are the viewer's directions in the image the model sees. This convention is declared, not
+fitted; upstream numbers some groups by world x, and a camera that mirrored world x would make every left/right
+ordinal wrong. A request abstains, leaving `pick` unrestricted, when:
+
+- any reported object fell below the confidence threshold or was not visible (it might belong to the group);
+- the group is empty, larger than eight, or smaller than the ordinal;
+- two members overlap along the axis, a card value is unread, or two values are equal;
+- no tag shows a named face, or the instruction negates ("not", "except").
+
+Not read: grid rows and columns ("the solution on the 2nd row and 4th column"), since an empty grid slot has no tag
+and the image cannot fix a column number; "on the top layer" without a direction; depth words such as "farthest".
 
 Unusable perception (invalid JSON, no confident object, no bound role) supplies no facts, and the episode
 decodes under grammar or causal alone. Every reply records the result in
-`<!-- perception: status=... visible=[...] categories={...} candidates={...} hypotheses=n complete=... -->`.
+`<!-- perception: status=... visible=[...] categories={...} cards={...} candidates={...} hypotheses=n complete=... -->`.
 
-Not used under this protocol: open/closed states (the official decoder keeps no world state), spatial, temporal and
-freshness policies (one capture, no execution), and every rule written against scene names (physics, complex, scene and task groups): a predicted kind is not a
-scene name, so those tables do not match it.
-Report such a run as a perception-augmented constrained system, apart from the zero-shot rows: the research formulas are
-priors written for VLABench, and a second call to the model precedes the plan. No official score has been measured yet.
+Not used under this protocol:
+- open/closed states, since the official decoder keeps no world state;
+- metric spatial, temporal and freshness policies: one capture, no execution;
+- every rule written against scene names (physics, complex, scene and task groups), since a predicted kind is not a
+  scene name;
+- Texas hold'em selection (`knowledge/poker_lcs.py`). Its formulas check at plan completion that the required cards
+  ended on the destination, which needs plan state the official decoder does not keep, and it needs five to seven
+  read card faces.
+
+Report such a run as a perception-augmented constrained system, apart from the zero-shot rows: the research and
+selection formulas are priors written for VLABench, and a second call to the model precedes the plan. No official
+score has been measured yet, and neither perception accuracy nor the left/right convention has been checked.
 
 ## GPU2 single-pair preparation
 

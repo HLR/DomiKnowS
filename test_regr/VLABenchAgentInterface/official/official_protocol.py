@@ -435,7 +435,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                lookahead_score: str = "joint", scene_ids: bool = False, pattern_first: bool = False,
                                adapt: dict[str, Any] | None = None, seed: int = 42,
                                causal: bool = False, perception: Any = None,
-                               research_knowledge: Any = None, disabled_formulas: Sequence[str] = ()
+                               research_knowledge: Any = None, disabled_formulas: Sequence[str] = (),
+                               grounding_policy: str = "joint"
                                ) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
@@ -496,7 +497,7 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         common = dict(entity_count=entity_cap, max_operations=max_operations, grammar_profile="benchmark")
         if observed is not None and observed.supplies_facts:
             # One episode's perception: built per episode and not cached.
-            grounding = (PerceivedGrounding(observed.grounding, knowledge_lcs, disabled_formulas)
+            grounding = (PerceivedGrounding(observed.grounding, knowledge_lcs, disabled_formulas, grounding_policy)
                          if observed.grounding is not None else None)
             dfa = KnowledgePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, causal=causal,
                                    press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,

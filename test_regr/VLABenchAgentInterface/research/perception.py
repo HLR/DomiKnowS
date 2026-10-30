@@ -58,8 +58,10 @@ Return one JSON object with exactly objects, requests, hypotheses, complete.
 objects is an array. Each element has id (the integer actually printed on the image),
 confidence (a number from 0 to 1), bbox (four numbers), category (the object's kind as a
 short lowercase common noun read from its appearance, such as "tomato" or "flask"; null
-when the kind cannot be read), description (observed appearance), and states (an object
-of optional Boolean/null observations).
+when the kind cannot be read), card (for a playing card whose face is readable, an object
+with rank, one of 2..10, jack, queen, king, ace, and suit, one of spades, clubs, diamonds,
+hearts; otherwise null), description (observed appearance), and states (an object of
+optional Boolean/null observations).
 List the actually visible numbered objects, not an illustrative template or guessed inventory.
 bbox is [left,top,right,bottom], normalized to [0,1], for the visible object extent
 in image 1, with x rightwards and y downwards. Do not bound the numeric label itself.
@@ -192,6 +194,22 @@ def normalized_category(value):
     return " ".join(words)
 
 
+CARD_RANKS={**{str(n):n for n in range(2,11)},"jack":11,"queen":12,"king":13,"ace":14}
+CARD_SUITS=("spades","clubs","diamonds","hearts")
+
+
+def normalized_card(value):
+    """A read playing-card face as (rank 2..14, suit), or None when no face was read."""
+    if value is None:return None
+    if not isinstance(value,dict) or set(value)-{"rank","suit"}:raise PerceptionUnavailable("Invalid card face")
+    rank,suit=value.get("rank"),value.get("suit")
+    if rank is None or suit is None:return None
+    rank=CARD_RANKS.get(str(rank).strip().lower())
+    suit=str(suit).strip().lower()
+    if rank is None or suit not in CARD_SUITS:raise PerceptionUnavailable("Card face must name a rank and a suit")
+    return rank,suit
+
+
 def compile_evidence(payload,*,config,episode,step,revisions=None,entity_table=None,requests=None,hashes=()):
     """Validate visual estimates and bind pointers after inference; names never enter the VLM."""
     from .evidence import EvidenceLedger
@@ -206,9 +224,9 @@ def compile_evidence(payload,*,config,episode,step,revisions=None,entity_table=N
         return entities[pointer] if entities is not None else pointer
     def score(value):
         return type(value) in (int,float) and isfinite(value) and 0<=value<=1
-    records=[];visible={};categories={};all_seen=set();uncertain=False
+    records=[];visible={};categories={};cards={};all_seen=set();uncertain=False
     for row in payload["objects"]:
-        if not isinstance(row,dict) or set(row)-{"id","confidence","bbox","category","description","states"}:
+        if not isinstance(row,dict) or set(row)-{"id","confidence","bbox","category","card","description","states"}:
             raise PerceptionUnavailable("Unsupported visual object fields")
         pointer=row.get("id");resolve(pointer)
         if pointer in all_seen:raise PerceptionUnavailable("Duplicate visual object pointer")
@@ -237,6 +255,10 @@ def compile_evidence(payload,*,config,episode,step,revisions=None,entity_table=N
         if category is not None:
             categories[pointer]=category
             add(f"visual_category:{pointer}",category)
+        card=normalized_card(row.get("card"))
+        if card is not None:
+            cards[pointer]=card
+            add(f"visual_card:{pointer}",list(card))
         description=row.get("description")
         if description is not None:
             if not isinstance(description,str) or len(description)>512:raise PerceptionUnavailable("Invalid visual description")
@@ -268,6 +290,7 @@ def compile_evidence(payload,*,config,episode,step,revisions=None,entity_table=N
     audit={"config":asdict(config),"fingerprint":config.fingerprint,"image_hashes":list(hashes),
         "visible_entities":sorted(visible),
         "visible_categories":{str(pointer):categories[pointer] for pointer in sorted(categories)},
+        "visible_cards":{str(pointer):list(cards[pointer]) for pointer in sorted(cards)},
         "object_confidences":{str(r["id"]):r["confidence"] for r in payload["objects"]},
         "confidence_calibration":"unvalidated_model_report","metric_geometry":"unavailable_rgb_only"}
     return {"evidence":evidence,"grounding":grounding,"perception":audit}

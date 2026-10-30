@@ -35,6 +35,8 @@ descriptors with `task`, `scene_group`, explicit `env_kwargs`, observation-only
 share a group. Do not put references, future observations or winning bindings in
 these descriptors. `--research-rollout-split` selects held-out scenes for manifest
 rollouts. Official evaluation and research perturbations require separate reports.
+`--grounding-policy` defaults to `robust`, except under `--protocol official`, where image perception
+uses `joint` unless a policy is named ([IMAGE_PERCEPTION.md](IMAGE_PERCEPTION.md#official-protocol)).
 Research and matched-baseline contexts discard legacy `task_target_entity` and
 `task_target_container` annotations. Observed candidate bindings belong in the
 grounding evidence block; evaluator intent cannot preselect one candidate.

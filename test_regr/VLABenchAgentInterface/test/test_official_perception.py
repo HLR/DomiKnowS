@@ -195,3 +195,140 @@ def test_named_kinds_constrain_the_official_plan(tmp_path):
     dfa = knowledge(entity_count=64, visible_entities=observed.visible, object_candidates=observed.candidates)
     assert dfa.accepts(labels([op("pick", 2), op("place", container=40)]))
     assert not dfa.accepts(labels([op("pick", 40), op("place", container=1)]))
+
+
+# Ordinal and named-card selection ------------------------------------------------------------
+
+def card(rank, suit):
+    return {"rank": rank, "suit": suit}
+
+
+def scene(rows):
+    """A perception payload from (id, box, category, card) rows, all confidently visible."""
+    objects = [{"id": i, "confidence": .95, "bbox": list(box), "category": kind, "card": face,
+                "states": {"visible": True}} for i, box, kind, face in rows]
+    return {"objects": objects, "requests": [], "hypotheses": [], "complete": True}
+
+
+def ti(tmp_path, instruction):
+    built, _ = items(tmp_path)
+    built[-2] = ["text", instruction]
+    return built
+
+
+POKERS = [(1, (.60, .4, .70, .6), "playing card", card("5", "hearts")),
+          (2, (.10, .4, .20, .6), "playing card", card("ace", "spades")),
+          (3, (.35, .4, .45, .6), "playing card", card("jack", "clubs")),
+          (4, (.80, .1, .95, .3), "card holder", None)]
+
+
+@pytest.mark.parametrize("instruction, expected", [
+    ("Please pick the 1st poker from left to right", (2,)),
+    ("Please pick the 2nd poker from left to right", (3,)),
+    ("Please pick the 3rd poker from left to right", (1,)),
+    ("Please pick the the largest poker", (2,)),
+    ("Please pick the the 2nd largest poker", (3,)),
+    ("Please pick the the smallest poker", (1,)),
+    ("Please pick the poker jack of clubs", (3,)),
+])
+def test_ordinal_and_card_requests_select_one_tag(tmp_path, instruction, expected):
+    observed = observe_episode(FakeModel(scene(POKERS)), ti(tmp_path, instruction))
+    assert observed.candidates.ids("pick", "target_entity_name", 8) == expected
+    assert dict(observed.cards)[2] == (14, "spades")
+
+
+@pytest.mark.parametrize("instruction", [
+    "Please pick the 4th poker from left to right",           # only three cards
+    "Please pick the poker 2 of diamonds",                    # no card shows that face
+    "Take out the solution on the 2nd row and 4th column.",   # grid columns are not read
+    "Please pick the 2nd poker that is not red from left to right",
+])
+def test_unsettled_requests_abstain(tmp_path, instruction):
+    observed = observe_episode(FakeModel(scene(POKERS)), ti(tmp_path, instruction))
+    assert observed.candidates.restrictions == ()
+
+
+def test_overlapping_boxes_or_unsure_objects_abstain(tmp_path):
+    overlapping = [(1, (.10, .4, .30, .6), "playing card", card("5", "hearts")),
+                   (2, (.25, .4, .45, .6), "playing card", card("6", "hearts"))]
+    observed = observe_episode(FakeModel(scene(overlapping)), ti(tmp_path, "Please pick the 1st poker from left to right"))
+    assert observed.candidates.restrictions == ()
+    unsure = scene(POKERS)
+    unsure["objects"].append({"id": 9, "confidence": .3, "states": {"visible": True}})
+    observed = observe_episode(FakeModel(unsure), ti(tmp_path, "Please pick the 1st poker from left to right"))
+    assert observed.candidates.restrictions == ()
+
+
+def test_value_order_needs_every_face(tmp_path):
+    faceless = [*POKERS[:2], (3, (.35, .4, .45, .6), "playing card", None)]
+    observed = observe_episode(FakeModel(scene(faceless)), ti(tmp_path, "Please pick the the largest poker"))
+    assert observed.candidates.restrictions == ()
+
+
+def test_vertical_order_and_shelf_layers(tmp_path):
+    condiments = [(1, (.4, .10, .5, .20), "condiment", None), (2, (.4, .70, .5, .80), "condiment", None),
+                  (3, (.4, .40, .5, .50), "condiment", None), (4, (.1, .85, .3, .95), "dish", None)]
+    observed = observe_episode(FakeModel(scene(condiments)), ti(tmp_path, "Add 1st condiment from bottom to the dish."))
+    assert observed.candidates.ids("pick", "target_entity_name", 8) == (2,)
+    books = [(1, (.10, .10, .15, .30), "book", None), (2, (.30, .12, .35, .30), "book", None),
+             (3, (.20, .60, .25, .80), "book", None), (4, (.40, .62, .45, .80), "book", None),
+             (5, (.05, .60, .12, .80), "book", None)]
+    instruction = "Please fetch the second book from the left on the bottom layer for me. Thank you."
+    observed = observe_episode(FakeModel(scene(books)), ti(tmp_path, instruction))
+    assert observed.candidates.ids("pick", "target_entity_name", 8) == (3,)
+    observed = observe_episode(FakeModel(scene(books)), ti(tmp_path, instruction.replace("bottom", "top")))
+    assert observed.candidates.ids("pick", "target_entity_name", 8) == (2,)
+
+
+def test_selected_tag_constrains_the_official_plan(tmp_path):
+    observed = observe_episode(FakeModel(scene(POKERS)), ti(tmp_path, "Please pick the 2nd poker from left to right"))
+    dfa = knowledge(entity_count=8, visible_entities=observed.visible, object_candidates=observed.candidates)
+    assert dfa.accepts(labels([op("pick", 3), op("lift")]))
+    assert not dfa.accepts(labels([op("pick", 2), op("lift")]))
+
+
+def test_deactivating_a_selection_formula_removes_it():
+    from ..official.selection_graph import build_selection_graph
+    graph = build_selection_graph()
+    tags, order = (1, 2, 3), {(2, 3), (2, 1), (3, 1)}
+    assert graph.admitted(tags, rank=2, members=tags, precedes=order) == (3,)
+    next(lc for lc in graph.graph.logicalConstrains.values() if lc.name == "ordinal_rank_2").active = False
+    assert graph.recompiled().admitted(tags, rank=2, members=tags, precedes=order) == tags
+
+
+@pytest.mark.parametrize("value", [{"rank": "13", "suit": "hearts"}, {"rank": "ace", "suit": "stars"}, "ace of spades"])
+def test_malformed_card_faces_make_perception_unavailable(tmp_path, value):
+    bad = scene(POKERS)
+    bad["objects"][0]["card"] = value
+    observed = observe_episode(FakeModel(bad), ti(tmp_path, "Please pick the 1st poker from left to right"))
+    assert observed.audit["status"] == "unavailable"
+
+
+def test_sources_that_disagree_abstain():
+    from ..object_grounding import ObjectConstraints
+    from ..official.perception_observations import merged_constraints
+    a = ObjectConstraints((("pick", "target_entity_name", (1, 2)),), ("a",))
+    b = ObjectConstraints((("pick", "target_entity_name", (2, 3)),), ("b",))
+    c = ObjectConstraints((("pick", "target_entity_name", (4,)),), ("c",))
+    assert merged_constraints(a, b).restrictions == (("pick", "target_entity_name", (2,)),)
+    assert merged_constraints(a, c).restrictions == ()
+
+
+# Grounding policy ----------------------------------------------------------------------------
+
+def test_explicit_robust_policy_refuses_disagreeing_hypotheses():
+    complete = {**GROUNDING, "complete": True}
+    robust = knowledge(grounding=PerceivedGrounding(complete, build_research_knowledge(), policy="robust"))
+    # The two hypotheses bind different objects, so no pick agrees with both.
+    assert not robust.accepts(labels([op("pick", 1), op("place", container=2)]))
+    assert robust.accepts(labels([op("press", 0)]))
+    one = {**GROUNDING, "hypotheses": GROUNDING["hypotheses"][:1]}  # complete is False
+    incomplete = knowledge(grounding=PerceivedGrounding(one, build_research_knowledge(), policy="robust"))
+    assert not incomplete.accepts(labels([op("pick", 1), op("place", container=2)]))
+
+
+def test_policy_default_is_robust_inside_and_joint_under_official():
+    from ..research.config import apply_research_arguments, default_config
+    args = Namespace(constraint_profile="baseline", grounding_policy=None, research_perception="off")
+    apply_research_arguments(args)
+    assert default_config().grounding_policy == "robust" and args.grounding_policy is None
