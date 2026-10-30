@@ -818,3 +818,11 @@ planner probabilities during primal-dual training. See
 [contracts, formulas and main-command configuration](RESEARCH_CONSTRAINTS.md).
 This addition has no historical benchmark score; static observations cannot
 establish measured execution freshness or interval preservation.
+
+## Shared image perception inputs
+
+The optional [image-only perception adapter](IMAGE_PERCEPTION.md) supplies primitive
+observations to the existing visibility, grounding, freshness, affordance and
+spatial/event LCs. It does not replace their declarative definitions. Screen-space
+bounds use explicit image frames; metric geometry, contact, numeric articulation
+and physical-event success require their original evidence contracts.

@@ -1,5 +1,5 @@
 """Additive policy lineage; does not change the eleven-skill weight schema."""
-from .config import ResearchConfig,default_config,default_loss_mode,default_training_options,default_compiled_loss
+from .config import ResearchConfig,default_config,default_loss_mode,default_training_options,default_compiled_loss,default_perception_options
 
 
 def data_fingerprints(args):
@@ -32,7 +32,8 @@ def load_adapter_metadata(path,planner,*,training=False):
     source=Path(path)/"research_configuration.json"
     if not source.is_file():return
     saved=json.loads(source.read_text());config=default_config()
-    changed=(saved["fingerprint"]!=config.fingerprint or saved.get("observation_inputs")!=(config.enabled or default_compiled_loss()))
+    changed=(saved["fingerprint"]!=config.fingerprint or saved.get("observation_inputs")!=(config.enabled or default_compiled_loss())
+        or saved.get("perception_configuration")!=default_perception_options())
     if training and changed:raise ValueError("adapter research profile differs from requested training configuration")
     planner._research_checkpoint_profile=saved
     planner.research_evaluation_override=changed
@@ -74,6 +75,7 @@ def checkpoint_metadata(world,planner):
                 "effective_loss_weights":{"supervised":1.,"allowed_mass":options.get("stage1_dfa_mass_weight",0.) if full else 0.,
                     "primal_dual":options.get("stage1_pmd_weight",1.) if full else 0.},
                 "evidence_schema_version":1,"controller_conditioning_version":2,
+                "perception_configuration":default_perception_options(),
                 "data_fingerprints":getattr(planner,"_research_data_fingerprints",{})},
             "research_training_state":provider() if callable(provider) else None}
 
@@ -87,6 +89,7 @@ def restore_metadata(payload,world,planner,*,training=False):
     if training and saved.get("supervised_mode")!=default_loss_mode():
         raise ValueError("research resume changes supervised-loss mode")
     if training:
+        if saved.get("perception_configuration")!=default_perception_options():raise ValueError("research resume changes image-perception configuration")
         if saved.get("observation_inputs")!=(config.enabled or default_compiled_loss()):raise ValueError("research resume changes observation-input mode")
         options={k:v for k,v in default_training_options().items() if k!="output"}
         if saved.get("loss_options",{})!=options:raise ValueError("research resume changes loss weights or dual optimization settings")
@@ -98,7 +101,8 @@ def restore_metadata(payload,world,planner,*,training=False):
         if saved.get("formulas")!=formulas:raise ValueError("research resume changes active logical constraints")
     # Evaluation may deliberately ablate a profile; expose the override, do not claim a matching run.
     payload["research_evaluation_override"]=(saved is None or saved["fingerprint"]!=config.fingerprint
-        or saved.get("observation_inputs")!=(config.enabled or default_compiled_loss()))
+        or saved.get("observation_inputs")!=(config.enabled or default_compiled_loss())
+        or saved.get("perception_configuration")!=default_perception_options())
     planner.research_evaluation_override=payload["research_evaluation_override"]
     planner._research_checkpoint_profile=saved
     if payload.get("research_training_state") is not None:

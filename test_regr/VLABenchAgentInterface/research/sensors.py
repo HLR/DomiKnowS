@@ -12,6 +12,8 @@ def held_name(value):
 
 
 def attach_sensor_adapter(env,context):
+    from .perception import attach_image_adapter
+    if attach_image_adapter(env,context):return
     if callable(getattr(env,"read_research_observations",None)):return
     from .runtime import research_block
     raw=research_block(context)

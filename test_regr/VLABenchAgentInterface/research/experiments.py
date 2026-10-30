@@ -127,11 +127,15 @@ def evaluation_matrix(row,manifest,*,pilot=False):
         "--research-rollout-split","test","--research-eval-episodes-per-family","2" if pilot else "10",
         "--constraint-profile",row["profile"],"--use-compiled-planner-loss","--seed",str(row["seed"])]
     for key in ("planner_model","planner_decoder_hidden_dim","vision_model","vision_dim","image_size","hidden_dim",
-                "max_views","max_steps","max_operations","action_horizon","execute_horizon","device"):
+                "max_views","max_steps","max_operations","action_horizon","execute_horizon","device",
+                "research_perception","perception_model","perception_confidence","perception_bbox_margin",
+                "perception_max_new_tokens","perception_camera"):
         value=getattr(trained,key,None)
         if value is not None:base.extend(["--"+key.replace("_","-"),str(value)])
     base.append("--load-in-4bit" if trained.load_in_4bit else "--no-load-in-4bit")
     if trained.tiny_vision:base.append("--tiny-vision")
+    if trained.perception_load_in_4bit:base.append("--perception-load-in-4bit")
+    base.append("--perception-local-files-only" if trained.perception_local_files_only else "--no-perception-local-files-only")
     result=[{"name":"heldout_robust","arguments":[*base,"--grounding-policy","robust"]}]
     if row["profile"]=="research_v1" and not pilot:
         result.extend({"name":"heldout_"+policy,"arguments":[*base,"--grounding-policy",policy]} for policy in ("joint","abstain"))

@@ -78,6 +78,15 @@ def add_research_arguments(parser):
     parser.add_argument("--research-disable-formula",action="append",default=[])
     parser.add_argument("--use-compiled-planner-loss",action="store_true",help="use the shared full/masked/CE builder for a matched baseline")
     parser.add_argument("--controller-warmup-units",choices=("batches","updates"),default="batches")
+    import argparse
+    parser.add_argument("--research-perception",choices=("off","image-vlm"),default="off")
+    parser.add_argument("--perception-model",default="Qwen/Qwen3-VL-8B-Instruct")
+    parser.add_argument("--perception-confidence",type=float,default=.85)
+    parser.add_argument("--perception-bbox-margin",type=float,default=.01)
+    parser.add_argument("--perception-max-new-tokens",type=int,default=2048)
+    parser.add_argument("--perception-camera",type=int,default=0)
+    parser.add_argument("--perception-load-in-4bit",action="store_true")
+    parser.add_argument("--perception-local-files-only",action=argparse.BooleanOptionalAction,default=True)
     for option,kind,default in (("stage1-dfa-mass-weight",float,0.),("stage1-pmd-weight",float,1.),
             ("stage1-dual-lr",float,.05),("stage1-dual-warmup",int,10),("stage1-dual-every",int,10)):
         if "--"+option not in parser._option_string_actions:parser.add_argument("--"+option,type=kind,default=default)
@@ -99,6 +108,16 @@ def apply_research_arguments(args):
                             getattr(args, "research_max_state_expansions", 10000))
     from dataclasses import replace
     config=replace(config,disabled_formulas=tuple(getattr(args,"research_disable_formula",())))
+    perception=None
+    if getattr(args,"research_perception","off")=="image-vlm":
+        from .perception import PerceptionConfig
+        from dataclasses import asdict
+        if not (config.enabled or getattr(args,"use_compiled_planner_loss",False)):
+            raise ValueError("Image perception requires research_v1 or an explicitly matched compiled baseline")
+        perception=asdict(PerceptionConfig(model_id=args.perception_model,confidence=args.perception_confidence,
+            bbox_margin=args.perception_bbox_margin,max_new_tokens=args.perception_max_new_tokens,camera=args.perception_camera,
+            load_in_4bit=args.perception_load_in_4bit,local_files_only=args.perception_local_files_only))
+    _PERCEPTION_OPTIONS.set(perception)
     _DEFAULT.set(config)
     _COMPILED_LOSS.set(config.enabled or getattr(args,"use_compiled_planner_loss",False))
     mode=getattr(args,"research_supervised_mode","full")
@@ -118,3 +137,7 @@ _TRAIN_OPTIONS=ContextVar("vlabench_research_train_options",default={})
 def default_training_options():return dict(_TRAIN_OPTIONS.get())
 _COMPILED_LOSS=ContextVar("vlabench_compiled_planner_loss",default=False)
 def default_compiled_loss():return _COMPILED_LOSS.get()
+_PERCEPTION_OPTIONS=ContextVar("vlabench_perception_options",default=None)
+def default_perception_options():
+    value=_PERCEPTION_OPTIONS.get()
+    return dict(value) if value else None

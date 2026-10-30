@@ -1424,6 +1424,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         return self._plan_rejection_reason(plan, entities, dfa=dfa) is None
 
     def collect_episode(self, descriptor: Mapping[str, Any]) -> JointEpisode:
+        from ..research.config import default_perception_options
+        if default_perception_options():descriptor={**descriptor,"research_matched":True}
         from ..research.runtime import config_for,reconcile,admit_with_refresh,admission,geometry_admission,record_measured_completion
         from ..research.sensors import attach_sensor_adapter
         research_config=config_for(descriptor,self.runtime.world_bundle)
@@ -1578,8 +1580,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
             if measured_execution:
                 env._research_unassisted=True
-                attach_sensor_adapter(env,descriptor)
-                research_context=reconcile(env,descriptor,step=0,changed=("reset",),observation=observation)
+                research_context={**descriptor,"instruction":descriptor.get("instruction") or env.task.get_instruction()}
+                attach_sensor_adapter(env,research_context)
+                research_context=reconcile(env,research_context,step=0,changed=("reset",),observation=observation)
             # The official control dataset stores absolute EE poses relative to
             # the robot base. Keep policy inputs/outputs in that learned frame
             # and cross into simulator world coordinates only at the IK edge.

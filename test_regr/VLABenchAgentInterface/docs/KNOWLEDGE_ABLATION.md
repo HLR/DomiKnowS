@@ -681,3 +681,11 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
   pre-fold metadata-assisted run reproduced their earlier rows. None of the 4,500 reference plans
   breaks its three rules, but the two rules that `generic` lacks were chosen after that check, so like the press
   question they encode benchmark knowledge.
+
+## Image perception input ablation
+
+`--research-perception image-vlm` supplies shared visual evidence to the research
+and explicitly matched baseline pipelines. See [IMAGE_PERCEPTION.md](IMAGE_PERCEPTION.md)
+for supported constraints and RGB-only limitations. Hold the perception checkpoint,
+confidence settings, image pairs and observations fixed when removing an LC.
+Historical results above predate this adapter and have not been recomputed.

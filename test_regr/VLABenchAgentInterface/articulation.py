@@ -150,6 +150,8 @@ def refreshed_articulation_context(env, context, entities):
     """Replace joint/door evidence with actual state before each replanning call."""
     from copy import deepcopy
     context = deepcopy(context or {})
+    from .research.config import default_perception_options
+    if default_perception_options():return context
     raw = context.get("planning_facts")
     task = context.get("task") or context.get("task_name")
     if task not in TASKS and not (isinstance(raw, dict) and raw.get("articulation_targets")):

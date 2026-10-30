@@ -192,7 +192,7 @@ def reconcile(env,context,*,step,episode=None,changed=(),observation=None):
     for event,prefixes in (("camera",("camera:",)),("tracking",("tracking:",)),("articulation",("joint:","object:"))):
         if event in changed:
             changed=tuple(set(changed)|{key for record in ledger.records for key,_ in record.dependencies if key.startswith(prefixes)})
-    if episode is None:episode=ledger.episode
+    if episode is None:episode=ledger.episode or str(context.get("episode_id") or "execution")
     if episode!=ledger.episode:
         block["events"]=[];block["completed_event_ids"]=[]
         block["executed_operations"]=[]
@@ -210,6 +210,19 @@ def reconcile(env,context,*,step,episode=None,changed=(),observation=None):
         parameters=inspect.signature(reader).parameters
         kwargs={"step":step,"episode":episode,"revisions":dict(ledger.revisions),"observation":observation}
         sample=reader(**{k:v for k,v in kwargs.items() if k in parameters or any(p.kind==p.VAR_KEYWORD for p in parameters.values())}) or {}
+    if sample.get("image_only"):
+        from dataclasses import replace
+        # Replace same-step estimates even on an unavailable refresh. Preserve prior visual samples only.
+        ledger=replace(ledger,records=tuple(r for r in ledger.records if r.source=="perception"
+            and r.id.startswith(("visual_","image_bbox:","perception:")) and r.step<step))
+        from .perception import merge_context
+        observed={"evidence":ledger.advance(step,records=sample.get("records",())).as_dict(),
+            "grounding":sample["grounding"],"perception":sample["perception"]}
+        cleaned=merge_context(context,observed)
+        facts.clear();facts.update(cleaned["planning_facts"]);block=facts["research"]
+        context["visible_entities"]=cleaned.get("visible_entities")
+        grounding=dict(sample["grounding"]);grounding.pop("requests",None)
+        sample={**sample,"grounding":grounding,"initial_state":deepcopy(cleaned["planning_facts"]["initial_state"])}
     ledger=ledger.advance(step,records=sample.get("records",()))
     block["evidence"]=ledger.as_dict()
     if sample.get("events"):

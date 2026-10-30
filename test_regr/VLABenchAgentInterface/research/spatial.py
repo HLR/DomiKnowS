@@ -27,6 +27,7 @@ def less(a_low, a_high, b_low, b_high, *, inclusive=False):
 
 
 def compare(requirement, ledger, *, planning=False):
+    if requirement.get("geometry")=="image_boxes":return compare_image(requirement,ledger)
     relation = requirement.get("relation")
     allowed = {"left", "right", "front", "behind", "above", "below", "inside", "disjoint", "near", "far", "on", "ordered"}
     if relation not in allowed:
@@ -74,3 +75,32 @@ def compare(requirement, ledger, *, planning=False):
         tolerance=requirement.get("tolerance_m")
         if type(contact) is not bool or type(tolerance) not in (int,float) or not isfinite(tolerance) or tolerance<0:return None
         return contact and abs(al[2]-bh[2])<=tolerance and all(ah[i]>=bl[i] and bh[i]>=al[i] for i in (0,1))
+
+
+def compare_image(requirement,ledger):
+    """Explicit screen-space relations cannot establish physical containment/contact or metric distance."""
+    relation=requirement.get("relation");frame=requirement.get("frame")
+    ids=requirement.get("entities",()) if relation=="ordered" else (requirement.get("left"),requirement.get("right"))
+    if not isinstance(frame,str) or not frame.startswith("image:") or len(ids)<2:return None
+    rows=[ledger.get(i) for i in ids]
+    if any(r is None or not ledger.fresh(r.id) or r.frame!=frame or r.units!="normalized_image" for r in rows):return None
+    values=[]
+    for row in rows:
+        box=row.value
+        if not isinstance(box,(tuple,list)) or len(box)!=4 or any(type(x) not in (float,int) or not isfinite(x) or not 0<=x<=1 for x in box):
+            raise ValueError("Invalid normalized image bounds")
+        if box[0]>=box[2] or box[1]>=box[3]:raise ValueError("Unordered normalized image bounds")
+        values.append((box[:2],box[2:]))
+    if relation=="ordered":
+        axis=requirement.get("axis")
+        if axis not in (0,1):return None
+        if requirement.get("descending"):values.reverse()
+        checks=[less(a[0][axis],a[1][axis],b[0][axis],b[1][axis]) for a,b in zip(values,values[1:])]
+        return False if False in checks else None if None in checks else True
+    (al,ah),(bl,bh)=values
+    if relation in ("left","right","above","below"):
+        axis,reverse={"left":(0,False),"right":(0,True),"above":(1,False),"below":(1,True)}[relation]
+        return less(bl[axis],bh[axis],al[axis],ah[axis]) if reverse else less(al[axis],ah[axis],bl[axis],bh[axis])
+    if relation=="disjoint":return any(b<c or d<a for a,b,c,d in zip(al,ah,bl,bh))
+    # No RGB-only claim about depth, physical support, interiors or distances in metres.
+    return None

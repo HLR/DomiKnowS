@@ -240,7 +240,9 @@ class HierarchicalVLABenchAgent:
         success = False
         from ..research.runtime import reconcile,admit_with_refresh,geometry_admission,config_for,record_measured_completion
         from ..research.sensors import attach_sensor_adapter
-        research_context={**(task_context or {}),"research_config":config_for(task_context,self.runtime.world_bundle).as_dict()}
+        research_context={**(task_context or {}),"instruction":instruction,"research_config":config_for(task_context,self.runtime.world_bundle).as_dict()}
+        from ..research.config import default_perception_options
+        if default_perception_options():research_context["research_matched"]=True
         attach_sensor_adapter(env,research_context)
         research_context=reconcile(env,research_context,step=0,changed=("reset",),observation=observation)
         planning_refresh_steps=set()

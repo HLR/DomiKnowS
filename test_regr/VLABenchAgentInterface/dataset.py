@@ -338,6 +338,7 @@ class PlanningExample:
     visible_entities: tuple[str | int, ...] | None = None
     scene_group: str | None = None
     research_split: str | None = None
+    perception_image_paths: tuple[Path, ...] = ()
 
     def as_reward_item(self) -> dict[str, Any]:
         return {
@@ -581,6 +582,8 @@ def with_predicted_task(example: PlanningExample, predicted: str | None, *, obse
     facts, profile = ground_planning_facts(
         predicted, example.instruction, config, list(example.entities), input_dir,
         observation_mode=observation_mode, ground_complex=ground_complex)
+    if (example.planning_facts or {}).get("research",{}).get("perception"):
+        facts=example.planning_facts;profile=example.planning_observation_profile
     visual_qa = observation_mode == "visual" and predicted in QA_TASK_PATTERNS
     return replace(
         example, predicted_task=predicted, planning_facts=facts, planning_observation_profile=profile,
@@ -637,13 +640,21 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None,
         research_input=input_dir / "research_observations.json"
         if research_input.is_file():
             research=_read_json(research_input)
-            permitted={"evidence","grounding","freshness","spatial","temporal","events","executed_operations","duration_upper_steps","sensors","sensor_profile","spatial_effects"}
+            permitted={"evidence","grounding","freshness","spatial","temporal","events","executed_operations","duration_upper_steps","sensors","sensor_profile","spatial_effects","perception"}
             if not isinstance(research,Mapping) or set(research)-permitted:
                 raise ValueError("research input contains supervision or unsupported fields")
             planning_facts={**(planning_facts or {}),"research":research}
         dependency = payload.get("dependency", config.get("dependency", default_dependency(task))) if isinstance(payload, Mapping) else config.get("dependency", default_dependency(task))
+        pair=()
+        if (input_dir/"perception_images.json").is_file():
+            specification=_read_json(input_dir/"perception_images.json")
+            if set(specification)!={"raw","numbered"}:raise ValueError("Perception pair declares raw and numbered paths only")
+            pair=tuple((input_dir/specification[key]).resolve() for key in ("raw","numbered"))
+            if any(not p.is_relative_to(input_dir.resolve()) or not p.is_file() for p in pair):
+                raise ValueError("Perception image pair must stay inside its episode input directory")
         examples.append(PlanningExample(
             episode_id=episode_id,
+            perception_image_paths=pair,
             scene_group=(_read_json(example_dir/"provenance/research.json").get("scene_group") if (example_dir/"provenance/research.json").is_file() else None),
             research_split=(_read_json(example_dir/"provenance/research.json").get("split") if (example_dir/"provenance/research.json").is_file() else None),
             instruction=instruction,
@@ -666,7 +677,8 @@ def load_planning_examples(root: str | Path, *, limit: int | None = None,
             break
     if not examples:
         raise ValueError(f"no VLABench planning episodes were found under {root}")
-    return examples
+    from .research.perception import enrich_examples
+    return enrich_examples(examples)
 
 
 def load_scene_planning_examples(root: str | Path, *, limit: int | None = None,
