@@ -148,6 +148,9 @@ def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypa
 
     monkeypatch.setattr(cli, "apply_knowledge_argument", lambda args: "test")
     monkeypatch.setattr(cli, "apply_holdout_arguments", lambda args: ())
+    # _prepare is stubbed, so no planning dataset is read; the guard has its own tests in test_dataset_protocol.py.
+    monkeypatch.setattr("test_regr.VLABenchAgentInterface.dataset_protocol.guard_training_dataset",
+                        lambda *args, **kwargs: {})
     monkeypatch.setattr(cli, "_prepare", lambda *args: (
         runtime, examples, examples, {"validation": [item]}, {"train": [item], "validation": [item]}))
     monkeypatch.setattr(cli.JointQwenVLPlanner, "from_pretrained", lambda **kwargs: planner)

@@ -141,21 +141,21 @@ The policy and this DFA must describe the same entity ids and action schemas.
     def _successor(self, action, count, extras):
         key = action, count, extras
         if key not in self._action_moves:
-            if not super().operation_admitted(action, count, extras[:4]):
+            if not super().operation_admitted(action, count, extras[:-1]):
                 result = None, True
             else:
                 skill, pointer = self.actions[action]
                 params = {role: pointer for role in self.skill_arguments[skill]}
-                world, known = self.world_reachability.advance(extras[4], skill, params)
+                world, known = self.world_reachability.advance(extras[-1], skill, params)
                 result = (None if world is None else
-                          super().advance_state(action, count, extras[:4]) + (world,)), known
+                          super().advance_state(action, count, extras[:-1]) + (world,)), known
             self._action_moves[key] = result
         return self._action_moves[key]
 
     def _complete(self, prefixes, extras):
-        if () not in prefixes or not super().plan_complete(extras[:4]):
+        if () not in prefixes or not super().plan_complete(extras[:-1]):
             return False
-        return self.world_reachability.terminal(extras[4])
+        return self.world_reachability.terminal(extras[-1])
 
     def _query(self, node, prefixes, count, extras, work):
         key = node, prefixes, count, extras
@@ -212,7 +212,7 @@ The policy and this DFA must describe the same entity ids and action schemas.
         return self._successor(action, count, extras)[0]
 
     def plan_complete(self, extras):
-        return super().plan_complete(extras[:4]) and self.world_reachability.terminal(extras[4]) is True
+        return super().plan_complete(extras[:-1]) and self.world_reachability.terminal(extras[-1]) is True
 
     def byte_step(self, state, byte):
         # The base native language requires a nonempty plan; a bound world

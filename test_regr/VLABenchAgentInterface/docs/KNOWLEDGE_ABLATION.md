@@ -349,7 +349,9 @@ keep the same active LCs and episode facts and vary only the search/decoding
 option; record strictness, the expansion cap, missing-grounding outcomes and
 search-limit failures separately. Neither feature has a new score row in this
 document. Existing official runs receive no new support set automatically, and
-`--observation-mode visual` alone does not populate `visible_entities`.
+`--observation-mode visual` alone does not populate `visible_entities`; under
+`--protocol official` image perception supplies it (see
+[Image perception, official protocol](IMAGE_PERCEPTION.md#official-protocol)).
 
 See [Syntax and initial-observation visibility](SYNTAX_AND_VISIBILITY.md) and
 [Action-budget goal reachability](GOAL_REACHABILITY.md) for APIs and examples.

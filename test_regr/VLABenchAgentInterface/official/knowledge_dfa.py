@@ -16,11 +16,13 @@ try:
     from ..object_grounding import ObjectConstraints
     from .causal_dfa import CausalPlanDFA
     from .decoding_graph import build_decoding_graph
+    from .perception_observations import operation_for
 except ImportError:  # pragma: no cover - flat-module execution
     from visibility import visible_entity_ids
     from object_grounding import ObjectConstraints
     from causal_dfa import CausalPlanDFA
     from decoding_graph import build_decoding_graph
+    from perception_observations import operation_for
 
 START_PATTERN_PREFIXES = ((),)
 
@@ -31,11 +33,14 @@ class KnowledgePlanDFA(CausalPlanDFA):
     ``press_answer``: the model's Yes/No to the press question. ``scene_bound``: the
     largest tag number plus one, or ``None`` when it was not read. ``chosen_patterns``:
     the subtask patterns the model named (empty: none). ``object_candidates``: the
-    instruction's grounded ``ObjectConstraints``.
+    instruction's grounded ``ObjectConstraints``. ``visible_entities``: the tags an
+    observation supports. ``grounding``: a ``PerceivedGrounding`` whose compiled research
+    formulas admit an operation given the hypotheses still alive (the state's last field).
     """
 
     def __init__(self, *args, causal=True, causal_graph=None, decoding_graph=None, press_answer=False,
-                 scene_bound=None, chosen_patterns=(), object_candidates=None, visible_entities=None, **kwargs):
+                 scene_bound=None, chosen_patterns=(), object_candidates=None, visible_entities=None, grounding=None,
+                 **kwargs):
         super().__init__(*args, causal_graph=causal_graph, **kwargs)
         if not causal:
             self.causal_program = PredicateConstraintProgram()
@@ -46,7 +51,8 @@ class KnowledgePlanDFA(CausalPlanDFA):
         self.chosen_patterns = tuple(tuple(pattern) for pattern in chosen_patterns)
         self.object_candidates = object_candidates or ObjectConstraints()
         self.visible_entities = visible_entity_ids(visible_entities, range(self.entity_count))
-        self.start_state = self.start_state + (START_PATTERN_PREFIXES,)
+        self.grounding = grounding
+        self.start_state = self.start_state + (START_PATTERN_PREFIXES, grounding.start if grounding else ())
 
     @lru_cache(maxsize=None)
     def next_chosen(self, prefixes, skill):
@@ -87,14 +93,20 @@ class KnowledgePlanDFA(CausalPlanDFA):
             "target_is_instruction_candidate": candidates is not None and pointer in candidates,
         })
 
+    def research_operation(self, action):
+        skill, pointer = self.actions[action]
+        return operation_for(skill, self.skill_arguments[skill], pointer)
+
     def operation_admitted(self, action, count, extras) -> bool:
         return (self.admits(action, extras[:3])
-                and self.decoding_program.check(self.operation_event(action, count, extras)))
+                and self.decoding_program.check(self.operation_event(action, count, extras))
+                and (self.grounding is None or self.grounding.admits(self.research_operation(action), extras[4])))
 
     def advance_state(self, action, count, extras):
         skill = self.actions[action][0]
         chosen = self.next_chosen(extras[3], skill) if self.chosen_patterns else extras[3]
-        return self.advance(action, extras[:3]) + (chosen,)
+        alive = self.grounding.advance(self.research_operation(action), extras[4]) if self.grounding else extras[4]
+        return self.advance(action, extras[:3]) + (chosen, alive)
 
     def plan_complete(self, extras) -> bool:
         return self.decoding_program.check(PredicateEvent("plan", {

@@ -159,7 +159,7 @@ def test_vocabulary_checksum_and_legacy_exports(tmp_path):
     import pickle
     from .. import graph as legacy
     vocabulary = PlanVocabulary.default(4)
-    assert vocabulary.checksum == 'cc3c979fd236b317fc9dcf86ce9c611e7a351f3199dc4a0e8ce49ed0aa3549ec'
+    assert vocabulary.checksum == 'b7b3366c12e07a0e161752701968982fcf4bea69f77bb84ac777bdfdb1c37710'
     assert PlanVocabulary.load(vocabulary.save(tmp_path / 'vocabulary.json')) == vocabulary
     assert pickle.loads(pickle.dumps(vocabulary)) == vocabulary
     # Older checkpoints resolve the class through graph.PlanVocabulary.

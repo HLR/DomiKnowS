@@ -259,6 +259,7 @@ def run_official_protocol(
     standard: bool = True,
     decoding: str = "greedy",
     progress: Callable[[str], None] = print,
+    perception: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate (resumably), score and summarize. ``generate`` maps a ti-list to reply text."""
     prompt = load_official_prompt()
@@ -268,6 +269,8 @@ def run_official_protocol(
               "seed": seed, "prompt_sha256": PROMPT_SHA256, "dataset_fingerprint": dataset_fingerprint(examples)}
     if decoding != "greedy":  # runs made before this option exist keep their recorded configuration
         config["decoding"] = decoding
+    if perception is not None:  # the perception model, threshold and grounding policy of the run
+        config["perception"] = dict(perception)
     run_path = output_dir / "run.json"
     if run_path.exists() and json.loads(run_path.read_text(encoding="utf-8")) != config:
         raise ValueError(f"{run_path} records a different configuration; use a new output directory")
@@ -431,7 +434,9 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                hmm: Any = None, weight: float = 0.0,
                                lookahead_score: str = "joint", scene_ids: bool = False, pattern_first: bool = False,
                                adapt: dict[str, Any] | None = None, seed: int = 42,
-                               causal: bool = False) -> Callable[[list[list[Any]]], str]:
+                               causal: bool = False, perception: Any = None,
+                               research_knowledge: Any = None, disabled_formulas: Sequence[str] = ()
+                               ) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
     The DFA enforces the JSON skill language, argument roles, the benchmark subtask
@@ -450,6 +455,9 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     The DFA stays the only authority on which tokens are legal, and the comment
     ``hmm-action: changed=x scored=y steps=z`` records how often the lookahead changed the greedy token.
     ``causal`` adds the id-only causal LCs of :mod:`.causal_graph` to the same DFA.
+    ``perception`` is a frozen ``ImagePerceptionModel``: it reads the episode's two images and
+    instruction, and its visible tags, predicted object kinds and role hypotheses become observations of the decoding
+    and research LCs (:mod:`.perception_observations`); the result is recorded in a comment.
     """
     import torch
     from transformers import LogitsProcessorList
@@ -474,13 +482,31 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         except ImportError:  # pragma: no cover - flat-module execution
             from official_adapt import adapt_emission, episode_seed, sample_plans
 
-    def language(press_only: bool, bound: int | None, patterns: tuple = ()):
+    if perception is not None:
+        try:
+            from .perception_observations import PerceivedGrounding, observe_episode
+            from ..knowledge.research_lcs import build_research_knowledge
+        except ImportError:  # pragma: no cover - flat-module execution
+            from perception_observations import PerceivedGrounding, observe_episode
+            from knowledge.research_lcs import build_research_knowledge
+        knowledge_lcs = research_knowledge or build_research_knowledge()
+
+    def language(press_only: bool, bound: int | None, patterns: tuple = (), observed: Any = None):
         """The grammar DFA, with the episode's answers and the causal rules applied only through compiled LCs."""
+        common = dict(entity_count=entity_cap, max_operations=max_operations, grammar_profile="benchmark")
+        if observed is not None and observed.supplies_facts:
+            # One episode's perception: built per episode and not cached.
+            grounding = (PerceivedGrounding(observed.grounding, knowledge_lcs, disabled_formulas)
+                         if observed.grounding is not None else None)
+            dfa = KnowledgePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, causal=causal,
+                                   press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,
+                                   visible_entities=observed.visible, grounding=grounding,
+                                   object_candidates=observed.candidates, **common)
+            return None, dfa
         knowledge = causal or press_only or bound is not None or bool(patterns)
         key = ("official-knowledge" if knowledge else "official-grammar", causal, press_only, bound, patterns,
                entity_cap, max_operations)
         if key not in planner.dfas:
-            common = dict(entity_count=entity_cap, max_operations=max_operations, grammar_profile="benchmark")
             planner.dfas[key] = (KnowledgePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, causal=causal,
                                                   press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,
                                                   **common)
@@ -535,7 +561,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         press_only = press_question and says_yes(items)
         bound = read_entity_count(items) if scene_ids else None
         chosen = choose_patterns(items) if pattern_first and not press_only else ()
-        key, dfa = language(press_only, bound, tuple(sorted(chosen)))
+        observed = observe_episode(perception, items) if perception is not None else None
+        key, dfa = language(press_only, bound, tuple(sorted(chosen)), observed)
         steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
         try:
@@ -552,7 +579,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                 episode_lookahead = DFAActionLookahead(dfa, planner.tokenizer, TokenOperators(operators.transition, emission))
                 del emission
             elif steered:
-                episode_lookahead = lookahead_for(key, dfa)
+                episode_lookahead = (lookahead_for(key, dfa) if key is not None else
+                                     DFAActionLookahead(dfa, planner.tokenizer, operators))
             constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=episode_hmm if steered else None,
                                                    weight=weight if steered else 0, action_lookahead=episode_lookahead,
                                                    lookahead_score=lookahead_score)
@@ -574,6 +602,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                 notes.append("<!-- pattern-first: " + json.dumps(["+".join(pattern) for pattern in chosen]) + " -->")
             if scene_ids:
                 notes.append(f"<!-- scene-ids: {bound} -->")
+            if observed is not None:
+                notes.append(observed.note())
             if constraint.session is not None:
                 stats = constraint.session.stats
                 notes.append(f"<!-- hmm-action: changed={stats['changed']} scored={stats['scored_steps']} steps={stats['steps']} -->")

@@ -68,12 +68,45 @@ class ObjectConstraints:
                                   for s, r, ids in self.restrictions], "evidence": list(self.evidence)}
 
 
-def instruction_object_constraints(instruction, objects):
-    """Only hard-mask candidates when an explicit rule supplies positive evidence.
+def _category_named(category, text):
+    """The clause names this predicted kind: the whole phrase or its head noun, singular or plural."""
+    words = " " + _normal(text) + " "
+    phrase = _normal(category)
+    head = phrase.split()[-1] if phrase else ""
+    return any(" " + form + " " in words for name in {phrase, head} if name
+               for form in (name, name + "s", name + "es"))
 
-    This is a candidate filter, not a solver for natural-language instructions.
-    Ambiguous names retain their union; unsupported descriptions retain all IDs.
+
+def perceived_object_constraints(instruction, categories, unknown=()):
+    """Instruction candidates from the kinds a perception model read from pixels.
+
+    ``categories`` maps tags to predicted kinds; ``unknown`` are visible tags whose kind could not be read.
+    The abstentions of :func:`instruction_object_constraints` apply. A clause restricts a role only when it
+    names a predicted kind, and tags of unknown kind stay candidates: only tags seen as another kind are excluded.
     """
+    clauses = instruction_clauses(instruction)
+    if isinstance(clauses, ObjectConstraints):
+        return clauses
+    source, destination = clauses
+
+    def named(text):
+        matches = {tag for tag, kind in categories.items() if _category_named(kind, text)}
+        return tuple(sorted(matches | set(unknown))) if matches else ()
+    evidence, restrictions = [], []
+    candidates = named(source)
+    if candidates:
+        restrictions.append(("pick", "target_entity_name", candidates))
+        evidence.append("pick: predicted object kind in source clause")
+    candidates = named(destination) if destination is not None else ()
+    if candidates:
+        for skill in ("place", "insert", "pour", "push"):
+            restrictions.append((skill, "target_container_name", candidates))
+        evidence.append("destination: predicted object kind in destination clause")
+    return ObjectConstraints(tuple(restrictions), tuple(evidence) or ("abstain: no predicted kind named",))
+
+
+def instruction_clauses(instruction):
+    """The ``(source, destination)`` clauses of an action instruction, or an abstaining ``ObjectConstraints``."""
     text = instruction.lower()
     if re.search(r"\b(?:not|except|without|instead|rather|besides)\b|\bother\s+than\b", text):
         return ObjectConstraints(evidence=("abstain: negation or exclusion",))
@@ -89,7 +122,20 @@ def instruction_object_constraints(instruction, objects):
     # A source relation needs geometry/container membership; exact bare names can be misleading.
     if re.search(r"\b(?:on|in|inside|from)\b", source):
         return ObjectConstraints(evidence=("abstain: source relation",))
-    manipulable = tuple(obj for obj in objects if obj.kind not in _CONTAINERS | _SUPPORTS
+    return source, destination.group(1) if destination else None
+
+
+def instruction_object_constraints(instruction, objects):
+    """Only hard-mask candidates when an explicit rule supplies positive evidence.
+
+    This is a candidate filter, not a solver for natural-language instructions.
+    Ambiguous names retain their union; unsupported descriptions retain all IDs.
+    """
+    clauses = instruction_clauses(instruction)
+    if isinstance(clauses, ObjectConstraints):
+        return clauses
+    source, destination = clauses
+    manipulable =tuple(obj for obj in objects if obj.kind not in _CONTAINERS | _SUPPORTS
                         and obj.kind)  # Unknown class does not justify a hard restriction.
     candidates = _mentioned(manipulable, source)
     evidence, restrictions = [], []
@@ -104,7 +150,7 @@ def instruction_object_constraints(instruction, objects):
             evidence.append("pick: instruction object type and scene class")
     if destination:
         containers = tuple(obj for obj in objects if obj.kind in _CONTAINERS)
-        candidates = _mentioned(containers, destination.group(1))
+        candidates = _mentioned(containers, destination)
         if candidates:
             for skill in ("place", "insert", "pour", "push"):
                 restrictions.append((skill, "target_container_name", candidates))

@@ -965,11 +965,45 @@ def official_constraints(args) -> str:
     return knowledge
 
 
+def perception_calibration(args) -> str:
+    source = getattr(args, "perception_calibration_data", None)
+    return "fixed default threshold" if source is None else f"fit on {Path(source).resolve()}"
+
+
+def official_perception_options(args):
+    """Image perception under the official protocol, or ``None``; refuses what the protocol does not allow.
+
+    Perception sees only the official inputs and no entity table (``official/perception_observations.py``).
+    Its threshold is either the fixed default or fit on a training dataset that ``dataset_protocol``
+    proves disjoint from the official episodes. Task identity never enters: no task-level rule is used.
+    """
+    if getattr(args, "task_identity", None) is not None:
+        raise ValueError("--protocol official shows no task: omit --task-identity (the oracle task is not an input, "
+                         "and no task-level rule runs under this protocol)")
+    from test_regr.VLABenchAgentInterface.research.config import default_perception_options
+    profile = getattr(args, "constraint_profile", "baseline")
+    options = default_perception_options()
+    if profile == "research_v1" and options is None:
+        raise ValueError("--protocol official runs research_v1 only as image perception; drop --research-perception off")
+    if options is None:
+        return None
+    if args.constraints not in ("grammar", "causal"):
+        raise ValueError("image perception feeds the grammar DFA's LCs; add --knowledge grammar or causal")
+    from test_regr.VLABenchAgentInterface.research.perception import PerceptionConfig
+    source = getattr(args, "perception_calibration_data", None)
+    if source is None and options["confidence"] != PerceptionConfig.confidence:
+        raise ValueError("--perception-confidence differs from the fixed default; name the training data it was fit "
+                         "on with --perception-calibration-data (never the official episodes)")
+    if source is not None:
+        from test_regr.VLABenchAgentInterface.dataset_protocol import assert_training_dataset
+        assert_training_dataset(source)
+    return options
+
+
 def command_evaluate_official(args) -> None:
     """Standard VLABench VLM-planning protocol: every episode, official prompt and scoring."""
-    if getattr(args,"constraint_profile","baseline")=="research_v1":
-        raise ValueError("research_v1 requires the internal/world constraint runtime; official benchmark evaluation stays profile-off")
     args.constraints = official_constraints(args)
+    perception_options = official_perception_options(args)
     if args.resume_adapter or args.vocab:
         raise ValueError("--protocol official evaluates a frozen base VLM; omit --resume-adapter and --vocab")
     if getattr(args, "observation_mode", "visual") != "visual":
@@ -982,6 +1016,7 @@ def command_evaluate_official(args) -> None:
     from test_regr.VLABenchAgentInterface.official.official_protocol import (
         load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
     )
+    from test_regr.VLABenchAgentInterface.official.perception_observations import GROUNDING_POLICY
     examples = load_official_examples(args.planning_dir, tasks=args.tasks, limit=args.limit)
     standard = args.limit is None and not args.tasks
     if not standard:
@@ -991,6 +1026,16 @@ def command_evaluate_official(args) -> None:
     cot_label = "_cot" if args.with_cot else ""
     grammar = args.constraints in ("grammar", "causal")
     causal = args.constraints == "causal"
+    perception = None
+    if perception_options is not None:
+        from test_regr.VLABenchAgentInterface.research.perception import ImagePerceptionModel, PerceptionConfig
+        # The same frozen VLM perceives when it is the planner model; no second copy is loaded.
+        shared = perception_options["model_id"] == str(args.planner_model)
+        if shared:
+            perception_options = {**perception_options, "load_in_4bit": args.load_in_4bit}
+        config = PerceptionConfig(**perception_options)
+        perception = (ImagePerceptionModel(planner.model, planner.processor, config) if shared
+                      else ImagePerceptionModel.load(config))
     hmm, hmm_digest = None, None
     if args.hmm:
         from test_regr.VLABenchAgentInterface.official.official_hmm import load_hmm
@@ -998,17 +1043,22 @@ def command_evaluate_official(args) -> None:
     decoding = "greedy"
     if grammar:
         from test_regr.VLABenchAgentInterface.official.official_hmm import decoding_label
-        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "")
-    suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "")
+        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "") + ("+image-perception" if perception is not None else "")
+    suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + ("_perception" if perception is not None else "")
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
     generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question, scene_ids=args.scene_ids,
                                            pattern_first=args.pattern_first,
-                                           hmm=hmm, weight=args.hmm_weight, causal=causal) if grammar
+                                           hmm=hmm, weight=args.hmm_weight, causal=causal, perception=perception,
+                                           disabled_formulas=getattr(args, "research_disable_formula", ())) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
         examples, generate, output_dir=output_dir,
         model_name=str(args.planner_model), few_shot_num=args.few_shot_num, with_cot=args.with_cot,
-        seed=args.seed, standard=standard, decoding=decoding)
+        seed=args.seed, standard=standard, decoding=decoding,
+        perception=None if perception is None else {
+            "inputs": "unlabeled image, number-labeled image, instruction; no entity table",
+            "config": perception_options, "fingerprint": perception.config.fingerprint,
+            "grounding_policy": GROUNDING_POLICY, "calibration": perception_calibration(args)})
     _json(summary | {"output_dir": str(output_dir), "load_in_4bit": args.load_in_4bit,
                      "max_new_tokens": args.max_new_tokens})
 
@@ -1483,6 +1533,8 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--observation-mode", choices=OBSERVATION_MODES, default="visual",
                           help="QA property selection: visual predictions (default) or metadata-assisted constraints")
     add_knowledge_argument(evaluate)
+    evaluate.add_argument("--perception-calibration-data", type=Path, default=None,
+                          help="--protocol official: the training dataset a non-default --perception-confidence was fit on")
     evaluate.add_argument("--generation-mode", choices=["graph", "frozen-vlm"], default="graph",
                           help="graph: trained adapter and DFA decoder; frozen-vlm: direct base VLM, no DFA")
     evaluate.add_argument("--max-new-tokens", type=int, default=768,

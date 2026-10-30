@@ -21,6 +21,7 @@ accuracy, physical success, or calibrated confidence is claimed.
 | Existing constraint | Image perception contribution |
 |---|---|
 | Visibility | Confident, visibly numbered object IDs populate `visible_entities`; metadata membership alone supplies no visibility. |
+| Object kind | Each confidently visible object gets a predicted `category`, a short lowercase noun read from its appearance ("tomato", "flask"), recorded as `visual_category:<id>` and in the audit's `visible_categories`. It is free text from pixels, not a scene-table name, and `null` when the kind cannot be read. Under `--protocol official` it grounds the instruction's candidates (below). |
 | Ambiguous grounding/selection | Candidate role bindings and relative weights inferred from pixels and instruction; multiple interpretations remain explicit. |
 | Freshness | Each capture is stamped with episode, runtime step and dependency revisions. A failed refresh removes same-step visual evidence. |
 | Open/closed affordances | Confident explicit visual states populate initial positive/negative facts; they remain noisy visual estimates. |
@@ -96,6 +97,51 @@ and its `entity_table`. Selecting image perception replaces privileged research
 sensor callbacks, and the lightweight helper's direct simulator-joint refresh is
 disabled. Controller proprioception and independent evaluator diagnostics retain
 their existing roles; they are not inputs to this perception network.
+
+## Official protocol
+
+`--protocol official` accepts the perception with `--knowledge grammar` or `causal`:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --protocol official   --knowledge causal --constraint-profile research_v1 --research-perception image-vlm   --planner-model /home/auszok/models/Qwen/Qwen3-VL-8B-Instruct --load-in-4bit
+```
+
+The run stays within the protocol's inputs and scoring:
+
+| Requirement | How the official path meets it |
+|---|---|
+| Inputs | Perception reads the episode's `input.png`, `input_mask.png` and instruction, the same items the official prompt shows (`official/perception_observations.py`, `episode_inputs`). |
+| No entity table | `perceive(..., entity_table=None)`: pointers stay tag ids, any printed tag is accepted, and `complete` is the model's own claim about the image instead of a comparison with the scene inventory. |
+| No task identity | No task-level rule runs; `--task-identity` (oracle or predicted) is refused. |
+| Frozen model | When `--perception-model` is the planner model (the default), the loaded planner perceives; no adapter or vocabulary is accepted. |
+| Threshold | The fixed default 0.85, or a value fit on a dataset named by `--perception-calibration-data` that `dataset_protocol.assert_training_dataset` proves independent of the official episodes. |
+| Scoring | Unchanged upstream scorer over all 4,500 episodes; `run.json` records the perception model, fingerprint, policy and calibration. |
+
+The facts reach the plan only through compiled logical constraints:
+
+- the visible tags ground `observation_supported_references` (`official/decoding_graph.py`): an id the
+  perception did not confidently see is refused;
+- the predicted kinds ground `instruction_candidates_bound_targets`: when the instruction's source clause names a
+  predicted kind ("put the **apple** in the bowl"), `pick` takes only tags of that kind, and a kind named in the
+  destination clause bounds `place`, `insert`, `pour` and `push` the same way
+  (`object_grounding.perceived_object_constraints`). A kind matches by its whole phrase or head noun, singular or
+  plural ("red apple" matches "apples"). Tags whose kind could not be read stay candidates, so only tags seen as
+  another kind are excluded. Negation, spatial or ordinal wording and source relations ("from the plate") abstain,
+  as in the scene-name filter;
+- the role hypotheses ground the research grounding formulas (`knowledge/research_lcs.py`), evaluated by the same
+  `ResearchMonitor` as the internal runtime and compiled into `KnowledgePlanDFA`. Each operation must keep at least one
+  hypothesis consistent with every id the plan has written (`research__grounding_joint`). Only the joint policy is used:
+  robust and abstain refuse to act under ambiguity, which in a planning-only benchmark is a format error.
+
+Unusable perception (invalid JSON, no confident object, no bound role) supplies no facts, and the episode
+decodes under grammar or causal alone. Every reply records the result in
+`<!-- perception: status=... visible=[...] categories={...} candidates={...} hypotheses=n complete=... -->`.
+
+Not used under this protocol: open/closed states (the official decoder keeps no world state), spatial, temporal and
+freshness policies (one capture, no execution), and every rule written against scene names (physics, complex, scene and task groups): a predicted kind is not a
+scene name, so those tables do not match it.
+Report such a run as a perception-augmented constrained system, apart from the zero-shot rows: the research formulas are
+priors written for VLABench, and a second call to the model precedes the plan. No official score has been measured yet.
 
 ## GPU2 single-pair preparation
 

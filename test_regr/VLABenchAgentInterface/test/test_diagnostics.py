@@ -309,6 +309,9 @@ def test_diagnostic_command_preserves_checkpoint_and_rejects_nonheldout_episode(
     dataset = replay_dataset()
     loader = DataLoader(ConcatDataset([Subset(dataset, range(len(dataset)))]), batch_size=2)
     monkeypatch.setattr(main, "_control_loaders", lambda _: {"validation": loader})
+    # The control source is a stand-in; its task metadata would otherwise be downloaded. The checkpoint keeps
+    # the default 128 task embeddings.
+    monkeypatch.setattr(main, "load_control_task_instructions", lambda _: {i: f"task {i}" for i in range(128)})
     args = main.build_parser().parse_args([
         "diagnose-controller", "--checkpoint", str(checkpoint), "--control-source", "unused",
         "--output", str(tmp_path / "report"), "--task", "select_fruit", "--tiny-vision",
