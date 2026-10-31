@@ -202,6 +202,16 @@ def _stage2_resume_position(payload, rounds_per_epoch):
     return int(payload["epoch"]), next_round, partial, metrics.get("prior_best")
 
 
+def _stage2_dfa_enabled(args, resume_payload=None):
+    mode = getattr(args, "stage2_dfa", "on")
+    if resume_payload and resume_payload.get("stage") == "stage2":
+        saved = resume_payload.get("metrics", {}).get("stage2_dfa", "on")
+        if saved != mode:
+            raise ValueError("Stage 2 DFA mode differs from the checkpoint; resume with the saved "
+                             "--stage2-dfa setting, or start a new Stage 2 run from a Stage 1/controller-warmup checkpoint")
+    return mode != "off"
+
+
 def _unit_interval(value: str) -> float:
     parsed = float(value)
     if not 0.0 <= parsed <= 1.0:
@@ -447,6 +457,7 @@ def command_train_agent(args):
                 "language-conditioned action policy"
             )
         resume_stage = payload["stage"]
+        _stage2_dfa_enabled(args, payload)
         if supervised_only and resume_stage != "stage1":
             raise ValueError(f"--{training_mode} requires a Stage 1 checkpoint when resuming")
         if assist_ablation_modes and resume_stage == "stage1":
@@ -705,6 +716,8 @@ def command_train_agent(args):
             from test_regr.VLABenchAgentInterface.research.experiments import family_episodes
             evaluation_descriptors=family_episodes(evaluation_descriptors,args.research_eval_episodes_per_family,args.seed)
             args.stage2_eval_rollouts_per_task=1
+    stage2_dfa_enabled = _stage2_dfa_enabled(args, resume_payload)
+    _status(f"Stage 2 DFA decoding={'on' if stage2_dfa_enabled else 'off (free sampling and replay)'}")
     stage2 = JointReinforcementProgram(
         runtime,
         planner,
@@ -718,7 +731,8 @@ def command_train_agent(args):
         vlabench_supervised_examples=vla_splits["train"],
         controller_anchor_loader=control_loaders["train"],
         eai_num_samples=args.eai_samples,
-        eai_supervised_weight=0.5,
+        eai_supervised_weight=args.stage2_eai_anchor_weight,
+        dfa_enabled=stage2_dfa_enabled,
         parameter_policy=None if stage2_policy == "none" else stage2_policy,
         device=device,
         num_samples=args.vlabench_planner_samples,
@@ -893,6 +907,7 @@ def command_train_agent(args):
                 next_round=next_round,
                 round_robin_cursor=stage2.round_robin_cursor,
                 metrics={
+                    "stage2_dfa": "on" if stage2_dfa_enabled else "off",
                     "partial_training": dict(partial_metrics),
                     "prior_best": prior_best,
                     "baseline_reference": baseline_reference,
@@ -918,6 +933,7 @@ def command_train_agent(args):
             initial_metrics=initial_metrics,
             round_callback=save_round_progress,
         )
+        metrics["stage2_dfa"] = "on" if stage2_dfa_enabled else "off"
         if args.stage2_eval_rollouts_per_task > 0:
             metrics["eai_training"] = metrics["eai"]
             eai_evaluation = _evaluate_eai(
@@ -1116,6 +1132,9 @@ def build_parser():
     agent.add_argument("--seed", type=int, default=42)
     agent.add_argument("--stage1-epochs", type=int, default=5)
     agent.add_argument("--stage2-epochs", type=int, default=3)
+    agent.add_argument("--stage2-dfa", choices=("on", "off"), default="on",
+                       help="Stage 2 planner DFA masking for both domains; off uses free sampling, replay "
+                            "and planning validation, bypassing task-pattern DFAs and DFA acceptance checks")
     agent.add_argument("--stage1-rounds-per-epoch", type=int,
                        help="paired domain updates per epoch; defaults to the larger planner dataset size, "
                             "cycling the smaller domain so both datasets are covered")
@@ -1182,6 +1201,8 @@ def build_parser():
     agent.add_argument("--stage2-max-baseline-success-regression", type=_unit_interval, default=0.0,
         help="maximum fixed-seed VLABench success regression allowed relative to Stage 1",
     )
+    agent.add_argument("--stage2-eai-anchor-weight", type=float, default=0.5,
+                       help="Stage 2 EAI supervised anchor weight; 0 disables it for RL-only updates")
     agent.add_argument("--stage2-planner-anchor-weight", type=float, default=0.25,
         help="Stage 1 supervised planner-anchor weight during Joint RL",
     )

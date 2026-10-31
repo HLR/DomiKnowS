@@ -1401,11 +1401,27 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         )
         return policy
 
+    def _sample_planner_candidate(self, *, replay_available, **kwargs):
+        # Replay records reconstruct the differentiable policy later. Keeping
+        # collection graphs here wastes memory and prevents inference KV caches.
+        with torch.set_grad_enabled(torch.is_grad_enabled() and not replay_available):
+            return self.planner_head.sample_with_logprob(**kwargs)
+
+    def _sampling_dfa_for_entities(self, entities, *, instruction="", task=None, task_context=None,
+                                   expected_pattern=None, target_name=None):
+        policy = self._dfa_for_entities(entities, instruction=instruction, task=task, task_context=task_context)
+        if not getattr(self, "planner_dfa_enabled", True):
+            return policy
+        if expected_pattern is not None:
+            policy = _task_pattern_dfa(policy, self.runtime.vocabulary, expected_pattern,
+                                       target_name=target_name, entities=entities)
+        return ProductiveDFA(policy)
+
     def _plan_rejection_reason(self, plan, entities, *, dfa=None) -> str | None:
         validation = validate_plan(plan, entity_table=entities, skill_arguments=self.runtime.world_bundle.skill_arguments, policy=dfa)
         if not validation.valid:
             return "schema:" + (validation.errors[0] if validation.errors else "invalid")
-        if not dfa_accepts_plan(
+        if getattr(self, "planner_dfa_enabled", True) and not dfa_accepts_plan(
             dfa or self.runtime.dfa,
             self.runtime.generation_bundle,
             plan,
@@ -1654,25 +1670,18 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         for image in views:image.close()
                         valid=False;termination_reason=preflight.status;break
                 from domiknows.generation.dfa.productive import SemanticSearchLimitExceeded
-                try:
-                    sampling_dfa = self._dfa_for_entities(entities, instruction=instruction, task=descriptor.get("task"), task_context=research_context)
-                except SemanticSearchLimitExceeded:
-                    for image in views:image.close()
-                    valid=False;termination_reason="budget_exhausted";break
+                target_name = None
                 if expected_pattern is not None and not measured_execution:
                     target_name = descriptor.get("task_target_entity", next(
                         (str(name) for name, values in diagnostics.targets.items()
-                         if int(values.get("samples", 0)) > 0),
-                        None,
-                    ))
-                    sampling_dfa = _task_pattern_dfa(
-                        sampling_dfa,
-                        self.runtime.vocabulary,
-                        expected_pattern,
-                        target_name=target_name,
-                        entities=entities,
-                    )
-                sampling_dfa = ProductiveDFA(sampling_dfa)
+                         if int(values.get("samples", 0)) > 0), None))
+                try:
+                    sampling_dfa = self._sampling_dfa_for_entities(
+                        entities, instruction=instruction, task=descriptor.get("task"), task_context=research_context,
+                        expected_pattern=expected_pattern if not measured_execution else None, target_name=target_name)
+                except SemanticSearchLimitExceeded:
+                    for image in views:image.close()
+                    valid=False;termination_reason="budget_exhausted";break
                 selected_plan = None
                 selected_logprob = None
                 selected_witness_score=float("-inf")
@@ -1701,7 +1710,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         encoded_context = encode_context(planner_context)
                     for _ in range(self.num_samples):
                         try:
-                            sampled = self.planner_head.sample_with_logprob(
+                            sampled = self._sample_planner_candidate(
+                                replay_available=prepared_context is not None,
                                 instruction=instruction,
                                 images=views,
                                 entity_table=entities,

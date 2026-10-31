@@ -31,7 +31,7 @@ from test_regr.VLABenchAgentInterface.simulation.program import (
     attach_planner_sensors,
 )
 
-from .models import JointQwenVLPlanner
+from .models import JointQwenVLPlanner, FreeDecoding
 from .world_graph import JointDomainRuntime
 
 
@@ -614,12 +614,16 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         controller_anchor_loader=None,
         eai_num_samples: int = 8,
         eai_supervised_weight: float = 0.5,
+        dfa_enabled: bool = True,
         parameter_policy: str | None = "freeze_shared",
         device: str | torch.device = "cpu",
         **kwargs,
     ):
         self.joint_runtime = runtime
         self.joint_planner = planner
+        self.planner_dfa_enabled = bool(dfa_enabled)
+        planner.free_decoding = not self.planner_dfa_enabled
+        planner.free_decoding_min_steps = 0
         self.eai_planner = planner.for_domain("eai")
         self.vlabench_planner = planner.for_domain("vlabench")
         self.eai_supervised_examples = tuple(eai_supervised_examples)
@@ -651,6 +655,17 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         )
         # Public identity used by checkpointing and acceptance tests.
         self.planner_head = planner
+
+    def _policy_dfa(self, domain, context):
+        if not self.planner_dfa_enabled:
+            vocabulary = self.joint_planner.vocabulary(domain)
+            return FreeDecoding(vocabulary.label_count, vocabulary.eos_label)
+        return self.joint_runtime.dfa_for(domain, context)
+
+    def _dfa_for_entities(self, entities, *, instruction="", task=None, task_context=None):
+        if not self.planner_dfa_enabled:
+            return self._policy_dfa("vlabench", {})
+        return super()._dfa_for_entities(entities, instruction=instruction, task=task, task_context=task_context)
 
     def collect_episode(self, descriptor):
         with self.joint_runtime.domain_scope("vlabench", parameter_policy=self.parameter_policy):
@@ -690,12 +705,16 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         context = _context(item, "eai")
         pairs = []
         with self.joint_runtime.domain_scope("eai", parameter_policy=self.parameter_policy):
-            encoded_context = self.eai_planner.encode_context(context)
+            # The causal sampler consumes the observation mapping; retaining an
+            # unused differentiable prompt encoding wastes a full prefill graph.
+            encoded_context = context
             prepared_context = self.eai_planner.prepare_replay_context(context)
             samples = []
             with torch.no_grad():
-                for _ in range(self.eai_num_samples):
-                    policy_dfa = self.joint_runtime.dfa_for("eai", item)
+                for sample_index in range(self.eai_num_samples):
+                    sample_start = time.monotonic()
+                    _emit_progress(f"EAI sample {sample_index + 1}/{self.eai_num_samples}: generating")
+                    policy_dfa = self._policy_dfa("eai", item)
                     labels, _ = self.eai_planner.sample_labels_from_context(
                         encoded_context,
                         policy_dfa,
@@ -715,6 +734,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                         float(goal["is_success"]),
                         policy_dfa,
                     ))
+                    _emit_progress(f"EAI sample {sample_index + 1}/{self.eai_num_samples}: labels={len(labels)} "
+                                   f"reward={samples[-1][1]:.4f} elapsed={time.monotonic() - sample_start:.1f}s")
             rewards = torch.tensor([s[1] for s in samples], device=self.joint_planner.device, dtype=torch.float32)
             advantages = rewards - rewards.mean()
             self.planner_optimizer.zero_grad(set_to_none=True)
@@ -723,6 +744,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             for i, (labels, _, _, _, policy_dfa) in enumerate(samples):
                 adv = advantages[i].detach()
                 if adv.abs() > 1e-6:
+                    _emit_progress(f"EAI replay {i + 1}/{count}: policy gradient")
                     logprob = self.eai_planner.replay_labels_logprob(
                         prepared_context,
                         labels,

@@ -562,6 +562,22 @@ class JointQwenVLPlanner(nn.Module):
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary(domain), context)
         return require_bound_predicate_dfa(dfa)
 
+    def _sampling_forward(self, inputs, *, use_cache):
+        # HF disables caches while gradient checkpointing is active, even in a
+        # no_grad rollout. Temporarily suspend only checkpointing, preserving
+        # module train/eval modes and restoring every flag on failure as well.
+        checkpointed = []
+        if use_cache:
+            for module in self.model.modules():
+                if module.__dict__.get("gradient_checkpointing", False):
+                    checkpointed.append((module, module.gradient_checkpointing))
+                    module.gradient_checkpointing = False
+        try:
+            return self.model(**inputs, output_hidden_states=True, use_cache=use_cache)
+        finally:
+            for module, original in checkpointed:
+                module.gradient_checkpointing = original
+
     def sample_labels(
         self,
         domain: str,
@@ -584,6 +600,8 @@ class JointQwenVLPlanner(nn.Module):
         labels: list[int] = []
         token_strings: list[str] = []
         logprob = torch.zeros((), device=self.device)
+        use_cache = not torch.is_grad_enabled() and getattr(self, "sampling_use_cache", True)
+        past = previous_ids = rope_deltas = None
 
         update_progress = make_progress_tracker()
         while True:
@@ -594,11 +612,52 @@ class JointQwenVLPlanner(nn.Module):
                 break
             inputs, boundaries = self._prepare_inputs_and_boundaries(domain, context, token_strings)
             model_inputs = self._inputs_to_model_device(inputs)
-            output = self.model(**model_inputs, output_hidden_states=True, use_cache=False)
+            full_ids = model_inputs.get("input_ids")
+            prefix_length = 0
+            # Verify the actual expanded processor IDs: tokenization can change
+            # at a label boundary. A changed prefix requires a fresh prefill.
+            if (use_cache and past is not None and previous_ids is not None and full_ids is not None
+                    and full_ids.shape[1] > previous_ids.shape[1]
+                    and boundaries[-1] >= previous_ids.shape[1]
+                    and torch.equal(full_ids[:, :previous_ids.shape[1]], previous_ids)):
+                prefix_length = previous_ids.shape[1]
+                model_inputs = dict(model_inputs)
+                model_inputs["input_ids"] = full_ids[:, prefix_length:]
+                for key in ("pixel_values", "pixel_values_videos", "image_grid_thw", "video_grid_thw",
+                            "second_per_grid_ts", "pixel_attention_mask", "image_sizes"):
+                    model_inputs.pop(key, None)
+                for key in ("position_ids", "token_type_ids", "mm_token_type_ids"):
+                    if key in model_inputs:
+                        model_inputs[key] = model_inputs[key][..., prefix_length:]
+                if "position_ids" not in model_inputs:
+                    mask = model_inputs.get("attention_mask")
+                    if mask is None:
+                        positions = torch.arange(prefix_length, full_ids.shape[1], device=full_ids.device)[None, :]
+                    else:
+                        positions = mask.long().cumsum(-1) - 1
+                        positions = positions.masked_fill(mask == 0, 0)[:, prefix_length:]
+                    # Qwen-VL compresses image patch positions in M-RoPE. Use
+                    # this trajectory's image delta, never stale image metadata
+                    # left by an earlier visual rollout when sampling EAI text.
+                    if rope_deltas is not None:
+                        positions = positions.unsqueeze(0).expand(3, -1, -1) + rope_deltas.unsqueeze(0)
+                    model_inputs["position_ids"] = positions
+                model_inputs["past_key_values"] = past
+            output = self._sampling_forward(model_inputs, use_cache=use_cache)
+            past = getattr(output, "past_key_values", None) if use_cache else None
+            if prefix_length == 0:
+                rope_deltas = None
+                if past is not None and any(model_inputs.get(key) is not None for key in ("image_grid_thw", "video_grid_thw")):
+                    for module in self.model.modules():
+                        delta = module.__dict__.get("rope_deltas")
+                        if torch.is_tensor(delta):
+                            rope_deltas = delta.detach().clone()
+                            break
+            previous_ids = full_ids.detach().clone() if past is not None and full_ids is not None else None
             hidden_states = getattr(output, "hidden_states", None) or getattr(output, "decoder_hidden_states", None)
             if hidden_states is None:
                 raise RuntimeError("vision-language backbone did not return hidden states")
-            last_idx = min(boundaries[-1], hidden_states[-1].shape[1] - 1)
+            last_idx = min(boundaries[-1] - prefix_length, hidden_states[-1].shape[1] - 1)
             hidden = hidden_states[-1][0, last_idx, :].float().to(self.device)
             logits = self.label_heads[domain](hidden)
 
@@ -892,10 +951,10 @@ class JointPlannerDomainView(nn.Module):
     def sample_with_logprob(self, **kwargs):
         context = planner_context(self.domain, kwargs, context=kwargs.get("context"))
         dfa = kwargs.get("dfa")
-        if self.domain == "eai" and dfa is not None:
+        if self.domain == "eai" and dfa is not None and not getattr(self.joint, "free_decoding", False):
             from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import bind_eai_policy
             dfa = bind_eai_policy(dfa, self.vocabulary, context)
-        if self.domain == "vlabench" and dfa is not None:
+        if self.domain == "vlabench" and dfa is not None and not getattr(self.joint, "free_decoding", False):
             from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         encoded_context = kwargs.get("encoded_context")
@@ -926,10 +985,10 @@ class JointPlannerDomainView(nn.Module):
     def generate_plan(self, **kwargs):
         context = planner_context(self.domain, kwargs, context=kwargs.get("context"))
         dfa = kwargs.get("dfa")
-        if self.domain == "eai" and dfa is not None:
+        if self.domain == "eai" and dfa is not None and not getattr(self.joint, "free_decoding", False):
             from test_regr.EmbodiedAgentInterface.utils.constraint_compiler import bind_eai_policy
             dfa = bind_eai_policy(dfa, self.vocabulary, context)
-        if self.domain == "vlabench" and dfa is not None:
+        if self.domain == "vlabench" and dfa is not None and not getattr(self.joint, "free_decoding", False):
             from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
             dfa = bind_vlabench_contextual_dfa(dfa, self.vocabulary, context)
         labels, _ = self.sample_labels(

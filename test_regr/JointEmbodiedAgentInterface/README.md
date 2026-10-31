@@ -6,15 +6,21 @@ Qwen3-VL-8B-Instruct backbone with one 4-bit LoRA adapter, two compact label hea
 and one sequential program lifecycle. The standalone EAI and VLABench CLIs
 remain supported for component debugging.
 
-The planner encodes each text or text-plus-vision observation with Qwen once.
-Separate EAI and VLABench graph-token embeddings and recurrent decoders reuse
-that differentiable context for the complete teacher-forced sequence or
-autoregressive trajectory. Multiple Stage 2 candidates for the same EAI item
-or VLABench observation also share that context. This avoids one full Qwen
-execution per prefix or sampled candidate. Qwen's non-reentrant layer
-checkpointing bounds activation memory during its
-single context pass. `--planner-decoder-hidden-dim` controls the compact
-decoder width and defaults to `512`.
+The planner uses one shared causal Qwen backbone and separate EAI/VLABench
+graph-label heads. Teacher forcing and differentiable trajectory replay each
+use one full-sequence forward pass. With a cache-capable backbone, gradient-free
+collection prefills the observation once per candidate trajectory and then
+passes only newly appended subword tokens through the model using its KV cache.
+Candidate trajectories have independent caches. Backbones returning no cache
+retain full-prefix decoding; gradient-enabled sampling also retains that path.
+
+Sampling temporarily suspends gradient-checkpoint flags to permit inference
+caches, then restores them without changing module train/eval modes. Replay
+retains gradient checkpointing and does not reuse detached rollout caches.
+Image-expanded token positions and multimodal RoPE offsets are preserved;
+text-only rollouts never reuse a previous image's position offsets. EAI updates
+report generation/reward progress per sample and policy-gradient replay progress.
+Keep `--planner-decoder-hidden-dim` at the saved checkpoint's value for compatibility.
 
 ## Combined graph and activation
 
@@ -208,7 +214,48 @@ exact same `JointQwenVLPlanner`. By default Stage 2 freezes the shared
 Qwen/LoRA and trains only the separate EAI and VLABench graph-token decoders;
 this prevents one domain's policy gradient from erasing the other domain's
 representation. Use `--no-stage2-freeze-shared-backbone` only as an explicit
-shared-adapter ablation:
+shared-adapter ablation.
+
+To run Stage 2 RL without DFA activation, use `--stage2-dfa off` (default:
+`on`). This applies to both EAI and VLABench planner sampling, differentiable
+log-probability replay, rollout evaluation, and Stage 2 planning validation.
+Task-pattern DFA wrappers, productive-DFA filtering, and DFA acceptance checks
+are bypassed. Every vocabulary label is available until EOS or the configured
+generation limit. Schema validation, graph-constraint checks, rewards,
+controller PPO, supervised anchors, simulator safety, and existing exploration
+and preflight gates retain their normal behavior. Graphs/DFAs are still built
+for checkpoint compatibility; the flag disables their use in Stage 2 decoding.
+
+Start Stage 2 from a selected Stage 1 checkpoint with:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage \
+  --resume path/to/joint_stage1_epoch_002.pt --stage1-epochs 0 \
+  --stage2-dfa off --stage2-epochs 3 --output checkpoints_rl_no_dfa
+```
+
+The normal controller BC warm-up runs before RL if needed; use a
+`joint_controller_warmup.pt` checkpoint to reuse an already warmed controller,
+or explicitly set `--controller-warmup-steps 0` to skip it. Stage 1 settings
+are independent of `--stage2-dfa`, so a new two-stage run can use constrained
+supervision followed by unconstrained RL, or `--stage1-dfa-loss off` for plain
+CE followed by unconstrained RL. Do not use `--ce-only`/`--ce-dfa-only` when
+requesting Stage 2: those modes intentionally stop after supervision.
+
+Stage 2 epoch/progress checkpoints record `metrics.stage2_dfa`. Resume them
+with the same setting (`--stage2-dfa off` for an unconstrained run); old
+unmarked Stage 2 checkpoints are treated as DFA-on. To change the setting,
+start a new Stage 2 run from Stage 1/controller-warm-up weights rather than
+mixing different sampling policies in a resumed run. Evaluate a DFA-off
+checkpoint separately with `evaluate-planning --no-dfa`.
+
+For reward-only updates, disable the supervised anchors with
+`--stage2-eai-anchor-weight 0 --stage2-planner-anchor-weight 0
+--stage2-controller-bc-weight 0`. Use `--dagger-weight 0` to disable the
+controller's auxiliary imitation loss, and `--controller-warmup-steps 0`
+when no additional behavior-cloning phase is wanted.
+
+With the default DFA-on setting:
 
 1. EAI samples eight prefix-conditioned, DFA-masked trajectories. Its
    SimpleTL/final-state/world-constraint reward trains the planner with
