@@ -19,6 +19,7 @@ from domiknows.generation.dfa.stop_policy import StopPolicy, stop_policy_from_le
 
 
 POSITIVE_RETURN_EPSILON = 1e-6
+INVALID_PLAN_RETURN = -0.1
 # InsertFlowerTask's expert lifts and moves the grasped flower with this fixed
 # gripper pose; the gripper x-axis then points to world -z so a stem grasped
 # along that axis hangs downward for insertion.
@@ -1751,7 +1752,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             # Constraint-invalid samples are useful negative
                             # planner evidence but can never reach the controller.
                             planner_logprobs.append(candidate_evidence)
-                            planner_transition_indices.append(None)
+                            planner_transition_indices.append(-1)  # rejected candidate
                 finally:
                     for image in views:
                         image.close()
@@ -3489,10 +3490,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 transitions[-1].reward += terminal
                 transitions[-1].done = True
             total = sum(item.reward for item in transitions)
-            if not valid:
-                total = 0.0
-                for item in transitions:
-                    item.reward = 0.0
+            # A later planning failure must not erase rewards earned by the
+            # controller's executed prefix. Invalid candidates receive their
+            # own planner penalty below, never fabricated controller actions.
             values = [float(item.old_value) for item in transitions]
             advantages, returns = generalized_advantage_estimate(
                 [item.reward for item in transitions], values, [item.done for item in transitions],
@@ -3502,7 +3502,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 item.advantage = advantage
                 item.return_value = return_value
             planner_returns = [
-                0.0 if start is None else sum(item.reward for item in transitions[start:])
+                INVALID_PLAN_RETURN if start == -1 else (
+                    0.0 if start is None else sum(item.reward for item in transitions[start:])
+                )
                 for start in planner_transition_indices
             ]
             
@@ -3653,7 +3655,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.planner_head.train()
         self.planner_optimizer.zero_grad(set_to_none=True)
         reward_values = torch.tensor([float(item[1]) for item in pairs], dtype=torch.float32)
-        advantages = reward_values - reward_values.mean()
+        # Use a fixed zero baseline. Batch centering deletes the entire signal
+        # when every sampled plan is invalid (or every plan is successful).
+        # Signed returns retain both rejection penalties and task rewards.
+        advantages = reward_values
         count = len(pairs)
         policy_value = 0.0
 
@@ -3675,9 +3680,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         # Replay Qwen decisions sequentially. At most one vision-language
         # autograd graph is resident, so memory does not grow with rollout
         # count or episode length while return-to-go still updates LoRA.
-        for (evidence, _reward), advantage in zip(pairs, advantages):
+        for decision_index, ((evidence, _reward), advantage) in enumerate(zip(pairs, advantages), 1):
             if not isinstance(evidence, PlannerReplayDecision) or float(advantage) == 0.0:
                 continue
+            self._report_progress(
+                f"VLABench planner replay {decision_index}/{count} advantage={float(advantage):.4f}"
+            )
             logprob = evidence.logprob(self.planner_head)
             term = -(logprob * advantage.to(device=logprob.device, dtype=logprob.dtype)) / count
             term.backward()
@@ -3686,8 +3694,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         anchor = self.supervised_weight * self._planner_anchor()
         if anchor.requires_grad:
             anchor.backward()
-        torch.nn.utils.clip_grad_norm_(self.planner_head.parameters(), 1.0)
+        gradient_norm = torch.nn.utils.clip_grad_norm_(self.planner_head.parameters(), 1.0)
         self.planner_optimizer.step()
+        self._report_progress(
+            f"VLABench planner update decisions={count} "
+            f"penalized={int((reward_values < 0).sum())} "
+            f"nonzero_advantages={int((advantages != 0).sum())} "
+            f"gradient_norm={float(gradient_norm):.6g} loss={policy_value:.6g}"
+        )
         return policy_value + float(anchor.detach())
 
     def _controller_anchor(self):
@@ -3726,11 +3740,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         task_signal_episodes = sum(
             episode.total_return > POSITIVE_RETURN_EPSILON for episode in episodes
         )
-        actor_update_enabled = bool(task_signal_episodes)
-        # Once a batch has genuine task signal, all executed transitions from
-        # valid rollouts are useful PPO evidence: positive-return episodes show
-        # what to reinforce and zero-return episodes show what to suppress.
-        # A wholly zero-return batch still updates only the detached critic.
+        # Executed on-policy transitions support GAE and entropy exploration
+        # even before the first positive return. Requiring a success before
+        # enabling exploration traps an unsuccessful initial policy forever.
+        actor_update_enabled = any(
+            int(item.executed) > 0
+            for episode in episodes for item in episode.controller
+        )
         entries = [
             (item, actor_update_enabled and int(item.executed) > 0)
             for episode in episodes
@@ -3771,7 +3787,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             # Centering a singleton advantage erases the only sparse-success
             # policy signal. Normalize only when there is a population against
             # which to compare it; otherwise preserve the raw GAE advantage.
-            if informative_advantages.numel() > 1:
+            if (
+                informative_advantages.numel() > 1
+                and float(informative_advantages.std(unbiased=False)) > 1e-6
+            ):
                 informative_advantages = (
                     informative_advantages - informative_advantages.mean()
                 ) / informative_advantages.std(unbiased=False).clamp_min(1e-6)
@@ -3943,8 +3962,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     - entropy_bonus
                     + feasibility_loss
                     + dagger_loss
-                    # The std regulariser reaches the shared trunk, so it follows the actor gate: an update with no
-                    # task-signal episode must not move the actor's features.
+                    # Regularize exploration only when sampled actions were
+                    # executed; planner-only failures have no controller evidence.
                     + (std_penalty if actor_update_enabled else torch.zeros_like(std_penalty))
                 )
             mean_action_log_ratio, max_action_log_ratio, approximate_kl = (

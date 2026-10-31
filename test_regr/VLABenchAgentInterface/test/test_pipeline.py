@@ -1938,7 +1938,9 @@ def test_feasibility_gradient_changes_only_rejected_action_likelihood():
     )
 
 
-def test_single_positive_transition_preserves_ppo_policy_signal():
+@pytest.mark.parametrize("advantage", [1.0, -1.0])
+@pytest.mark.parametrize("count", [1, 2])
+def test_constant_nonzero_advantages_preserve_ppo_policy_signal(advantage, count):
     world = build_vlabench_world_graph("test_single_positive_transition_world")
     runtime = build_constraint_runtime(
         world, max_entities=2, max_operations=2, name_prefix="test_single_positive_transition"
@@ -1981,17 +1983,17 @@ def test_single_positive_transition_preserves_ppo_policy_signal():
         actions=torch.zeros(1, 1, 7),
         old_logprob=torch.zeros(()),
         old_value=torch.zeros(()),
-        reward=1.0,
+        reward=max(0.0, advantage),
         done=True,
         executed=1,
-        advantage=1.0,
+        advantage=advantage,
         return_value=1.0,
     )
-    episode = JointEpisode([], [transition], 1.0, True, True, 1)
+    episode = JointEpisode([], [transition] * count, max(0.0, advantage), advantage > 0, True, count)
 
     program._update_controller([episode])
 
-    assert controller.logprob.item() > 0.0
+    assert controller.logprob.item() * advantage > 0.0
     assert program.last_controller_update["actor_update_attempted"] is True
     assert program.last_controller_update["rolled_back"] is False
 
@@ -2138,7 +2140,37 @@ def test_invalid_plan_never_executes_controller_or_environment():
     assert episode.controller == []
     assert simulator.count == 0
     assert planner.calls == program.num_samples == 4
-    assert episode.planner_returns == [0.0] * 4
+    assert episode.planner_returns == [-0.1] * 4
+    before = planner.preference.item()
+    program._update_planner([episode])
+    # Even an entirely rejected batch must suppress the sampled invalid plans.
+    assert planner.preference.item() < before
+
+
+def test_later_invalid_plan_preserves_executed_prefix_rewards():
+    world = build_vlabench_world_graph("test_invalid_after_progress_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2,
+                                       name_prefix="test_invalid_after_progress")
+
+    class LaterInvalidPlanner(TinyCompactPlanner):
+        def sample_with_logprob(self, **kwargs):
+            if self.calls:
+                self.calls += 1
+                return [{"name": "pick", "params": {}}], torch.nn.functional.logsigmoid(self.preference)
+            return super().sample_with_logprob(**kwargs)
+
+    planner = LaterInvalidPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    simulator = FakeSimulator(success=False)
+    simulator.get_task_progress = lambda: 0.5 if simulator.count else 0.0
+    program = _joint_program(runtime, planner, controller, lambda **_: simulator, num_samples=1)
+    program.max_steps = 2
+    episode = program.collect_episode({"task": "select_book", "task_skill_sequence": ("pick", "place")})
+    assert not episode.valid and not episode.success
+    assert simulator.count == 1
+    assert episode.total_return > 0
+    assert sum(item.reward for item in episode.controller) == pytest.approx(episode.total_return)
+    assert episode.planner_returns == pytest.approx([episode.total_return, -0.1])
 
 
 def test_failed_ik_action_receives_zero_and_is_not_executed():
@@ -2938,7 +2970,7 @@ def test_online_controller_uses_language_task_id_not_skill_pattern():
     assert controller.seen_task_index == 73
 
 
-def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
+def test_zero_return_rollout_can_explore_before_first_success():
     world = build_vlabench_world_graph("test_zero_return_actor_world")
     runtime = build_constraint_runtime(
         world, max_entities=2, max_operations=2, name_prefix="test_zero_return_actor"
@@ -2957,25 +2989,18 @@ def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
     transition.feasibility_cost = 1.0
     transition.feasibility_index = 0
     transition.old_feasibility_logprob = transition.old_logprob.detach().clone()
-    program.controller_anchor_loader = [{
-        "images": transition.images,
-        "state": transition.state,
-        "task_index": transition.task_index,
-        "plan_context": transition.plan_context,
-        "actions": transition.actions,
-    }]
-    program.controller_bc_weight = 1.0
+    program.feasibility_weight = 0.0
+    program.controller_bc_weight = 0.0
     actor_before = controller.policy_head.weight.detach().clone()
-    task_before = controller.task_embedding.weight.detach().clone()
     value_before = controller.value_head[-1].weight.detach().clone()
+    std_before = controller.log_std.detach().clone()
     loss = program._update_controller([episode])
     assert torch.isfinite(torch.tensor(loss))
-    assert torch.equal(actor_before, controller.policy_head.weight)
-    assert torch.equal(task_before, controller.task_embedding.weight)
+    assert not torch.equal(actor_before, controller.policy_head.weight) or not torch.equal(std_before, controller.log_std)
     assert not torch.equal(value_before, controller.value_head[-1].weight)
-    assert program.last_controller_update["actor_update_attempted"] is False
+    assert program.last_controller_update["actor_update_attempted"] is True
     assert program.last_controller_update["rolled_back"] is False
-    assert program.last_controller_update["parameters_changed"] is False
+    assert program.last_controller_update["parameters_changed"] is True
 
 
 def test_controller_ppo_rolls_back_complete_update_when_policy_drift_exceeds_limit():
