@@ -48,6 +48,14 @@ def test_numeric_bindings_never_recover_identity_from_metadata():
     assert result["perception"]["confidence_calibration"]=="unvalidated_model_report"
 
 
+def test_boxes_on_the_qwen_thousand_grid_are_normalized():
+    data=payload();data["objects"][0]["bbox"]=[100,100,300,300]
+    assert EvidenceLedger.parse(evidence(data)["evidence"]).get("image_bbox:0").value==pytest.approx((.09,.09,.31,.31))
+    for bad in ([100,100,1300,300],[300,100,100,300]):
+        data=payload();data["objects"][0]["bbox"]=bad
+        with pytest.raises(PerceptionUnavailable):evidence(data)
+
+
 def test_missing_placement_destination_cannot_bypass_observation_gate():
     result=perceive(Observer(),Image.new("RGB",(16,16)),Image.new("RGB",(16,16)),
         "Put the apple into the bowl",episode="e",step=0)

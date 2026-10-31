@@ -245,6 +245,9 @@ def compile_evidence(payload,*,config,episode,step,revisions=None,entity_table=N
             records.append({"id":identifier,"value":value,"episode":episode,"step":step,"source":"perception",
                 "kind":"observed","max_age_steps":0,"dependencies":deps,**kwargs})
         box=row.get("bbox")
+        if (isinstance(box,list) and len(box)==4 and max(box,default=0)>1
+                and all(type(v) in (int,float) and isfinite(v) and 0<=v<=1000 for v in box)):
+            box=[v/1000 for v in box]  # Qwen-VL grounding convention: coordinates relative to a 1000 grid
         if box is not None:
             if not isinstance(box,list) or len(box)!=4 or any(not score(v) for v in box) or box[0]>=box[2] or box[1]>=box[3]:
                 raise PerceptionUnavailable("Invalid normalized image bounds")
