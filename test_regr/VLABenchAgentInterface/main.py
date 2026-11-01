@@ -1016,7 +1016,6 @@ def command_evaluate_official(args) -> None:
     from test_regr.VLABenchAgentInterface.official.official_protocol import (
         load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
     )
-    from test_regr.VLABenchAgentInterface.official.perception_observations import GROUNDING_POLICY
     examples = load_official_examples(args.planning_dir, tasks=args.tasks, limit=args.limit)
     standard = args.limit is None and not args.tasks
     if not standard:
@@ -1027,7 +1026,7 @@ def command_evaluate_official(args) -> None:
     grammar = args.constraints in ("grammar", "causal")
     causal = args.constraints == "causal"
     perception = None
-    grounding_policy = getattr(args, "grounding_policy", None) or GROUNDING_POLICY
+    grounding_policy = getattr(args, "grounding_policy", None)  # None: no research grounding formula (opt-in)
     if perception_options is not None:
         from test_regr.VLABenchAgentInterface.research.perception import ImagePerceptionModel, PerceptionConfig
         # The same frozen VLM perceives when it is the planner model; no second copy is loaded.
@@ -1037,6 +1036,14 @@ def command_evaluate_official(args) -> None:
         config = PerceptionConfig(**perception_options)
         perception = (ImagePerceptionModel(planner.model, planner.processor, config) if shared
                       else ImagePerceptionModel.load(config))
+        if getattr(args, "perception_cache", None):
+            cached = perception.attach_disk_cache(args.perception_cache)
+            print(f"[official-vlm] perception cache {args.perception_cache}: {cached} replies", flush=True)
+    disabled_official = tuple(sorted(set(getattr(args, "official_disable_formula", None) or ())))
+    disabled_research = tuple(sorted(set(getattr(args, "research_disable_formula", None) or ())))
+    if disabled_official and not grammar:
+        raise ValueError("--official-disable-formula needs --knowledge grammar or causal")
+    disabled_label = "".join(f"-{name}" for name in disabled_official + disabled_research)
     hmm, hmm_digest = None, None
     if args.hmm:
         from test_regr.VLABenchAgentInterface.official.official_hmm import load_hmm
@@ -1044,14 +1051,15 @@ def command_evaluate_official(args) -> None:
     decoding = "greedy"
     if grammar:
         from test_regr.VLABenchAgentInterface.official.official_hmm import decoding_label
-        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "") + (f"+image-perception-{grounding_policy}" if perception is not None else "")
-    suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + (f"_perception_{grounding_policy}" if perception is not None else "")
+        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "") + (("+image-perception" + (f"-{grounding_policy}" if grounding_policy else "")) if perception is not None else "") + disabled_label
+    suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + (("_perception" + (f"_{grounding_policy}" if grounding_policy else "")) if perception is not None else "")
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
     generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question, scene_ids=args.scene_ids,
                                            pattern_first=args.pattern_first,
                                            hmm=hmm, weight=args.hmm_weight, causal=causal, perception=perception,
-                                           disabled_formulas=getattr(args, "research_disable_formula", ()),
-                                           grounding_policy=grounding_policy) if grammar
+                                           disabled_formulas=disabled_research,
+                                           grounding_policy=grounding_policy,
+                                           disabled_official_formulas=disabled_official) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
         examples, generate, output_dir=output_dir,
@@ -1566,6 +1574,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--hmm-weight", type=float, default=1.0, help="lookahead weight used with --hmm")
     evaluate.add_argument("--tasks", nargs="+", help="official protocol: restrict to these tasks (marks the run non-standard)")
     evaluate.add_argument("--official-output-dir", type=Path, help="official protocol: resumable outputs and summary.json")
+    evaluate.add_argument("--official-disable-formula", action="append", default=[],
+                          help="official protocol ablation: deactivate a named decoding or selection formula "
+                               "(e.g. observation_supported_references, ordinal_rank_2); recorded in the decoding label")
+    evaluate.add_argument("--perception-cache", type=Path,
+                          help="official protocol: directory of raw perception replies reused across runs "
+                               "(keyed by perception fingerprint, instruction and image hashes)")
     evaluate.set_defaults(handler=command_evaluate_planner)
 
     rollout = sub.add_parser("rollout")

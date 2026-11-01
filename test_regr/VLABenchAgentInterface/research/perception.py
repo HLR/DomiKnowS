@@ -135,7 +135,24 @@ class ImagePerceptionModel:
         self.model,self.processor=model,processor
         self.config=config or PerceptionConfig()
         self.cache=OrderedDict();self.lock=RLock()
+        self.disk=None;self.disk_file=None
         self.model.eval();self.model.requires_grad_(False)
+
+    def attach_disk_cache(self,directory):
+        """Reuse raw model replies across runs: keyed by the config fingerprint, instruction and image hashes.
+
+        Every ``*.jsonl`` file in ``directory`` is read; new replies go to this process's own file.
+        """
+        import os
+        from pathlib import Path
+        directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
+        self.disk={}
+        for path in sorted(directory.glob("*.jsonl")):
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    row=json.loads(line);self.disk[row["key"]]=row["text"]
+        self.disk_file=directory/f"{os.getpid()}.jsonl"
+        return len(self.disk)
 
     @classmethod
     def load(cls,config=None):
@@ -167,6 +184,9 @@ class ImagePerceptionModel:
             if key in self.cache:
                 self.cache.move_to_end(key)
                 return json.loads(self.cache[key])
+            stored=self.disk.get(json.dumps(key)) if self.disk is not None else None
+            if stored is not None:
+                return parse_response(stored)
             content=[{"type":"image","image":i} for i in images]
             content.append({"type":"text","text":perception_prompt(instruction)})
             text=self.processor.apply_chat_template([{"role":"user","content":content}],tokenize=False,
@@ -177,6 +197,10 @@ class ImagePerceptionModel:
             with torch.inference_mode():
                 output=self.model.generate(**batch,max_new_tokens=self.config.max_new_tokens,do_sample=False,use_cache=True)
             decoded=self.processor.tokenizer.decode(output[0,size:],skip_special_tokens=True)
+            if self.disk is not None:
+                self.disk[json.dumps(key)]=decoded
+                with open(self.disk_file,"a",encoding="utf-8") as stream:
+                    stream.write(json.dumps({"key":json.dumps(key),"text":decoded})+"\n")
             result=parse_response(decoded)
             self.cache[key]=json.dumps(result);self.cache.move_to_end(key)
             if len(self.cache)>64:self.cache.popitem(last=False)

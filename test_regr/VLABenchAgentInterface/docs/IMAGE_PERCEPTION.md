@@ -132,12 +132,13 @@ The facts reach the plan only through compiled logical constraints:
   as in the scene-name filter;
 - ordinal and named-card requests ground the selection formulas of `official/selection_graph.py`, and the tags they
   admit join the same candidate LC for `pick` (see below);
-- the role hypotheses ground the research grounding formulas (`knowledge/research_lcs.py`), evaluated by the same
-  `ResearchMonitor` as the internal runtime and compiled into `KnowledgePlanDFA`. With the default joint policy each
-  operation must keep at least one hypothesis consistent with every id the plan has written
-  (`research__grounding_joint`). `--grounding-policy robust` or `abstain` selects the stricter formulas
-  (`_robust`, `_unique`, `_abstain_match`, `_complete`); they refuse to act when the hypotheses disagree or the
-  grounding is incomplete, and such an episode ends as a format error. The policy is part of the run's decoding label.
+- with `--grounding-policy` (opt-in; none runs by default, see the ablation below), the role hypotheses ground the
+  research grounding formulas (`knowledge/research_lcs.py`), evaluated by the same `ResearchMonitor` as the internal
+  runtime and compiled into `KnowledgePlanDFA`. Under `joint` each operation must keep at least one hypothesis
+  consistent with every id the plan has written (`research__grounding_joint`). `robust` or `abstain` selects the
+  stricter formulas (`_robust`, `_unique`, `_abstain_match`, `_complete`); they refuse to act when the hypotheses
+  disagree or the grounding is incomplete, and such an episode ends as a format error. The policy is part of the
+  run's decoding label.
 
 When several sources bound the same skill and role, a tag must satisfy all of them; if they leave no tag in common,
 that role is left unrestricted.
@@ -185,8 +186,50 @@ Not used under this protocol:
   read card faces.
 
 Report such a run as a perception-augmented constrained system, apart from the zero-shot rows: the research and
-selection formulas are priors written for VLABench, and a second call to the model precedes the plan. No official
-score has been measured yet, and neither perception accuracy nor the left/right convention has been checked.
+selection formulas are priors written for VLABench, and a second call to the model precedes the plan. Neither
+perception accuracy nor the left/right convention has been checked.
+
+### Constraint ablation on the official episodes
+
+Measured 30 October to 1 November 2026 on all 4,500 episodes, 4-bit Qwen3-VL-8B-Instruct, `--knowledge causal`
+unless noted (code at commit 1b0393a7 plus the switches below). Δ is the official score (mean of the six dimension
+total scores) against the reference, with a paired bootstrap 95% interval (episodes resampled within each dimension).
+
+| Added to the reference | Reference | Δ | 95% interval | Plans changed (better / worse) |
+|---|---|---:|---|---|
+| Visibility only | causal, 37.39 | +0.00 | [−0.05, +0.06] | 219 (20 / 19) |
+| Object-kind filter | visibility | −0.02 | [−0.06, +0.02] | 35 (11 / 16) |
+| Ordinal / named-card selection | visibility + kinds | −0.02 | [−0.06, +0.00] | 5 (0 / 2) |
+| Visibility, kinds and selection | causal | −0.04 | [−0.12, +0.04] | 256 (31 / 37) |
+| Joint grounding | the three above | −1.05 | [−1.27, −0.82] | 780 (147 / 347) |
+| Joint grounding alone | causal | −1.09 | [−1.34, −0.85] | 858 (156 / 358) |
+| All, robust (or abstain) policy | causal | −5.34 | [−6.05, −4.62] | 1,966 (393 / 1,374) |
+| Visibility, kinds and selection | grammar, 37.44 | −0.06 | [−0.13, +0.00] | 195 (16 / 33) |
+
+The 450-episode held-out split moves the same way in every row. Perception reported no facts for 856 episodes (19%),
+which decode as the reference. Robust and abstain gave identical plans on every episode; they refuse to act on 708
+(16%), which score as format errors. They raise PhysLaw from 0 to 35.2 only because refusing every pick leaves
+`press`, the skill those question tasks need. Conclusion: the observation formulas (visibility, kinds, selection) are
+neutral and stay available; the grounding policies lower the score and are opt-in. These are decisions made on the
+official episodes, so report them as a diagnosis, not as tuned settings.
+
+Reproduce one configuration with the switches below; `--perception-cache DIR` replays the raw perception replies
+across runs (keyed by perception fingerprint, instruction and image hashes), so only the first run calls the model
+twice per episode:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --protocol official \
+  --planning-dir /path/to/vlm_evaluation_v1.0 --planner-model /path/to/Qwen3-VL-8B-Instruct --load-in-4bit \
+  --knowledge causal --constraint-profile research_v1 --research-perception image-vlm \
+  --perception-cache results/perception_cache \
+  --official-disable-formula instruction_candidates_bound_targets \
+  --official-output-dir results/ablation_visibility_only
+```
+
+`--official-disable-formula` takes any formula of `official/decoding_graph.py` or `official/selection_graph.py`
+(`observation_supported_references`, `instruction_candidates_bound_targets`, `ordinal_rank_1` .. `_8`,
+`named_card_face`) and may be repeated; `--grounding-policy joint|robust|abstain` adds a grounding policy. Both are
+recorded in the run's decoding label.
 
 ## GPU2 single-pair preparation
 

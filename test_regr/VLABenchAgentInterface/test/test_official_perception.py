@@ -327,8 +327,49 @@ def test_explicit_robust_policy_refuses_disagreeing_hypotheses():
     assert not incomplete.accepts(labels([op("pick", 1), op("place", container=2)]))
 
 
-def test_policy_default_is_robust_inside_and_joint_under_official():
+def test_policy_default_is_robust_inside_and_off_under_official():
+    import inspect
     from ..research.config import apply_research_arguments, default_config
+    from ..official.official_protocol import make_grammar_dfa_generator
     args = Namespace(constraint_profile="baseline", grounding_policy=None, research_perception="off")
     apply_research_arguments(args)
     assert default_config().grounding_policy == "robust" and args.grounding_policy is None
+    # Official runs add no grounding formula unless --grounding-policy names one.
+    assert inspect.signature(make_grammar_dfa_generator).parameters["grounding_policy"].default is None
+
+
+# Ablation switches -----------------------------------------------------------------------------
+
+def test_deactivating_the_visibility_formula_admits_unseen_ids():
+    from ..official.decoding_graph import build_decoding_graph
+    graph = build_decoding_graph()
+    next(lc for lc in graph.graph.logicalConstrains.values() if lc.name == "observation_supported_references").active = False
+    dfa = knowledge(visible_entities=(1, 2), decoding_graph=graph)
+    assert dfa.accepts(labels([op("pick", 3), op("place", container=2)]))
+
+
+def test_selection_formulas_can_be_switched_off_per_run(tmp_path):
+    from ..official.selection_graph import build_selection_graph
+    graph = build_selection_graph()
+    for lc in graph.graph.logicalConstrains.values():
+        lc.active = False
+    observed = observe_episode(FakeModel(scene(POKERS)), ti(tmp_path, "Please pick the 2nd poker from left to right"),
+                               selection=graph.recompiled())
+    assert observed.candidates.ids("pick", "target_entity_name", 8) == (1, 2, 3, 4)
+
+
+def test_disk_cache_replays_raw_replies_without_the_model(tmp_path):
+    from types import SimpleNamespace
+    from ..research.perception import ImagePerceptionModel, PerceptionUnavailable
+    frozen = SimpleNamespace(eval=lambda: None, requires_grad_=lambda flag: None)
+    first = ImagePerceptionModel(frozen, None, PerceptionConfig(model_id="frozen"))
+    assert first.attach_disk_cache(tmp_path) == 0
+    raw, numbered = Image.new("RGB", (8, 8)), Image.new("RGB", (8, 8), "white")
+    from ..research.perception import image_hash, rgb
+    key = (first.config.fingerprint, "Put the apple in the bowl", image_hash(rgb(raw)), image_hash(rgb(numbered)))
+    reply = json.dumps({"objects": [], "requests": [], "hypotheses": [], "complete": False})
+    (tmp_path / "1.jsonl").write_text(json.dumps({"key": json.dumps(key), "text": reply}) + "\n"
+                                      + json.dumps({"key": json.dumps([*key[:3], "other"]), "text": "not json"}) + "\n")
+    second = ImagePerceptionModel(frozen, None, PerceptionConfig(model_id="frozen"))
+    assert second.attach_disk_cache(tmp_path) == 2
+    assert second.infer(raw, numbered, "Put the apple in the bowl")["objects"] == []  # no processor or model call

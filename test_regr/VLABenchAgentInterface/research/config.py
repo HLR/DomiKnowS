@@ -68,7 +68,7 @@ def observation_context(context,config=None):
 def add_research_arguments(parser):
     parser.add_argument("--constraint-profile", choices=("baseline", "research_v1"), default="baseline")
     parser.add_argument("--grounding-policy", choices=("joint", "robust", "abstain"), default=None,
-                        help="research grounding policy (default robust; joint under --protocol official)")
+                        help="research grounding policy (default robust; under --protocol official no grounding rule unless named)")
     parser.add_argument("--motion-geometry", choices=("off", "sampled"), default="off")
     parser.add_argument("--max-grounding-hypotheses", type=int, default=128)
     parser.add_argument("--research-max-state-expansions", type=int, default=10000)

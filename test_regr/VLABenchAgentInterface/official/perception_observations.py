@@ -15,11 +15,12 @@ The facts reach the plan DFA only as observations of compiled logical constraint
 * ordinal and named-card requests ("2nd poker from left to right", "3rd largest poker",
   "poker jack of spades") ground the selection formulas of ``selection_graph.py`` from the
   perceived boxes and card faces; the tags they admit join the same candidate LC;
-* the hypotheses ground the research grounding formulas (``knowledge/research_lcs.py``),
-  evaluated by the same ``ResearchMonitor`` as the internal runtime. The default joint
-  policy needs the plan's ids to keep at least one hypothesis alive. ``--grounding-policy
-  robust`` or ``abstain`` may be chosen explicitly; they refuse to act under ambiguity or
-  incomplete grounding, which in a planning-only benchmark is a format error.
+* with ``--grounding-policy joint|robust|abstain`` (opt-in), the hypotheses ground the research
+  grounding formulas (``knowledge/research_lcs.py``), evaluated by the same ``ResearchMonitor``
+  as the internal runtime. Joint needs the plan's ids to keep at least one hypothesis alive;
+  robust and abstain refuse to act under ambiguity or incomplete grounding, which in a
+  planning-only benchmark is a format error. All three lowered the official score, so none
+  runs by default.
 """
 from __future__ import annotations
 
@@ -151,8 +152,11 @@ class EpisodePerception:
                 f"candidates={candidates} hypotheses={hypotheses} complete={str(complete).lower()} -->")
 
 
-def observe_episode(model, items: list[list[Any]], episode: str = "official") -> EpisodePerception:
-    """Run perception on the episode's official inputs; any failure supplies no facts."""
+def observe_episode(model, items: list[list[Any]], episode: str = "official", selection=None) -> EpisodePerception:
+    """Run perception on the episode's official inputs; any failure supplies no facts.
+
+    ``selection`` is a compiled ``SelectionGraph`` (default: all formulas active).
+    """
     raw, numbered, instruction = episode_inputs(items)
     try:
         result = perceive(model, raw, numbered, instruction, episode=episode, step=0, entity_table=None)
@@ -170,6 +174,6 @@ def observe_episode(model, items: list[list[Any]], episode: str = "official") ->
     uncertain = bool(reported - set(visible or ()))
     candidates = merged_constraints(
         perceived_object_constraints(instruction, known, tuple(t for t in visible or () if t not in known)),
-        selection_constraints(selection_graph(), instruction, visible or (), perceived_boxes(result), known,
+        selection_constraints(selection or selection_graph(), instruction, visible or (), perceived_boxes(result), known,
                               dict(cards), uncertain))
     return EpisodePerception(visible, grounding, result["perception"], categories, candidates, cards)

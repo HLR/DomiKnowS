@@ -436,7 +436,7 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                adapt: dict[str, Any] | None = None, seed: int = 42,
                                causal: bool = False, perception: Any = None,
                                research_knowledge: Any = None, disabled_formulas: Sequence[str] = (),
-                               grounding_policy: str = "joint"
+                               grounding_policy: str | None = None, disabled_official_formulas: Sequence[str] = ()
                                ) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
@@ -459,6 +459,11 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     ``perception`` is a frozen ``ImagePerceptionModel``: it reads the episode's two images and
     instruction, and its visible tags, predicted object kinds and role hypotheses become observations of the decoding
     and research LCs (:mod:`.perception_observations`); the result is recorded in a comment.
+    ``disabled_official_formulas`` deactivates named formulas of :mod:`.decoding_graph` and
+    :mod:`.selection_graph` before they are compiled (an ablation; ``disabled_formulas`` does the same for
+    the research grounding formulas). ``grounding_policy`` (``joint``, ``robust`` or ``abstain``) turns on the
+    research grounding formulas over the perceived role hypotheses; ``None`` leaves them out. They are opt-in
+    because on the official episodes every policy lowered the score (see docs/IMAGE_PERCEPTION.md).
     """
     import torch
     from transformers import LogitsProcessorList
@@ -473,8 +478,22 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
 
     try:
         from .knowledge_dfa import KnowledgePlanDFA
+        from .decoding_graph import build_decoding_graph
+        from .selection_graph import build_selection_graph
     except ImportError:  # pragma: no cover - flat-module execution
         from knowledge_dfa import KnowledgePlanDFA
+        from decoding_graph import build_decoding_graph
+        from selection_graph import build_selection_graph
+    decoding_graph, selection = build_decoding_graph(), build_selection_graph()
+    disabled_official = set(disabled_official_formulas)
+    formulas = [lc for g in (decoding_graph.graph, selection.graph) for lc in g.logicalConstrains.values()]
+    unknown = disabled_official - {lc.name for lc in formulas}
+    if unknown:
+        raise ValueError(f"unknown decoding or selection formulas: {sorted(unknown)}")
+    for lc in formulas:
+        if lc.name in disabled_official:
+            lc.active = False
+    selection = selection.recompiled()
     operators = TokenOperators(hmm[1], hmm[2]) if hmm is not None and weight > 0 else None
     adapting = operators is not None and adapt is not None and adapt.get("samples", 0) > 0 and adapt.get("lam", 0) > 0
     if adapting:
@@ -498,18 +517,19 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         if observed is not None and observed.supplies_facts:
             # One episode's perception: built per episode and not cached.
             grounding = (PerceivedGrounding(observed.grounding, knowledge_lcs, disabled_formulas, grounding_policy)
-                         if observed.grounding is not None else None)
+                         if observed.grounding is not None and grounding_policy is not None else None)
             dfa = KnowledgePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, causal=causal,
+                                   decoding_graph=decoding_graph,
                                    press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,
                                    visible_entities=observed.visible, grounding=grounding,
                                    object_candidates=observed.candidates, **common)
             return None, dfa
         knowledge = causal or press_only or bound is not None or bool(patterns)
         key = ("official-knowledge" if knowledge else "official-grammar", causal, press_only, bound, patterns,
-               entity_cap, max_operations)
+               entity_cap, max_operations) + ((tuple(sorted(disabled_official)),) if disabled_official else ())
         if key not in planner.dfas:
             planner.dfas[key] = (KnowledgePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, causal=causal,
-                                                  press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,
+                                                  decoding_graph=decoding_graph, press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,
                                                   **common)
                                  if knowledge else
                                  NativePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, **common))
@@ -562,7 +582,7 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         press_only = press_question and says_yes(items)
         bound = read_entity_count(items) if scene_ids else None
         chosen = choose_patterns(items) if pattern_first and not press_only else ()
-        observed = observe_episode(perception, items) if perception is not None else None
+        observed = observe_episode(perception, items, selection=selection) if perception is not None else None
         key, dfa = language(press_only, bound, tuple(sorted(chosen)), observed)
         steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
