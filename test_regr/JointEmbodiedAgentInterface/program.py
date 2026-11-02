@@ -50,8 +50,9 @@ class DFALossConfig:
     ``masked_ce_domains`` lists the domains trained on the distribution a DFA-masked decoder samples from: the softmax
     is restricted to the labels the DFA allows at each teacher-forced step (a step whose target the DFA disallows keeps
     the full softmax and is counted). Other domains keep plain cross entropy. The allowed-mass term (``mass_weight``)
-    is off by default: along the teacher path it is bounded by
-    the full cross entropy, so it adds no signal. ``pmd_weight`` is the primal-dual program's ``beta``; the
+    is off by default. With masked CE it teaches the unmasked distribution to
+    suppress forbidden labels; at weight 1 their sum equals full CE for allowed
+    targets. With full CE it reweights an existing signal. ``pmd_weight`` is the primal-dual program's ``beta``; the
     multipliers take an ascent step every ``dual_every`` rounds after ``dual_warmup`` rounds, as in
     ``PrimalDualProgram.train``.
     """

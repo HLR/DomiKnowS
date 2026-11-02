@@ -25,6 +25,8 @@ def test_verified_task_exclusion_requires_matching_training_and_resume_history()
     assert evaluation_protocol(args(), checkpoint)["excluded_from_joint_training_verified"]
     assert training_data_protocol(args(resume="same.pt"), checkpoint)["holdout_history_verified"]
     assert not training_data_protocol(args(resume="legacy.pt"), {})["holdout_history_verified"]
+    assert not training_data_protocol(args(initialize_from="legacy.pt"), {})["holdout_history_verified"]
+    assert training_data_protocol(args(initialize_from="same.pt"), checkpoint)["holdout_history_verified"]
     assert not training_data_protocol(args(resume_adapter="unknown-adapter"))["holdout_history_verified"]
     assert not training_data_protocol(args(resume="different.pt", holdout_tasks="select_toy"), checkpoint)["holdout_history_verified"]
     assert not evaluation_protocol(args(holdout_tasks="select_toy"), checkpoint)["excluded_from_joint_training_verified"]
@@ -105,3 +107,25 @@ def test_audit_probes_rejects_an_already_modified_reference():
     arguments = build_eval_parser().parse_args(["--checkpoint", "unused.pt", "--audit-probes", "--input-probe", "no-images"])
     with pytest.raises(ValueError, match="paired reference"):
         run_planning_evaluation(arguments)
+
+
+@pytest.mark.parametrize("count", [1, 2, 8, 450])
+def test_evaluation_shards_cover_each_selected_episode_once(count):
+    from ..eval_planning import _evaluation_shard
+    episodes = [f"episode_{i:03}" for i in range(450)]
+    parts = [_evaluation_shard(episodes, count, index) for index in range(count)]
+    combined = [episode for part in parts for episode in part]
+    assert len(combined) == len(set(combined)) == len(episodes)
+    assert sorted(combined) == episodes
+    assert max(map(len, parts)) - min(map(len, parts)) <= 1
+    assert [parts[i % count][i // count] for i in range(450)] == episodes
+
+
+@pytest.mark.parametrize("count,index", [(0, 0), (-1, 0), (2, -1), (2, 2)])
+def test_invalid_evaluation_shard_rejected_before_loading_checkpoint(count, index):
+    from ..eval_planning import run_planning_evaluation
+    selected = build_eval_parser().parse_args([
+        "--checkpoint", "unused.pt", "--num-shards", str(count), "--shard-index", str(index),
+    ])
+    with pytest.raises(ValueError, match="evaluation sharding"):
+        run_planning_evaluation(selected)

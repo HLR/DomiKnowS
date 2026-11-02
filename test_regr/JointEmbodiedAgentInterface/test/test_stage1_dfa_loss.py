@@ -129,8 +129,9 @@ def test_domains_outside_the_dfa_loss_keep_plain_cross_entropy(joint_fixture):
     assert terms == {}
 
 
-@pytest.mark.parametrize("mode", ["ce-only", "ce-dfa-only"])
-def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypatch, tmp_path, mode):
+@pytest.mark.parametrize("mode", ["ce-only", "ce-dfa-only", "ce-dfa-mass-only"])
+@pytest.mark.parametrize("initialize", [False, True])
+def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypatch, tmp_path, mode, initialize):
     from .. import main as cli
     from .. import program as program_module
     from ..models import FreeDecoding
@@ -171,9 +172,11 @@ def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypa
         # Poor baseline performance must still be saved, without an RL exploration gate.
         return {"goal_success": 0.0, "goal_recall": 0.0, "positive_reward_rate": 0.0}
 
+    vla_decoding = []
     def evaluate_vla(*args, **kwargs):
-        assert isinstance(planner._planning_dfa("vlabench", item["planner_context"], runtime.vlabench_dfa), FreeDecoding) == (mode == "ce-only")
-        return {"exact_graph_match": 0.0, "valid": 0.0}
+        free = isinstance(planner._planning_dfa("vlabench", item["planner_context"], runtime.vlabench_dfa), FreeDecoding)
+        vla_decoding.append(free)
+        return {"exact_graph_match": 0.0, "strict_plan_match": 0.0, "valid": 0.0}
 
     monkeypatch.setattr(cli, "_evaluate_eai", evaluate_eai)
     monkeypatch.setattr(cli, "evaluate_planner", evaluate_vla)
@@ -184,7 +187,11 @@ def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypa
         return path
 
     monkeypatch.setattr(cli, "save_joint_checkpoint", save)
-    monkeypatch.setattr(cli, "load_joint_checkpoint", lambda *a, **kw: saved)
+    loads = []
+    def load(*a, **kw):
+        loads.append(kw)
+        return saved or {"stage": "stage1", "epoch": 2}
+    monkeypatch.setattr(cli, "load_joint_checkpoint", load)
     args = cli.build_parser().parse_args([
         "train-agent", f"--{mode}", "--device", "cpu", "--output", str(tmp_path),
         "--stage1-epochs", "1", "--stage1-rounds-per-epoch", "1", "--stage1-eai-warmup-steps", "0",
@@ -192,14 +199,23 @@ def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypa
         "--stage1-dfa-domains", "none", "--stage1-pmd-domains", "eai,vlabench",
         "--stage1-pmd-weight", "10", "--stage1-dfa-mass-weight", "10",
     ])
+    if initialize:
+        args.initialize_from = str(tmp_path / "ce_epoch_002.pt")
     cli.command_train_agent(args)
+    if initialize:
+        assert "planner_optimizer" not in loads[0] and "controller_optimizer" not in loads[0]
+        assert saved["epoch"] == 0
+        assert saved["metrics"]["initialization"]["optimizers"] == "fresh"
     config = cli._dfa_loss_config(args)
     if mode == "ce-only":
         assert config is None
     else:
         assert config.masked_ce_domains == config.domains == ("eai", "vlabench")
-        assert config.pmd_domains == () and config.pmd_weight == config.mass_weight == 0.0
+        assert config.pmd_domains == () and config.pmd_weight == 0.0
+        assert config.mass_weight == (0.5 if mode == "ce-dfa-mass-only" else 0.0)
         assert saved["metrics"]["dfa_mass"].keys() == {"eai", "vlabench"}
+    assert vla_decoding == ([False, True] if mode == "ce-dfa-mass-only" else [mode == "ce-only"])
+    assert planner.free_decoding == (mode == "ce-only")
     assert args.stage2_epochs == args.controller_warmup_steps == 0
     assert saved["stage"] == "stage1"
     assert saved["metrics"]["training_mode"] == mode
@@ -288,3 +304,37 @@ def test_masked_cross_entropy_applies_only_to_the_listed_domains(joint_fixture):
         masked_total, masked_terms = both._domain_loss("eai", examples[0])
     assert plain_terms["masked_ce_misses"] == 0.0  # not masked: nothing is counted
     assert float(masked_total) <= float(plain_total) + 1e-6
+
+
+@pytest.mark.parametrize("weight", [0.0, -1.0, 1.1, float("nan"), float("inf")])
+def test_mass_mode_rejects_invalid_weights(weight):
+    from ..main import build_parser, _dfa_loss_config
+    args = build_parser().parse_args(["train-agent", "--ce-dfa-mass-only", "--ce-dfa-mass-weight", str(weight)])
+    with pytest.raises(ValueError, match="ce-dfa-mass-weight"):
+        _dfa_loss_config(args)
+
+
+def test_mass_penalty_suppresses_forbidden_logits_at_deterministic_dfa_steps():
+    from domiknows.generation.learners.common.losses import masked_cross_entropy, allowed_log_mass
+    logits = torch.tensor([[0.0, 10.0]], requires_grad=True)
+    target = torch.tensor([0]);allowed = {0: (0,)}
+    conditional, misses = masked_cross_entropy(logits, target, allowed)
+    assert misses == 0 and conditional.item() == pytest.approx(0.0, abs=1e-6)
+    mass = -allowed_log_mass(torch.log_softmax(logits, -1), allowed).mean()
+    full = torch.nn.functional.cross_entropy(logits, target)
+    torch.testing.assert_close(conditional + mass, full)
+    loss = conditional + .5 * mass
+    loss.backward()
+    assert logits.grad[0, 1] > 0 and logits.grad[0, 0] < 0
+    before = logits.detach().softmax(-1)[0, 0]
+    updated = (logits.detach() - .1 * logits.grad).softmax(-1)[0, 0]
+    assert updated > before
+
+
+def test_mass_mode_selection_considers_unconstrained_accuracy():
+    from ..main import stage1_selection_key
+    def result(masked, free):
+        return {"eai": {"goal_success": .5, "goal_recall": .8},
+                "vlabench": {"strict_plan_match": masked, "valid": 1},
+                "vlabench_no_dfa": {"strict_plan_match": free}, "validation_loss": .1}
+    assert stage1_selection_key(result(.9, .8)) > stage1_selection_key(result(.95, .1))

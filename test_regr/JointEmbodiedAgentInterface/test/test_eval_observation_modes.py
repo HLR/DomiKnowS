@@ -7,9 +7,10 @@ import pytest
 from .. import eval_planning
 
 
-@pytest.mark.parametrize('mode', ['visual','metadata-assisted'])
+@pytest.mark.parametrize('knowledge', [None, 'grammar', 'causal', 'metadata'])
 @pytest.mark.parametrize('updated', [False, True])
-def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypatch, mode, updated):
+def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypatch, knowledge, updated):
+    mode = 'metadata-assisted' if knowledge == 'metadata' else 'visual'
     checkpoint = tmp_path/'checkpoint.pt'
     checkpoint.write_bytes(b'fixture')
     output = tmp_path/'metrics.json'
@@ -18,6 +19,7 @@ def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypa
         '--output',str(output),'--observation-mode',mode,
     ])
     args.updated_data = updated
+    args.knowledge = knowledge
     from test_regr.VLABenchAgentInterface import repair_density_labels
     calls = []
     def update(selected):
@@ -36,13 +38,18 @@ def test_joint_cli_propagates_observation_mode_and_records_it(tmp_path, monkeypa
     planner = SimpleNamespace(eval=lambda:None, for_domain=lambda domain:object())
     monkeypatch.setattr(eval_planning,'JointQwenVLPlanner',SimpleNamespace(from_pretrained=lambda **kwargs:planner))
     monkeypatch.setattr(eval_planning,'_controller',lambda *args:object())
-    monkeypatch.setattr(eval_planning,'load_joint_checkpoint',lambda *args,**kwargs:{'stage':'stage2','epoch':4})
+    checkpoint_options = []
+    def load_checkpoint(*args, **kwargs):
+        checkpoint_options.append(kwargs)
+        return {'stage': 'stage2', 'epoch': 4}
+    monkeypatch.setattr(eval_planning, 'load_joint_checkpoint', load_checkpoint)
     monkeypatch.setattr(eval_planning,'_runtime_adapter',lambda *args:object())
     def evaluate(planner, selected, adapter):
         assert selected is examples
         return {'planning_metrics':{'overall':{},'dimensions':{}}}
     monkeypatch.setattr(eval_planning,'evaluate_planner',evaluate)
     report = eval_planning.run_planning_evaluation(args)
+    assert checkpoint_options[0]['allow_knowledge_ablation'] is (knowledge is not None)
     assert seen == [mode]
     assert report['examples_evaluated'] == 1
     assert report['observation_mode'] == json.loads(output.read_text())['observation_mode'] == mode

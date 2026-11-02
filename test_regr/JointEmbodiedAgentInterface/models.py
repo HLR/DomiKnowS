@@ -678,7 +678,8 @@ class JointQwenVLPlanner(nn.Module):
             observer = getattr(self, "decision_observer", None)
             if observer is not None:
                 from domiknows.generation.decision_trace import decision_record
-                observer(decision_record(logits, allowed, label, vocabulary, token_strings))
+                observer(decision_record(logits, allowed, label, vocabulary, token_strings,
+                                         dfa=dfa, state=state, remaining_steps=remaining_steps_for(policy, step)))
             logprob = logprob + distribution.log_prob(label)
             label_int = int(label)
             labels.append(label_int)

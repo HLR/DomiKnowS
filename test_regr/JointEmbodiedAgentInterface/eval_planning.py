@@ -79,6 +79,12 @@ def build_eval_parser() -> argparse.ArgumentParser:
                         help="decode without the grammar DFA or any constraint (baseline below --knowledge grammar)")
     parser.add_argument("--audit-probes", action="store_true",
                         help="also score paired no-images, shuffled-images and permuted-entities inputs")
+    from .utils.leakage_pilot import add_pilot_arguments
+    add_pilot_arguments(parser)
+    parser.add_argument("--num-shards", type=int, default=1,
+                        help="partition the selected examples into this many disjoint evaluation shards")
+    parser.add_argument("--shard-index", type=int, default=0,
+                        help="zero-based evaluation shard; aggregate every shard for a full-split score")
     parser.add_argument("--updated-data", "--updated-labels", action="store_true",
                         help="score against corrected density labels computed in memory; default uses labels stored in --planning-dir")
     parser.add_argument(
@@ -138,6 +144,9 @@ def build_eval_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ground-complex", action=argparse.BooleanOptionalAction, default=True,
                         help="enable input-grounded Complex goals; disable for the representation-only ablation")
     parser.add_argument("--decision-trace", type=Path, help="write read-only token logits, masks, and probabilities as JSONL")
+    parser.add_argument("--predictions-output", type=Path, help="save per-episode predictions and reference scores as JSONL")
+    parser.add_argument("--paired-density-references", action="store_true",
+                        help="score each prediction against original and in-memory corrected density references")
     parser.add_argument("--input-probe", choices=("original", "permuted-entities", "no-images", "shuffled-images", "shuffled-instructions"), default="original",
                         help="diagnostic ablation; non-original results are not benchmark scores")
     parser.add_argument("--allow-planning-schema-migration", action="store_true", help="explicitly warm-start the audited optional-push/longer-budget schema; exact resume remains the default")
@@ -209,12 +218,46 @@ def _prepare_eval(args, device):
     return runtime, vlabench_splits
 
 
+def _evaluation_shard(examples, count=1, index=0):
+    if count < 1 or not 0 <= index < count:
+        raise ValueError("evaluation sharding requires num-shards >= 1 and 0 <= shard-index < num-shards")
+    return examples if count == 1 else examples[index::count]
+
+
 def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
+    if getattr(args, "pilot_condition", "original") != "original" and not getattr(args, "pilot_manifest", None):
+        raise ValueError("--pilot-condition requires --pilot-manifest")
+    if getattr(args, "paired_density_references", False) and getattr(args, "updated_data", False):
+        raise ValueError("--paired-density-references requires original input examples; omit --updated-data")
+    if getattr(args, "paired_density_references", False) and not (args.output or args.predictions_output):
+        raise ValueError("paired references require --output or --predictions-output")
+    shard_count = getattr(args, "num_shards", 1)
+    shard_index = getattr(args, "shard_index", 0)
+    _evaluation_shard([], shard_count, shard_index)
     if getattr(args, "audit_probes", False) and getattr(args, "input_probe", "original") != "original":
         raise ValueError("--audit-probes requires --input-probe original for its paired reference")
     checkpoint_path = Path(args.checkpoint).resolve()
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"checkpoint not found: {checkpoint_path}")
+    pilot_manifest = None
+    if getattr(args, "pilot_manifest", None):
+        from .utils.leakage_pilot import load_manifest, guard_settings
+        if (not args.no_dfa or args.split != "test" or not args.output
+                or getattr(args, "knowledge", None) != "grammar"
+                or args.observation_mode != "visual" or args.input_probe != "original"
+                or args.paired_density_references or args.updated_data or args.audit_probes
+                or args.limit or args.dimension or args.num_shards != 1):
+            raise ValueError("pilot requires --no-dfa --knowledge grammar --split test --output; "
+                             "no other filters, probes, reference repair flags or sharding")
+        pilot_manifest = load_manifest(args.pilot_manifest, checkpoint_path)
+        if (args.seed != pilot_manifest["seed"] or
+                args.planning_dir.resolve() != Path(pilot_manifest["planning_root"]).resolve()):
+            raise ValueError("pilot seed/planning root differs from its frozen manifest")
+        settings = json.loads(json.dumps({"manifest_sha256": pilot_manifest["manifest_sha256"],
+                            "checkpoint_sha256": pilot_manifest["checkpoint_sha256"],
+                            "source_sha256": pilot_manifest["source_sha256"],
+                            "arguments": vars(args)}, default=str))
+        guard_settings(args.output.with_suffix(".pilot.settings.json"), settings)
     knowledge = apply_knowledge_argument(args)
     holdout = apply_holdout_arguments(args)
 
@@ -246,7 +289,11 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         controller=controller,
         map_location=device,
         allow_planning_schema_migration=getattr(args, "allow_planning_schema_migration", False),
-        allow_knowledge_ablation=bool(holdout) and not bool(getattr(args, "declare_heldout_knowledge", False)),
+        # An explicit evaluation knowledge level changes decoding constraints,
+        # not the trained weights. Keep vocabulary, model and EAI checks active.
+        allow_knowledge_ablation=(getattr(args, "knowledge", None) is not None) or (
+            bool(holdout) and not bool(getattr(args, "declare_heldout_knowledge", False))
+        ),
     )
 
     planner.eval()
@@ -258,6 +305,10 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         examples = _evaluation_examples(args, args.planning_dir)
     else:
         examples = vla_splits.get(args.split, [])
+
+    if pilot_manifest is not None:
+        from .utils.leakage_pilot import pilot_examples
+        examples = pilot_examples(examples, pilot_manifest, args.pilot_condition)
 
     if args.dimension:
         dim_str = args.dimension.lower()
@@ -278,11 +329,32 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
                                  ground_complex=getattr(args, "ground_complex", True))
     from test_regr.VLABenchAgentInterface.planning_augmentation import diagnostic_examples
     examples = diagnostic_examples(examples, getattr(args, "input_probe", "original"), args.seed)
+    total_selected_examples = len(examples)
+    examples = _evaluation_shard(examples, shard_count, shard_index)
+    if not examples:
+        raise ValueError("selected evaluation shard is empty")
 
     dim_msg = f" (dimension: {args.dimension})" if args.dimension else ""
     print(f"[eval-planning] Evaluating {len(examples)} examples from split '{args.split}'{dim_msg}...", flush=True)
 
     with ExitStack() as stack, torch.no_grad():
+        paired = None
+        pilot_audit = None
+        predictions_path = getattr(args, "predictions_output", None)
+        if pilot_manifest is not None:
+            from .utils.leakage_pilot import PilotObserver
+            predictions_path = predictions_path or args.output.with_suffix(".predictions.jsonl")
+            predictions_path.parent.mkdir(parents=True, exist_ok=True)
+            pilot_audit = stack.enter_context(PilotObserver(
+                stack.enter_context(predictions_path.open("w", encoding="utf-8")),
+                examples, pilot_manifest, args.pilot_condition, planner))
+        if getattr(args, "paired_density_references", False) and predictions_path is None:
+            predictions_path = args.output.with_suffix(".predictions.jsonl")
+        if predictions_path is not None and pilot_audit is None:
+            from .utils.paired_references import PairedReferenceAudit
+            predictions_path.parent.mkdir(parents=True, exist_ok=True)
+            paired = PairedReferenceAudit(stack.enter_context(predictions_path.open("w", encoding="utf-8")),
+                                          correct_density=getattr(args, "paired_density_references", False))
         trace = None
         if getattr(args, "decision_trace", None):
             args.decision_trace.parent.mkdir(parents=True, exist_ok=True)
@@ -293,6 +365,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
                 examples,
                 _runtime_adapter(runtime, "vlabench"),
                 **({"decision_trace": trace} if trace is not None else {}),
+                **({"prediction_observer": paired.observe} if paired is not None else {}),
+                **({"prediction_observer": pilot_audit.observe} if pilot_audit is not None else {}),
             )
 
     input_audit = {}
@@ -341,7 +415,13 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "updated_data": getattr(args, "updated_data", False),
         "ground_complex": getattr(args, "ground_complex", True),
         "input_probe": getattr(args, "input_probe", "original"),
+        "pilot_audit": pilot_audit.report() if pilot_audit is not None else None,
         "examples_evaluated": len(examples),
+        "paired_reference_evaluation": paired.report() if paired is not None else None,
+        "predictions_output": str(predictions_path) if predictions_path is not None else None,
+        "evaluation_shard": {"count": shard_count, "index": shard_index,
+                             "total_selected_examples": total_selected_examples},
+        "evaluation_episode_ids": [getattr(example, "episode_id", None) for example in examples],
         "generation_failures": metrics.get("generation_failures", 0),
         "semantic_search_limit_failures": metrics.get("semantic_search_limit_failures", 0),
         "overall": overall,
@@ -350,6 +430,10 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "dimensions": dimensions,
         "detailed_metrics": metrics,
     }
+
+    if pilot_audit is not None:
+        report["reference_labels"] = "scene-verified density references frozen before input perturbation"
+        report["evaluation_protocol"]["scope"] = pilot_manifest["scope"]
 
     # Print formatted scorecard
     print("\n" + "=" * 70)

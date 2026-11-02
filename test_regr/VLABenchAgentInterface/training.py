@@ -532,7 +532,8 @@ def train_planner_reinforcement_epoch(
 
 @torch.no_grad()
 def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstraintRuntime | None = None,
-                     *, generation_mode: str = "graph", max_new_tokens: int = 768, decision_trace=None) -> dict[str, Any]:
+                     *, generation_mode: str = "graph", max_new_tokens: int = 768, decision_trace=None,
+                     prediction_observer=None) -> dict[str, Any]:
     """Apply the same scoring to graph plans or unconstrained native VLM text."""
     if generation_mode not in {"graph", "frozen-vlm"}:
         raise ValueError(f"unknown planner generation mode {generation_mode!r}")
@@ -662,6 +663,9 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 statuses = grounding_coverage.setdefault(check["family"], {})
                 statuses[check["status"]] = statuses.get(check["status"], 0) + 1
             totals["valid"] += float(result.valid)
+            if prediction_observer is not None:
+                error = next((e for e in reversed(generation_errors) if e["example"] == count), None)
+                prediction_observer(example, output, generation_error=error)
             for key in ("skill_match", "entity_match", "skill_with_entity_match", "exact_graph_match"):
                 totals[key] += getattr(result, key)
     finally:

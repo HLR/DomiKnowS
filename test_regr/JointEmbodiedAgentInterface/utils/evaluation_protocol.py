@@ -6,7 +6,7 @@ from test_regr.VLABenchAgentInterface.knowledge.holdout import holdout_tasks
 def training_data_protocol(args, resume_payload=None):
     tasks = sorted(set(holdout_tasks(args)))
     previous = (resume_payload or {}).get("metrics", {}).get("training_data_protocol", {})
-    verified = not getattr(args, "resume_adapter", None) and (not getattr(args, "resume", None) or (
+    verified = not getattr(args, "resume_adapter", None) and (not (getattr(args, "resume", None) or getattr(args, "initialize_from", None)) or (
         bool(previous.get("holdout_history_verified"))
         and previous.get("vlabench_holdout_tasks") == tasks
     ))

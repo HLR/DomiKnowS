@@ -133,6 +133,30 @@ larger total `--stage1-epochs`. Only Stage 1 checkpoints are accepted; use a
 fresh run or a checkpoint from this mode for an entirely CE-with-DFA run.
 Evaluate the checkpoint with the default DFA decoding in `evaluate-planning`.
 
+To retain useful unmasked logits while using DFA-masked training, use a separate
+supervised mode:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --ce-dfa-mass-only \
+  --ce-dfa-mass-weight 0.5 --knowledge grammar --stage1-epochs 4 \
+  --initialize-from /path/to/ce_stage1_checkpoint.pt \
+  --stage1-eai-warmup-steps 0 --output /path/to/new_run
+```
+
+Its loss is masked CE plus `weight * -log(allowed probability mass)` at every
+teacher-forced step in both domains. For allowed targets, weight 0.5 is an equal
+blend of masked and full-vocabulary CE; weight 1 is full-vocabulary CE. The
+original `--ce-dfa-only` baseline retains zero mass weight. Neither mode runs
+primal-dual training or RL; Stage 1 controller behavior cloning remains enabled.
+
+`--initialize-from` loads compatible Stage 1 weights with fresh optimizers and
+starts epoch numbering at zero. It preserves checkpoint lineage and cannot be
+combined with resume options. For an interrupted run, use `--resume` instead.
+Each mass-mode epoch saves both DFA and no-DFA VLABench validation metrics, the
+mass weight, and initialization provenance. Checkpoint selection uses the lower
+of the two complete-plan accuracies alongside EAI goal success. Dataset and
+checkpoint compatibility checks still apply.
+
 Stage 1 constructs one `JointSolverPOIProgram(SolverPOIProgram)` with both
 sensor branches attached. Each round performs one EAI update and one VLABench
 update, giving the domains equal weight:
@@ -626,7 +650,9 @@ CUDA_VISIBLE_DEVICES=2 python \
 | `--device cuda:0` | Uses the first GPU visible to the Python process, physical GPU 2 in this command. |
 | `--allow-planning-schema-migration` | Allows the audited compatibility migration from the older champion's planning schema to optional push destinations and the longer operation budget. It does not modify checkpoint weights or bypass arbitrary incompatibilities. Current-schema checkpoints do not need it. |
 | `--observation-mode visual` | Default QA input mode: the VLM chooses physical-property answers from images, instructions, and the existing scene/entity interface. Additional property metadata does not select the answer. Grounded Complex task constraints remain active; this is not an image-only planner. |
-| `--decision-trace` | Optional JSONL output of token logits, allowed tokens, and selected tokens, for diagnostics and replay. It does not change decoding. |
+| `--decision-trace` | Optional JSONL output of token logits, allowed tokens, raw argmax, selected tokens, and immediate rule rejections. Completion pruning is labeled separately when no immediate violated rule is identified. It does not change decoding. |
+| `--paired-density-references` | Generate each plan once and score the identical prediction against original and in-memory corrected density references. Requires `--output` or `--predictions-output`; cannot be combined with `--updated-data`. |
+| `--predictions-output` | JSONL records containing predictions, entity tables, both references and scores, and an inference-input fingerprint. With paired references, defaults to the report filename with `.predictions.jsonl`. |
 | `--output` | Saves the aggregate metrics, dimension breakdown, generation failures, observation mode, and label protocol to JSON. Use a different filename for each condition. |
 | `--updated-data` | Optional; computes corrected density scoring labels in memory. Images, instructions, decoder grounding, and disk data remain unchanged. Alias: `--updated-labels`. |
 
@@ -651,6 +677,34 @@ With the flag it is `density-material-button-v1`, and `updated_data` is `true`.
 See [original/corrected label migration and restoration](../VLABenchAgentInterface/README.md#original-and-corrected-scoring-labels)
 for reversible on-disk updates. These tests measure non-interactive planning,
 not simulator execution success.
+
+## Controlled shortcut pilot
+
+`python -m test_regr.JointEmbodiedAgentInterface.utils.leakage_pilot` prepares an
+immutable manifest from `--planning-dir`, `--checkpoint`, `--source-root`,
+`--archive-predictions`, and a new `--output` directory. It freezes the seed-42
+split, selects 90 test episodes balanced across tasks and repeated/novel text
+inputs, hashes scene files and decoded images, and freezes density references
+before any input perturbation. This audits a historical checkpoint; it does not
+train or certify an untouched official benchmark.
+
+Evaluate each manifest using `eval_planning --split test --knowledge grammar
+--no-dfa --pilot-manifest <manifest.json> --pilot-condition <condition> --output
+<report.json> --decision-trace <decisions.jsonl>` plus the checkpoint's compatible
+model and controller options. Conditions are `original`, `anonymous-objects`,
+`no-images`, `shuffled-images`, `shuffled-instructions`, and
+`anonymous-no-images`. The original condition must reproduce the archived
+predictions and scores before interpreting the other conditions.
+
+The pilot records actual prompt/chat text, input hashes, donor identities,
+predictions and frozen-reference scores. Anonymization changes only the object
+inventory and object-specific button hints in the prompt; instruction text,
+canonical entity tables and scoring pointers remain intact. Donor instructions
+must differ, and image views always come from one donor. Resume settings reject
+changed checkpoints, manifests, sources and probe configurations. Interrupted
+conditions rerun from the beginning; outputs use separate condition directories.
+Report pilot scores separately from the full test. Changes under an input
+ablation measure sensitivity and can include distribution shift.
 
 ## Source code map
 

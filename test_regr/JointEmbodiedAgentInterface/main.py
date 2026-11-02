@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import math
 import random
 import sys
 from pathlib import Path
@@ -104,6 +105,9 @@ def stage1_selection_key(metrics):
     # Legacy checkpoints retain their historical interpretation when inspected.
     # New evaluations select on binary complete-plan equality, not partial PM.
     plan_accuracy = float(vla["strict_plan_match"] if "strict_plan_match" in vla else vla["exact_graph_match"])
+    free = metrics.get("vlabench_no_dfa")
+    if free is not None:
+        plan_accuracy = min(plan_accuracy, float(free["strict_plan_match"]))
     minimum = min(float(eai["goal_success"]), plan_accuracy)
     mean = (float(eai["goal_success"]) + plan_accuracy) / 2.0
     return (
@@ -322,6 +326,15 @@ def _base_dfa_loss_config(args) -> DFALossConfig | None:
     """Stage 1 DFA loss (allowed mass on the DFA path + primal-dual constraint loss), on unless disabled."""
     if getattr(args,"ce_only",False):
         return None
+    if getattr(args, "ce_dfa_mass_only", False):
+        weight = args.ce_dfa_mass_weight
+        if not math.isfinite(weight) or not 0 < weight <= 1:
+            raise ValueError("--ce-dfa-mass-weight must be finite and in (0, 1]")
+        return DFALossConfig(
+            masked_ce_domains=("eai", "vlabench"), domains=("eai", "vlabench"),
+            mass_weight=weight, mass_steps=None, pmd_weight=0.0, pmd_domains=(),
+            lookahead_domains=tuple(d for d in args.stage1_dfa_lookahead_domains.split(",") if d),
+        )
     if getattr(args, "ce_dfa_only", False):
         return DFALossConfig(
             masked_ce_domains=("eai", "vlabench"), domains=("eai", "vlabench"),
@@ -354,15 +367,20 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
 
 def command_train_agent(args):
     from test_regr.VLABenchAgentInterface.dataset_protocol import guard_training_dataset
-    guard_training_dataset(args.vlabench_planning_dir, args.output, resume=getattr(args, "resume", None) or getattr(args,"resume_adapter",None))
+    if getattr(args, "initialize_from", None) and (args.resume or args.resume_adapter):
+        raise ValueError("--initialize-from cannot be combined with --resume or --resume-adapter")
+    guard_training_dataset(args.vlabench_planning_dir, args.output, resume=getattr(args, "resume", None) or getattr(args,"resume_adapter",None) or getattr(args, "initialize_from", None))
     if (getattr(args,"constraint_profile","baseline")=="research_v1" or getattr(args,"research_rollout_manifest",None)) and not (Path(args.control_source)/"research_control.json").is_file():
         raise ValueError("Research agent training requires measured, explicitly segmented control data")
     ce_only = getattr(args, "ce_only", False)
     ce_dfa_only = getattr(args, "ce_dfa_only", False)
-    supervised_only = ce_only or ce_dfa_only
-    training_mode = "ce-only" if ce_only else "ce-dfa-only" if ce_dfa_only else "two-stage"
+    ce_dfa_mass_only = getattr(args, "ce_dfa_mass_only", False)
+    supervised_only = ce_only or ce_dfa_only or ce_dfa_mass_only
+    training_mode = "ce-only" if ce_only else "ce-dfa-only" if ce_dfa_only else "ce-dfa-mass-only" if ce_dfa_mass_only else "two-stage"
     if not args.two_stage and not supervised_only:
-        raise ValueError("train-agent requires --two-stage, --ce-only or --ce-dfa-only")
+        raise ValueError("train-agent requires --two-stage or a supervised CE training mode")
+    if ce_dfa_mass_only:
+        _dfa_loss_config(args)  # Validate the objective before loading models.
     if ce_only:
         args.stage1_dfa_loss = "off"
     if supervised_only:
@@ -407,6 +425,24 @@ def command_train_agent(args):
     planner.free_decoding = ce_only
     _status(f"loading controller vision encoder {args.vision_model if not args.tiny_vision else 'tiny'}")
     controller = _controller(args, device)
+    initialization = None
+    initialization_payload = None
+    if getattr(args, "initialize_from", None):
+        initialization_payload = load_joint_checkpoint(
+            args.initialize_from, runtime=runtime, planner=planner, controller=controller,
+            map_location=device, allow_knowledge_ablation=getattr(args, "knowledge", None) is not None,
+        )
+        if initialization_payload["stage"] != "stage1":
+            raise ValueError("--initialize-from requires a Stage 1 checkpoint")
+        initialization = {"checkpoint": str(Path(args.initialize_from).resolve()),
+                          "epoch": initialization_payload["epoch"], "optimizers": "fresh"}
+        # Checkpoint loading restores RNG states for exact resume; a new
+        # objective instead starts its own reproducible experiment.
+        import numpy as np
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        _status(f"initialized Stage 1 weights from {args.initialize_from}; fresh optimizers and epoch counter")
     _status("controller ready; building control-data indices")
     planner_optimizer = torch.optim.AdamW(
         (parameter for parameter in planner.parameters() if parameter.requires_grad),
@@ -540,19 +576,37 @@ def command_train_agent(args):
                     vla_splits["validation"],
                     _runtime_adapter(runtime, "vlabench"),
                 )
+            free_metrics = None
+            if ce_dfa_mass_only:
+                _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} VLABench validation without DFA")
+                previous_free = planner.free_decoding
+                try:
+                    planner.free_decoding = True
+                    with runtime.domain_scope("vlabench"):
+                        free_metrics = evaluate_planner(
+                            planner.for_domain("vlabench"), vla_splits["validation"],
+                            _runtime_adapter(runtime, "vlabench"),
+                        )
+                finally:
+                    planner.free_decoding = previous_free
             dfa_mass = {} if ce_only else stage1.dfa_mass_report(eai_valid, prepared["validation"])
             if not ce_only:
                 _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} DFA mass (unmasked probability on valid labels) {dfa_mass}")
             metrics = {
                 "training_mode": training_mode,
                 "decoding": "free" if ce_only else "dfa",
-                "training_data_protocol": training_data_protocol(args, resume_payload),
+                "training_data_protocol": training_data_protocol(args, resume_payload or initialization_payload),
                 "train": train_metrics,
                 "eai": eai_metrics,
                 "vlabench": vla_metrics,
                 "dfa_mass": dfa_mass,
                 "validation_loss": (train_metrics["eai_loss"] + train_metrics["vlabench_loss"]) / 2.0,
             }
+            if ce_dfa_mass_only:
+                metrics["vlabench_no_dfa"] = free_metrics
+                metrics["allowed_mass_weight"] = args.ce_dfa_mass_weight
+            if initialization is not None:
+                metrics["initialization"] = initialization
             path = save_joint_checkpoint(
                 output / f"joint_stage1_epoch_{epoch:03d}.pt",
                 runtime=runtime,
@@ -1111,6 +1165,11 @@ def build_parser():
                       help="DFA-masked planner cross entropy for both EAI and VLABench, with DFA decoding; "
                            "no allowed-mass loss, primal-dual training, RL, or extra controller warm-up; "
                            "retain Stage 1 controller behavior cloning")
+    mode.add_argument("--ce-dfa-mass-only", action="store_true",
+                      help="masked CE plus allowed-token-mass loss for both planners; no primal-dual or RL; "
+                           "validate VLABench with and without DFA, retaining Stage 1 controller BC")
+    agent.add_argument("--ce-dfa-mass-weight", type=float, default=0.5,
+                       help="allowed-mass weight for --ce-dfa-mass-only, in (0, 1]; 1 equals full CE for allowed targets")
     agent.add_argument("--eai-dataset", default="all")
     agent.add_argument("--eai-split", default="train")
     agent.add_argument("--eai-data-path")
@@ -1124,6 +1183,7 @@ def build_parser():
     agent.add_argument("--vlabench-limit", type=int)
     agent.add_argument("--output", default=str(DEFAULT_OUTPUT))
     agent.add_argument("--resume")
+    agent.add_argument("--initialize-from", help="load Stage 1 weights with fresh optimizers and a new epoch counter")
     agent.add_argument("--resume-adapter")
     agent.add_argument("--planner-model", default=DEFAULT_MODEL_ID)
     agent.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
