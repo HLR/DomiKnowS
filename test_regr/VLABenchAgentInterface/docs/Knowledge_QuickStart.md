@@ -1,0 +1,150 @@
+# Knowledge quick start
+
+How to choose what the planner knows (`--knowledge`) and how it is evaluated (`--protocol`). Each rule is a
+DomiKnowS logical constraint. The details are in [VLABenchLogicaConstraints.md](VLABenchLogicaConstraints.md),
+and the measured effect of each level is in [KNOWLEDGE_ABLATION.md](KNOWLEDGE_ABLATION.md).
+
+## Three separate settings
+
+| Flag | What it decides | Values |
+|---|---|---|
+| `--knowledge` | Which constraint groups the decoder enforces (the knowledge) | `grammar`, `causal`, `generic`, `scene`, `task`, `official` |
+| `--observation-mode` | Where the physical-property observations of the QA tasks come from | `visual` (default), `metadata-assisted` |
+| `--protocol` (VLABench `evaluate-planner` only) | What is evaluated and how it is scored | `internal` (default), `official` |
+
+These flags are independent: `--knowledge official` doesn't select the official protocol, and
+`--protocol official` doesn't select the official knowledge. `--observation-mode` changes only where the
+observations come from, never which rules are active.
+
+## Knowledge levels
+
+The first five levels are cumulative: each one keeps everything below it.
+
+| Level | Active constraints | Needs |
+|---|---|---|
+| `grammar` | Plan grammar only: plan ends, skill patterns and arguments, token and operation budgets | nothing |
+| `causal` | + causal rules over the ids the plan writes: no self-placement, distinct subtask destinations, a destination is never picked again | nothing |
+| `generic` | + entity-type rules: static fixtures are never picked, press needs a button, destinations must be containers, no redundant repeated picks | entity table |
+| `scene` | + scene-grounded rules: plans refer only to entities the observation supports | entity table, scene |
+| `task` | + task rules: skill sequences, obligations, physics and complex-task knowledge | task identity |
+| `official` | `causal` + the `official` group (perceived visible tags, instruction candidates) | image perception (turned on automatically) |
+
+`official` sits outside the chain. Its observations come only from what the benchmark gives:
+- the episode's two images;
+- its instruction.
+
+It uses no entity table, scene fact or task. It turns image perception (`--research-perception image-vlm`) on, so
+training and evaluation see the same observations. Combining it with `--research-perception off` is an error.
+
+The default when `--knowledge` is omitted is `task`, or the value of the environment variable `VLABENCH_KNOWLEDGE`.
+
+### Related flags
+
+- **`--task-identity oracle|predicted`** (at the `task` level) sets where the task comes from:
+  - `oracle` is the episode's task name. It is privileged, and it is the default.
+  - `predicted` comes from a classifier fitted on the training split, so it also needs `--task-classifier`.
+- **Legacy aliases:**
+  - `learned` is `task` with `--task-identity predicted`;
+  - `metadata` is `task` with `--task-identity oracle`.
+- **`--constraints none|grammar|causal`** (only with `--protocol official`) is an older alias of `--knowledge`. Leave
+  it out, or give it the same value as `--knowledge`; any other value is a conflict error.
+
+## Observation modes (`--observation-mode`)
+
+The task-level physics rules of the QA tasks choose among the answer options by a property, such as which one is
+heaviest or which one sinks. A rule can reject an option only if that property has been observed. The
+observation mode decides whether those observations exist and where they come from.
+
+| | `visual` (default) | `metadata-assisted` |
+|---|---|---|
+| Source of property observations | none: properties stay unknown, so the property rule never rejects an option and the VLM chooses from the images; only the option identities are used (the press must target one of the option buttons) | the episode's `property_observations.json` (simulator metadata), and the property rule rejects the losing options |
+| Privileged | no | yes: it reads simulator state the model never sees |
+| Required level | any | `--knowledge task` (the physics rules live in the task group) |
+| Affects | QA (physics) tasks only; other tasks are grounded the same way in both modes | the same |
+
+Restrictions:
+- **Which commands accept it:** VLABench `evaluate-planner` and the standalone
+  `python -m test_regr.JointEmbodiedAgentInterface.eval_planning`. The Joint `main evaluate-planning` command and
+  all training commands don't accept it, and always use `visual`.
+- **Rejected combinations:**
+  - `metadata-assisted` below the task level, including `--knowledge official` (the physics rules aren't active
+    there);
+  - `metadata-assisted` with `--protocol official`, which uses the dataset's images and instruction only;
+  - `metadata-assisted` with `--generation-mode frozen-vlm`, which has no constraint decoder.
+- **Reports:** an evaluation report records the observation mode next to the knowledge level, so the two
+  settings can't be confused.
+
+Use `metadata-assisted` only as an upper bound: it shows what the task rules can do with perfect property
+observations. It isn't a fair comparison with `visual` runs or with published results.
+
+## Protocols (`evaluate-planner`)
+
+| | `--protocol internal` (default) | `--protocol official` |
+|---|---|---|
+| Episodes | this repository's seeded split (`--split`) | all 4,500 benchmark episodes |
+| Model | trained adapter / checkpoint | frozen base VLM (`--resume-adapter` and `--vocab` are rejected) |
+| Inputs | entity table, scene, task (as the level allows) | the two images and the instruction only |
+| Scoring | internal metrics | upstream VLABench prompt and scorer |
+| Allowed `--knowledge` | any level | `grammar`, `causal` or `official` |
+| Comparable to published numbers | no | yes |
+
+Under `--protocol official`, the knowledge must come from `--knowledge` (or its `--constraints` alias). If both are
+omitted, the decoder runs with no constraints at all, not even the grammar.
+
+## Which flags do I need?
+
+**I want to train and evaluate with the official knowledge.** Pass `--knowledge official` to both training and
+evaluation. You don't need `--protocol official`: the internal protocol evaluates the trained model with the
+official constraints.
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent ... --knowledge official
+```
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main evaluate-planning --checkpoint <ckpt> --planning-dir test_regr/VLABenchAgentInterface/data/planning --split test --knowledge official --output out/official.json
+```
+
+The standalone `python -m test_regr.JointEmbodiedAgentInterface.eval_planning` takes the same flags.
+
+**I want numbers comparable to the published VLABench results.** Pass both flags:
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --planning-dir test_regr/VLABenchAgentInterface/data/planning --protocol official --knowledge official
+```
+
+**I want the task rules with perfect property observations (an upper bound).** Use the standalone evaluator with
+the task level:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.eval_planning --checkpoint <ckpt> --planning-dir test_regr/VLABenchAgentInterface/data/planning --split test --knowledge task --task-identity oracle --observation-mode metadata-assisted --output out/metadata.json
+```
+
+The legacy alias `--knowledge metadata` means `task` with `--task-identity oracle`. It doesn't set the observation
+mode, so you still need `--observation-mode metadata-assisted`.
+
+**I want to compare knowledge levels on one checkpoint (an ablation).** Evaluate the same checkpoint once per level,
+each time with an explicit `--knowledge`. An explicit level changes only the decoding constraints, not the trained
+weights.
+
+## Checkpoints and levels
+
+A Joint checkpoint records the constraint configuration it was trained with.
+- **Without `--knowledge`,** evaluation uses the default level (`task`) and checks that it matches the checkpoint.
+  A checkpoint trained with `--knowledge official` therefore fails this check.
+- **With an explicit `--knowledge`,** evaluation runs as a deliberate ablation, and that check is skipped.
+
+So always pass `--knowledge` when you evaluate, and use the same level as training unless you mean to run an
+ablation.
+
+## In code
+
+```python
+from test_regr.VLABenchAgentInterface.knowledge import set_default_level, group_active
+
+set_default_level("official")          # graphs built afterwards use this level
+group_active("official", "causal")     # True
+group_active("official", "task")       # False
+```
+
+`set_knowledge_level(bundle, level)` in `world_graph.py` switches an already-built world graph between levels.
