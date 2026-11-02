@@ -231,6 +231,31 @@ python -m test_regr.VLABenchAgentInterface.main evaluate-planner --protocol offi
 `named_card_face`) and may be repeated; `--grounding-policy joint|robust|abstain` adds a grounding policy. Both are
 recorded in the run's decoding label.
 
+### The official knowledge level for training and evaluation
+
+`--knowledge official` brings the same knowledge to the trained planners. It activates the world graph's causal group
+and its `official` group, `official__observation_supported_references` and
+`official__instruction_candidates_bound_targets`. The level also turns image perception on, so every example is read
+from its image pair and instruction by `research/perception.py:enrich_examples`. Each example then stores its visible
+tags and the candidates of `official/perception_observations.perceived_observations`: perceived kinds named by the
+clauses, and tags admitted by the selection formulas. The graph DFA, the DataNode verifier and the Stage 1 DFA loss
+all read these, and they are recorded in the checkpoint's perception configuration. The level is available on
+`train-agent`, on `evaluate-planning` and standalone `eval_planning`, and on `evaluate-planner` (where under
+`--protocol official` it means `causal` with image perception):
+
+```bash
+python -u -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage \
+  --vlabench-planning-dir test_regr/VLABenchAgentInterface/data/planning_train \
+  --control-source test_regr/VLABenchAgentInterface/data/control \
+  --knowledge official --device cuda:0 --load-in-4bit --output checkpoints/official_level
+python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint checkpoints/official_level/joint_stage2_best.pt \
+  --planning-dir test_regr/VLABenchAgentInterface/data/planning --split test --device cuda:0 \
+  --knowledge official --output results/official_level.json
+```
+
+`--research-perception off` is refused at this level. No score has been measured at this level yet.
+
 ## GPU2 single-pair preparation
 
 Run inside the existing GPU2 environment, keeping generated observations there:

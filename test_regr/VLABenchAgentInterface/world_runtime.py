@@ -122,7 +122,8 @@ def materialize_plan(
         _truth(root, bundle.pattern_complete, pattern_complete)
         from domiknows.generation.grounded import observations, report
         semantics = PlanSemantics(entities, bundle.skill_arguments, requirements.planning,
-                                   visible_entities=requirements.visible_entities)
+                                   visible_entities=requirements.visible_entities,
+                                   object_candidates=requirements.object_candidates)
         root.attributes["visibility_report"] = {
             "status": "unavailable" if requirements.visible_entities is None else "supplied",
             "visible_ids": None if requirements.visible_entities is None else sorted(requirements.visible_entities),

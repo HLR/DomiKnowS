@@ -406,8 +406,17 @@ def enrich_examples(examples,model=None):
         context=merge_context({"planning_facts":dict(example.planning_facts or {})},observed)
         result.append(replace(example,planning_facts=context["planning_facts"],task_target_entity=None,task_target_container=None,
             visible_entities=tuple(context["visible_entities"]) if context["visible_entities"] is not None else None,
+            object_candidates=instruction_candidates(observed,example.instruction),
             planning_observation_profile="image_vlm_unvalidated"))
     return result
+
+
+def instruction_candidates(observed,instruction):
+    """The instruction's candidates from one perception result (the official decoder's observations), or None."""
+    if observed["perception"].get("status")=="unavailable":return None
+    from ..official.perception_observations import perceived_observations
+    restrictions=perceived_observations(observed,instruction)[3].restrictions
+    return tuple((skill,role,tuple(ids)) for skill,role,ids in restrictions) or None
 
 
 class ImageObservationAdapter:

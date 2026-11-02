@@ -97,7 +97,8 @@ class VLABenchPredicateAdapter:
             from task_policy import TaskRequirements
         self.requirements = requirements or TaskRequirements(schema=schema)
         self.semantics = PlanSemantics(entities, world.skill_arguments, self.requirements.planning,
-                                       visible_entities=self.requirements.visible_entities)
+                                       visible_entities=self.requirements.visible_entities,
+                                       object_candidates=self.requirements.object_candidates)
         self.schema = self.requirements.schema
         self.entities = self.semantics.entities
         self.pattern_dfa = pattern_dfa if pattern_dfa is not None else pattern_progress_for(world, self.requirements)
@@ -337,6 +338,8 @@ def bind_task_policy(policy, vocabulary, context):
     requirements = task_requirements(context, world, monitor.adapter.entities)
     if "visible_entities" not in context:
         requirements = replace(requirements, visible_entities=previous.visible_entities)
+    if "object_candidates" not in context:
+        requirements = replace(requirements, object_candidates=previous.object_candidates)
     if "planning_facts" not in context:
         requirements = replace(requirements, planning=previous.planning, allowed_sequences=previous.allowed_sequences)
     if not context.get("task") and not context.get("task_name"):

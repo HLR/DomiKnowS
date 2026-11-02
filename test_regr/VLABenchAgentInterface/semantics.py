@@ -13,9 +13,9 @@ from dataclasses import dataclass, replace
 from domiknows.generation.grounded import GroundedState, PlanningFacts, Operation
 from typing import Any, Mapping, Sequence
 try:
-    from .visibility import visible_entity_ids, reference_is_visible
+    from .visibility import instruction_candidate_ids, reference_is_candidate, visible_entity_ids, reference_is_visible
 except ImportError:
-    from visibility import visible_entity_ids, reference_is_visible
+    from visibility import instruction_candidate_ids, reference_is_candidate, visible_entity_ids, reference_is_visible
 
 
 # Every benchmark subtask pattern begins with a pick or a press; its destinations are tracked from there.
@@ -126,11 +126,13 @@ class OperationPredicates:
 class PlanSemantics:
     """Scene-bound predicate meanings reusable by verification and decoding."""
 
-    def __init__(self, entity_table, skill_arguments, planning_facts=None, *, visible_entities=None):
+    def __init__(self, entity_table, skill_arguments, planning_facts=None, *, visible_entities=None,
+                 object_candidates=None):
         self.entities = entity_mapping(entity_table)
         self.skill_arguments = skill_arguments
         self.planning = planning_facts or PlanningFacts()
         self.visible_entities = visible_entity_ids(visible_entities, self.entities)
+        self.object_candidates = instruction_candidate_ids(object_candidates, self.entities)
 
     def initial_state(self):
         initial = self.planning.initial
@@ -253,8 +255,16 @@ class PlanSemantics:
             value = params.get(key)
             return value is not None and value != "" and not isinstance(value, bool) and resolve_pointer(value, self.entities)[1]
 
+        entity_known, entity_candidate = reference_is_candidate(
+            params.get("target_entity_name"), skill, "target_entity_name", self.entities, self.object_candidates)
+        container_known, container_candidate = reference_is_candidate(
+            params.get("target_container_name"), skill, "target_container_name", self.entities, self.object_candidates)
         return {
             "has_undeclared_argument": bool(params.keys() - allowed),
+            "entity_candidates_known": entity_known,
+            "entity_is_instruction_candidate": entity_candidate,
+            "container_candidates_known": container_known,
+            "container_is_instruction_candidate": container_candidate,
             "visibility_supplied": self.visible_entities is not None,
             "entity_seen_initially": reference_is_visible(params.get("target_entity_name"), self.entities, self.visible_entities),
             "container_seen_initially": reference_is_visible(params.get("target_container_name"), self.entities, self.visible_entities),

@@ -103,8 +103,8 @@ def test_manifest_is_stable_across_build_names_and_role_ids(joint_fixture):
     json.dumps(runtime.knowledge_manifest)  # the inspectable manifest also supports JSON reports
     assert runtime.knowledge_manifest["components"]["joint"]["constraint_count"] == 0
     assert runtime.knowledge_manifest["components"]["eai_world"]["constraint_count"] == 62
-    # The eleven-skill domain adds the close_door/open_laptop argument rules.
-    assert runtime.knowledge_manifest["components"]["vlabench_world"]["constraint_count"] == 91
+    # The eleven-skill domain adds the close_door/open_laptop argument rules; the official group adds two.
+    assert runtime.knowledge_manifest["components"]["vlabench_world"]["constraint_count"] == 93
 
 
 def test_manifest_distinguishes_definitions_from_activation_and_labels(joint_fixture):

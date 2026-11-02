@@ -162,10 +162,20 @@ def observe_episode(model, items: list[list[Any]], episode: str = "official", se
         result = perceive(model, raw, numbered, instruction, episode=episode, step=0, entity_table=None)
     except PerceptionUnavailable as error:
         return EpisodePerception(None, None, {"status": "unavailable", "reason": str(error)})
-    visible = tuple(result["perception"].get("visible_entities") or ()) or None
     grounding = result["grounding"]
     if not grounding.get("requests") or not grounding.get("hypotheses"):
         grounding = None  # no role was bound: the grounding formulas have nothing to observe
+    visible, categories, cards, candidates = perceived_observations(result, instruction, selection)
+    return EpisodePerception(visible, grounding, result["perception"], categories, candidates, cards)
+
+
+def perceived_observations(result, instruction: str, selection=None):
+    """``(visible, categories, cards, candidates)`` of one perception result.
+
+    The same observations feed the official protocol's decoder and the ``official`` knowledge level of the
+    world graph (``research/perception.py`` stores them on each example).
+    """
+    visible = tuple(result["perception"].get("visible_entities") or ()) or None
     categories = tuple((int(tag), kind) for tag, kind in result["perception"].get("visible_categories", {}).items())
     known = dict(categories)
     cards = tuple((int(tag), (face[0], face[1])) for tag, face in result["perception"].get("visible_cards", {}).items())
@@ -176,4 +186,4 @@ def observe_episode(model, items: list[list[Any]], episode: str = "official", se
         perceived_object_constraints(instruction, known, tuple(t for t in visible or () if t not in known)),
         selection_constraints(selection or selection_graph(), instruction, visible or (), perceived_boxes(result), known,
                               dict(cards), uncertain))
-    return EpisodePerception(visible, grounding, result["perception"], categories, candidates, cards)
+    return visible, categories, cards, candidates

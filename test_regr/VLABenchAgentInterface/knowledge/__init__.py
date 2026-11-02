@@ -12,7 +12,16 @@ causal      causal rules
 generic     causal + generic rules
 scene       causal + generic + scene-grounded rules
 task        + task rules: sequences, obligations, grounded families, complex tasks, physics
+official    causal + official rules (outside the chain; see below)
 ==========  ==================================================================
+
+``official`` is the knowledge of the standard VLABench protocol (``--protocol official``): the causal rules plus
+the ``official`` group, whose observations come only from image perception of the episode's two images and its
+instruction. ``official__observation_supported_references`` keeps plan ids to the confidently visible tags, and
+``official__instruction_candidates_bound_targets`` keeps them to the instruction's candidates (perceived object
+kinds named by its clauses, and the tags the ordinal and card-face formulas of ``official/selection_graph.py``
+admit). No entity table, scene fact or task enters. The level turns image perception on (``research/config.py``),
+so training and evaluation see the same observations.
 
 ``--task-identity`` decides where the ``task__*`` observation comes from once the task group is active:
 ``oracle`` (the episode's task name; privileged) or ``predicted`` (``context['predicted_task']`` from a classifier
@@ -37,7 +46,9 @@ from .tables import (
 )
 
 LEVELS = ("grammar", "causal", "generic", "scene", "task")
-GROUPS = ("causal", "generic", "scene", "task")
+GROUPS = ("causal", "generic", "scene", "task", "official")
+# Levels outside the cumulative chain, with the groups each one activates.
+SIDE_LEVELS = {"official": ("causal", "official")}
 TASK_IDENTITIES = ("oracle", "predicted")
 # The former combined levels: (knowledge level, task identity).
 LEGACY_LEVELS = {"learned": ("task", "predicted"), "metadata": ("task", "oracle")}
@@ -51,8 +62,9 @@ def split_level(level: str, task_identity: str | None = None) -> tuple[str, str 
         if task_identity is not None and task_identity != implied:
             raise ValueError(f"--knowledge alias implies --task-identity {implied}, got {task_identity}")
         task_identity = implied
-    if level not in LEVELS:
-        raise ValueError(f"knowledge level must be one of {LEVELS} (or {tuple(LEGACY_LEVELS)}), got {level!r}")
+    if level not in LEVELS and level not in SIDE_LEVELS:
+        raise ValueError(f"knowledge level must be one of {(*LEVELS, *SIDE_LEVELS)} (or {tuple(LEGACY_LEVELS)}), "
+                         f"got {level!r}")
     if task_identity is not None and task_identity not in TASK_IDENTITIES:
         raise ValueError(f"task identity must be one of {TASK_IDENTITIES}, got {task_identity!r}")
     return level, task_identity
@@ -96,7 +108,15 @@ def set_default_task_identity(task_identity: str) -> None:
 
 def group_active(level: str, group: str) -> bool:
     """Whether a constraint group is enabled at ``level``."""
-    return LEVELS.index(check_level(level)) >= LEVELS.index(_GROUP_FROM[group])
+    level = check_level(level)
+    if level in SIDE_LEVELS:
+        return group in SIDE_LEVELS[level]
+    return group in _GROUP_FROM and LEVELS.index(level) >= LEVELS.index(_GROUP_FROM[group])
+
+
+def official_observations(level: str | None = None) -> bool:
+    """Whether ``level`` (default: the default level) observes through image perception only, as the official protocol."""
+    return group_active(level or default_level(), "official")
 
 
 def task_facts_available(level: str) -> bool:
@@ -113,10 +133,11 @@ def set_excluded_tasks(tasks) -> None:
 
 
 def add_knowledge_argument(parser) -> None:
-    parser.add_argument("--knowledge", choices=(*LEVELS, *LEGACY_LEVELS), default=None,
+    parser.add_argument("--knowledge", choices=(*LEVELS, *SIDE_LEVELS, *LEGACY_LEVELS), default=None,
                         help="active constraint groups: grammar < causal < generic < scene < task (default: task, or "
-                             "$VLABENCH_KNOWLEDGE); the aliases learned (= task + --task-identity predicted) and metadata "
-                             "(= task + --task-identity oracle) are kept for existing commands")
+                             "$VLABENCH_KNOWLEDGE); official = causal + the official protocol's image-perception rules "
+                             "(turns image perception on); the aliases learned (= task + --task-identity predicted) and "
+                             "metadata (= task + --task-identity oracle) are kept for existing commands")
     parser.add_argument("--task-identity", choices=TASK_IDENTITIES, default=None,
                         help="source of the task identity at the task level: oracle (the episode's task name, privileged; "
                              "default) or predicted (a classifier fitted on the training split; needs --task-classifier)")
@@ -138,6 +159,11 @@ def apply_knowledge_argument(args) -> str:
     # Validate before changing any default, so a rejected request leaves the defaults as they were.
     if getattr(args, "observation_mode", "visual") == "metadata-assisted" and not group_active(level or default_level(), "task"):
         raise ValueError("--observation-mode metadata-assisted needs the task level (--knowledge task)")
+    if official_observations(level or default_level()):
+        from test_regr.VLABenchAgentInterface.research.config import default_perception_options
+        if not default_perception_options():
+            raise ValueError("--knowledge official observes through image perception; apply the research arguments "
+                             "first and do not pass --research-perception off")
     if level is not None:
         set_default_level(level)
     if identity is not None:
@@ -210,7 +236,7 @@ __all__ = [
     "COMPLEX_TASK_SCHEMAS", "ComplexTaskSchema", "DEFAULT_TASK_KNOWLEDGE", "GROUPS", "KnowledgeState", "LEVELS",
     "PLANNING_TASK_PATTERNS", "PRIMITIVE_TASK_PATTERNS", "QA_TASK_PATTERNS", "TaskKnowledge", "check_level",
     "default_level", "group_active", "set_default_level", "task_facts_available", "TASK_IDENTITIES", "LEGACY_LEVELS",
-    "split_level", "check_task_identity", "default_task_identity", "set_default_task_identity", "uses_predicted_task",
+    "split_level", "SIDE_LEVELS", "official_observations", "check_task_identity", "default_task_identity", "set_default_task_identity", "uses_predicted_task",
 ]
 
 

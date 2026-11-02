@@ -86,6 +86,8 @@ class VLABenchWorldGraphBundle:
 # bindings feed ordinary DataNode verification and incremental DFA monitoring.
 WORLD_FACT_DOMAINS = {
     **dict.fromkeys(("has_undeclared_argument", "visibility_supplied", "entity_seen_initially", "container_seen_initially"), "operation"),
+    **dict.fromkeys(("entity_candidates_known", "entity_is_instruction_candidate",
+                     "container_candidates_known", "container_is_instruction_candidate"), "operation"),
     **dict.fromkeys(("entity_value_usable", "container_value_usable", "entity_resolves", "container_resolves",
                      "entity_is_button", "container_is_button", "subject_equals_destination",
                      "entity_is_static_fixture", "destination_used_in_subtask", "target_was_destination"), "operation"),
@@ -182,6 +184,28 @@ def _declare_causal_rules(world, level):
          "causal__destinations_stay_put")
 
 
+def _declare_official_rules(world, level):
+    """The official protocol's perception rules, active at ``official`` only.
+
+    Their observations come from image perception of the episode's images and instruction: the confidently
+    visible tags and the instruction's candidates per skill and role (``official/perception_observations.py``).
+    Without an observation (``visibility_supplied`` or ``*_candidates_known`` false) a rule does not restrict.
+    """
+    from domiknows.graph.logicalConstrain import andL, ifL
+    rule = lambda a, b, name: _record_rule(world, "official", a, b, name, level)
+    op, facts = world.operation, world.facts
+    rule(andL(op("op"), facts["visibility_supplied"]("op")), andL(
+        ifL(world.has_target_entity("op"), facts["entity_seen_initially"]("op")),
+        ifL(world.has_target_container("op"), facts["container_seen_initially"]("op")),
+    ), "official__observation_supported_references")
+    rule(op("op"), andL(
+        ifL(andL(world.has_target_entity("op"), facts["entity_candidates_known"]("op")),
+            facts["entity_is_instruction_candidate"]("op")),
+        ifL(andL(world.has_target_container("op"), facts["container_candidates_known"]("op")),
+            facts["container_is_instruction_candidate"]("op")),
+    ), "official__instruction_candidates_bound_targets")
+
+
 def _declare_scene_rules(world, level):
     """Scene observations constrain references, targets and container access."""
     from domiknows.graph.logicalConstrain import andL, ifL, notL, orL
@@ -223,10 +247,10 @@ def build_vlabench_world_graph(
 ) -> VLABenchWorldGraphBundle:
     """Define the DomiKnowS plan ontology and its hard logical constraints.
 
-    Every rule is a concept plus logical constraints, in four groups: ``causal`` (id-level causal rules),
-    ``generic`` (schema, patterns, causal rules), ``scene`` (rules that need an entity table)
-    and ``task`` (task facts and the ``task__<name>``
-    rules of ``knowledge.task_lcs``). ``knowledge_level`` (default: ``knowledge.default_level()``) decides which
+    Every rule is a concept plus logical constraints, in five groups: ``causal`` (id-level causal rules),
+    ``generic`` (schema, patterns, causal rules), ``scene`` (rules that need an entity table),
+    ``task`` (task facts and the ``task__<name>`` rules of ``knowledge.task_lcs``) and ``official``
+    (the official protocol's image-perception rules). ``knowledge_level`` (default: ``knowledge.default_level()``) decides which
     groups are active; :func:`set_knowledge_level` changes it later.
     """
     from domiknows.graph import Concept, Graph
@@ -305,7 +329,7 @@ def build_vlabench_world_graph(
         task_concepts = declare_task_concepts(
             operation, skills, task_knowledge, active=group_active(level, "task"),
             constraints=include_default_constraints)
-        groups = {"causal": [], "generic": [], "scene": [], "task": list(task_concepts.constraints)}
+        groups = {"causal": [], "generic": [], "scene": [], "task": list(task_concepts.constraints), "official": []}
         groups["task"].extend(grounded_constraints.constraints)
         facts = {
             name: (operation if domain == "operation" else transition)(name=f"fact__{name}")
@@ -372,6 +396,7 @@ def build_vlabench_world_graph(
             _declare_causal_rules(bundle, level)
             _declare_generic_rules(bundle, level)
             _declare_scene_rules(bundle, level)
+            _declare_official_rules(bundle, level)
 
         for builder in tuple(constraint_builders):
             builder(bundle)

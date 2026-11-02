@@ -158,6 +158,9 @@ def build_eval_parser() -> argparse.ArgumentParser:
     parser.add_argument("--action-horizon", type=int, default=16)
     parser.add_argument("--hidden-dim", type=int, default=256)
     parser.add_argument("--max-views", type=int, default=4)
+    # Research and image-perception options, as on the evaluate-planning subcommand.
+    from test_regr.VLABenchAgentInterface.research.config import add_research_arguments
+    add_research_arguments(parser)
     return parser
 
 
@@ -495,6 +498,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = build_eval_parser()
     args = parser.parse_args(argv)
+    from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
+    apply_research_arguments(args)  # --knowledge official turns image perception on
     run_planning_evaluation(args)
     return 0
 

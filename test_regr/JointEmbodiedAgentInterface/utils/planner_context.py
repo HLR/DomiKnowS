@@ -12,6 +12,7 @@ KNOWLEDGE_CONTEXT_FIELDS = (
     "research_config",
     "research_matched",
     "visible_entities",
+    "object_candidates",
     "task_target_container",
     "task_target_entity",
     "task",

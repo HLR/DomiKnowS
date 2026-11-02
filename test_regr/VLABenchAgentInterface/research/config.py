@@ -112,13 +112,16 @@ def apply_research_arguments(args):
     config=replace(config,disabled_formulas=tuple(getattr(args,"research_disable_formula",())))
     perception=None
     mode=getattr(args,"research_perception","auto")
-    if mode=="auto":mode="image-vlm" if config.enabled else "off"
+    # --knowledge official observes only through image perception, as the official protocol does.
+    official=_official_level(args)
+    if mode=="auto":mode="image-vlm" if config.enabled or official else "off"
+    if official and mode!="image-vlm":raise ValueError("--knowledge official observes through image perception; drop --research-perception off")
     args.research_perception=mode
     if mode=="image-vlm":
         from .perception import PerceptionConfig
         from dataclasses import asdict
-        if not (config.enabled or getattr(args,"use_compiled_planner_loss",False)):
-            raise ValueError("Image perception requires research_v1 or an explicitly matched compiled baseline")
+        if not (config.enabled or official or getattr(args,"use_compiled_planner_loss",False)):
+            raise ValueError("Image perception requires research_v1, --knowledge official or an explicitly matched compiled baseline")
         model=getattr(args,"perception_model",None) or getattr(args,"planner_model",None) or PerceptionConfig.model_id
         perception=asdict(PerceptionConfig(model_id=model,confidence=getattr(args,"perception_confidence",.85),
             bbox_margin=getattr(args,"perception_bbox_margin",.01),max_new_tokens=getattr(args,"perception_max_new_tokens",2048),
@@ -136,6 +139,12 @@ def apply_research_arguments(args):
         ("stage1_dfa_mass_weight",0.),("stage1_pmd_weight",1.),("stage1_dual_lr",.05),
         ("stage1_dual_warmup",10),("stage1_dual_every",10))})
     return config
+
+
+def _official_level(args):
+    from test_regr.VLABenchAgentInterface.knowledge import default_level, official_observations, split_level
+    level=getattr(args,"knowledge",None)
+    return official_observations(split_level(level)[0] if level else default_level())
 
 
 _LOSS_MODE=ContextVar("vlabench_research_loss_mode",default="full")

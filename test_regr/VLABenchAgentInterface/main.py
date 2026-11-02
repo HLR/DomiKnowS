@@ -949,17 +949,25 @@ def command_train_agent(args) -> None:
         })
 
 
-OFFICIAL_KNOWLEDGE = ("grammar", "causal")
+OFFICIAL_KNOWLEDGE = ("grammar", "causal", "official")
 
 
 def official_constraints(args) -> str:
-    """The official protocol's decoder from ``--knowledge`` (``grammar`` or ``causal``); ``--constraints`` is its alias."""
+    """The official protocol's decoder from ``--knowledge`` (``grammar``, ``causal`` or ``official``).
+
+    ``--constraints`` is its alias. ``official`` is ``causal`` with image perception, which
+    ``apply_research_arguments`` has already turned on.
+    """
     knowledge, constraints = getattr(args, "knowledge", None), getattr(args, "constraints", "none")
     if knowledge is None:
         return constraints
     if knowledge not in OFFICIAL_KNOWLEDGE:
-        raise ValueError("--protocol official shows no entity table and no task, so --knowledge must be grammar or "
-                         f"causal, not {knowledge!r}")
+        raise ValueError("--protocol official shows no entity table and no task, so --knowledge must be grammar, "
+                         f"causal or official, not {knowledge!r}")
+    if knowledge == "official":
+        if constraints not in ("none", "causal"):
+            raise ValueError(f"--knowledge official decodes with the causal rules; it conflicts with --constraints {constraints}")
+        return "causal"
     if constraints not in ("none", knowledge):
         raise ValueError(f"--knowledge {knowledge} conflicts with --constraints {constraints}")
     return knowledge

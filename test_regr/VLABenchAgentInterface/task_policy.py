@@ -9,13 +9,13 @@ from domiknows.generation.grounded import PlanningFacts
 from typing import Any, Mapping
 
 try:
-    from .visibility import visible_entity_ids
+    from .visibility import instruction_candidate_ids, visible_entity_ids
     from .semantics import entity_mapping, resolve_pointer
     from .knowledge import (
         COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, default_task_identity, task_facts_available,
     )
 except ImportError:
-    from visibility import visible_entity_ids
+    from visibility import instruction_candidate_ids, visible_entity_ids
     from semantics import entity_mapping, resolve_pointer
     from knowledge import (
         COMPLEX_TASK_SCHEMAS, DEFAULT_TASK_KNOWLEDGE, ComplexTaskSchema, default_level, default_task_identity, task_facts_available,
@@ -36,6 +36,8 @@ class TaskRequirements:
     interface: str = "full"
     explicit_sequence: bool = False
     visible_entities: frozenset[int] | None = None
+    # The instruction's candidates per skill and role, ``((skill, role, ids), ...)``, observed by image perception.
+    object_candidates: tuple | None = None
 
     def skill_allowed(self, index, skill):
         # A declared (graph) sequence is enforced by the task LCs; only explicit facts are checked here.
@@ -96,12 +98,16 @@ def task_requirements(context, world, entities):
     context = observation_context(context,getattr(world,"research_config",None))
     get = context.get if isinstance(context, Mapping) else lambda k, default=None: getattr(context, k, default)
     visible = visible_entity_ids(get("visible_entities"), entities)
+    instruction_candidates = instruction_candidate_ids(get("object_candidates"), entities)
+    instruction_candidates = None if instruction_candidates is None else tuple(
+        (skill, role, tuple(sorted(ids))) for (skill, role), ids in sorted(instruction_candidates.items()))
     knowledge = getattr(world, "task_knowledge", None) or DEFAULT_TASK_KNOWLEDGE
     state = getattr(world, "knowledge_state", None)
     level = state.level if state is not None else default_level()
     predicted = (state.task_identity if state is not None else default_task_identity()) == "predicted"
     if not task_facts_available(level):
-        return TaskRequirements(visible_entities=visible)  # Visibility is independent of task identity.
+        # Visibility and instruction candidates are independent of task identity.
+        return TaskRequirements(visible_entities=visible, object_candidates=instruction_candidates)
     normalize = lambda value: str(value or "").strip().lower().replace("-", "_")
     task = normalize(get("task") or get("task_name"))
     if predicted:
@@ -200,7 +206,7 @@ def task_requirements(context, world, entities):
         raise ValueError("skill_cycle contains an unknown skill")
     return TaskRequirements(expected, target, knowledge.schema(task), planning, skill_cycle=cycle,
                             task=task or None, interface=interface, explicit_sequence=explicit_sequence,
-                            visible_entities=visible)
+                            visible_entities=visible, object_candidates=instruction_candidates)
 
 
 

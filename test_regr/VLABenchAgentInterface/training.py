@@ -220,7 +220,7 @@ def prepare_planner_program_examples(examples: Iterable[Any], runtime: PlannerCo
             item["planner_context"].setdefault("research_config",runtime.world_bundle.research_config.as_dict())
         from .research.config import observation_context
         item["planner_context"]=observation_context(item["planner_context"],runtime.world_bundle.research_config)
-        for key in ("planning_facts","task","planning_interface","predicted_task","visible_entities","research_config"):
+        for key in ("planning_facts","task","planning_interface","predicted_task","visible_entities","object_candidates","research_config"):
             if key in item["planner_context"]:
                 item[key]=item["planner_context"][key]
         item["reward_function"] = make_vlabench_reward_function(

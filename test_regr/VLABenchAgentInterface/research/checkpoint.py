@@ -61,7 +61,7 @@ def clone_warmed_controller(path,controller,optimizer,runtime,control_source):
 
 def checkpoint_metadata(world,planner):
     config=ResearchConfig.parse(getattr(world,"research_config",None) or default_config())
-    if not config.enabled and not default_compiled_loss():return {}
+    if not config.enabled and not default_compiled_loss() and not default_perception_options():return {}
     knowledge=getattr(world,"research_knowledge",None)
     formulas={name:lc.active for name,lc in knowledge.get().enforce_constraints.items()} if knowledge and config.enabled else {}
     if set(config.disabled_formulas)-set(formulas):raise ValueError("Unknown disabled research formula")
@@ -83,7 +83,7 @@ def checkpoint_metadata(world,planner):
 def restore_metadata(payload,world,planner,*,training=False):
     saved=payload.get("research_configuration")
     config=ResearchConfig.parse(getattr(world,"research_config",None) or default_config())
-    if saved is None and not config.enabled and not default_compiled_loss():return
+    if saved is None and not config.enabled and not default_compiled_loss() and not default_perception_options():return
     if training and (saved is None or saved["fingerprint"]!=config.fingerprint):
         raise ValueError("research resume changes policy/evidence profile; start a fresh matched run")
     if training and saved.get("supervised_mode")!=default_loss_mode():

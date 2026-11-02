@@ -336,6 +336,8 @@ class PlanningExample:
     predicted_task: str | None = None
     # Explicit initial-image support supplied by perception; never inferred from the entity inventory.
     visible_entities: tuple[str | int, ...] | None = None
+    # The instruction's candidates per skill and role, ``((skill, role, ids), ...)``, from image perception.
+    object_candidates: tuple | None = None
     scene_group: str | None = None
     research_split: str | None = None
     perception_image_paths: tuple[Path, ...] = ()
@@ -357,6 +359,7 @@ class PlanningExample:
             "planning_interface": self.planning_interface,
             "predicted_task": self.predicted_task,
             "visible_entities": self.visible_entities,
+            "object_candidates": self.object_candidates,
         }
 
 

@@ -31,6 +31,12 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 450 test episodes. Task knowledge is expressed as graph concepts and logical constraints
 (`knowledge/`, see the README source code map); `--knowledge` switches which constraint groups are active; `--task-identity` (`oracle` or `predicted`) and `--observation-mode` (`visual` or `metadata-assisted`) are separate settings of the facts those rules read. The former levels `learned` and `metadata` remain aliases (`task` with a predicted or an oracle identity).
 `causal` is a `--knowledge` level on every path: it enables only **3 DomiKnowS logical constraints**, the world graph's `causal` group for the Joint and internal graph decoders and the equivalent official causal graph for `--protocol official` (where `--constraints causal` remains an alias). It is the first cumulative tier above `grammar`, so `generic` and every higher level also keep the causal group active, and its result-table rows come from `eval_planning --knowledge causal`. Rows from `generic` up were measured before causal joined them (see Caveats).
+`official` is the standard protocol's knowledge as a `--knowledge` level on the same paths (`train-agent`, `eval_planning`, `evaluate-planner`). It sits outside the cumulative chain. It enables the causal group plus the world graph's **2-constraint** `official` group:
+
+- `official__observation_supported_references`: plan ids are confidently visible tags.
+- `official__instruction_candidates_bound_targets`: plan ids are the instruction's candidates, meaning perceived object kinds named by its clauses and the tags admitted by the ordinal and card-face formulas of `official/selection_graph.py`.
+
+The level turns image perception on: `--research-perception auto` becomes `image-vlm`. Observations then come only from the episode's two images and its instruction, and the entity table is shown as numbered objects. No scene fact or task enters, in training or in evaluation. Under `--protocol official` the level is `causal` with image perception. No score has been measured at this level yet.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -240,9 +246,10 @@ existing grounding report records incomplete evidence. The old aggregate
 `applicable/satisfied` observations remain available to custom rules and the
 EAI adapter, but do not determine VLABench's default detailed enforcement.
 
-The current default world graph has **91 logical constraints**: 3 causal, 28 generic, 7 scene,
-and 53 task constraints (including the eight grounded families). With the five
-grammar constraints, the total is **96**; the causal group is active from `causal` upwards. Counts refer to complete logical
+The current default world graph has **93 logical constraints**: 3 causal, 28 generic, 7 scene,
+53 task constraints (including the eight grounded families) and 2 official. With the five
+grammar constraints, the total is **98**. The causal group is active from `causal` upwards and at `official`; the official
+group is active only at `official`. Counts refer to complete logical
 constraints, not operators within their formulas. Grounded per-rule satisfaction percentages now average requirement
 nodes rather than operation nodes, so partial diagnostic percentages can differ.
 The reward and validity gate remain unchanged: every active rule must be fully
@@ -296,6 +303,7 @@ Two additional generic constraints require a legal first operation and a complet
 `knowledge/__init__.py` remains the single source for level ordering and group
 activation: `grammar` has no world group; `causal` adds the causal rules; `generic`
 adds generic rules; `scene` adds scene rules; `task` activates the task group as well.
+`official` lies outside the chain (`SIDE_LEVELS`) and activates only the causal and official groups.
 The task identity is a separate setting (`--task-identity`, stored with the level in
 `KnowledgeState`): `predicted` reads the classifier's task, `oracle` the episode's.
 Metadata assistance (`--observation-mode`) changes observations, not LC groups.
@@ -357,7 +365,8 @@ See [Syntax and initial-observation visibility](SYNTAX_AND_VISIBILITY.md) and
 [Action-budget goal reachability](GOAL_REACHABILITY.md) for APIs and examples.
 
 `causal` is the second level of `knowledge/__init__.py` (`grammar < causal < generic < scene < task`); `group_active` keeps the `causal` group active at every level from `causal` up. `--knowledge causal` selects it in
-`evaluate-planner` (graph and official protocols), `eval_planning` and `train-agent`.
+`evaluate-planner` (graph and official protocols), `eval_planning` and `train-agent`. On the same commands,
+`--knowledge official` selects causal plus the official group, with image perception.
 
 The declaration refactor is validated with independently specified semantic
 counterexamples, edits to actual formulas, tier-toggle equivalence, preservation
@@ -376,7 +385,7 @@ python -u -m test_regr.JointEmbodiedAgentInterface.eval_planning \
   --checkpoint test_regr/JointEmbodiedAgentInterface/checkpoints/joint_stage2_best.pt \
   --planning-dir test_regr/VLABenchAgentInterface/data/planning \
   --split test --seed 42 --device cuda:0 --allow-planning-schema-migration \
-  --observation-mode visual --knowledge <grammar|causal|generic|scene|task> \
+  --observation-mode visual --knowledge <grammar|causal|generic|scene|task|official> \
   --output test_regr/JointEmbodiedAgentInterface/results/knowledge_ablation/<level>.json
 ```
 

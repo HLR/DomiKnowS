@@ -41,6 +41,36 @@ def reference_is_visible(value, entities, visible):
     return bool(ids <= visible)
 
 
+def instruction_candidate_ids(values, entities):
+    """``{(skill, role): frozenset(ids)}`` from instruction candidates, or None when none were observed.
+
+    ``values`` is an ``ObjectConstraints``, its ``as_dict()`` form, or ``(skill, role, ids)`` triples.
+    A skill and role without an entry is unrestricted; ids resolve against the inventory like visible ids.
+    """
+    if values is None:
+        return None
+    if hasattr(values, "restrictions"):
+        values = values.restrictions
+    elif isinstance(values, Mapping):
+        values = [(row["skill"], row["role"], row["ids"]) for row in values.get("restrictions", ())]
+    table = {}
+    for skill, role, ids in values:
+        table[(str(skill), str(role))] = visible_entity_ids(tuple(ids), entities)
+    return table or None
+
+
+def reference_is_candidate(value, skill, role, entities, candidates):
+    """``(known, member)``: whether the instruction restricts this skill and role, and whether ``value`` is allowed."""
+    allowed = (candidates or {}).get((skill, role))
+    if allowed is None or value is None:
+        return False, False
+    try:
+        ids = visible_entity_ids((value,), entities)
+    except ValueError:
+        return True, False
+    return True, bool(ids <= allowed)
+
+
 def visibility_from_segmentation(masks, segment_entities, entities):
     """Union supported ids across initial-view integer instance-label masks.
 
