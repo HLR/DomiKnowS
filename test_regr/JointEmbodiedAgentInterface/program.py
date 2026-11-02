@@ -33,6 +33,7 @@ from test_regr.VLABenchAgentInterface.simulation.program import (
 
 from .models import JointQwenVLPlanner, FreeDecoding
 from .world_graph import JointDomainRuntime
+from .utils.stage2_training import SharedUpdateEvidence, validate_shared_optimizer
 
 
 @dataclass(frozen=True)
@@ -596,9 +597,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
     """Alternating EAI REINFORCE and VLABench planner/PPO optimization.
 
     EAI and VLABench rewards are intentionally stored and reported separately.
-    No reward scalar crosses the domain boundary. The CLI freezes the shared
-    Qwen/LoRA by default during this stage; callers that leave it trainable
-    explicitly opt back into cross-domain gradient coupling.
+    No reward scalar crosses the domain boundary. New runs train already-learnable
+    shared parameters (normally LoRA) and freeze the inactive domain head.
+    Explicit freeze_shared remains available for historical ablations.
     """
 
     def __init__(
@@ -616,7 +617,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         eai_num_samples: int = 8,
         eai_supervised_weight: float = 0.5,
         dfa_enabled: bool = True,
-        parameter_policy: str | None = "freeze_shared",
+        parameter_policy: str | None = "freeze_inactive",
         device: str | torch.device = "cpu",
         **kwargs,
     ):
@@ -631,12 +632,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         self.eai_num_samples = int(eai_num_samples)
         self.eai_supervised_weight = float(eai_supervised_weight)
         self.parameter_policy = parameter_policy
-        if self.parameter_policy != "freeze_shared":
+        if self.parameter_policy is None:
             import warnings
             warnings.warn(
                 f"Stage 2 JointReinforcementProgram initialized with parameter_policy={self.parameter_policy!r}. "
-                "This policy is an experimental ablation: the shared Qwen/LoRA backbone remains trainable during "
-                "independent domain updates without gradient conflict projection, which may lead to cross-domain policy interference.",
+                "This unscoped policy does not isolate inactive domain heads.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -656,6 +656,14 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         )
         # Public identity used by checkpointing and acceptance tests.
         self.planner_head = planner
+        # The inherited model owns only the VLABench graph. Coordinate against
+        # both domains last, so a child graph cannot misclassify shared LoRA as
+        # private and override the requested freeze/unfreeze policy.
+        poi = []
+        for domain, view in (("eai", self.eai_planner), ("vlabench", self.vlabench_planner)):
+            poi.extend(attach_planner_sensors(_runtime_adapter(runtime, domain), view, device=device))
+        self.parameter_coordinator = SolverModel(runtime.root, poi=list(dict.fromkeys(poi)), device=device)
+        validate_shared_optimizer(planner, planner_optimizer, self.parameter_policy)
 
     def _policy_dfa(self, domain, context):
         if not self.planner_dfa_enabled:
@@ -706,6 +714,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         context = _context(item, "eai")
         pairs = []
         with self.joint_runtime.domain_scope("eai", parameter_policy=self.parameter_policy):
+            shared_update = SharedUpdateEvidence(self.joint_planner, self.planner_optimizer)
             # The causal sampler consumes the observation mapping; retaining an
             # unused differentiable prompt encoding wastes a full prefill graph.
             encoded_context = context
@@ -783,6 +792,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                             p.grad = rl_g.clone()
             torch.nn.utils.clip_grad_norm_(self.joint_planner.parameters(), 1.0)
             self.planner_optimizer.step()
+            shared_evidence = shared_update.report()
+            _emit_progress(f"EAI shared planner update {shared_evidence}")
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
         return {
@@ -791,6 +802,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "goal_recall": sum(s[2] for s in samples) / len(samples),
             "success": sum(s[3] for s in samples) / len(samples),
             "samples": len(samples),
+            "planner_update": shared_evidence,
         }
 
     def train_vlabench_update(
@@ -802,13 +814,17 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         self.joint_planner.train()
         self.controller.train()
         with self.joint_runtime.domain_scope("vlabench", parameter_policy=self.parameter_policy):
+            shared_update = SharedUpdateEvidence(self.joint_planner, self.planner_optimizer)
             planner = self.planner_head
             self.planner_head = self.vlabench_planner
             try:
-                return super().train_joint_epoch(
+                metrics = super().train_joint_epoch(
                     descriptors,
                     rollouts_per_update=rollouts_per_update,
                 )
+                metrics["planner_update"] = shared_update.report()
+                _emit_progress(f"VLABench shared planner update {metrics['planner_update']}")
+                return metrics
             finally:
                 self.planner_head = planner
 
@@ -863,7 +879,13 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "parameter_delta_l2": 0.0,
             "approximate_kl": 0.0,
         }
+        planner_evidence = {domain: {"updates": 0, "updates_with_shared_change": 0,
+            "shared_trainable_parameters": 0, "shared_optimizer_parameters": 0,
+            "shared_gradient_norm_sum": 0.0, "sampled_shared_delta_l2_sum": 0.0,
+            "nonfinite_updates": 0} for domain in ("eai", "vlabench")}
         if initial_metrics is not None:
+            for domain, values in planner_evidence.items():
+                values.update(initial_metrics.get("planner_evidence", {}).get(domain, {}))
             for key in eai_totals:
                 eai_totals[key] = float(initial_metrics.get("eai", {}).get(key, 0.0)) * start_round
             for key in vla_totals:
@@ -939,6 +961,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 },
                 "rounds": int(completed),
                 "round_robin_cursor": self.round_robin_cursor,
+                "planner_evidence": {domain: dict(values) for domain, values in planner_evidence.items()},
             }
 
         progress = _TrainingProgress("Stage 2 rounds", rounds, initial=start_round)
@@ -987,6 +1010,17 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 [descriptor],
                 rollouts_per_update=vlabench_rollouts_per_update,
             )
+            for domain, update in (("eai", eai), ("vlabench", vla)):
+                evidence = update.get("planner_update")
+                if evidence is not None:
+                    totals = planner_evidence[domain]
+                    totals["updates"] += 1
+                    totals["updates_with_shared_change"] += int(evidence["shared_parameters_changed"])
+                    for name in ("shared_trainable_parameters", "shared_optimizer_parameters"):
+                        totals[name] = max(totals[name], evidence[name])
+                    totals["shared_gradient_norm_sum"] += evidence["shared_gradient_norm"]
+                    totals["sampled_shared_delta_l2_sum"] += evidence["sampled_shared_delta_l2"]
+                    totals["nonfinite_updates"] += int(not evidence["finite"])
             for key in eai_totals:
                 eai_totals[key] += float(eai[key])
             for key in vla_totals:

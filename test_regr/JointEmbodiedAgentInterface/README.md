@@ -678,6 +678,33 @@ See [original/corrected label migration and restoration](../VLABenchAgentInterfa
 for reversible on-disk updates. These tests measure non-interactive planning,
 not simulator execution success.
 
+## Future Stage 2 RL runs
+
+The default Stage 2 parameter policy is `auto`: new runs use `freeze_inactive`,
+which trains the shared LoRA adapter and active head while freezing the other
+head. Intrinsically frozen base-model parameters remain frozen. Exact Stage 2
+resumes preserve their recorded policy; legacy checkpoints without that field
+retain the historical `freeze_shared` interpretation. Explicit `freeze_shared`
+is still available for ablations. Policy changes require a new Stage 2 run
+from a Stage 1 checkpoint.
+
+For RL-only training without DFA or CE/BC anchors, use
+[`utils/launch_rl_only_nodfa.sh`](utils/launch_rl_only_nodfa.sh). Set
+`CUDA_VISIBLE_DEVICES` to a free GPU UUID, plus `STAGE1_CHECKPOINT`,
+`PLANNING_DIR`, `CONTROL_SOURCE`, and a new `OUTPUT_DIR`, then execute it inside
+the training environment. It enables fixed-seed unassisted evaluation before
+training and after each epoch. Existing dataset-lineage guards still apply;
+historical evaluation-exposed checkpoints cannot initialize a clean run.
+
+Each domain logs shared trainable/optimizer parameter counts, gradient norms
+and sampled weight deltas; epoch/progress checkpoints aggregate this in
+`planner_evidence` and record `stage2_parameter_policy`. These diagnostics
+show whether shared parameters actually receive updates. They do not certify
+that the policy improved. Best-checkpoint selection requires fixed-seed
+evaluation and the existing success/coverage/IK/retention gates; disabling
+evaluation produces diagnostic epoch snapshots only. Rejection reasons are
+saved explicitly, and a failed preflight stops before RL training.
+
 ## Controlled shortcut pilot
 
 `python -m test_regr.JointEmbodiedAgentInterface.utils.leakage_pilot` prepares an

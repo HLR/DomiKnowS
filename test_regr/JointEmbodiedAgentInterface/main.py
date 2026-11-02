@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import torch
+from .utils.stage2_training import resolve_parameter_policy, selection_rejections
 
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
 from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset, split_train_dev
@@ -729,12 +730,7 @@ def command_train_agent(args):
             "controller optimizer entered PPO regime "
             f"lr={args.controller_rl_learning_rate:g}; BC moments reset"
         )
-    stage2_policy = getattr(args, "stage2_parameter_policy", "freeze_shared")
-    if getattr(args, "stage2_freeze_shared_backbone", None) is not None:
-        if not args.stage2_freeze_shared_backbone and stage2_policy == "freeze_shared":
-            stage2_policy = "freeze_inactive"
-        elif args.stage2_freeze_shared_backbone:
-            stage2_policy = "freeze_shared"
+    stage2_policy = resolve_parameter_policy(args, resume_payload)
 
     if stage2_policy == "freeze_shared":
         _status(
@@ -746,6 +742,10 @@ def command_train_agent(args):
             "Stage 2 parameter policy is 'pcgrad_protected_eai'; shared backbone is trainable "
             "with PCGrad projecting RL gradients orthogonal to EAI anchor gradients"
         )
+    elif stage2_policy == "freeze_inactive":
+        _status("Stage 2 parameter policy is 'freeze_inactive'; train shared backbone/LoRA "
+                "parameters that were already trainable and the active domain head; "
+                "keep the other head and frozen base weights unchanged")
     else:
         _status(
             f"WARNING: Stage 2 parameter policy is set to {stage2_policy!r}. "
@@ -907,31 +907,36 @@ def command_train_agent(args):
                 "maximum_ik_truncation_rate": args.stage2_preflight_max_ik_truncation_rate,
                 "vlabench": baseline,
             })
+            return
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     best_key = None
     best_path = None
+    best_selection_metrics = None
     if resumed_prior_best is not None:
         candidate_path = Path(str(resumed_prior_best.get("path", "")))
         candidate_key = resumed_prior_best.get("key")
-        if candidate_path.is_file() and isinstance(candidate_key, (list, tuple)):
+        candidate_metrics = resumed_prior_best.get("selection_metrics")
+        candidate_ok = candidate_metrics is not None and not selection_rejections(
+            candidate_metrics, min_success=args.stage2_min_vlabench_success_rate,
+            min_tasks=args.stage2_min_successful_tasks, max_ik=args.stage2_max_ik_truncation_rate)
+        if candidate_path.is_file() and isinstance(candidate_key, (list, tuple)) and candidate_ok:
             best_path = candidate_path.resolve()
             best_key = tuple(float(value) for value in candidate_key)
+            best_selection_metrics = candidate_metrics
         else:
-            _status("prior best Stage 2 checkpoint metadata could not be restored")
+            _status("prior best Stage 2 checkpoint lacks eligible fixed-seed evaluation metadata; not promoted")
     if (
         resume_stage == "stage2"
         and resume_payload is not None
         and "next_round" not in resume_payload
     ):
-        if stage2_checkpoint_eligible(
-            resume_payload["metrics"],
-            min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
-            min_successful_tasks=args.stage2_min_successful_tasks,
-            max_ik_truncation_rate=args.stage2_max_ik_truncation_rate,
-        ):
+        if not selection_rejections(
+            resume_payload["metrics"], min_success=args.stage2_min_vlabench_success_rate,
+            min_tasks=args.stage2_min_successful_tasks, max_ik=args.stage2_max_ik_truncation_rate):
             best_key = stage2_selection_key(resume_payload["metrics"])
             best_path = Path(args.resume).resolve()
+            best_selection_metrics = resume_payload["metrics"]
         else:
             _status(
                 "resume checkpoint is not a Stage 2 best candidate: "
@@ -948,7 +953,8 @@ def command_train_agent(args):
         def save_round_progress(next_round, partial_metrics, *, current_epoch=epoch):
             prior_best = None
             if best_path is not None and best_key is not None:
-                prior_best = {"path": str(best_path), "key": list(best_key)}
+                prior_best = {"path": str(best_path), "key": list(best_key),
+                              "selection_metrics": best_selection_metrics}
             progress_path = save_joint_checkpoint(
                 output / "joint_stage2_progress.pt",
                 runtime=runtime,
@@ -962,6 +968,7 @@ def command_train_agent(args):
                 round_robin_cursor=stage2.round_robin_cursor,
                 metrics={
                     "stage2_dfa": "on" if stage2_dfa_enabled else "off",
+                    "stage2_parameter_policy": stage2_policy,
                     "partial_training": dict(partial_metrics),
                     "prior_best": prior_best,
                     "baseline_reference": baseline_reference,
@@ -988,6 +995,12 @@ def command_train_agent(args):
             round_callback=save_round_progress,
         )
         metrics["stage2_dfa"] = "on" if stage2_dfa_enabled else "off"
+        metrics["stage2_parameter_policy"] = stage2_policy
+        metrics["stage2_evaluation"] = {
+            "source": "fixed_seed_rollouts" if args.stage2_eval_rollouts_per_task > 0 else "training_rollouts",
+            "rollouts_per_task": args.stage2_eval_rollouts_per_task,
+            "seed": args.seed + 100000 if args.stage2_eval_rollouts_per_task > 0 else None,
+        }
         if args.stage2_eval_rollouts_per_task > 0:
             metrics["eai_training"] = metrics["eai"]
             eai_evaluation = _evaluate_eai(
@@ -1056,6 +1069,10 @@ def command_train_agent(args):
         metrics["fallback_path"] = (
             str(best_stage1) if best_stage1 is not None else None
         )
+        rejection_reasons = selection_rejections(
+            metrics, min_success=args.stage2_min_vlabench_success_rate,
+            min_tasks=args.stage2_min_successful_tasks, max_ik=args.stage2_max_ik_truncation_rate)
+        metrics["best_candidate_rejection_reasons"] = rejection_reasons
         path = save_joint_checkpoint(
             output / f"joint_stage2_epoch_{epoch:03d}.pt",
             runtime=runtime,
@@ -1069,19 +1086,16 @@ def command_train_agent(args):
             metrics=metrics,
         )
         key = stage2_selection_key(metrics)
-        eligible = retention_eligible and stage2_checkpoint_eligible(
-            metrics,
-            min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
-            min_successful_tasks=args.stage2_min_successful_tasks,
-            max_ik_truncation_rate=args.stage2_max_ik_truncation_rate,
-        )
+        eligible = not rejection_reasons
         if eligible and (best_key is None or key > best_key):
             best_key, best_path = key, path
+            best_selection_metrics = metrics
         _json({
             "stage": "stage2",
             "epoch": epoch,
             "checkpoint": path,
             "best_candidate_eligible": eligible,
+            "best_candidate_rejection_reasons": rejection_reasons,
             "retention_eligible": retention_eligible,
             "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
             "minimum_successful_vlabench_tasks": args.stage2_min_successful_tasks,
@@ -1139,7 +1153,7 @@ def command_train_agent(args):
     elif not stage2_aborted:
         _json({
             "stage": "stage2-best-skipped",
-            "reason": "no epoch met all VLABench success, task-coverage, and IK-feasibility gates",
+            "reason": "no epoch met fixed-seed evaluation, success, task-coverage, IK-feasibility and retention gates",
             "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
             "minimum_successful_vlabench_tasks": args.stage2_min_successful_tasks,
             "maximum_ik_truncation_rate": args.stage2_max_ik_truncation_rate,
@@ -1312,9 +1326,9 @@ def build_parser():
     )
     agent.add_argument(
         "--stage2-parameter-policy",
-        choices=("freeze_shared", "freeze_inactive", "none", "pcgrad_protected_eai"),
-        default="freeze_shared",
-        help="parameter coordination policy for Stage 2 RL domain scoping (default: freeze_shared)",
+        choices=("auto", "freeze_shared", "freeze_inactive", "none", "pcgrad_protected_eai"),
+        default="auto",
+        help="Stage 2 policy: auto trains shared adapters for new runs and preserves the saved policy on resume",
     )
     agent.add_argument(
         "--stage2-max-eai-success-regression",

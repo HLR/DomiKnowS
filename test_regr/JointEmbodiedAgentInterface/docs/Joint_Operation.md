@@ -278,7 +278,8 @@ switches to `3e-5` when first entering RL; the planner optimizer is reused.
 
 | `--stage2-parameter-policy` | Effect |
 |---|---|
-| `freeze_shared` (default) | Freeze shared Qwen/LoRA within domain scopes; train the active linear label head |
+| `auto` (default) | New Stage 2: use `freeze_inactive`; Stage 2 resume: preserve the checkpoint's recorded policy (legacy missing policy: `freeze_shared`) |
+| `freeze_shared` | Explicit historical ablation: freeze shared Qwen/LoRA within domain scopes; train the active linear label head |
 | `freeze_inactive` | Keep shared parameters trainable and freeze the inactive head |
 | `none` | Apply no scoped parameter-freezing policy |
 | `pcgrad_protected_eai` | Experimental trainable-shared mode with an EAI-update projection against its supervised anchor |
@@ -286,8 +287,16 @@ switches to `3e-5` when first entering RL; the planner optimizer is reused.
 The last option's explicit projection is in `train_eai_update()`. The inherited
 VLABench planner update does not perform the paired Stage 1 PCGrad operation.
 These alternatives should not be described as equivalent protection against
-cross-domain interference. The deprecated freeze-shared Boolean flag can
-override the selected policy.
+cross-domain interference. The deprecated freeze-shared Boolean flag is an
+alias; conflicting flags are rejected. Changing policy on an exact Stage 2
+resume is rejected; start a new Stage 2 experiment from Stage 1 instead.
+Coordination sees both domain graphs, including when constructing Stage 2
+directly without a preceding Stage 1 program. Frozen quantized base parameters
+stay frozen; only already-trainable shared parameters, normally LoRA, update.
+Per-update and checkpoint `planner_evidence` record shared optimizer coverage,
+gradient norms and sampled parameter changes separately for each domain. The
+delta samples contain at most 16 elements per shared tensor, not a full-model
+norm; zero samples do not prove every parameter is unchanged.
 
 ### 2. Record fixed-seed baselines and the preflight result
 
@@ -297,13 +306,17 @@ holdout success/recall and optional static VLABench planning scores.
 
 VLABench preflight defaults require positive-return rate at least `0.01` and
 IK truncation at most `0.50`. Minimum success and successful-task coverage both
-default to zero. **Current control flow only logs `stage2-skipped` when this
-preflight fails; it does not return before the RL epoch loop.** This differs
-from the EAI gate and from the standalone VLABench command.
+default to zero. A failed preflight records `stage2-skipped` and returns before
+any RL epoch begins.
 
 Setting `--stage2-eval-rollouts-per-task 0` disables this baseline evaluation
-and the corresponding fixed-seed post-epoch evaluations. Selection then uses
-training metrics, and baseline references may be absent.
+and the corresponding fixed-seed post-epoch evaluations. Such runs are
+diagnostic only and cannot select `joint_stage2_best.pt`, even if training
+success exceeds the gate. Selection requires recorded fixed-seed rollout
+evaluation; rejection reasons are saved in epoch metrics and printed in logs.
+Thresholds for success, task coverage, IK feasibility and baseline retention
+are unchanged. Passing these gates is an empirical result, not guaranteed by
+enabling shared-adapter training.
 
 ### 3. Train the EAI head with sampled-plan reward
 

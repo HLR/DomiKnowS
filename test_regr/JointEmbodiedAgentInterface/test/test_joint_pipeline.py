@@ -1357,7 +1357,7 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)
     assert args.max_consecutive_ik_rejections == 3
-    assert args.stage2_parameter_policy == "freeze_shared"
+    assert args.stage2_parameter_policy == "auto"
     assert args.stage2_freeze_shared_backbone is None
     assert args.stage2_eval_planning is True
     assert args.stage2_eval_planning_limit is None
