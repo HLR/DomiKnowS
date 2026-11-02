@@ -358,7 +358,9 @@ def save_joint_checkpoint(
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(target.suffix + ".tmp")
     compatibility = _compatibility(runtime, planner, controller)
+    from test_regr.VLABenchAgentInterface.prompt_protocol import planner_input_protocol
     payload = {
+        "planner_input_protocol": planner_input_protocol(),
         "joint_checkpoint_version": JOINT_CHECKPOINT_VERSION,
         "compatibility": compatibility,
         "knowledge_manifest_version": compatibility["knowledge_manifest"]["version"],
@@ -405,6 +407,9 @@ def load_joint_checkpoint(
         weights_only=False,
     )
     checkpoint_version = payload.get("joint_checkpoint_version")
+    if planner_optimizer is not None or controller_optimizer is not None:
+        from test_regr.VLABenchAgentInterface.prompt_protocol import validate_training_input_protocol
+        validate_training_input_protocol(payload)
     from test_regr.VLABenchAgentInterface.research.checkpoint import restore_metadata
     if checkpoint_version not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
         raise ValueError("unsupported or standalone checkpoint; a joint checkpoint is required")

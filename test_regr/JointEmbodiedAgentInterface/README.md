@@ -92,6 +92,34 @@ resuming a DFA-trained Stage 1 checkpoint is a warm start. Stage 2 and controlle
 warm-up checkpoints are rejected in CE-only mode. When evaluating the saved
 baseline with `evaluate-planning`, include `--no-dfa` for free decoding.
 
+For the same anonymous object-list prompt used by official knowledge, without
+DFA losses, decoding masks, or image-perception inference, add
+`--no-dfa-official` (also accepted as `-no-dfa-official`):
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent \
+  --ce-only --no-dfa-official --stage1-epochs 5 --output /path/to/new_run
+
+python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint /path/to/checkpoint.pt --split test --no-dfa-official
+```
+
+The flag is also available on `main evaluate-planning`. With `train-agent
+--two-stage`, it preserves the configured RL stage while disabling Stage 1
+planner DFA losses and Stage 2 DFA sampling/replay masks. Training still requires
+a mode (`--ce-only` or `--two-stage`) and the existing dataset-lineage checks.
+Explicit masked-CE modes, non-grammar knowledge, metadata-assisted observations,
+compiled losses and image perception conflict with this option and are rejected.
+
+Only the rendered object list changes: names become `numbered object i`, so the
+name-based answer-button directive is omitted. Instructions, images, canonical
+entity tables, reference plans and scoring pointers remain unchanged. Existing
+`--no-dfa` retains its named-object prompt. Evaluation reports record
+`no_dfa_official` and `planner_input_protocol`; joint checkpoints record the input
+protocol and reject training resumes that silently change it. Use
+`--initialize-from` for a new experiment from a compatible named-object Stage 1
+checkpoint, and repeat the flag when resuming anonymous-object training.
+
 For CE training with DFA-constrained validation instead, the lower-level
 combination is `--two-stage --stage1-dfa-loss off --stage2-epochs 0`.
 

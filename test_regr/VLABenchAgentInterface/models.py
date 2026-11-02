@@ -291,8 +291,9 @@ def vision_language_hidden_size(model: nn.Module) -> int | None:
 
 
 def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: PlanVocabulary) -> str:
-    from .research.config import default_perception_options
-    if default_perception_options():entity_table=tuple(f"numbered object {i}" for i in range(len(entity_table)))
+    from .prompt_protocol import planner_input_protocol
+    if planner_input_protocol() == "anonymous_objects":
+        entity_table = tuple(f"numbered object {i}" for i in range(len(entity_table)))
     entities = "\n".join(f"{index}: {name}" for index, name in enumerate(entity_table)) or "No objects."
     skills = ", ".join(vocabulary.skills)
     directive = ""

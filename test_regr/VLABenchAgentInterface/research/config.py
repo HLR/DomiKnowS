@@ -103,6 +103,8 @@ def add_research_subcommands(parser):
 
 
 def apply_research_arguments(args):
+    from ..prompt_protocol import apply_no_dfa_official_argument
+    apply_no_dfa_official_argument(args)
     config = ResearchConfig(getattr(args, "constraint_profile", "baseline"),
                             getattr(args, "grounding_policy", None) or "robust",
                             getattr(args, "motion_geometry", "off"),

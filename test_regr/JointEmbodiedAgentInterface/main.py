@@ -367,6 +367,12 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
 
 
 def command_train_agent(args):
+    from test_regr.VLABenchAgentInterface.prompt_protocol import apply_no_dfa_official_argument
+    apply_no_dfa_official_argument(args)
+    if getattr(args, "no_dfa_official", False):
+        from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
+        apply_research_arguments(args)
+        _status("anonymous object prompts; no name-based button hints, planner DFA losses or decoding masks")
     from test_regr.VLABenchAgentInterface.dataset_protocol import guard_training_dataset
     if getattr(args, "initialize_from", None) and (args.resume or args.resume_adapter):
         raise ValueError("--initialize-from cannot be combined with --resume or --resume-adapter")
@@ -423,7 +429,7 @@ def command_train_agent(args):
     if args.resume_adapter:
         from test_regr.VLABenchAgentInterface.research.checkpoint import load_adapter_metadata
         load_adapter_metadata(args.resume_adapter,planner,training=True)
-    planner.free_decoding = ce_only
+    planner.free_decoding = ce_only or bool(getattr(args, "no_dfa_official", False))
     _status(f"loading controller vision encoder {args.vision_model if not args.tiny_vision else 'tiny'}")
     controller = _controller(args, device)
     initialization = None
@@ -590,12 +596,13 @@ def command_train_agent(args):
                         )
                 finally:
                     planner.free_decoding = previous_free
-            dfa_mass = {} if ce_only else stage1.dfa_mass_report(eai_valid, prepared["validation"])
-            if not ce_only:
+            dfa_mass = {} if planner.free_decoding else stage1.dfa_mass_report(eai_valid, prepared["validation"])
+            if not planner.free_decoding:
                 _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} DFA mass (unmasked probability on valid labels) {dfa_mass}")
             metrics = {
                 "training_mode": training_mode,
-                "decoding": "free" if ce_only else "dfa",
+                "decoding": "free" if planner.free_decoding else "dfa",
+                "no_dfa_official": bool(getattr(args, "no_dfa_official", False)),
                 "training_data_protocol": training_data_protocol(args, resume_payload or initialization_payload),
                 "train": train_metrics,
                 "eai": eai_metrics,
@@ -1167,9 +1174,11 @@ def command_evaluate_planning(args):
 
 
 def build_parser():
+    from test_regr.VLABenchAgentInterface.prompt_protocol import add_no_dfa_official_argument
     parser = argparse.ArgumentParser(description="Unified EAI/VLABench dynamic-activation training")
     subparsers = parser.add_subparsers(dest="command", required=True)
     agent = subparsers.add_parser("train-agent", help="run joint SolverPOI then joint reinforcement learning")
+    add_no_dfa_official_argument(agent)
     mode = agent.add_mutually_exclusive_group(required=True)
     mode.add_argument("--two-stage", action="store_true", help="run supervised training followed by RL")
     mode.add_argument("--ce-only", action="store_true",
@@ -1475,6 +1484,7 @@ def build_parser():
     eval_planning.add_argument("--split", choices=("validation", "test", "train", "all", "heldout"), default="validation")
     add_knowledge_argument(eval_planning)
     eval_planning.add_argument("--no-dfa", action="store_true")
+    add_no_dfa_official_argument(eval_planning)
     eval_planning.add_argument("--no-dfa-min-steps", type=int, default=0)
     eval_planning.add_argument("--input-probe", choices=("original", "permuted-entities", "no-images", "shuffled-images", "shuffled-instructions"), default="original")
     eval_planning.add_argument("--audit-probes", action="store_true",

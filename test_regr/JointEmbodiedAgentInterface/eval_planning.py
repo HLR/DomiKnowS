@@ -48,6 +48,7 @@ from .utils.evaluation_protocol import evaluation_protocol
 
 
 def build_eval_parser() -> argparse.ArgumentParser:
+    from test_regr.VLABenchAgentInterface.prompt_protocol import add_no_dfa_official_argument
     parser = argparse.ArgumentParser(
         description="Evaluate non-interactive VLABench planning progress score for a joint checkpoint"
     )
@@ -77,6 +78,7 @@ def build_eval_parser() -> argparse.ArgumentParser:
                         help="with --no-dfa: withhold the end label for this many steps (0 = fully free)")
     parser.add_argument("--no-dfa", action="store_true",
                         help="decode without the grammar DFA or any constraint (baseline below --knowledge grammar)")
+    add_no_dfa_official_argument(parser)
     parser.add_argument("--audit-probes", action="store_true",
                         help="also score paired no-images, shuffled-images and permuted-entities inputs")
     from .utils.leakage_pilot import add_pilot_arguments
@@ -228,6 +230,11 @@ def _evaluation_shard(examples, count=1, index=0):
 
 
 def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
+    from test_regr.VLABenchAgentInterface.prompt_protocol import apply_no_dfa_official_argument, planner_input_protocol
+    apply_no_dfa_official_argument(args)
+    if getattr(args, "no_dfa_official", False):
+        from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
+        apply_research_arguments(args)
     if getattr(args, "pilot_condition", "original") != "original" and not getattr(args, "pilot_manifest", None):
         raise ValueError("--pilot-condition requires --pilot-manifest")
     if getattr(args, "paired_density_references", False) and getattr(args, "updated_data", False):
@@ -409,6 +416,8 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "knowledge_manifest": getattr(runtime, "knowledge_manifest", None),
         "knowledge_provenance": payload.get("knowledge_provenance", {"status": "unrecorded_legacy"}),
         "decoding": "free" if getattr(args, "no_dfa", False) else "dfa",
+        "no_dfa_official": bool(getattr(args, "no_dfa_official", False)),
+        "planner_input_protocol": planner_input_protocol(),
         "free_decoding_min_steps": int(getattr(args, "no_dfa_min_steps", 0)),
         "holdout_tasks": list(holdout),
         "declare_heldout_knowledge": bool(getattr(args, "declare_heldout_knowledge", False)),
