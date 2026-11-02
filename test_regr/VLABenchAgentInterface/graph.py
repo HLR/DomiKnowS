@@ -21,12 +21,14 @@ def _any(predicates):
     return predicates[0] if len(predicates) == 1 else orL(*predicates)
 
 
-def _declare_plan_grammar(bundle, world, vocabulary, language):
+def _declare_plan_grammar(bundle, vocabulary, language):
     """Describe positions within each subtask, without enumerating plans."""
     ctx = bundle.context
     patterns = tuple(dict.fromkeys((*language.patterns, *(language.roots or ()))))
     roots = set(language.patterns if language.roots is None else language.roots)
     objects = tuple(f"obj:{index}" for index in range(vocabulary.max_entities))
+    skill_arguments = vocabulary.skill_argument_map
+    optional_arguments = dict(vocabulary.optional_skill_arguments)
     positions = {"finished": (vocabulary.eos_token,)}
     following = {"finished": {"finished"}}
     starts, complete, repeating_starts = set(), set(), set()
@@ -48,8 +50,13 @@ def _declare_plan_grammar(bundle, world, vocabulary, language):
             for previous in previous_operation:
                 following[previous].add(skill_position)
             last = skill_position
-            required = tuple(world.skill_arguments[skill])
-            optional = tuple(world.optional_skill_arguments.get(skill, ()))
+            required = tuple(skill_arguments[skill])
+            optional = tuple(optional_arguments.get(skill, ()))
+            if not objects:  # no object can fill a role: a skill with required roles never completes
+                optional = ()
+                if required:
+                    previous_operation = set()
+                    continue
             operation_ends = set()
             for index, key in enumerate((*required, *optional)):
                 if index >= len(required):
@@ -109,15 +116,28 @@ def create_planner_generation_graph(
     ``skill_language`` supplies task-specific roots and empty-plan permission.
     These facts change declarations, never bypass compilation.
     """
-    from domiknows.generation.dfa.pattern_language import BoundedPatternLanguage
     vocabulary = vocabulary or PlanVocabulary.from_world(world)
     if vocabulary.domain_checksum != world.domain_checksum:
         raise ValueError("generation vocabulary does not match the world graph")
+    return create_plan_grammar_graph(vocabulary, world.subtask_patterns, max_operations=max_operations,
+                                     graph_name=graph_name, skill_language=skill_language)
+
+
+def create_plan_grammar_graph(
+    vocabulary: PlanVocabulary, patterns, *, max_operations: int = 12,
+    graph_name: str = "vlabench_plan_grammar", skill_language=None,
+):
+    """The plan grammar of one skill-argument table (``vocabulary``) and subtask-pattern list.
+
+    The world graph's planner and the native JSON decoder (``NativePlanDFA``, one vocabulary
+    per native profile) both decode with this declaration.
+    """
+    from domiknows.generation.dfa.pattern_language import BoundedPatternLanguage
     if max_operations < 0:
         raise ValueError("max_operations must be non-negative")
     language = skill_language
     if language is None:
-        language = BoundedPatternLanguage(world.subtask_patterns, max_operations)
+        language = BoundedPatternLanguage(tuple(tuple(pattern) for pattern in patterns), max_operations)
     elif not isinstance(language, BoundedPatternLanguage):
         language = BoundedPatternLanguage(tuple(language), max_operations, repeat=False, allow_empty=() in language)
     graph, bundle = GenerationEncoder(
@@ -135,7 +155,7 @@ def create_planner_generation_graph(
         mark_for_dfa(atMostAL(_any(
             ctx.token_value(f"skill:{skill}", "position") for skill in vocabulary.skills
         ), min(max_operations, language.maximum)))
-        bundle.planner_grammar = _declare_plan_grammar(bundle, world, vocabulary, language)
+        bundle.planner_grammar = _declare_plan_grammar(bundle, vocabulary, language)
     return graph, bundle
 
 

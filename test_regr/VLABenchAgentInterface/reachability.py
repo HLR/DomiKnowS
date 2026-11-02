@@ -152,8 +152,9 @@ The policy and this DFA must describe the same entity ids and action schemas.
             self._action_moves[key] = result
         return self._action_moves[key]
 
-    def _complete(self, prefixes, extras):
-        if () not in prefixes or not super().plan_complete(extras[:-1]):
+    def _complete(self, prefixes, count, extras):
+        # An empty plan is the bound world policy's decision (a no-op for a satisfied goal).
+        if (count and not self.plan_closes(prefixes)) or not super().plan_complete(extras[:-1]):
             return False
         return self.world_reachability.terminal(extras[-1])
 
@@ -165,7 +166,7 @@ The policy and this DFA must describe the same entity ids and action schemas.
         if work[0] > self.world_reachability.max_state_expansions:
             raise SemanticSearchLimitExceeded("native action reachability expansion limit exceeded; feasibility is undetermined")
         # node=None means an action boundary where stopping is also possible.
-        terminal = self._complete(prefixes, extras) if node is None else False
+        terminal = self._complete(prefixes, count, extras) if node is None else False
         if terminal is True:
             self._action_answers[key] = True
             return True
@@ -219,5 +220,5 @@ The policy and this DFA must describe the same entity ids and action schemas.
         # policy may explicitly allow a no-op for an already satisfied goal.
         if state[2] == "operation" and state[3] == 0 and state[0] == 0 and byte == ord("]"):
             return ((0, state[1], "closed", 0, "") + state[5:]
-                    if self._complete(state[1], state[5:]) is True else None)
+                    if self._complete(state[1], 0, state[5:]) is True else None)
         return super().byte_step(state, byte)

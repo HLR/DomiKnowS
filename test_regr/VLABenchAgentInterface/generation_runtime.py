@@ -1,15 +1,18 @@
 """Compilation, progress annotations, and request binding for the planner graph."""
 from collections import deque
+from dataclasses import dataclass
+from functools import lru_cache
+import hashlib
 from itertools import count
 from typing import Mapping
 
 try:
     from .plan_codec import PlanVocabulary, plan_to_tokens
-    from .graph import create_planner_generation_graph
+    from .graph import create_plan_grammar_graph, create_planner_generation_graph
     from .pattern_runtime import project_skill_progress
 except ImportError:
     from plan_codec import PlanVocabulary, plan_to_tokens
-    from graph import create_planner_generation_graph
+    from graph import create_plan_grammar_graph, create_planner_generation_graph
     from pattern_runtime import project_skill_progress
 
 _BUILD_IDS = count()
@@ -79,6 +82,68 @@ def _domain_dfa(world, vocabulary, max_operations, complete_sequences=None, *, i
     if include_pattern:
         return result, project_skill_progress(raw, vocabulary)
     return result
+
+
+@dataclass(frozen=True)
+class PlanLanguage:
+    """The compiled ``graph.py`` plan grammar of one vocabulary, with the states that can still end a plan."""
+    vocabulary: PlanVocabulary
+    graph: object
+    bundle: object
+    dfa: object
+    live: frozenset
+
+    @property
+    def start(self):
+        return self.dfa.start_state
+
+    def advance(self, state, tokens):
+        """The state after ``tokens`` (token strings), or ``None`` once no plan can be completed."""
+        for token in tokens:
+            state = self.dfa.step(state, self.vocabulary.label_for_token(token))
+            if state not in self.live:
+                return None
+        return state
+
+    def closes(self, state) -> bool:
+        """The plan may end here (EOS is accepted)."""
+        return self.dfa.is_accepting(self.dfa.step(state, self.vocabulary.eos_label))
+
+
+def compile_plan_language(graph, bundle, vocabulary) -> PlanLanguage:
+    """Compile a plan grammar graph (with its currently active LCs) and mark its live states."""
+    from domiknows.generation import constraints_to_dfa_from_graph
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+    predecessors = {}
+    for (source, _label), target in dfa.transitions.items():
+        predecessors.setdefault(target, set()).add(source)
+    live, queue = set(dfa.accepting_states), deque(dfa.accepting_states)
+    while queue:
+        for source in predecessors.get(queue.popleft(), ()):
+            if source not in live:
+                live.add(source)
+                queue.append(source)
+    return PlanLanguage(vocabulary, graph, bundle, dfa, frozenset(live))
+
+
+def profile_vocabulary(skill_arguments, max_entities: int) -> PlanVocabulary:
+    """The plan vocabulary of a skill-argument table (no optional roles), in table order."""
+    skill_arguments = tuple((skill, tuple(roles)) for skill, roles in dict(skill_arguments).items())
+    return PlanVocabulary(
+        skills=tuple(skill for skill, _roles in skill_arguments),
+        argument_keys=tuple(sorted({role for _skill, roles in skill_arguments for role in roles})),
+        skill_arguments=skill_arguments, max_entities=int(max_entities),
+        domain_checksum="profile:" + hashlib.sha256(repr(skill_arguments).encode()).hexdigest()[:16],
+    )
+
+
+@lru_cache(maxsize=None)
+def plan_language(skill_arguments: tuple, patterns: tuple, max_entities: int, max_operations: int) -> PlanLanguage:
+    """The compiled plan grammar of a skill-argument table and pattern list (cached per process)."""
+    vocabulary = profile_vocabulary(skill_arguments, max_entities)
+    graph, bundle = create_plan_grammar_graph(vocabulary, patterns, max_operations=max_operations,
+                                              graph_name=f"vlabench_profile_grammar_{next(_BUILD_IDS)}")
+    return compile_plan_language(graph, bundle, vocabulary)
 
 
 def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_operations: int = 12):

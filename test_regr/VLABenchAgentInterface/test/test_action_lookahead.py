@@ -194,7 +194,7 @@ def test_dfa_exposes_the_action_inventory_the_lookahead_uses():
     assert pick_one in dfa.node_actions[state[3]]
     assert dfa.completed_action(state, ord("}")) == (pick_one, b"")
     index, successors, accepting = dfa.semantic_automaton()
-    assert accepting[0] and index[((),)] == 0
+    assert not accepting[0] and index[dfa.start_state[1]] == 0  # the grammar refuses the empty plan
     assert len(successors) == len(accepting)
 
 

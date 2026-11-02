@@ -9,11 +9,10 @@ queries and relay applies/decided views. General native generation defaults to t
 eleven-skill `world` profile; the explicit official/legacy languages stay fixed.
 The dated inventories and scores below describe earlier schema revisions.
 
-**2026-11-01 update:** the native plan grammar is now declared as logical constraints in
-`official/grammar_graph.py` and compiled into `NativePlanDFA`, which keeps only the JSON lexer:
-15 formulas for the benchmark profile used by the official protocol (17 for `world`, 15 for `legacy`).
-The official causal setting therefore enables 15 + 3 formulas. See
-[Native plan grammar](#native-plan-grammar-15-logical-constraints).
+**2026-11-01 update:** the native JSON decoder (`NativePlanDFA`) now runs on the five grammar
+formulas of `graph.py`, compiled for the native profile's vocabulary, and keeps only the JSON lexer.
+The official causal setting therefore enables 5 + 3 formulas. See
+[Native JSON decoding runs on the same grammar](#native-json-decoding-runs-on-the-same-grammar).
 
 **2026-10-30 update:** the [official protocol with image perception](IMAGE_PERCEPTION.md#official-protocol)
 adds `official/selection_graph.py`: nine formulas (`ordinal_rank_1` .. `ordinal_rank_8`, `named_card_face`)
@@ -114,7 +113,7 @@ The task subtotal is **4 request constraints + 36 sequence/completion constraint
 
 ## Ablation levels
 
-The grammar/world levels are cumulative. The official-protocol `causal` row is a separate decoding path. Inactive world constraints still exist in the graph; the table counts only enabled logical constraints. The official native grammar is its own graph (`official/grammar_graph.py`, 15 formulas for the benchmark profile) and does not use the five grammar formulas of `graph.py`, so `causal` enables 15 + 3, not 5 + 3 (the snapshot rows below predate the grammar graph and count 3).
+The grammar/world levels are cumulative. The official-protocol `causal` row is a separate decoding path. Inactive world constraints still exist in the graph; the table counts only enabled logical constraints. The official native grammar is the five `graph.py` grammar formulas compiled for the benchmark profile vocabulary, so `causal` enables 5 + 3 (the snapshot rows below predate this and count 3).
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -551,24 +550,11 @@ The 13 declared subtask skill patterns are defined at [test_regr/VLABenchAgentIn
 
 Skill role data are defined at [test_regr/VLABenchAgentInterface/world_domain.py:123](../world_domain.py#L123). A pointer within the 64-label vocabulary is syntactically legal; whether it resolves to a supplied scene entity is checked by world knowledge. Labels outside the generation vocabulary cannot match the declared token alternatives. The baseline does not allow an empty plan. Task-specific continuation declarations can alter roots, patterns, repetition, bounds, and empty-plan permission, so the resulting formulas can differ from this baseline.
 
-## Native plan grammar: 15 logical constraints
+## Native JSON decoding runs on the same grammar
 
-`official/grammar_graph.py` declares the native JSON plan grammar of the official protocol (and of every native profile) as DomiKnowS formulas. `NativePlanDFA` compiles them with the same predicate compiler as the causal graph and is otherwise a JSON lexer: it spells each skill name of the profile with every argument shape (none, `target_entity_name`, `target_container_name`) and integer ids, and reports the operation it read, the open subtask-pattern prefixes and the operation count. The formulas decide which of those are legal. The skill-argument table and the pattern list of the profile generate the per-skill and pattern formulas at build time, so the benchmark profile (nine skills, eleven patterns) declares 15 formulas, the `world` profile 17 and the `legacy` profile 15.
+The native JSON decoder of the official protocol (and of every native profile) uses the five grammar formulas above; there is no second grammar declaration. `create_plan_grammar_graph` in `graph.py` declares them for any skill-argument table and pattern list (`create_planner_generation_graph` calls it with the world graph's), and `plan_language` in `generation_runtime.py` compiles them with the generation compiler for one native profile vocabulary: the profile's skills and argument roles, `obj:0` .. `obj:<entity_count - 1>`, and the profile's subtask patterns and operation budget (benchmark: nine skills, eleven patterns, 16 operations). The compiled DFA is cached per profile, id count and budget (about 7 s for 64 ids and 16 operations).
 
-Three event domains are compiled:
-
-- **`grammar_action`**, evaluated once per DFA over the whole lexicon. The admitted actions become the DFA's action inventory.
-  - `operation_exactly_one_skill`: `ifL(action(a), exactL(action_pick(a), ..., action_press(a), 1))`.
-  - `skill_arguments__<skill>` (one per skill, 9): `ifL(action_<skill>(a), andL(has_entity_argument(a) | notL(...), has_container_argument(a) | notL(...)))`, the declared argument roles of that skill.
-  - `target_within_id_bound`: `ifL(orL(has_entity_argument(a), has_container_argument(a)), target_within_id_bound(a))`; ids stay below the episode's `entity_count`.
-- **`grammar_step`**, evaluated per candidate operation against the plan prefix.
-  - `operation_within_budget`: `ifL(operation(s), remaining_at_least_0(s))`, where remaining = `max_operations - count - 1`.
-  - `operation_continues_subtask_pattern`: `ifL(operation(s), orL(andL(open__<prefix>(s), skill_<next>(s), remaining_at_least_<k>(s)), ...))`, one term per (open prefix, next skill, operations still needed to finish the pattern); a skill may follow only an open prefix of a declared pattern that can still be completed within the budget.
-- **`grammar_plan`**, evaluated when the plan closes (`]`).
-  - `plan_has_an_operation`: `ifL(plan(p), has_operations(p))`.
-  - `plan_completes_subtask_pattern`: `ifL(plan(p), subtask_boundary(p))`; the plan ends on a complete pattern.
-
-The open prefixes (`open__subtask_start`, `open__after_pick`, `open__after_pick_pour`, `open__after_pick_push`) are observations of the plan prefix, as the causal rules observe earlier ids; the lexer advances them after each operation without refusing anything. JSON bytes, whitespace, string escapes and member order remain the lexer's responsibility. The compiled grammar was checked against the former hand-written DFA (kept as `test/legacy_native_grammar.py`) on every reachable byte transition for the benchmark, world and legacy profiles and a restricted pattern set, and on full-size pattern admission (`test/test_native_grammar_lcs.py`). Deactivating a formula changes the language once a new DFA is built; a compiled program is cached per activation of the graph's formulas.
+`NativePlanDFA` is a JSON lexer over that vocabulary's actions. Each finished operation is fed to the compiled DFA as plan tokens (`skill:pick arg:target_entity_name obj:3`); an operation is legal only if the DFA can still end a plan afterwards, and `]` is legal only where the DFA accepts EOS. Argument roles, the id bound, subtask patterns, pattern completion within the budget and the non-empty plan therefore all come from the declared formulas. JSON bytes, whitespace, string escapes and member order remain the lexer's responsibility. The native language is unchanged: the decoder was checked against a frozen copy of the former hand-written DFA (`test/legacy_native_grammar.py`) on every reachable byte transition for the benchmark, world and legacy profiles and a restricted pattern set, and on full-size pattern admission (`test/test_native_grammar_lcs.py`). Deactivating a formula changes the language once the grammar is compiled again; the generation compiler skips inactive formulas.
 
 ## Causal (id-only) DFA rules: 3 logical constraints
 
@@ -576,7 +562,7 @@ These rules are the `causal` level of the standard VLABench protocol, the highes
 
 Each formula binds `operation` to the candidate operation. `pick`, `place`, `insert`, `pour`, and `push` are skill concepts under the graph's operation concept; the grammar already determines the skill. `target_is_subject` observes equality with the object picked in the current subtask; `target_used_in_subtask` observes membership in its earlier destinations; `target_was_destination` observes membership in all earlier destinations. These are comparisons of plan ids, computed before the candidate executes, without scene metadata or task identity. They are not precomputed legality flags.
 
-The prefix state stores `(subject, local_destinations, former_destinations)`. Pick/press start a subtask, reset local destinations, and set the subject to the picked id or to none for press. A destination operation appends its id to local and plan-wide history. This state update accumulates observations; it does not refuse actions. Native JSON syntax, EOS, byte-token projection, and this observation lifecycle remain runtime responsibilities; the operation budget, argument roles, id bound and subtask patterns are the [native plan grammar](#native-plan-grammar-15-logical-constraints) formulas. No additional state-update logical constraints are counted.
+The prefix state stores `(subject, local_destinations, former_destinations)`. Pick/press start a subtask, reset local destinations, and set the subject to the picked id or to none for press. A destination operation appends its id to local and plan-wide history. This state update accumulates observations; it does not refuse actions. Native JSON syntax, EOS, byte-token projection, and this observation lifecycle remain runtime responsibilities; the operation budget, argument roles, id bound and subtask patterns are the [grammar formulas](#native-json-decoding-runs-on-the-same-grammar). No additional state-update logical constraints are counted.
 
 Ids are pruned as soon as no grammatical operation satisfies the compiled formulas; whitespace before a refused closing brace is also refused. Existing checks found no violations in the 4,500 reference plans; this declaration refactor was validated locally without rerunning that dataset evaluation.
 
@@ -605,7 +591,7 @@ Ids are pruned as soon as no grammatical operation satisfies the compiled formul
 </tbody>
 </table>
 
-The official protocol still does not enforce scene-based pointer classification or the generic repeated-pick rule. Repeated picks of a non-destination stay permitted, including chemistry-experiment patterns. Pointer bounds remain the grammar's `target_within_id_bound` formula over the configured `entity_count` (64 in the official setup) unless `--scene-ids` is set; then the `scene_ids_bound_targets` formula below bounds them. The three declarations are independent of the generic/scene/task world groups; their counts are not cumulative with those groups.
+The official protocol still does not enforce scene-based pointer classification or the generic repeated-pick rule. Repeated picks of a non-destination stay permitted, including chemistry-experiment patterns. Pointer bounds remain the grammar vocabulary's ids below the configured `entity_count` (64 in the official setup) unless `--scene-ids` is set; then the `scene_ids_bound_targets` formula below bounds them. The three declarations are independent of the generic/scene/task world groups; their counts are not cumulative with those groups.
 
 The world graph declares the same three rules as its `causal` group (`_declare_causal_rules`, [world_graph.py:158](../world_graph.py#L158)), so `--knowledge causal` also constrains the Joint and internal graph decoders. They read the world facts `subject_equals_destination`, `destination_used_in_subtask` and `target_was_destination`, which `semantics.py` grounds from the prefix (`PlanSemanticState.subtask_destinations` and `former_destinations`); the graph DFA and DataNode verification agree on them in the bounded-equivalence test.
 
@@ -7527,7 +7513,7 @@ The generation graph provides syntax and finite language membership. World verif
 
 ## Checking and interpreting counts
 
-The inventory was checked against the complete declared formulas in the current graph build: **5 grammar logical constraints and 89 world logical constraints**, with world groups **causal=3, generic=24, scene=6, task=56**. The separate official-protocol `causal` graph declares three additional `ifL` formulas; its grammar is the separate native grammar graph (15 formulas for the benchmark profile), so it enables 15 + 3, not 5 + 3. The separate decoding graph declares five more `ifL` formulas, the physics graph 82 and the complex-task graph 85. Across the paths there are **269 declarations**, classified by their outermost operator in the operator-class table; no current level enables all 269 together.
+The inventory was checked against the complete declared formulas in the current graph build: **5 grammar logical constraints and 89 world logical constraints**, with world groups **causal=3, generic=24, scene=6, task=56**. The separate official-protocol `causal` graph declares three additional `ifL` formulas; its grammar is the five `graph.py` grammar formulas compiled for the benchmark profile vocabulary, so it enables 5 + 3. The separate decoding graph declares five more `ifL` formulas, the physics graph 82 and the complex-task graph 85. Across the paths there are **269 declarations**, classified by their outermost operator in the operator-class table; no current level enables all 269 together.
 
 Counts can change with custom task knowledge/excluded tasks, custom constraint builders, disabling default constraints, or changes that add or remove complete declared formulas. Changing entity vocabulary size, `max_operations`, or continuation data can change a formula's alternatives and limits without adding a logical constraint. Actual active groundings also depend on plan length, task guards, and supplied requirements. Source lines are the local snapshot cited here and can move after code edits.
 

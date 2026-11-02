@@ -161,8 +161,8 @@ def analyze_generation_constraints(
     auxiliary_families = compile_auxiliary_state_families(graph, bundle)
     analyses: list[GenerationConstraintAnalysis] = []
     for lc_name, lc in graph.logicalConstrains.items():
-        if not getattr(lc, "headLC", True):
-            continue
+        if not getattr(lc, "headLC", True) or not getattr(lc, "active", True):
+            continue  # nested formulas belong to their head; inactive formulas are not enforced
         # A shared hidden-state family must be projected jointly, before the
         # ordinary normalizer separates its conjuncts into independent DFAs.
         if lc_name in auxiliary_families:
