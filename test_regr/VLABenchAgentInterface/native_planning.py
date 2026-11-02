@@ -85,26 +85,45 @@ def byte_token_map(tokenizer):
 
 
 class NativePlanDFA:
-    """Lazy deterministic JSON language with semantic subtask boundaries.
+    """Lazy deterministic JSON language whose plan grammar is compiled logical constraints.
 
-    Token transitions consume *all* token bytes, including tokens spanning JSON
-    delimiters. Semantic states retain subtask-prefix possibilities rather than
-    complete history, avoiding enumeration of all possible operation sequences.
+    The class is a JSON lexer: it spells each skill name of the profile with every argument
+    shape and integer id, and reports the operation it read, the open subtask-pattern prefixes
+    and the operation count. ``official/grammar_graph.py`` declares what is legal: the action
+    formulas choose the action inventory (skill, argument roles, id bound), the step formulas
+    admit an operation after a prefix (budget, pattern continuation) and the plan formulas admit
+    closing the plan. Token transitions consume *all* token bytes, including tokens spanning JSON
+    delimiters. Semantic states retain subtask-prefix possibilities rather than complete history.
     """
 
     def __init__(self, token_bytes, eos_id, *, entity_count, max_operations=None,
-                 grammar_profile="benchmark", patterns=None):
+                 grammar_profile="benchmark", patterns=None, grammar_graph=None):
         self.eos_label = int(eos_id)
         self.grammar_profile = grammar_profile
-        self.skill_arguments, self.patterns = native_schema(grammar_profile)
+        declared_arguments, declared_patterns = native_schema(grammar_profile)
         if patterns is not None:  # restrict the language to these complete subtask patterns
-            self.patterns = tuple(tuple(pattern) for pattern in patterns)
-            used = {skill for pattern in self.patterns for skill in pattern}
-            self.skill_arguments = {skill: roles for skill, roles in self.skill_arguments.items() if skill in used}
+            declared_patterns = tuple(tuple(pattern) for pattern in patterns)
+            used = {skill for pattern in declared_patterns for skill in pattern}
+            declared_arguments = {skill: roles for skill, roles in declared_arguments.items() if skill in used}
+        if grammar_graph is None:
+            try:
+                from .official.grammar_graph import grammar_graph as profile_grammar
+            except ImportError:  # pragma: no cover - flat-module execution
+                from official.grammar_graph import grammar_graph as profile_grammar
+            grammar_graph = profile_grammar(tuple(declared_arguments.items()),
+                                            tuple(tuple(pattern) for pattern in declared_patterns))
+        self.grammar_graph = grammar_graph
+        self.grammar_program = grammar_graph.compiled()
+        self.patterns = grammar_graph.patterns
         self.max_operations = max_operations if max_operations is not None else (8 if grammar_profile == "legacy" else 16)
         if self.max_operations < 1 or entity_count < 0:
             raise ValueError("positive operation budget and nonnegative entity count required")
         self.entity_count = min(entity_count, 64) if grammar_profile == "legacy" else entity_count
+        admitted = grammar_graph.admitted_actions(self.entity_count)
+        # The roles the action formulas give each skill, probed with one in-bound id (the lookahead reads them).
+        self.skill_arguments = {}
+        for skill, roles, _pointer in grammar_graph.admitted_actions(1, lexical_ids=1):
+            self.skill_arguments.setdefault(skill, roles)
         self.states = frozenset()  # lazily projected states
         self.start_state = (0, ((),), "start", 0, "")
         self.token_bytes = token_bytes
@@ -119,37 +138,36 @@ class NativePlanDFA:
         self.action_index = {}
         self.end_action = {}
         node_actions = [set()]
-        for skill, roles in self.skill_arguments.items():
-            # Object candidates from the instruction are an LC (official/decoding_graph.py), not an inventory filter.
-            values = range(self.entity_count) if roles else [None]
-            for pointer in values:
-                action = len(self.actions)
-                self.actions.append((skill, pointer))
-                self.action_index[(skill, pointer)] = action
-                params = {role: pointer for role in roles}
-                variants = [{"name": skill, "params": params}]
-                if grammar_profile != "legacy":
-                    variants.append({"params": params, "name": skill})
-                for value in variants:
-                    text = json.dumps(value, separators=(",", ":"))
-                    node, quoted = 0, False
+        # Only actions the grammar's action formulas admit are spelled. Object candidates from the
+        # instruction are an LC of the decoder (official/decoding_graph.py), not an inventory filter.
+        for skill, roles, pointer in admitted:
+            action = len(self.actions)
+            self.actions.append((skill, pointer))
+            self.action_index[(skill, pointer)] = action
+            params = {role: pointer for role in roles}
+            variants = [{"name": skill, "params": params}]
+            if grammar_profile != "legacy":
+                variants.append({"params": params, "name": skill})
+            for value in variants:
+                text = json.dumps(value, separators=(",", ":"))
+                node, quoted = 0, False
+                self.possible[node].add(skill)
+                node_actions[node].add(action)
+                for byte in text.encode():
+                    if byte == ord('"'):
+                        quoted = not quoted
+                    if byte not in self.operations[node]:
+                        self.operations[node][byte] = len(self.operations)
+                        self.operations.append({})
+                        self.possible.append(set())
+                        self.in_string.append(quoted)
+                        self.whitespace_boundary.append(not quoted and (byte in b'{}:,"' or byte in b'0123456789'))
+                        node_actions.append(set())
+                    node = self.operations[node][byte]
                     self.possible[node].add(skill)
                     node_actions[node].add(action)
-                    for byte in text.encode():
-                        if byte == ord('"'):
-                            quoted = not quoted
-                        if byte not in self.operations[node]:
-                            self.operations[node][byte] = len(self.operations)
-                            self.operations.append({})
-                            self.possible.append(set())
-                            self.in_string.append(quoted)
-                            self.whitespace_boundary.append(not quoted and (byte in b'{}:,"' or byte in b'0123456789'))
-                            node_actions.append(set())
-                        node = self.operations[node][byte]
-                        self.possible[node].add(skill)
-                        node_actions[node].add(action)
-                    self.ends[node] = skill
-                    self.end_action[node] = action
+                self.ends[node] = skill
+                self.end_action[node] = action
         self.node_actions = [tuple(sorted(members)) for members in node_actions]
         self.tokens = [{}]
         self.token_ends = {}
@@ -179,16 +197,14 @@ class NativePlanDFA:
 
     @lru_cache(maxsize=None)
     def allowed_skills(self, prefixes, count):
-        remaining = self.max_operations - count - 1
-        result = set()
-        for skill in self.skill_arguments:
-            next_prefixes = self.next_semantics(prefixes, skill)
-            if () in next_prefixes or any(
-                tuple(pattern[:len(prefix)]) == prefix and len(pattern)-len(prefix) <= remaining
-                for prefix in next_prefixes for pattern in self.patterns
-            ):
-                result.add(skill)
-        return frozenset(result)
+        """Skills the compiled step formulas admit as operation ``count`` after open prefixes ``prefixes``."""
+        return frozenset(skill for skill in self.skill_arguments if self.grammar_program.check(
+            self.grammar_graph.step_event(skill, prefixes, count, self.max_operations)))
+
+    @lru_cache(maxsize=None)
+    def plan_closes(self, prefixes, count) -> bool:
+        """The compiled plan formulas admit closing the plan here."""
+        return self.grammar_program.check(self.grammar_graph.plan_event(prefixes, count))
 
     def byte_step(self, state, byte):
         count, prefixes, phase, node, pending = state
@@ -226,19 +242,20 @@ class NativePlanDFA:
         if phase == "start":
             return (count, prefixes, "operation", 0, "") if byte == ord("[") else None
         if phase == "separator":
-            if byte == ord("]") and () in prefixes:
+            if byte == ord("]") and self.plan_closes(prefixes, count):
                 return (count, prefixes, "closed", 0, "")
-            if byte == ord(",") and count < self.max_operations:
+            if byte == ord(",") and self.allowed_skills(prefixes, count):
                 return (count, prefixes, "operation", 0, "")
             return None
-        if phase != "operation" or count >= self.max_operations:
+        if phase != "operation":
             return None
+        if byte == ord("]") and node == 0 and count == 0:  # an empty plan: the plan formulas refuse it
+            return (count, prefixes, "closed", 0, "") if self.plan_closes(prefixes, count) else None
         child = self.operations[node].get(byte)
         if child is None or not self.possible[child].intersection(self.allowed_skills(prefixes, count)):
             return None
         if child in self.ends:
-            next_prefixes = self.next_semantics(prefixes, self.ends[child])
-            return (count + 1, next_prefixes, "separator", 0, "") if next_prefixes else None
+            return (count + 1, self.next_semantics(prefixes, self.ends[child]), "separator", 0, "")
         return (count, prefixes, "operation", child, "")
 
     @lru_cache(maxsize=None)
