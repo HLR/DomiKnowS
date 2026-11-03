@@ -1,6 +1,8 @@
 # DomiKnowS Logical Constraints in VLABench: Specification and Components
 
-Source-aligned reference, updated 2026-10-17. This document describes the graph-constrained planner in `test_regr/VLABenchAgentInterface` and its integration with `test_regr/JointEmbodiedAgentInterface`. Native/raw generation is a separate evaluation mode and does not receive these decoding masks.
+Source-aligned reference, updated 2026-11-03 against `a0a3f0e7`. This document describes the graph-constrained planner in `test_regr/VLABenchAgentInterface` and its integration with `test_regr/JointEmbodiedAgentInterface`. Native JSON decoding can also use the shared declarative grammar and its own episode constraints; unconstrained generation receives no decoding masks.
+
+For flag selection, see [Knowledge quick start](Knowledge_QuickStart.md). The formula-by-formula companion is [VLABenchLogicaConstraints.md](VLABenchLogicaConstraints.md); the source declarations and active compiled coverage determine the effective inventory. The dated experiment sections below preserve historical results and do not describe a fresh benchmark of this revision.
 
 ## 1. Current architecture
 
@@ -10,7 +12,9 @@ World logical constraints drive both incremental decoding and completed-plan ver
 flowchart TD
     World["world_graph.py: ontology and world LCs"] --> Compiler["Generic compile_predicate_constraints"]
     Compiler --> Program["Compiled program and coverage snapshot"]
-    Tokens["graph.py: token LCs and domain grammar"] --> Grammar["CompiledPlannerDFA"]
+    Tokens["graph.py: boundaries, budgets and auxiliary progress LCs"] --> Compile["generation_runtime.py: compile graph formulas"]
+    Compile --> Grammar["CompiledPlannerDFA"]
+    Tokens --> Native["NativePlanDFA: JSON / token-language bridge"]
     Program --> Grammar
     Grammar --> Monitor["WorldConstraintDFA / generic PredicateMonitorDFA"]
     Facts["Scene identities and explicit task facts"] --> Monitor
@@ -27,46 +31,45 @@ flowchart TD
 The compilation and binding sequence is:
 
 1. `create_planner_generation_graph` declares token-level LCs.
-2. `compile_planner_dfa` intersects the token-constraint DFA with the domain grammar derived from skill signatures and complete subtask patterns. It also calls `compile_world_constraints` to attach the compiled world program.
+2. `generation_runtime.compile_planner_dfa` compiles the graph's active formulas, including the jointly projected auxiliary progress declarations. Skill signatures and complete subtask patterns are inputs to those declarations. It also calls `compile_world_constraints` to attach the selected world program.
 3. `bind_vlabench_contextual_dfa` binds scene identities and task requirements to that program, producing `WorldConstraintDFA`.
 4. Sampling masks logits with this bound policy. Replay retains the same policy and token budget.
 5. `materialize_plan(..., policy=policy)` reuses the bound task requirements for completed-plan verification. Alternatively, callers can provide `task_context=...` or `task_name=...`.
 
 An unbound `CompiledPlannerDFA` recognizes the grammar only. Context-free planner entry points reject an unbound program with active semantic rules. Supplying only the grammar is not semantic enforcement.
 
-## 2. Complete default world-constraint inventory
+## 2. Knowledge levels and world-constraint inventory
 
-`build_vlabench_world_graph` declares **41 active head constraints** by default: 15 existing named rules, eight grounded planning rules, and 18 generated skill-argument rules. Custom builders and `include_default_constraints=False` can change this inventory.
+`build_vlabench_world_graph` declares groups independently of their activation. The default knowledge level is `task`, overridable by `VLABENCH_KNOWLEDGE` or an explicit `knowledge_level`. With the stock task catalog and default constraints enabled, the world graph has **93 head declarations: 91 active at `task`, plus two inactive official rules**. These counts exclude the eight generation-grammar formulas and the separately relayed physics, complex-task, articulation, poker and research graphs. Custom builders, task catalogs and `include_default_constraints=False` change the inventory.
 
-In the formulas below, `O(op)` means `operation(op)`, `T(e)` means `transition(e)`, and `S_s(op)` means the skill predicate for skill `s`. Predicate meanings are executable definitions, not additional quantified formulas silently inferred from their names.
+| Group | Head declarations | First active level | Meaning |
+|---|---:|---|---|
+| `causal` | 3 | `causal` | No self-placement; distinct destinations within a subtask; an earlier destination cannot later be picked. These comparisons use plan IDs. |
+| `generic` | 28 | `generic` | Seven schema/pattern/diversity rules and 21 required/forbidden argument rules. |
+| `scene` | 7 | `scene` | Observation support, resolved pointers, button/press implications, static-fixture picks, declared destinations and enclosed-container access. |
+| `task` | 53 | `task` | Four explicit-request rules, 34 task sequence/completion rules, seven composite obligations and eight grounded-family rules. |
+| `official` | 2 | `official` only | Initial image-supported references and instruction candidates, guarded by observation availability. |
 
-| Constraint name | Declared implication | Grounded meaning |
-|---|---|---|
-| `operation_exactly_one_skill` | `O(op) -> valid_skill_type(op)` | The skill name is in the declared signature map. Materialization assigns one-hot skill facts; this LC itself is an implication, not an existential cardinality formula. |
-| `operation_schema_is_valid` | `O(op) -> valid_operation(op)` | Required target arguments are present and valid, and forbidden target arguments are absent. |
-| `operation_pointer_is_valid` | `O(op) -> valid_pointer(op)` | Every supplied entity/container pointer resolves in the current scene. |
-| `transition_matches_subtask_pattern` | `T(e) -> allowed_transition(e)` | Materialization grounds this from full plan validation, including complete subtask-pattern membership. The token grammar independently enforces the declared pattern language. |
-| `button_entity_requires_press_skill` | `targets_button(op) -> S_press(op)` | An operation referencing a button must use `press`. |
-| `press_requires_button_target` **(new)** | `S_press(op) -> targets_button(op)` | A press must target a button. This is the converse of the preceding rule and adds a restriction. |
-| `task_skill_sequence` **(new)** | `O(op) -> task_skill_allowed(op)` | At operation index `i`, the skill must equal the declared sequence's skill at `i`, when a sequence is specified. |
-| `task_initial_target` **(new)** | `O(op) -> task_target_allowed(op)` | The first operation must reference the specified initial target when one is supplied. Later operations are not forced to reuse that target. |
-| `task_sequence_completion` **(new)** | `O(op) -> task_sequence_complete(op)` | On the last operation, the completed operation count must equal the declared sequence length. Nonfinal operations receive a true completion fact. |
-| `anti_self_placement` | `O(op) -> not is_self_placement(op)` | The placement destination cannot equal the subject, using the held entity when the operation omits an explicit subject. |
-| `pick_excludes_static_fixtures` | `O(op) -> not targets_static_fixture(op)` | A pick cannot target a recognized static fixture. |
-| `no_redundant_repeated_picks` | `T(e) -> not repeated_pick_entity(e)` | A second pick of any previously picked resolved entity is forbidden throughout the current plan, including intervening place, pour, pull, or open operations. This is a plan-diversity policy; deactivate this LC for a domain that intentionally permits regrasping. |
-| `container_destination_consistency` | `T(e) -> not inconsistent_container(e)` | A container operation must match the explicit object-specific destination, or the global `task_target_container` fallback. Different objects can have different destinations; an earlier placement does not invent a destination requirement. |
-| `open_before_enclosed_placement` | `T(e) -> not unopened_container_placement(e)` | `place`, `pour`, or `insert` into a recognized enclosed container requires that container or its named door/lid to have been opened. |
-| `composite_subgoal_completion` | `O(op) -> not premature_composite_eos(op)` | The last operation must meet the selected composite task's minimum operation count and required-skill set. |
-| `skill_argument__{name}__{key}` | `S_name(op) -> flag_key(op)` or `S_name(op) -> not flag_key(op)` | Two rules per skill declare presence or absence of the two supported target argument roles. |
+`grammar < causal < generic < scene < task` is cumulative. `official` is a separate level enabling only `causal` and `official` world groups: **five active world heads**, together with the grammar. `set_knowledge_level` changes activation on an existing bundle; recompile and rebind before decoding. `--task-identity oracle|predicted` independently selects the task observation source at the task level; `oracle` is the privileged default. Legacy `learned` and `metadata` mean `task` with predicted and oracle identity respectively.
 
-The four new declarations are:
+The following are summaries of the actual declarations in [world_graph.py](../world_graph.py) and [knowledge/task_lcs.py](../knowledge/task_lcs.py), rather than replacements for their formulas:
 
-```python
-ifL(skills["press"]("op"), targets_button("op"), name="press_requires_button_target")
-ifL(operation("op"), task_skill_allowed("op"), name="task_skill_sequence")
-ifL(operation("op"), task_target_allowed("op"), name="task_initial_target")
-ifL(operation("op"), task_sequence_complete("op"), name="task_sequence_completion")
-```
+| Rule or family | Declared behavior |
+|---|---|
+| `operation_exactly_one_skill` | `operation(op)` implies `exactL` over all skill predicates with count 1. |
+| `operation_schema_is_valid` | Reject undeclared keys; require one declared skill schema with required roles, no forbidden roles and usable values for supplied roles. |
+| `transition_matches_subtask_pattern`, `operation_starts_subtask_pattern`, `plan_completes_subtask_pattern` | Check prefix continuation, legal starts and final completion against progress projected from the grammar formulas. A legal adjacent skill pair alone is insufficient. |
+| `anti_self_placement` | A manipulation's subject and supplied destination must differ, including targeted `push`. |
+| `no_redundant_repeated_picks` | A later pick cannot revisit a previously picked entity unless the request explicitly permits reuse. |
+| `skill_argument__{skill}__{role}` | Require or forbid each target role; optional roles produce no presence/absence head. |
+| `observation_supported_references`, `operation_pointer_is_valid` | Supplied references must be initially supported when visibility is known, and must resolve in the scene. Missing support and an explicitly empty support set are distinct. |
+| `button_entity_requires_press_skill`, `press_requires_button_target` | Button references imply `press`, and `press` implies a button target. |
+| `pick_excludes_static_fixtures` | Reject picks of recognized fixtures. |
+| `container_destination_consistency` | Check a known declared destination; earlier placements do not invent a global destination. |
+| `open_before_enclosed_placement` | Require observed/prior opening for enclosed placements when access is known. Explicit planning facts with unknown access remain unknown; the no-facts path retains legacy closed-world behavior. |
+| `task_skill_sequence`, `task_initial_target`, `task_sequence_completion`, `composite_subgoal_completion` | Enforce explicit sequence/cycle, first-target and final minimum/history obligations through request concepts and phase guards. |
+| `task__{task}__skill_sequence[__{interface}]`, `task__{task}__completion[__{interface}]`, `task__{task}__obligations` | Declare task-specific sequences and final obligations. An explicit sequence overrides the task's default sequence. |
+| `official__observation_supported_references`, `official__instruction_candidates_bound_targets` | Constrain known visible tags and known per-skill/role instruction candidates from image perception; absent observations do not establish support. |
 
 ### Grounded planning rules in both domains
 
@@ -93,7 +96,7 @@ Joint EAI enables **62 default head LCs**: 54 existing action preconditions plus
 
 ### 2.1 Skill signatures
 
-The authoritative signatures are `SKILL_ARGUMENTS` in `world_graph.py`:
+The authoritative signatures are `SKILL_ARGUMENTS` and `OPTIONAL_SKILL_ARGUMENTS` in `world_domain.py`, exposed through the world bundle and compatibility imports from `world_graph.py`:
 
 | Skill | Required target argument | Forbidden target argument(s) |
 |---|---|---|
@@ -101,9 +104,10 @@ The authoritative signatures are `SKILL_ARGUMENTS` in `world_graph.py`:
 | `place` | `target_container_name` | `target_entity_name` |
 | `insert` | `target_container_name` | `target_entity_name` |
 | `pour` | `target_container_name` | `target_entity_name` |
-| `open_door` | `target_entity_name` | `target_container_name` |
+| `open_door`, `close_door`, `open_laptop` | `target_entity_name` | `target_container_name` |
 | `press` | `target_entity_name` | `target_container_name` |
-| `push`, `pull`, `lift` | None | Both target arguments |
+| `push` | None | `target_entity_name`; `target_container_name` is optional |
+| `pull`, `lift` | None | Both target arguments |
 
 In particular, `place` and `pour` do not require both a subject and a container argument. The semantic state tracks the held subject across operations.
 
@@ -115,11 +119,11 @@ State includes the held entity, opened entity names, first destination, previous
 
 Grounding currently uses explicit name-based classifiers: button names contain `button`; static fixture names contain markers such as `table`, `counter`, `wall`, or `floor`; enclosed-container names match the declared keyword list. These are predicate definitions, not decoder-side enforcement wrappers, and do not constitute a complete physical model. Opening `cooler_a` or its named door/lid does not open `cooler_b`.
 
-The transition-domain rules are evaluated on edges after the first operation. The domain grammar supplies the allowed complete subtask sequences; the world LCs do not replace that grammar.
+The transition-domain rules are evaluated on edges after the first operation. `pattern_runtime.py` projects operation progress from the declared grammar by hiding argument/object symbols; completed-plan checks use this same language. It does not maintain a separate skill-pair or subtask interpreter.
 
 ## 3. Declarative task facts
 
-`task_policy.py` holds `TaskRequirements`, the composite task declarations, and task-fact resolution. `world_graph.py` retains the primitive task contracts and canonical skill sequences.
+`task_policy.py` resolves `TaskRequirements` and request facts. `knowledge/tables.py` holds the task sequences and composite schemas, `knowledge/task_lcs.py` declares their formulas, and `world_domain.py` holds primitive controller contracts and domain signatures. Compatibility imports preserve earlier entry points.
 
 | Request field | Interpretation |
 |---|---|
@@ -180,7 +184,7 @@ context = {
 
 A friction question can similarly supply `property="observed_slide_time"`, `criterion="min"`, and observed option times. Floating can use `criterion="below"` with measured object densities and an explicit fluid-density threshold. The generic evaluator does not infer slide speed from shape names, assume button order encodes density, or read reference plans, hidden success conditions, or prepared reference state. The planning loader accepts explicit `planning_facts` annotations and supplies the scene-metadata adapter described below. Explicit press-selection annotations take precedence over automatic metadata models.
 
-Eligibility is an action-target precondition enforced by the existing `grounded__affordance` LC in VLABench and EAI. Detailed `selection` diagnostic rows explain its grounding; they are not extra head LCs. Known losing options remain forbidden even when another option's score is missing. An unproven winner remains unavailable/partial. QA requests without observations get an explicit unavailable selection check, while their press sequence is still enforced. The default head counts therefore remain 41 (VLABench) and 62 (joint EAI).
+Eligibility is an action-target precondition enforced through `grounded__affordance` in VLABench and EAI when that family is active. Detailed `selection` diagnostic rows explain its grounding; they are not extra world head LCs. Known losing options remain forbidden even when another option's score is missing. An unproven winner remains unavailable/partial. At task level, QA requests without observations retain their press sequence while disclosing unavailable selection evidence. Relayed task-knowledge graphs also declare their own property and candidate formulas; count those separately from the world inventory in section 2.
 
 The first chosen receptacle is not restored as a universal destination requirement. The accepted design permits task/object-specific destinations; use `task_target_container` or `planning_facts.destinations` when the task declares them. Changing this globally would incorrectly reject legitimate plans with different destinations. Distinct-object diversity alone also does not identify the correct ingredients: those targets require exposed task facts or the planner's grounded prediction.
 
@@ -266,7 +270,9 @@ Grounded no-op plans stop the agent before controller execution; simulator succe
 | `VLABenchAgentInterface/constraint_compiler.py` | Predicate registration and the VLABench token/event adapter. `WorldConstraintDFA` subclasses the generic monitor. |
 | `VLABenchAgentInterface/semantics.py` | Grounding and physical-prefix predicate meanings. |
 | `VLABenchAgentInterface/task_policy.py` | Task declarations and executable task-predicate meanings. |
-| `VLABenchAgentInterface/graph.py` | Vocabulary, token LCs, domain grammar, compilation entry point, and request binding. |
+| `VLABenchAgentInterface/graph.py` | Declarative boundaries, budgets and auxiliary progress formulas shared by symbolic and native plan languages; compatibility exports preserve earlier imports. |
+| `VLABenchAgentInterface/generation_runtime.py`, `pattern_runtime.py` | Compile graph formulas, bind requests, annotate operation history and project grammar progress. |
+| `VLABenchAgentInterface/world_domain.py`, `world_runtime.py` | Domain vocabulary/contracts and completed-plan materialization/verification respectively. |
 
 The generic predicate compiler supports Boolean connectives (`ifL`, `notL`, `andL`, `orL`, `nandL`, `norL`, `xorL`, `iffL`/`equivalenceL`), `forAllL`, and finite-grounded `atMostL`/`atLeastL`/`exactL`/`existsL` counts. Multiple named variables and direct relation arguments use explicit finite event domains and entity-keyed observations; existing single-variable planner events remain compatible. See `domiknows/generation/dfa/README.md` for grounding, local count scopes, and the evaluation limit. It snapshots active head constraints in the selected graph and descendant subgraphs. `program.coverage` records compiled and inactive head constraints.
 
@@ -286,12 +292,22 @@ Nonfinal operations receive non-premature completion facts. EOS and final accept
 
 ### 4.3 Token graph and domain grammar
 
-Two token LCs remain in `create_planner_generation_graph`:
+`create_planner_generation_graph` delegates to `create_plan_grammar_graph`. The default declaration has **eight active head formulas**:
 
-1. **EOS closure:** if EOS occurs before another token, that later token must also be EOS. This prevents non-EOS continuation after termination; it does not itself bound repeated EOS padding.
-2. **Non-EOS token budget:** `atMostAL(notL(EOS), max_operations * 5)` limits the number of non-EOS tokens. This is a token cap, not an independent count of completed operations.
+| Formula | Operator | Meaning |
+|---|---|---|
+| EOS occurrence | `atLeastAL` | Require at least one EOS. |
+| EOS closure | `ifL` | Every successor of EOS is EOS; repeated padding is not independently bounded. |
+| Non-EOS budget | `atMostAL` | At most `max_operations * 5` non-EOS tokens. |
+| Operation budget | `atMostAL` | Count skill tokens, bounded by `min(max_operations, language.maximum)`. |
+| `plan_progress_positions` | `andL` | Exactly one auxiliary progress position per token, matching token values and legal starts. |
+| `plan_operation_arguments` | `ifL` | Order skill, argument name and entity positions within each operation. |
+| `plan_pattern_steps` | `ifL` | Continue optional roles or the next operation, or leave a subtask. |
+| `plan_only_completed_subtasks_end` | `ifL` | Permit EOS/new subtasks only at completed subtask boundaries; EOS stays ended. |
 
-The domain grammar separately enforces skill/argument token structure, complete declared subtask-pattern concatenations, the configured operation limit, and EOS at complete boundaries. Task restrictions do not replace syntactic parsing.
+The four named formulas share `plan_progress` auxiliary concepts and are projected jointly by `domiknows/generation/dfa/auxiliary.py`. Their formulas define the grammar; names label it. Ambiguous prefixes retain alternative progress interpretations. Deactivating an individual formula changes compilation without an independent handwritten grammar restoring it. `BoundedPatternLanguage` supplies patterns, request-specific roots and empty-plan permission without enumerating all plans. Operation-history annotations support task pruning and do not add grammar rejections.
+
+`NativePlanDFA` uses this same declaration with its profile-specific skill/argument table. Its bridge parses executor JSON into plan-language events, handling punctuation, object IDs and token pieces across JSON boundaries. Native profiles and the symbolic eleven-skill profile remain distinct; sharing the declaration does not make their vocabularies interchangeable.
 
 The former inactive `contextual_qa_button_press` token rule and its registration have been removed.
 
@@ -343,7 +359,25 @@ If Gurobi is unavailable, selection falls back to the highest-scoring eligible c
 
 Official planning metrics such as SR, PR, SPR, PM, overall progress score, and macro averages are computed separately from world-constraint validity. A zeroed planner reward does not imply that every official metric is zeroed. Report validity and constraint satisfaction alongside those metrics; a planning progress score alone is not evidence that every constraint passed.
 
-Native/raw evaluation omits the graph decoder and semantic token masks. Its results must be distinguished from graph-constrained inference.
+Unconstrained native generation omits decoding masks. Constrained native generation uses the shared grammar and can compose causal and episode-knowledge LCs (`official/decoding_graph.py`), plus a supplied bound world reachability policy where supported. It does not automatically receive the internal planner's scene/task facts. See [syntax and visibility](SYNTAX_AND_VISIBILITY.md) and [action-budget reachability](GOAL_REACHABILITY.md).
+
+### 5.3 Knowledge, input protocol and training controls
+
+`--knowledge official` activates causal and image-perception rules for internal training/evaluation as well as official-protocol evaluation. It turns image perception on; explicitly disabling perception conflicts with this level. `--protocol official` is a separate standalone `evaluate-planner` option: it evaluates all 4,500 episodes with the frozen base model, upstream prompt/scorer and only the two images and instruction. It admits `grammar`, `causal` or `official` knowledge. Omitting both `--knowledge` and its legacy `--constraints` alias under this protocol leaves decoding unconstrained.
+
+`--observation-mode` is independent of knowledge activation. The VLABench evaluator and standalone joint `eval_planning` accept `visual` (default) or `metadata-assisted`; joint `main evaluate-planning` and training use visual inputs. Metadata assistance requires task-level knowledge and is rejected for the official protocol and frozen-VLM generation. It uses privileged property observations and must be reported separately.
+
+Joint `--no-dfa` disables decoding constraints while retaining the named-object prompt. `--no-dfa-official` additionally renders anonymous `numbered object i` entries and removes name-based button hints, with no perception inference. It disables Stage 1 planner DFA losses and Stage 2 sampling/replay masks; canonical identities and scoring labels remain unchanged. This is an internal anonymous-prompt ablation, not selection of the official evaluation protocol. Reports/checkpoints retain `planner_input_protocol`; training resume rejects a silent protocol change. See the [joint workflow](../../JointEmbodiedAgentInterface/README.md).
+
+Training losses and runtime masks are separate controls. Masked CE can be paired with an allowed-mass penalty to calibrate unmasked logits; masked loss alone does not establish free-decoding quality. Stage 2 supports explicit DFA-free RL and shared-adapter training. `--stage2-parameter-policy auto` selects `freeze_inactive` for new runs, training shared LoRA and the active head. Exact Stage 2 resumes preserve their saved policy; legacy checkpoints without a recorded policy retain `freeze_shared`. Checkpoint selection and learned-performance claims require generated validation evidence; formula coverage alone measures neither learning nor simulator success. See [masked CE](MASKED_CROSS_ENTROPY.md) and the [input-leakage audit](../../JointEmbodiedAgentInterface/docs/KNOWLEDGE_LEAKAGE.md).
+
+### 5.4 Relayed task knowledge and expanded domain
+
+The world bundle lazily supplies physics, complex-task, articulation, poker and research knowledge graphs. Request monitors evaluate their compiled LCs through the shared grounded interface; their heads are additional to section 2's world counts. Task identity and permitted observations determine applicability.
+
+At task level, articulation adds final-state goals: `cool_drink` requires the drink in the fridge with the fridge closed; `set_study_table` / `manage_study_table` require the book outside its original container and the laptop joint in the inclusive interval `[1.2, 1.5]`. Poker knowledge declares benchmark-specific hand categories, dominance and first-combination ties; it does not use standard kicker tie-breaking or require exactly five destination cards. Missing card/geometry observations remain disclosed.
+
+The current internal domain is schema version 4 with eleven skills. Native `world` supports the expanded domain; native `benchmark` and `legacy` retain nine skills, with the official protocol selecting `benchmark`. Native push explicitly names a destination while internal symbolic push permits omission. Old nine-skill checkpoints require retraining for the expanded runtime; the historical audited migration described below is not blanket compatibility with schema 4. See [articulated goals and poker](PRACTICAL_CONSTRAINTS.md).
 
 ## 6. Removed duplicate enforcement
 
@@ -358,6 +392,14 @@ The following mechanisms no longer implement plan restrictions:
 Physical predicate evaluation, token parsing, and controller execution remain executable code. Plan-permission decisions use the logical declarations; they are not reimplemented by those removed wrappers.
 
 ## 7. Validation and reproducible checks
+
+Current-source review (2026-11-03): **83 focused tests passed** with:
+
+```powershell
+./.venv/Scripts/python.exe -m pytest test_regr/VLABenchAgentInterface/test/test_constraint_doc.py test_regr/VLABenchAgentInterface/test/test_declarative_generation.py test_regr/VLABenchAgentInterface/test/test_pattern_progress.py test_regr/VLABenchAgentInterface/test/test_native_grammar_lcs.py test_regr/VLABenchAgentInterface/test/test_official_knowledge_level.py test_regr/JointEmbodiedAgentInterface/test/test_no_dfa_official.py -q --tb=short
+```
+
+These checks cover formula counts, individual grammar-rule activation, projected progress, native grammar reuse, official-level activation and anonymous-prompt controls. The counts and runs in the following paragraphs are historical validation of earlier extensions, not a current full-suite result.
 
 New grounded suites cover all eight families, per-object destinations, initial holding/open state, continuations, satisfied-goal completion, unknown diagnostics, reference isolation, hand separation, negative goals, and bounded acceptance/mask comparisons. Both domain suites isolate and deactivate each LC to prove that enforcement comes from the graph. The VLABench suite also adds replacement LCs without decoder edits. Sampling/replay tests include explicitly grounded requests.
 
@@ -415,6 +457,8 @@ Baseline comparison used the pre-change source snapshot at `C:/Users/auszok/AppD
 
 
 ## Density QA dataset correction (2026-10-18)
+
+Sections from here through original/corrected reference-label selection record the October 18 implementation and experiments. Subsequent changes replace fixed task predicates with grouped declarations, add articulation/poker knowledge, and separate knowledge, observation mode and evaluation protocol as described above. Preserve the reported scores with their original configuration and source provenance.
 
 The offline migration `repair_density_labels.py` fixes the upstream density
 config manager to select the button associated with the chosen material,
@@ -587,8 +631,9 @@ python -m pytest test_regr/generation/test_property_observations.py \
 
 The default dataset and evaluation observation mode is now `visual`.
 `load_planning_examples` and `load_scene_planning_examples` accept an explicit
-`observation_mode`; standalone and joint evaluation CLIs expose the same
-`--observation-mode {visual,metadata-assisted}` switch. Both the joint test-split
+`observation_mode`; the VLABench evaluator and standalone joint `eval_planning`
+expose `--observation-mode {visual,metadata-assisted}`. Joint
+`main evaluate-planning` and training use visual inputs. Both the joint test-split
 preparation path and the all-split loading path propagate the choice. Joint
 reports and standalone CLI reports record the requested mode, while detailed
 metrics count effective observation profiles.
@@ -808,7 +853,7 @@ on-disk update. `--restore --apply --backup-dir BACKUP` restores dataset files
 byte for byte after preflighting the full manifest. Backup corruption or unrelated
 file edits reject restoration before writes. The corrected upstream generator is
 preserved. Neither operation changes historical evaluation artifacts.
-# Optional research constraints
+## 8. Optional research constraints
 
 The `research_v1` task-tier extension declares fifteen logical constraints in
 `knowledge/research_lcs.py` using `RelayedKnowledge`: three freshness rules, two
@@ -819,10 +864,27 @@ planner probabilities during primal-dual training. See
 This addition has no historical benchmark score; static observations cannot
 establish measured execution freshness or interval preservation.
 
-## Shared image perception inputs
+The default profile is `baseline`; `--constraint-profile research_v1` enables
+the extension, with robust grounding and automatic image perception for the
+internal path. Under `--protocol official`, grounding-policy constraints are
+opt-in: no grounding formula runs unless `--grounding-policy` is supplied.
+Research profile selection, knowledge level, perception and supervised-loss
+controls are separate settings. `--research-disable-formula` supports individual
+formula ablations; reports must retain these settings.
+
+## 9. Shared image perception inputs
 
 The optional [image-only perception adapter](IMAGE_PERCEPTION.md) supplies primitive
 observations to the existing visibility, grounding, freshness, affordance and
 spatial/event LCs. It does not replace their declarative definitions. Screen-space
 bounds use explicit image frames; metric geometry, contact, numeric articulation
 and physical-event success require their original evidence contracts.
+
+Image perception is enabled automatically for `research_v1` and for the
+`official` knowledge level. Official observations use only the two benchmark
+images and instruction: visible tag IDs, predicted kinds and role candidates.
+They do not import scene metadata, entity names, symbolic goals or reference
+answers. Qwen-VL boxes in 0–1000 coordinates are normalized before screen-space
+checks. Confidence gating and missing observations remain explicit; perceived
+support does not prove physical reachability or simulator success. See
+[image perception validation](IMAGE_PERCEPTION_VALIDATION.md).
