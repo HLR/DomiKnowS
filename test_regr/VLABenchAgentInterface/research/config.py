@@ -81,7 +81,7 @@ def add_research_arguments(parser):
     parser.add_argument("--controller-warmup-units",choices=("batches","updates"),default="batches")
     import argparse
     parser.add_argument("--research-perception",choices=("auto","off","image-vlm"),default="auto",
-        help="auto enables image perception for research_v1; off preserves supplied-evidence runs")
+        help="auto enables image perception for research_v1 and official knowledge; off disables auxiliary perception (official diagnostic ablation)")
     parser.add_argument("--perception-model",help="original perception backbone; defaults to --planner-model")
     parser.add_argument("--perception-confidence",type=float,default=.85)
     parser.add_argument("--perception-bbox-margin",type=float,default=.01)
@@ -117,7 +117,8 @@ def apply_research_arguments(args):
     # --knowledge official observes only through image perception, as the official protocol does.
     official=_official_level(args)
     if mode=="auto":mode="image-vlm" if config.enabled or official else "off"
-    if official and mode!="image-vlm":raise ValueError("--knowledge official observes through image perception; drop --research-perception off")
+    # Explicit off is a diagnostic ablation: retain official declarations but
+    # supply no visibility/candidate evidence. Auto keeps the standard behavior.
     args.research_perception=mode
     if mode=="image-vlm":
         from .perception import PerceptionConfig

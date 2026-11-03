@@ -21,7 +21,10 @@ instruction. ``official__observation_supported_references`` keeps plan ids to th
 ``official__instruction_candidates_bound_targets`` keeps them to the instruction's candidates (perceived object
 kinds named by its clauses, and the tags the ordinal and card-face formulas of ``official/selection_graph.py``
 admit). No entity table, scene fact or task enters. The level turns image perception on (``research/config.py``),
-so training and evaluation see the same observations.
+so training and evaluation see the same observations. Explicit
+``--research-perception off`` is a diagnostic ablation: the anonymous prompt
+and official declarations remain, while absent visibility/candidate evidence
+does not restrict objects. Grammar and causal rules still apply.
 
 ``--task-identity`` decides where the ``task__*`` observation comes from once the task group is active:
 ``oracle`` (the episode's task name; privileged) or ``predicted`` (``context['predicted_task']`` from a classifier
@@ -161,9 +164,9 @@ def apply_knowledge_argument(args) -> str:
         raise ValueError("--observation-mode metadata-assisted needs the task level (--knowledge task)")
     if official_observations(level or default_level()):
         from test_regr.VLABenchAgentInterface.research.config import default_perception_options
-        if not default_perception_options():
-            raise ValueError("--knowledge official observes through image perception; apply the research arguments "
-                             "first and do not pass --research-perception off")
+        if not default_perception_options() and getattr(args, "research_perception", None) != "off":
+            raise ValueError("--knowledge official uses image perception by default; apply the research arguments "
+                             "first, or explicitly select --research-perception off for the diagnostic ablation")
     if level is not None:
         set_default_level(level)
     if identity is not None:

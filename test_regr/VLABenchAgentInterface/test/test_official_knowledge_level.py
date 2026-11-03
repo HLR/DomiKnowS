@@ -54,6 +54,8 @@ def verified(plan, world, context):
 
 
 CASES = [
+    ({"visible_entities": None, "object_candidates": None}, [op("pick", 0), op("place", 2)], True),
+    ({"visible_entities": None, "object_candidates": None}, [op("pick", 0), op("place", 0)], False),
     ({"object_candidates": CANDIDATES}, [op("pick", 1), op("place", 3)], True),
     ({"object_candidates": CANDIDATES}, [op("pick", 0), op("place", 3)], False),    # not an instruction candidate
     ({"object_candidates": CANDIDATES}, [op("pick", 2), op("place", 1)], False),    # destination not a candidate
@@ -133,8 +135,12 @@ def test_official_level_turns_image_perception_on_for_training_and_evaluation():
         apply_research_arguments(args)
         assert args.research_perception == "image-vlm" and default_perception_options()["model_id"] == "frozen"
         assert apply_knowledge_argument(args) == "official"
-        with pytest.raises(ValueError, match="image perception"):
-            apply_research_arguments(research_args(knowledge="official", research_perception="off"))
+        args = research_args(knowledge="official", research_perception="off")
+        apply_research_arguments(args)
+        assert default_perception_options() is None
+        assert apply_knowledge_argument(args) == "official"
+        from ..prompt_protocol import planner_input_protocol
+        assert planner_input_protocol() == "anonymous_objects"
         apply_research_arguments(research_args(knowledge="causal"))
         assert default_perception_options() is None
         with pytest.raises(ValueError, match="image perception"):

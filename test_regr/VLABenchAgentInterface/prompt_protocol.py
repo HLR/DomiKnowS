@@ -34,7 +34,9 @@ def apply_no_dfa_official_argument(args):
 
 def planner_input_protocol():
     from .research.config import default_perception_options
-    return "anonymous_objects" if _ANONYMOUS_OBJECTS.get() or default_perception_options() else "named_objects"
+    from .knowledge import official_observations
+    return "anonymous_objects" if (_ANONYMOUS_OBJECTS.get() or default_perception_options()
+                                   or official_observations()) else "named_objects"
 
 
 def validate_training_input_protocol(payload):

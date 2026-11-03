@@ -104,7 +104,20 @@ python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
   --checkpoint /path/to/checkpoint.pt --split test --no-dfa-official
 ```
 
-The flag is also available on `main evaluate-planning`. With `train-agent
+To isolate the auxiliary perception pipeline while retaining constrained decoding:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint /path/to/checkpoint.pt --split test \
+  --knowledge official --research-perception off
+```
+
+This diagnostic keeps images, numbered objects, grammar and causal rules. It
+does not run the auxiliary perception model. Missing visibility and candidate
+evidence remain unknown, so the corresponding official rules do not exclude
+objects. Omit `--research-perception off` for the standard official setting.
+
+The `--no-dfa-official` flag is also available on `main evaluate-planning`. With `train-agent
 --two-stage`, it preserves the configured RL stage while disabling Stage 1
 planner DFA losses and Stage 2 DFA sampling/replay masks. Training still requires
 a mode (`--ce-only` or `--two-stage`) and the existing dataset-lineage checks.
