@@ -2,12 +2,19 @@
 
 **Eleven-skill domain update (29 October 2026):** [practical constraints](PRACTICAL_CONSTRAINTS.md)
 adds `close_door` and `open_laptop`, terminal articulation goals and poker selection.
-Current counts: world=91 (causal=3, generic=28, scene=7, task=53), grammar=5;
+Current counts: world=91 (causal=3, generic=28, scene=7, task=53), grammar=8;
 physics=82, complex=85, articulation=4, poker=11; official causal=3 and decoding=6.
-Across paths this is 287 formulas, excluding ten auxiliary poker classification
+Across paths this is 290 formulas, excluding ten auxiliary poker classification
 queries and relay applies/decided views. General native generation defaults to the
 eleven-skill `world` profile; the explicit official/legacy languages stay fixed.
 The dated inventories and scores below describe earlier schema revisions.
+
+**2026-11-03 update:** the former single grammar formula `plan_skill_patterns_and_arguments` is now four
+formulas over the same `plan_progress` positions: `plan_progress_positions`, `plan_operation_arguments`,
+`plan_pattern_steps` and `plan_only_completed_subtasks_end`. Each can be deactivated alone and together they
+accept the same language. The grammar has eight formulas (one `atLeastAL`, four `ifL`, two `atMostAL`, one
+`andL`); the counts in this document include them (grammar + world 97, and the official causal setting
+enables 8 + 3). See [Grammar rule families](#grammar-rule-families-eight-logical-constraints).
 
 **2026-11-01 update:** the native JSON decoder (`NativePlanDFA`) now runs on the five grammar
 formulas of `graph.py`, compiled for the native profile's vocabulary, and keeps only the JSON lexer.
@@ -52,7 +59,7 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
   <tbody>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generation grammar</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">8</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">grammar</code></td>
     </tr>
     <tr>
@@ -102,18 +109,18 @@ A **grounded instance** evaluates a logical constraint for a token, operation, t
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Grammar + world total</strong></td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>94</strong></td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>97</strong></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">All groups at <code style="white-space: normal; overflow-wrap: anywhere;">task</code></td>
     </tr>
-  <tr><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Inventory across both paths</strong></td><td style="padding: 0.55em 0.65em;"><strong>269</strong></td><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;">94 grammar/world + 82 physics + 85 complex + 3 official causal + 5 episode decoding declarations; not one active setting</td></tr>
+  <tr><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Inventory across both paths</strong></td><td style="padding: 0.55em 0.65em;"><strong>272</strong></td><td style="padding: 0.55em 0.65em; overflow-wrap: anywhere;">97 grammar/world + 82 physics + 85 complex + 3 official causal + 5 episode decoding declarations; not one active setting</td></tr>
 </tbody>
 </table>
 
-The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. The separate `causal` level declares **3 id-only logical constraints**, compiled into `CausalPlanDFA` and described below. The world graph also declares the same three rules as its `causal` group, for the graph DFA of the Joint and internal planners; the VLABench grammar/world baseline is therefore 94 declarations, all enabled at `task`, and the inventory across that baseline, the physics graph (82 formulas, below), the complex-task graph (85 formulas, below), the separate causal graph and the separate decoding graph (5 formulas, below) contains **269 declarations**. These are counts of declarations, so the causal and generic anti-self-placement formulas count separately even though their rule names overlap. All 89 world constraints use `ifL` as their outermost operator. The five grammar constraints use one `atLeastAL`, one `ifL`, two `atMostAL`, and one `andL`.
+The task subtotal is **4 request constraints + 36 sequence/completion constraints + 8 complex-task obligation constraints + 8 grounded-family constraints = 56**. The separate `causal` level declares **3 id-only logical constraints**, compiled into `CausalPlanDFA` and described below. The world graph also declares the same three rules as its `causal` group, for the graph DFA of the Joint and internal planners; the VLABench grammar/world baseline is therefore 97 declarations, all enabled at `task`, and the inventory across that baseline, the physics graph (82 formulas, below), the complex-task graph (85 formulas, below), the separate causal graph and the separate decoding graph (5 formulas, below) contains **272 declarations**. These are counts of declarations, so the causal and generic anti-self-placement formulas count separately even though their rule names overlap. All 89 world constraints use `ifL` as their outermost operator. The eight grammar constraints use one `atLeastAL`, four `ifL`, two `atMostAL`, and one `andL`.
 
 ## Ablation levels
 
-The grammar/world levels are cumulative. The official-protocol `causal` row is a separate decoding path. Inactive world constraints still exist in the graph; the table counts only enabled logical constraints. The official native grammar is the five `graph.py` grammar formulas compiled for the benchmark profile vocabulary, so `causal` enables 5 + 3 (the snapshot rows below predate this and count 3).
+The grammar/world levels are cumulative. The official-protocol `causal` row is a separate decoding path. Inactive world constraints still exist in the graph; the table counts only enabled logical constraints. The official native grammar is the eight `graph.py` grammar formulas compiled for the benchmark profile vocabulary, so `causal` enables 8 + 3 (the snapshot rows below predate this and count 3).
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -150,56 +157,56 @@ The grammar/world levels are cumulative. The official-protocol `causal` row is a
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">grammar</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable five grammar constraints: boundaries, budgets, skill patterns, and arguments. No task identity is supplied.</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">8</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable eight grammar constraints: boundaries, budgets, progress positions, operation arguments, pattern steps, and subtask completion. No task identity is supplied.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code> may complete a subtask; EOS after an incomplete <code style="white-space: normal; overflow-wrap: anywhere;">pick</code> subtask is rejected.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">causal</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + causal</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">8 (graph DFA) / 3 (official DFA)</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">--knowledge causal</code> enables only the three id-level causal formulas: the world graph&#x27;s <code style="white-space: normal; overflow-wrap: anywhere;">causal</code> group (with the five grammar constraints) for the Joint and internal graph decoders, or the official causal graph for <code style="white-space: normal; overflow-wrap: anywhere;">--protocol official</code>. No scene facts and no task identity are used.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">11 (graph DFA and official DFA: 8 grammar + 3 causal)</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">--knowledge causal</code> enables only the three id-level causal formulas: the world graph&#x27;s <code style="white-space: normal; overflow-wrap: anywhere;">causal</code> group (with the eight grammar constraints) for the Joint and internal graph decoders, or the official causal graph for <code style="white-space: normal; overflow-wrap: anywhere;">--protocol official</code>. No scene facts and no task identity are used.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">In a subtask that picks 2, placing into 2 is refused, as by generic&#x27;s anti_self_placement; a later pick of an object that was already a destination is refused. Any id 0–63 remains allowed.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">generic</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + causal + generic</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">32</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">35</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable 24 additional schema and domain constraints, including explicit subtask-start and completion checks.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A required subject must be supplied to <code style="white-space: normal; overflow-wrap: anywhere;">pick</code>; placing an object into itself violates <code style="white-space: normal; overflow-wrap: anywhere;">anti_self_placement</code>.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">scene</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + causal + generic + scene</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">38</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">41</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable six additional constraints using scene observations.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">If a target is classified as a static fixture, the existing <code style="white-space: normal; overflow-wrap: anywhere;">pick_excludes_static_fixtures</code> formula rejects picking it.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--task-identity predicted</code> (alias <code style="white-space: normal; overflow-wrap: anywhere;">learned</code>)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups + physics + complex</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">261</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">264</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Enable 56 additional task/grounded constraints. A classifier&#x27;s predicted task sets task-concept values; supplied requirements provide further facts. The formulas are predefined, not learned by this classifier.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Predicting <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code> makes its task concept true. Its sequence constraint requires <code style="white-space: normal; overflow-wrap: anywhere;">place</code> at operation index 1, and its completion constraint prevents stopping after index 0.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, <code style="white-space: normal; overflow-wrap: anywhere;">--task-identity oracle</code> (default)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups + physics + complex</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">261</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">264</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">No additional constraints. Use the episode task identity instead of the predicted identity; this can change which task-guarded formulas apply.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">If the classifier predicted <code style="white-space: normal; overflow-wrap: anywhere;">select_chemistry_tube</code> but the episode task is <code style="white-space: normal; overflow-wrap: anywhere;">select_fruit</code>, the applicable sequence changes from <code style="white-space: normal; overflow-wrap: anywhere;">pick, lift</code> to <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code>. If the prediction was correct, this identity change has no effect.</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">task</code>, oracle, <code style="white-space: normal; overflow-wrap: anywhere;">--observation-mode metadata-assisted</code> (alias <code style="white-space: normal; overflow-wrap: anywhere;">metadata</code>)</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar + all world groups + physics + complex</td>
-      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">261</td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">264</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">No additional constraints. Supply metadata-assisted property observations to the existing formulas.</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">For a requested highest-density choice, supplied density comparisons can make candidate A satisfy the selection requirement and candidate B fail it. The existing <code style="white-space: normal; overflow-wrap: anywhere;">grounded__affordance</code> constraint then rejects B.</td>
     </tr>
   </tbody>
 </table>
 
-The levels are cumulative: `causal` adds the three id-level causal formulas to the grammar, and every higher level keeps them. Under `--protocol official`, whose grammar DFA (`NativePlanDFA`) is not the five-constraint grammar of `graph.py`, `causal` is the highest level that can be grounded and enforces the official causal graph instead. `--observation-mode metadata-assisted` introduces observations, not a further rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `task`.
+The levels are cumulative: `causal` adds the three id-level causal formulas to the grammar, and every higher level keeps them. Under `--protocol official`, whose native JSON decoder (`NativePlanDFA`) runs on the same eight grammar constraints of `graph.py`, `causal` is the highest level that can be grounded and enforces the official causal graph instead. `--observation-mode metadata-assisted` introduces observations, not a further rule group. A task rule is guarded by task/interface/phase facts, so an active rule need not apply to every operation. Explicit requests are consulted starting at `task`.
 
 The distinction is between **enabling a logical constraint** and **changing the facts evaluated by that constraint**. Moving from `scene` to `task` enables more constraints. Changing `--task-identity` (predicted or oracle) or `--observation-mode` retains the same formulas but can change their applicable cases and accepted plans through different concept values. More supplied knowledge therefore need not increase the constraint count.
 
@@ -215,15 +222,15 @@ Four operator classes are used as the outermost operator of complete logical con
 <colgroup><col style="width: 12%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 13%;"><col style="width: 7%;"><col style="width: 7%;"><col style="width: 19%;"></colgroup>
 <thead><tr><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Class</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generic</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Scene</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Task</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Causal</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Episode</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Physics</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Complex</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Inventory total</th><th scope="col" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Class definition</th></tr></thead>
 <tbody>
-<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>ifL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">82</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">85</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">265</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1331">logicalConstrain.py:1331</a></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>ifL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">4</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">82</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">85</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">268</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1331">logicalConstrain.py:1331</a></td></tr>
 <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>andL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1307">logicalConstrain.py:1307</a></td></tr>
 <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>atLeastAL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1528">logicalConstrain.py:1528</a></td></tr>
 <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>atMostAL</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">2</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">0</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">2</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../../../domiknows/graph/logicalConstrain.py#L1527">logicalConstrain.py:1527</a></td></tr>
-<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Total</strong></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">82</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">85</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>269</strong></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Across both decoding paths; not simultaneously enabled.</td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>Total</strong></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">8</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">24</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">56</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">6</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">5</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">82</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">85</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>272</strong></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Across both decoding paths; not simultaneously enabled.</td></tr>
 </tbody>
 </table>
 
-The grammar/world subtotal is **90 ifL + 1 andL + 1 atLeastAL + 2 atMostAL = 94** (3 of the ifL are the world causal group). The physics graph adds **82 ifL**, the complex-task graph **85 ifL**, the official causal graph **3 ifL** and the decoding graph **5 ifL**, giving **265 ifL + 1 andL + 1 atLeastAL + 2 atMostAL = 269**. Nested `orL` and `notL` do not add declarations.
+The grammar/world subtotal is **93 ifL + 1 andL + 1 atLeastAL + 2 atMostAL = 97** (3 of the ifL are the world causal group). The physics graph adds **82 ifL**, the complex-task graph **85 ifL**, the official causal graph **3 ifL** and the decoding graph **5 ifL**, giving **268 ifL + 1 andL + 1 atLeastAL + 2 atMostAL = 272**. Nested `orL` and `notL` do not add declarations.
 
 `orL`, `notL`, and `exactL` are also used to express parts of these formulas. They do not create separately counted logical constraints in this inventory. The examples below explain all seven operators used in the formulas.
 
@@ -272,25 +279,25 @@ Examples below use the descriptive aliases explained under “Reading the formul
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">exactL</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Local exact count: <code style="white-space: normal; overflow-wrap: anywhere;">exactL(*(skill_concept(&#x27;x&#x27;) for skill_concept in skill_concepts.values()), 1)</code> requires exactly one skill on this operation. The grammar also requires exactly one progress state per token.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../world_graph.py#L129">test_regr/VLABenchAgentInterface/world_graph.py:129</a>; <a href="../graph.py#L79">test_regr/VLABenchAgentInterface/graph.py:79</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../world_graph.py#L129">test_regr/VLABenchAgentInterface/world_graph.py:129</a>; <a href="../graph.py#L94">test_regr/VLABenchAgentInterface/graph.py:94</a></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar, generic</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">atLeastAL</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Accumulated lower bound: <code style="white-space: normal; overflow-wrap: anywhere;">atLeastAL(eos(&#x27;p&#x27;), 1)</code> requires at least one EOS across the sequence.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L129">test_regr/VLABenchAgentInterface/graph.py:129</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L168">test_regr/VLABenchAgentInterface/graph.py:168</a></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</td>
     </tr>
     <tr>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">atMostAL</code></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Accumulated upper bound: <code style="white-space: normal; overflow-wrap: anywhere;">atMostAL(notL(eos(&#x27;p&#x27;)), operation_limit * 5)</code> caps non-EOS tokens at 60 in the baseline.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L134">test_regr/VLABenchAgentInterface/graph.py:134</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L173">test_regr/VLABenchAgentInterface/graph.py:173</a></td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar</td>
     </tr>
   </tbody>
 </table>
 
-The separate `causal` graph uses three `ifL` formulas, with nested `orL` and `notL`; the decoding graph uses five, with nested `andL`. `exactL` counts the alternatives at a bound position/operation; the `AL` operators accumulate across token positions. The grammar/world subtotal is 94, the physics graph contributes 82, the complex-task graph 85, the separate causal graph 3 and the decoding graph 5, giving an inventory of 269 declarations. Operators inside a formula do not increase its count.
+The separate `causal` graph uses three `ifL` formulas, with nested `orL` and `notL`; the decoding graph uses five, with nested `andL`. `exactL` counts the alternatives at a bound position/operation; the `AL` operators accumulate across token positions. The grammar/world subtotal is 97, the physics graph contributes 82, the complex-task graph 85, the separate causal graph 3 and the decoding graph 5, giving an inventory of 272 declarations. Operators inside a formula do not increase its count.
 
 ### Reading the formula examples
 
@@ -321,17 +328,17 @@ The aliases correspond to source concepts as follows:
     <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">subject_unspecified; hand_capacity_known; hand_capacity_is_zero; hand_capacity_is_positive</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">world.grounded_constraints.inputs[&quot;subject_unspecified&quot;]; [&quot;capacity_known&quot;]; [&quot;capacity_zero&quot;]; [&quot;capacity_positive&quot;]</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The other primitive requirement observations.</td></tr>
     <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">generation_context; eos; adjacent_tokens; sequence_start</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">generation_bundle.context; its token_value(plan_vocabulary.eos_token, variable); is_before_rel; sequence_start</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generation concepts. eos is the predicate for the EOS token label.</td></tr>
     <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">first_token_relation; second_token_relation; start_token_relation</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">generation_bundle.first_token; generation_bundle.second_token; generation_bundle.sequence_start_token</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Relation paths that bind the token positions used by the formula.</td></tr>
-    <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">progress_states; token_labels_by_progress_state; successors_by_progress_state; initial_progress_states</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The declared progress enum values; graph.py positions; following; starts</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The progress concepts and their declared token labels, successors, and initial states.</td></tr>
+    <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">progress_states; token_labels_by_progress_state; initial_progress_states; successors_inside_operation; successors_after_operation_end; completing_progress_states; leaving_progress_states</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The declared plan_progress enum values; graph.py positions; starts; inside; ends; complete; repeating_starts plus finished</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The progress positions, their token labels and initial positions, the successors inside an operation and after an operation end, the positions that complete a subtask, and the positions that leave one.</td></tr>
     <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">operation_limit; skill_language; plan_vocabulary</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">graph.py max_operations; language; vocabulary</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Generation configuration and token vocabulary.</td></tr>
   <tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>plan; first_operation; pattern_start_allowed; pattern_complete</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>world.plan; world.pattern_first_operation; world.pattern_start_allowed; world.pattern_complete</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Plan identity, the first-operation flag, and start/completion observations from compiled progress.</td></tr>
 </tbody>
 </table>
 
-The examples expand the skill-schema and exact-position helpers so their conditions are visible. The grammar examples spell out disjunctions with `orL`; a disjunction containing one alternative has that alternative's meaning. Names such as `required_skills_supported` and `entity_value_usable` remain observed concepts, with their grounding described in the source map. The examples cover **91 grammar/world constraints and 3 separate causal constraints**, or **94 declarations** across the two paths.
+The examples expand the skill-schema and exact-position helpers so their conditions are visible. The grammar examples spell out disjunctions with `orL`; a disjunction containing one alternative has that alternative's meaning. Names such as `required_skills_supported` and `entity_value_usable` remain observed concepts, with their grounding described in the source map. The examples cover **94 grammar/world constraints and 3 separate causal constraints**, or **97 declarations** across the two paths.
 
-## Grammar rule families: five logical constraints
+## Grammar rule families: eight logical constraints
 
-All rows in this section belong to the grammar and remain enforced at every DFA-enabled level. The first four logical constraints have automatically assigned names (`LC0`, etc. in a fresh standalone graph); the last has the explicit name shown below. Use the source/formula to identify these rules rather than depending on auto-generated names.
+All rows in this section belong to the grammar and remain enforced at every DFA-enabled level. The first four logical constraints have automatically assigned names (`LC0`, etc. in a fresh standalone graph); the last four have the explicit names shown below. Use the source/formula to identify these rules rather than depending on auto-generated names.
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -353,7 +360,7 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">EOS existence</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A sequence without EOS cannot accept. At least one end token is required.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L129">test_regr/VLABenchAgentInterface/graph.py:129</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L168">test_regr/VLABenchAgentInterface/graph.py:168</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>atLeastAL(
@@ -365,7 +372,7 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">EOS closure</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">After EOS, the only legal labels are further EOS labels. Repeated EOS is permitted; <code style="white-space: normal; overflow-wrap: anywhere;">EOS, skill:pick</code> is rejected.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L130">test_regr/VLABenchAgentInterface/graph.py:130</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L169">test_regr/VLABenchAgentInterface/graph.py:169</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>ifL(
@@ -380,7 +387,7 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Non-EOS token budget</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At most <code style="white-space: normal; overflow-wrap: anywhere;">12 * 5 = 60</code> non-EOS tokens in the baseline. EOS padding does not consume this budget.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L134">test_regr/VLABenchAgentInterface/graph.py:134</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L173">test_regr/VLABenchAgentInterface/graph.py:173</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>atMostAL(
@@ -392,7 +399,7 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Operation budget</td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At most 12 skill tokens; a custom language may tighten the limit through <code style="white-space: normal; overflow-wrap: anywhere;">language.maximum</code>.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L135">test_regr/VLABenchAgentInterface/graph.py:135</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L174">test_regr/VLABenchAgentInterface/graph.py:174</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>atMostAL(
@@ -406,131 +413,117 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
 )</code></pre></td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">plan_skill_patterns_and_arguments</code></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">plan_progress_positions</code></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A complete <code style="white-space: normal; overflow-wrap: anywhere;">pick(obj:0), place(obj:1)</code> subtask may terminate or concatenate with another complete subtask. A lone incomplete <code style="white-space: normal; overflow-wrap: anywhere;">pick</code> cannot terminate.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L100">test_regr/VLABenchAgentInterface/graph.py:100</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Every token has exactly one progress position: the skill position of a subtask step, the argument-name or entity position of one of its roles, or <code style="white-space: normal; overflow-wrap: anywhere;">finished</code>. Each position allows only its token (an entity position allows <code style="white-space: normal; overflow-wrap: anywhere;">obj:0</code> .. <code style="white-space: normal; overflow-wrap: anywhere;">obj:63</code>), and the plan starts at the first skill of a declared root pattern. <code style="white-space: normal; overflow-wrap: anywhere;">place(obj:0)</code> cannot start a plan.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L105">test_regr/VLABenchAgentInterface/graph.py:105</a></td>
     </tr>
     <tr data-constraint-example="true">
-      <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>progress_constraints = [
-    exactL(
-        *(
-            progress_states[progress_state_name](&#x27;p&#x27;)
-            for progress_state_name in token_labels_by_progress_state
-        ),
-        1,
-    )
-]
-for progress_state_name, allowed_token_labels in token_labels_by_progress_state.items():
-    progress_constraints.append(
+      <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>andL(
+    exactL(*(progress_states[name](&#x27;p&#x27;) for name in token_labels_by_progress_state), 1),
+    *(
         ifL(
-            progress_states[progress_state_name](&#x27;p&#x27;),
-            orL(
-                *(
-                    generation_context.token_value(token_label, &#x27;p&#x27;)
-                    for token_label in allowed_token_labels
-                )
+            progress_states[name](&#x27;p&#x27;),
+            orL(*(generation_context.token_value(token_label, &#x27;p&#x27;) for token_label in token_labels)),
+        )
+        for name, token_labels in token_labels_by_progress_state.items()
+    ),
+    ifL(
+        sequence_start(&#x27;s&#x27;),
+        orL(*(
+            progress_states[name](&#x27;first_position&#x27;, path=(&#x27;s&#x27;, start_token_relation))
+            for name in sorted(initial_progress_states)
+        )),
+    ),
+    name=&#x27;plan_progress_positions&#x27;,
+)</code></pre></td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">plan_operation_arguments</code></td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Inside an operation, the skill is followed by the argument name of its first role, an argument name by its entity, and an entity by the next required role. <code style="white-space: normal; overflow-wrap: anywhere;">skill:pick, skill:place</code> fails: the pick has no <code style="white-space: normal; overflow-wrap: anywhere;">arg:target_entity_name, obj:i</code>. A skill whose required roles no id can fill is a dead end.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L118">test_regr/VLABenchAgentInterface/graph.py:118</a></td>
+    </tr>
+    <tr data-constraint-example="true">
+      <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>ifL(
+    adjacent_tokens(&#x27;t&#x27;),
+    andL(*(
+        ifL(
+            progress_states[current](&#x27;current_position&#x27;, path=(&#x27;t&#x27;, first_token_relation)),
+            orL(*(
+                progress_states[following](&#x27;next_position&#x27;, path=(&#x27;t&#x27;, second_token_relation))
+                for following in sorted(successors)
+            )) if successors else notL(
+                progress_states[current](&#x27;current_position&#x27;, path=(&#x27;t&#x27;, first_token_relation))
             ),
         )
-    )
-first_position_path = (&#x27;s&#x27;, start_token_relation)
-allowed_initial_states = [
-    progress_states[progress_state_name](&#x27;first_position&#x27;, path=first_position_path)
-    for progress_state_name in sorted(initial_progress_states)
-]
-if not allowed_initial_states:
-    first_position = progress_states[&#x27;finished&#x27;](
-        &#x27;first_position&#x27;, path=first_position_path
-    )
-    allowed_initial_states = [andL(first_position, notL(first_position))]
-progress_constraints.append(
-    ifL(sequence_start(&#x27;s&#x27;), orL(*allowed_initial_states)),
-)
-progress_constraints.append(
-    ifL(
-        adjacent_tokens(&#x27;t&#x27;),
-        orL(
-            *(
-                andL(
-                    progress_states[current_state_name](
-                        &#x27;current_position&#x27;, path=(&#x27;t&#x27;, first_token_relation)
-                    ),
-                    orL(
-                        *(
-                            progress_states[next_state_name](
-                                &#x27;next_position&#x27;, path=(&#x27;t&#x27;, second_token_relation)
-                            )
-                            for next_state_name in sorted(next_state_names)
-                        )
-                    ),
-                )
-                for current_state_name, next_state_names in successors_by_progress_state.items()
-                if next_state_names
-            ),
+        for current, successors in successors_inside_operation.items()
+    )),
+    name=&#x27;plan_operation_arguments&#x27;,
+)</code></pre></td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">plan_pattern_steps</code></td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">An operation end (its last required entity, or any completed optional pair) is followed by its next optional role, the next step of its pattern, a repeating subtask start or <code style="white-space: normal; overflow-wrap: anywhere;">finished</code>. A completed <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code> cannot continue with another <code style="white-space: normal; overflow-wrap: anywhere;">place</code>, which starts no subtask.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L120">test_regr/VLABenchAgentInterface/graph.py:120</a></td>
+    </tr>
+    <tr data-constraint-example="true">
+      <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>ifL(
+    adjacent_tokens(&#x27;t&#x27;),
+    andL(*(
+        ifL(
+            progress_states[current](&#x27;current_position&#x27;, path=(&#x27;t&#x27;, first_token_relation)),
+            orL(*(
+                progress_states[following](&#x27;next_position&#x27;, path=(&#x27;t&#x27;, second_token_relation))
+                for following in sorted(successors | leaving_progress_states)
+            )),
+        )
+        for current, successors in successors_after_operation_end.items()
+    )),
+    name=&#x27;plan_pattern_steps&#x27;,
+)</code></pre></td>
+    </tr>
+    <tr>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">plan_only_completed_subtasks_end</code></td>
+      <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A subtask start or <code style="white-space: normal; overflow-wrap: anywhere;">finished</code> may follow only a position that completes its subtask (or <code style="white-space: normal; overflow-wrap: anywhere;">finished</code>), and an ended plan stays ended. A lone <code style="white-space: normal; overflow-wrap: anywhere;">pick</code> of <code style="white-space: normal; overflow-wrap: anywhere;">pick, place</code> cannot end the plan, and <code style="white-space: normal; overflow-wrap: anywhere;">pick, press</code> is rejected.</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L122">test_regr/VLABenchAgentInterface/graph.py:122</a></td>
+    </tr>
+    <tr data-constraint-example="true">
+      <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>ifL(
+    adjacent_tokens(&#x27;t&#x27;),
+    andL(
+        ifL(
+            orL(*(
+                progress_states[name](&#x27;next_position&#x27;, path=(&#x27;t&#x27;, second_token_relation))
+                for name in sorted(leaving_progress_states)
+            )),
+            orL(*(
+                progress_states[name](&#x27;current_position&#x27;, path=(&#x27;t&#x27;, first_token_relation))
+                for name in sorted({*completing_progress_states, &#x27;finished&#x27;})
+            )),
+        ),
+        ifL(
+            progress_states[&#x27;finished&#x27;](&#x27;current_position&#x27;, path=(&#x27;t&#x27;, first_token_relation)),
+            progress_states[&#x27;finished&#x27;](&#x27;next_position&#x27;, path=(&#x27;t&#x27;, second_token_relation)),
         ),
     ),
-)
-andL(
-    *progress_constraints,
-    name=&#x27;plan_skill_patterns_and_arguments&#x27;,
+    name=&#x27;plan_only_completed_subtasks_end&#x27;,
 )</code></pre></td>
     </tr>
   </tbody>
 </table>
 
-The `plan_skill_patterns_and_arguments` logical constraint combines progress-state consistency, legal token values, legal starts, and legal transitions in one formula. The following components explain its meaning and are not counted as separate logical constraints.
+The four position formulas read one shared auxiliary concept, `plan_progress`, an `EnumConcept` whose values are generated from the skill-argument table and the pattern list: one skill position per subtask step, two positions (argument name, entity) per role, and `finished`. The position is hidden memory: an entity token alone does not say which role of which step it fills. The generation compiler projects every active formula that reads `plan_progress` jointly (`domiknows/generation/dfa/auxiliary.py`), so the positions are eliminated once, never per formula.
 
-<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
-  <colgroup>
-    <col style="width: 23%;">
-    <col style="width: 47%;">
-    <col style="width: 30%;">
-  </colgroup>
-  <thead>
-    <tr>
-      <th scope="col" width="23%" style="width: 23%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Grammar component</th>
-      <th scope="col" width="47%" style="width: 47%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Example</th>
-      <th scope="col" width="30%" style="width: 30%; text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Definition</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Exactly one progress state</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A token cannot simultaneously represent a skill position and an argument-name position.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L79">test_regr/VLABenchAgentInterface/graph.py:79</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">State determines token alternatives</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">An entity position allows <code style="white-space: normal; overflow-wrap: anywhere;">obj:0</code> through <code style="white-space: normal; overflow-wrap: anywhere;">obj:63</code>; an argument-name position requires its particular <code style="white-space: normal; overflow-wrap: anywhere;">arg:...</code> label.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L81">test_regr/VLABenchAgentInterface/graph.py:81</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Legal starts</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">The unrestricted language starts at a declared subtask root, not an argument or EOS. A continuation can explicitly permit an empty plan.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L89">test_regr/VLABenchAgentInterface/graph.py:89</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Legal adjacent progress states</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A skill is followed by its first required argument; an argument name is followed by an entity pointer.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L93">test_regr/VLABenchAgentInterface/graph.py:93</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Required argument order</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">pick</code> requires <code style="white-space: normal; overflow-wrap: anywhere;">arg:target_entity_name, obj:i</code>; an entity pointer before the argument name fails.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L51">test_regr/VLABenchAgentInterface/graph.py:51</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Optional argument suffix</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">push</code> may omit its destination or append <code style="white-space: normal; overflow-wrap: anywhere;">arg:target_container_name, obj:i</code>; it cannot supply an unrelated role.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L52">test_regr/VLABenchAgentInterface/graph.py:52</a></td>
-    </tr>
-    <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Subtask completion and repetition</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code style="white-space: normal; overflow-wrap: anywhere;">pick, pour</code> and <code style="white-space: normal; overflow-wrap: anywhere;">pick, pour, place</code> share a prefix; both complete interpretations remain possible. Another subtask may follow a completed one.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L68">test_regr/VLABenchAgentInterface/graph.py:68</a></td>
-    </tr>
-  </tbody>
-</table>
+Each formula can be deactivated alone. Switching off `plan_operation_arguments`, `plan_pattern_steps` or `plan_only_completed_subtasks_end` loosens only its own restriction (`test_each_grammar_rule_is_its_own_switch` in `test/test_declarative_generation.py`); switching off `plan_progress_positions` removes all four. Together they accept exactly the language of the former single `plan_skill_patterns_and_arguments` formula (paired byte-transition check in `test/test_native_grammar_lcs.py`).
+
+Further behaviour of the position formulas:
+
+- **Optional argument suffix:** `push` may omit its destination or append `arg:target_container_name, obj:i`; each completed optional pair is an operation end.
+- **Shared prefixes:** `pick, pour` and `pick, pour, place` share a prefix; both interpretations remain possible until the tokens decide.
+- **Repetition and empty plans:** another subtask may follow a completed one when the language repeats; task-specific continuations may forbid repetition or allow an empty plan (`finished` as a start).
 
 The 13 declared subtask skill patterns are defined at [test_regr/VLABenchAgentInterface/world_domain.py:20](../world_domain.py#L20):
 
@@ -552,7 +545,7 @@ Skill role data are defined at [test_regr/VLABenchAgentInterface/world_domain.py
 
 ## Native JSON decoding runs on the same grammar
 
-The native JSON decoder of the official protocol (and of every native profile) uses the five grammar formulas above; there is no second grammar declaration. `create_plan_grammar_graph` in `graph.py` declares them for any skill-argument table and pattern list (`create_planner_generation_graph` calls it with the world graph's), and `plan_language` in `generation_runtime.py` compiles them with the generation compiler for one native profile vocabulary: the profile's skills and argument roles, `obj:0` .. `obj:<entity_count - 1>`, and the profile's subtask patterns and operation budget (benchmark: nine skills, eleven patterns, 16 operations). The compiled DFA is cached per profile, id count and budget (about 7 s for 64 ids and 16 operations).
+The native JSON decoder of the official protocol (and of every native profile) uses the eight grammar formulas above; there is no second grammar declaration. `create_plan_grammar_graph` in `graph.py` declares them for any skill-argument table and pattern list (`create_planner_generation_graph` calls it with the world graph's), and `plan_language` in `generation_runtime.py` compiles them with the generation compiler for one native profile vocabulary: the profile's skills and argument roles, `obj:0` .. `obj:<entity_count - 1>`, and the profile's subtask patterns and operation budget (benchmark: nine skills, eleven patterns, 16 operations). The compiled DFA is cached per profile, id count and budget (about 7 s for 64 ids and 16 operations).
 
 `NativePlanDFA` is a JSON lexer over that vocabulary's actions. Each finished operation is fed to the compiled DFA as plan tokens (`skill:pick arg:target_entity_name obj:3`); an operation is legal only if the DFA can still end a plan afterwards, and `]` is legal only where the DFA accepts EOS. Argument roles, the id bound, subtask patterns, pattern completion within the budget and the non-empty plan therefore all come from the declared formulas. JSON bytes, whitespace, string escapes and member order remain the lexer's responsibility. The native language is unchanged: the decoder was checked against a frozen copy of the former hand-written DFA (`test/legacy_native_grammar.py`) on every reachable byte transition for the benchmark, world and legacy profiles and a restricted pattern set, and on full-size pattern admission (`test/test_native_grammar_lcs.py`). Deactivating a formula changes the language once the grammar is compiled again; the generation compiler skips inactive formulas.
 
@@ -7513,7 +7506,7 @@ The generation graph provides syntax and finite language membership. World verif
 
 ## Checking and interpreting counts
 
-The inventory was checked against the complete declared formulas in the current graph build: **5 grammar logical constraints and 89 world logical constraints**, with world groups **causal=3, generic=24, scene=6, task=56**. The separate official-protocol `causal` graph declares three additional `ifL` formulas; its grammar is the five `graph.py` grammar formulas compiled for the benchmark profile vocabulary, so it enables 5 + 3. The separate decoding graph declares five more `ifL` formulas, the physics graph 82 and the complex-task graph 85. Across the paths there are **269 declarations**, classified by their outermost operator in the operator-class table; no current level enables all 269 together.
+The inventory was checked against the complete declared formulas in the current graph build: **8 grammar logical constraints and 89 world logical constraints**, with world groups **causal=3, generic=24, scene=6, task=56**. The separate official-protocol `causal` graph declares three additional `ifL` formulas; its grammar is the eight `graph.py` grammar formulas compiled for the benchmark profile vocabulary, so it enables 8 + 3. The separate decoding graph declares five more `ifL` formulas, the physics graph 82 and the complex-task graph 85. Across the paths there are **272 declarations**, classified by their outermost operator in the operator-class table; no current level enables all 272 together.
 
 Counts can change with custom task knowledge/excluded tasks, custom constraint builders, disabling default constraints, or changes that add or remove complete declared formulas. Changing entity vocabulary size, `max_operations`, or continuation data can change a formula's alternatives and limits without adding a logical constraint. Actual active groundings also depend on plan length, task guards, and supplied requirements. Source lines are the local snapshot cited here and can move after code edits.
 

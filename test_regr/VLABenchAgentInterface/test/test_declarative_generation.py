@@ -120,18 +120,47 @@ def test_formula_edits_change_acceptance_without_hidden_grammar():
     illegal_start = ('skill:place', 'arg:target_container_name', 'obj:0', vocabulary.eos_token)
     assert not accepts(compiled(), vocabulary, illegal_start)
     family = bundle.planner_grammar
-    start_rule = family.e[-2]
+    start_rule = family.e[-1]
     family.e.remove(start_rule)
     assert accepts(compiled(), vocabulary, illegal_start)
-    family.e.insert(len(family.e)-1, start_rule)
+    family.e.append(start_rule)
     assert not accepts(compiled(), vocabulary, illegal_start)
     incomplete = ('skill:pick', vocabulary.eos_token)
     assert not accepts(compiled(), vocabulary, incomplete)
-    family.e.pop()  # Removing the adjacency formula allows the incomplete pair.
+    # Two rules forbid it: the pick needs its argument, and only a completed subtask ends the plan.
+    arguments, completed = (next(r for r in bundle.planner_grammar_rules if r.name == name)
+                            for name in ('plan_operation_arguments', 'plan_only_completed_subtasks_end'))
+    arguments.active = False
+    assert not accepts(compiled(), vocabulary, incomplete)
+    completed.active = False
     assert accepts(compiled(), vocabulary, incomplete)
     # Names are diagnostics; renaming the surviving formulas changes nothing.
     family.name = 'a_different_name'
     assert accepts(compiled(), vocabulary, incomplete)
+
+
+PICK_PLACE = ('skill:pick', 'arg:target_entity_name', 'obj:0', 'skill:place', 'arg:target_container_name', 'obj:0')
+
+
+@pytest.mark.parametrize('rule,tokens', [
+    # pick without its argument name and entity
+    ('plan_operation_arguments', ('skill:pick', 'skill:place', 'arg:target_container_name', 'obj:0')),
+    # a completed pick-place continued by a step that starts no subtask
+    ('plan_pattern_steps', PICK_PLACE + ('skill:place', 'arg:target_container_name', 'obj:0')),
+    # the plan ends after the first step of pick-place
+    ('plan_only_completed_subtasks_end', PICK_PLACE[:3]),
+])
+def test_each_grammar_rule_is_its_own_switch(rule, tokens):
+    world = build_vlabench_world_graph('declarative_switch_world_' + rule)
+    vocabulary = PlanVocabulary.from_world(world, max_entities=1)
+    graph, bundle = create_planner_generation_graph(world, vocabulary, max_operations=3,
+                                                   graph_name='declarative_switch_' + rule)
+    compiled = lambda: constraints_to_dfa_from_graph(graph, bundle, on_unsupported='error')
+    words = (tokens + (vocabulary.eos_token,), PICK_PLACE + (vocabulary.eos_token,))
+    assert [accepts(compiled(), vocabulary, word) for word in words] == [False, True]
+    (declared,) = [r for r in bundle.planner_grammar_rules if r.name == rule]
+    declared.active = False
+    assert [accepts(compiled(), vocabulary, word) for word in words] == [True, True]
 
 
 def test_required_and_multiple_optional_arguments():

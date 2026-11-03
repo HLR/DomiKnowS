@@ -107,8 +107,10 @@ def benchmark_grammar(entities=4, operations=4):
 def test_the_native_decoder_runs_on_the_graph_py_declaration():
     dfa = NativePlanDFA(BYTES, EOS, entity_count=4, max_operations=4)
     bundle = dfa.language.bundle
-    assert bundle.planner_grammar.name == "plan_skill_patterns_and_arguments"
-    assert bundle.planner_grammar in dfa.language.graph.logicalConstrains.values()
+    assert [rule.name for rule in bundle.planner_grammar_rules] == [
+        "plan_progress_positions", "plan_operation_arguments", "plan_pattern_steps", "plan_only_completed_subtasks_end"]
+    assert bundle.planner_grammar is bundle.planner_grammar_rules[0]
+    assert all(rule in dfa.language.graph.logicalConstrains.values() for rule in bundle.planner_grammar_rules)
     assert dfa.language.vocabulary.skills == tuple(native_schema("benchmark")[0])
 
 
@@ -120,3 +122,4 @@ def test_deactivating_the_declared_grammar_changes_the_language():
     assert not dfa().accepts(labels(lone_pick))
     bundle.planner_grammar.active = False
     assert dfa().accepts(labels(lone_pick))
+

@@ -112,8 +112,13 @@ def compile_auxiliary_state_families(graph, bundle):
         )}
         if set(related) & set(compiled):
             raise AuxiliaryFormulaError('a head formula cannot mix auxiliary enum domains')
+        # Inactive formulas are not enforced; without its active declaration the family enforces nothing.
+        active = [name for name in related if getattr(related[name], 'active', True)]
+        if primary not in active:
+            compiled.update({name: () for name in related})
+            continue
         dfa = compile_auxiliary_state_family(heads[primary], bundle, companions=[
-            lc for name, lc in related.items() if name != primary
+            related[name] for name in active if name != primary
         ])
         compiled.update({name: (() if name != primary else (dfa,)) for name in related})
     return compiled

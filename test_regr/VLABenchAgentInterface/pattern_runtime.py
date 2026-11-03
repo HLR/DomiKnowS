@@ -81,15 +81,17 @@ def project_skill_progress(grammar, vocabulary):
 
 def progress_from_declarations(graph, bundle, vocabulary):
     """Compile the actual formula; its name carries no grammar semantics."""
-    from domiknows.generation.dfa.auxiliary import compile_auxiliary_state_family
+    from domiknows.generation.dfa.auxiliary import compile_auxiliary_state_families
     if not any(rule is bundle.planner_grammar and rule.headLC and rule.active
                for rule in graph.logicalConstrains.values()):
         from domiknows.generation.dfa._constraints import accept_all_dfa
         return project_skill_progress(accept_all_dfa(bundle.vocabulary), vocabulary)
-    compiled = compile_auxiliary_state_family(bundle.planner_grammar, bundle)
-    if compiled is None:
+    # The declared positions are projected jointly with every active formula that reads them.
+    key = next(name for name, rule in graph.logicalConstrains.items() if rule is bundle.planner_grammar)
+    compiled = compile_auxiliary_state_families(graph, bundle).get(key)
+    if not compiled:
         raise ValueError("planner progress must be declared as an auxiliary-state formula")
-    return project_skill_progress(compiled, vocabulary)
+    return project_skill_progress(compiled[0], vocabulary)
 
 
 @lru_cache(maxsize=128)
