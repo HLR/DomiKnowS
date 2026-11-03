@@ -134,11 +134,11 @@ def test_actual_grammar_edit_changes_projected_progress(monkeypatch):
     original = graph._declare_plan_grammar
 
     def without_start_guard(*args, **kwargs):
-        formula = original(*args, **kwargs)
+        rules = original(*args, **kwargs)
         # Remove the actual declared start condition, retaining exactly-one,
-        # state/label and adjacent-state formulas. No names drive compilation.
-        formula.e = tuple(formula.e[:-2]) + tuple(formula.e[-1:])
-        return formula
+        # state/label and the adjacent-position rules. No names drive compilation.
+        rules[0].e = tuple(rules[0].e[:-1])
+        return rules
 
     monkeypatch.setattr(graph, "_declare_plan_grammar", without_start_guard)
     assert trace_progress(pattern_progress_for(world, TaskRequirements()), ("lift", "place"))[1]

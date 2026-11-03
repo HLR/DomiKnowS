@@ -1,25 +1,11 @@
 # VLABench logical constraints
 
-**Eleven-skill domain update (29 October 2026):** [practical constraints](PRACTICAL_CONSTRAINTS.md)
-adds `close_door` and `open_laptop`, terminal articulation goals and poker selection.
-Current counts: world=91 (causal=3, generic=28, scene=7, task=53), grammar=8;
-physics=82, complex=85, articulation=4, poker=11; official causal=3 and decoding=6.
-Across paths this is 290 formulas, excluding ten auxiliary poker classification
-queries and relay applies/decided views. General native generation defaults to the
-eleven-skill `world` profile; the explicit official/legacy languages stay fixed.
-The dated inventories and scores below describe earlier schema revisions.
-
 **2026-11-03 update:** the former single grammar formula `plan_skill_patterns_and_arguments` is now four
 formulas over the same `plan_progress` positions: `plan_progress_positions`, `plan_operation_arguments`,
 `plan_pattern_steps` and `plan_only_completed_subtasks_end`. Each can be deactivated alone and together they
 accept the same language. The grammar has eight formulas (one `atLeastAL`, four `ifL`, two `atMostAL`, one
 `andL`); the counts in this document include them (grammar + world 97, and the official causal setting
 enables 8 + 3). See [Grammar rule families](#grammar-rule-families-eight-logical-constraints).
-
-**2026-11-01 update:** the native JSON decoder (`NativePlanDFA`) now runs on the five grammar
-formulas of `graph.py`, compiled for the native profile's vocabulary, and keeps only the JSON lexer.
-The official causal setting therefore enables 5 + 3 formulas. See
-[Native JSON decoding runs on the same grammar](#native-json-decoding-runs-on-the-same-grammar).
 
 **2026-10-30 update:** the [official protocol with image perception](IMAGE_PERCEPTION.md#official-protocol)
 adds `official/selection_graph.py`: nine formulas (`ordinal_rank_1` .. `ordinal_rank_8`, `named_card_face`)
