@@ -2,7 +2,9 @@
 
 How to choose what the planner knows (`--knowledge`) and how it is evaluated (`--protocol`). Each rule is a
 DomiKnowS logical constraint. The details are in [VLABenchLogicaConstraints.md](VLABenchLogicaConstraints.md),
-and the measured effect of each level is in [KNOWLEDGE_ABLATION.md](KNOWLEDGE_ABLATION.md).
+and the measured effect of each level is in [KNOWLEDGE_ABLATION.md](KNOWLEDGE_ABLATION.md). Where each constraint
+gets its information, including which ones need an extra LLM prompt, is in
+[Constraint_Observation_Sources.md](Constraint_Observation_Sources.md).
 
 ## Three separate settings
 
@@ -57,7 +59,7 @@ observation mode decides whether those observations exist and where they come fr
 
 | | `visual` (default) | `metadata-assisted` |
 |---|---|---|
-| Source of property observations | none: properties stay unknown, so the property rule never rejects an option and the VLM chooses from the images; only the option identities are used (the press must target one of the option buttons) | the episode's `property_observations.json` (simulator metadata), and the property rule rejects the losing options |
+| Source of property observations | none: properties stay unknown, so the property rule never rejects an option and the VLM chooses from the images; only the option identities are used (the press must target one of the option buttons) | each option's material and shape from the episode's `env_config` (simulator metadata), plus `property_observations.json` for reflectance when an episode has one; the property rule rejects the losing options |
 | Privileged | no | yes: it reads simulator state the model never sees |
 | Required level | any | `--knowledge task` (the physics rules live in the task group) |
 | Affects | QA (physics) tasks only; other tasks are grounded the same way in both modes | the same |
@@ -90,6 +92,39 @@ observations. It isn't a fair comparison with `visual` runs or with published re
 
 Under `--protocol official`, the knowledge must come from `--knowledge` (or its `--constraints` alias). If both are
 omitted, the decoder runs with no constraints at all, not even the grammar.
+
+## Flags that ask the model first (`--protocol official`)
+
+Three optional flags make the model answer a short question before it generates the plan. They are off by default,
+and each one needs `--protocol official` with `--knowledge grammar`, `causal` or `official`. The questions' wording and
+parsers are in [Constraint_Observation_Sources.md](Constraint_Observation_Sources.md#model-question-flags).
+
+| Flag | What the model is asked | What it is shown | Constraint it activates | Effect | If the answer is unusable |
+|---|---|---|---|---|---|
+| `--press-question` | Is this a choose-one-and-press question? | the episode's input and the question | `press_answer_single_press` | a Yes limits the plan to one press | anything that doesn't start with "yes" counts as No |
+| `--scene-ids` | What is the largest tag number? | the question and the number-labeled image | `scene_ids_bound_targets` | object ids stay within that number | no number leaves the limit at the grammar's id cap |
+| `--pattern-first` | Which subtask patterns does the plan use? | the episode's input and the question | `chosen_patterns_continue`, `chosen_patterns_complete` | the plan is made of the named patterns | no usable pattern means no pattern limit |
+
+How they work:
+1. **Each flag adds one model call per episode.** With all three off, none of these calls is made.
+2. **The flag supplies an observation, not a rule.** The constraints in `official/decoding_graph.py` are always
+   compiled, but each one fires only when its observation exists, so without the flag it never restricts anything.
+3. **The answer limits the decoder, not the prompt.** The plan is generated from the same episode input as a normal
+   run, and the answer only changes which tokens the DFA allows.
+4. **`--pattern-first` is skipped after a Yes** to the press question, because the plan is already one press.
+
+The answers are the model's own guesses, but the DFA enforces them as hard limits. A wrong Yes, for example, leaves
+one press as the only possible plan.
+
+Leave these flags off for a standard run, because they make it a variant of the protocol. The press question's
+wording was also chosen on validation episodes and names the benchmark's question-task topics, so report any run that
+uses it as a variant. They have added little so far:
+- **`--press-question`:** recognised 127 of 600 question tasks and never chose the right button, so the official
+  score barely moved.
+- **`--scene-ids`:** changed no plan on the 450 validation episodes (38.18 for the grammar alone).
+- **`--pattern-first`:** scored 38.29 on the same episodes, with 39 of 450 replies unusable.
+
+The full results are in the [README](../README.md).
 
 ## Which flags do I need?
 

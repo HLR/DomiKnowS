@@ -451,8 +451,11 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     ``press_question`` first asks the model :data:`PRESS_QUESTION`, ``scene_ids`` reads the largest tag
     number and ``pattern_first`` asks for the subtask patterns. The answers are observations of the
     LCs in :mod:`.decoding_graph` (a Yes allows one ``press``; ids stay within the tags read; the plan
-    is made of the named patterns), compiled into a :class:`.knowledge_dfa.KnowledgePlanDFA`. The decision is
-    recorded in an HTML comment ahead of the fence. ``hmm`` is an ``(initial, transition,
+    is made of the named patterns), compiled into a :class:`.knowledge_dfa.KnowledgePlanDFA`. Each option
+    adds one model call per episode. An answer limits the DFA only: the plan is generated from the same
+    episode input, and without an answer the LC never fires. An unusable answer imposes no limit, except
+    that a press answer not starting with "yes" counts as No. ``pattern_first`` is skipped after a Yes. The
+    decision is recorded in an HTML comment ahead of the fence. ``hmm`` is an ``(initial, transition,
     emission)`` tuple; with ``weight`` > 0 its action-level lookahead (``native_lookahead``) adds
     ``weight * (log HMM mass - best log HMM mass)`` to the DFA-legal tokens that decide an action.
     The DFA stays the only authority on which tokens are legal, and the comment

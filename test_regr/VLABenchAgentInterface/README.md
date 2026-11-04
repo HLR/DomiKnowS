@@ -129,6 +129,10 @@ revision pinned in `planning_benchmark.json`:
   validation episodes and names the benchmark's question-task topics, so report it as a variant. In
   the measured run it recognised 127 of 600 question tasks, mostly tasks outside upstream's
   dim2task, and never chose the right button, so the official score barely moved.
+- `--press-question`, `--scene-ids` and `--pattern-first` are off by default. Each adds one model call per episode,
+  before the plan. The answer activates the matching constraint in `official/decoding_graph.py` and limits the DFA,
+  but it isn't added to the plan prompt. See
+  [Knowledge_QuickStart.md](docs/Knowledge_QuickStart.md#flags-that-ask-the-model-first---protocol-official).
 - `official/official_hmm.py` samples the frozen model on the benchmark inputs without labels, fits an HMM on the
   canonical plan tokens (`json.dumps(plan, indent=4)`, integer ids) and picks a lookahead weight on the
   450 validation episodes of the seed-42 split. The lookahead is action-level, after CLAMP's budget-aware
@@ -146,7 +150,8 @@ revision pinned in `planning_benchmark.json`:
   completed); on validation it was worse than the joint score (37.93 at weight 0.5, 33.6 at weight 5, against 38.18
   without the HMM) because it pushes plans to stop early and loses the long Complex plans.
   Validation results for the other additions (450 episodes, six-dimension mean; grammar DFA alone 38.18, joint HMM
-  weight 0.5 38.37): `--scene-ids` changes no plan (the model already picks only visible ids); per-instance
+  weight 0.5 38.37): `--scene-ids` (the model reads the largest tag number in the number-labeled image and ids are
+  limited to it) changes no plan (the model already picks only visible ids); per-instance
   adaptation (`official/official_adapt.py`, 16 samples, one EM step) scores 38.03 at best (weight 0.5, lam 0.1) and falls as
   lam and weight grow (down to 37.38); `--pattern-first` (the model names the subtask patterns from the official
   prompt's list and the grammar is limited to them; 39 of 450 replies were unusable) scores 38.29.

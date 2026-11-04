@@ -652,6 +652,12 @@ nothing the instruction does not already give; the unseen-task test (Phase D) is
   With the label-free HMM lookahead (weight 0.5) on the LC-compiled DFA, causal scores 37.96 against 38.02 for grammar
   (4 better, 22 worse) and 38.01 against 38.02 with `--scene-ids`; grammar + `--scene-ids` + HMM reproduces the earlier
   grammar + HMM plans exactly.
+- **The flags that ask the model first add little in the standard protocol.** `--press-question`, `--scene-ids` and
+  `--pattern-first` are outside the `--knowledge` levels: each adds one model call per episode, and its answer activates
+  a decoding constraint. The press question recognised 127 of 600 question tasks and never chose the right button, so
+  the official score barely moved. On the 450 validation episodes, against 38.18 for the grammar DFA alone,
+  `--scene-ids` changes no plan and `--pattern-first` scores 38.29 (39 replies unusable). See
+  [Knowledge_QuickStart.md](Knowledge_QuickStart.md#flags-that-ask-the-model-first---protocol-official).
 - **The task tier is the large step, +9.2 Macro**, and it comes from two dimensions: Complex 44.6 to 87.4
   (the obligations and sequence LCs) and PhysLaw 37.7 to 57.0 (grounded QA families). Skill recall rises
   from 89 to 98.

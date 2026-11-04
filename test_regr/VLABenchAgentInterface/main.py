@@ -1601,14 +1601,17 @@ def build_parser() -> argparse.ArgumentParser:
                           help="official protocol: alias of --knowledge grammar|causal (grammar: the DomiKnowS grammar "
                                "DFA; causal: plus the id-only causal LCs); neither uses scene information")
     evaluate.add_argument("--press-question", action="store_true",
-                          help="official protocol with --knowledge grammar or causal: the model first says whether the instruction is a "
-                               "choose-one-and-press question; if so the plan is restricted to one press")
+                          help="official protocol with --knowledge grammar, causal or official: one extra model call per episode, "
+                               "in which the model first says whether the instruction is a choose-one-and-press question; "
+                               "if so the plan is restricted to one press")
     evaluate.add_argument("--pattern-first", action="store_true",
-                          help="official protocol with --knowledge grammar or causal: the model first names the subtask pattern(s) "
-                               "from the official prompt's list and the grammar is limited to them")
+                          help="official protocol with --knowledge grammar, causal or official: one extra model call per episode, "
+                               "in which the model first names the subtask pattern(s) from the official prompt's list and the "
+                               "plan is limited to them; skipped after a Yes to --press-question")
     evaluate.add_argument("--scene-ids", action="store_true",
-                          help="official protocol with --knowledge grammar or causal: the model first reads the largest tag number in "
-                               "the number-labeled image and object ids are limited to 0..that number")
+                          help="official protocol with --knowledge grammar, causal or official: one extra model call per episode, "
+                               "in which the model first reads the largest tag number in the number-labeled image and object ids "
+                               "are limited to 0..that number")
     evaluate.add_argument("--hmm", help="official protocol with --knowledge grammar or causal: label-free HMM checkpoint (best.pt from official_hmm)")
     evaluate.add_argument("--hmm-weight", type=float, default=1.0, help="lookahead weight used with --hmm")
     evaluate.add_argument("--tasks", nargs="+", help="official protocol: restrict to these tasks (marks the run non-standard)")
