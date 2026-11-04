@@ -991,6 +991,18 @@ def official_perception_options(args):
     from test_regr.VLABenchAgentInterface.research.config import default_perception_options
     profile = getattr(args, "constraint_profile", "baseline")
     options = default_perception_options()
+    import math
+    policy = getattr(args, 'official_perception_policy', 'soft')
+    weight = getattr(args, 'official_perception_weight', 0.5)
+    verifier = getattr(args, 'perception_verifier_model', None)
+    if policy not in ('legacy', 'soft') or not math.isfinite(weight) or not 0 <= weight <= 2:
+        raise ValueError('invalid official perception policy or preference weight (must be in [0, 2])')
+    if verifier and (options is None or policy != 'soft'):
+        raise ValueError('a perception verifier requires soft image perception')
+    if verifier and verifier == options['model_id']:
+        raise ValueError('verification requires a different frozen perception model')
+    if options is not None and policy == 'soft' and getattr(args, 'grounding_policy', None) is not None:
+        raise ValueError('soft perception cannot enable hard research grounding; use legacy explicitly')
     if profile == "research_v1" and options is None:
         raise ValueError("--protocol official runs research_v1 only as image perception; drop --research-perception off")
     if options is None:
@@ -1002,6 +1014,8 @@ def official_perception_options(args):
     if source is None and options["confidence"] != PerceptionConfig.confidence:
         raise ValueError("--perception-confidence differs from the fixed default; name the training data it was fit "
                          "on with --perception-calibration-data (never the official episodes)")
+    if source is None and weight != 0.5:
+        raise ValueError('a non-default perception preference weight requires --perception-calibration-data, never official episodes')
     if source is not None:
         from test_regr.VLABenchAgentInterface.dataset_protocol import assert_training_dataset
         assert_training_dataset(source)
@@ -1034,6 +1048,9 @@ def command_evaluate_official(args) -> None:
     grammar = args.constraints in ("grammar", "causal")
     causal = args.constraints == "causal"
     perception = None
+    perception_verifier = None
+    perception_policy = getattr(args, 'official_perception_policy', 'soft')
+    perception_weight = getattr(args, 'official_perception_weight', 0.5)
     grounding_policy = getattr(args, "grounding_policy", None)  # None: no research grounding formula (opt-in)
     if perception_options is not None:
         from test_regr.VLABenchAgentInterface.research.perception import ImagePerceptionModel, PerceptionConfig
@@ -1047,6 +1064,13 @@ def command_evaluate_official(args) -> None:
         if getattr(args, "perception_cache", None):
             cached = perception.attach_disk_cache(args.perception_cache)
             print(f"[official-vlm] perception cache {args.perception_cache}: {cached} replies", flush=True)
+        verifier_model = getattr(args, 'perception_verifier_model', None)
+        if verifier_model:
+            if verifier_model == perception_options['model_id']:
+                raise ValueError('verification requires a different frozen perception model')
+            perception_verifier = ImagePerceptionModel.load(PerceptionConfig(**{**perception_options, 'model_id': verifier_model}))
+            if getattr(args, 'perception_cache', None):
+                perception_verifier.attach_disk_cache(args.perception_cache)
     disabled_official = tuple(sorted(set(getattr(args, "official_disable_formula", None) or ())))
     disabled_research = tuple(sorted(set(getattr(args, "research_disable_formula", None) or ())))
     if disabled_official and not grammar:
@@ -1059,14 +1083,18 @@ def command_evaluate_official(args) -> None:
     decoding = "greedy"
     if grammar:
         from test_regr.VLABenchAgentInterface.official.official_hmm import decoding_label
-        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "") + (("+image-perception" + (f"-{grounding_policy}" if grounding_policy else "")) if perception is not None else "") + disabled_label
+        decoding = decoding_label(hmm_digest, args.hmm_weight) + ("+press-question" if args.press_question else "") + ("+scene-ids" if args.scene_ids else "") + ("+pattern-first" if args.pattern_first else "") + ("+causal" if causal else "") + (("+image-perception-" + perception_policy + ("-verified" if perception_verifier is not None else "") + (f"-{grounding_policy}" if grounding_policy else "")) if perception is not None else "") + disabled_label
     suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + (("_perception" + (f"_{grounding_policy}" if grounding_policy else "")) if perception is not None else "")
+    if perception is not None:
+        suffix += '_' + perception_policy + ('_verified' if perception_verifier is not None else '')
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
     generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question, scene_ids=args.scene_ids,
                                            pattern_first=args.pattern_first,
                                            hmm=hmm, weight=args.hmm_weight, causal=causal, perception=perception,
                                            disabled_formulas=disabled_research,
                                            grounding_policy=grounding_policy,
+                                           perception_policy=perception_policy, perception_weight=perception_weight,
+                                           perception_verifier=perception_verifier,
                                            disabled_official_formulas=disabled_official) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
@@ -1076,6 +1104,9 @@ def command_evaluate_official(args) -> None:
         perception=None if perception is None else {
             "inputs": "unlabeled image, number-labeled image, instruction; no entity table",
             "config": perception_options, "fingerprint": perception.config.fingerprint,
+            "constraint_policy": perception_policy, "preference_weight": perception_weight,
+            "verifier_model": getattr(args, 'perception_verifier_model', None),
+            "verifier_fingerprint": None if perception_verifier is None else perception_verifier.config.fingerprint,
             "grounding_policy": grounding_policy, "calibration": perception_calibration(args)})
     _json(summary | {"output_dir": str(output_dir), "load_in_4bit": args.load_in_4bit,
                      "max_new_tokens": args.max_new_tokens})
@@ -1588,6 +1619,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--perception-cache", type=Path,
                           help="official protocol: directory of raw perception replies reused across runs "
                                "(keyed by perception fingerprint, instruction and image hashes)")
+    evaluate.add_argument('--official-perception-policy', choices=('soft', 'legacy'), default='soft',
+                          help='official image-perception extension: finite candidate preferences (default), or historical hard masks')
+    evaluate.add_argument('--official-perception-weight', type=float, default=0.5,
+                          help='bounded soft preference weight in [0,2]; non-default values require independent calibration data')
+    evaluate.add_argument('--perception-verifier-model',
+                          help='optional different frozen image model; only agreed visual identities and conservative box unions guide soft decoding')
     evaluate.set_defaults(handler=command_evaluate_planner)
 
     rollout = sub.add_parser("rollout")

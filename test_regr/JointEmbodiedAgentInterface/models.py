@@ -670,16 +670,21 @@ class JointQwenVLPlanner(nn.Module):
             masked = torch.full_like(logits, float("-inf"))
             indices = torch.tensor(sorted(int(label) for label in allowed), device=logits.device)
             masked[indices] = logits[indices]
+            log_bias = {}
             if domain=="vlabench":
                 from test_regr.VLABenchAgentInterface.research.runtime import joint_log_bias
-                for choice,bias in joint_log_bias(dfa,state,allowed).items():masked[choice]+=bias
+                log_bias = joint_log_bias(dfa,state,allowed)
+                for choice,bias in log_bias.items():masked[choice]+=bias
             distribution = torch.distributions.Categorical(logits=masked)
             label = torch.argmax(masked) if deterministic else distribution.sample()
             observer = getattr(self, "decision_observer", None)
             if observer is not None:
                 from domiknows.generation.decision_trace import decision_record
-                observer(decision_record(logits, allowed, label, vocabulary, token_strings,
-                                         dfa=dfa, state=state, remaining_steps=remaining_steps_for(policy, step)))
+                record = decision_record(logits, allowed, label, vocabulary, token_strings,
+                                         dfa=dfa, state=state, remaining_steps=remaining_steps_for(policy, step))
+                if log_bias:
+                    record['log_bias'] = {vocabulary.token_for_label(k): v for k,v in log_bias.items()}
+                observer(record)
             logprob = logprob + distribution.log_prob(label)
             label_int = int(label)
             labels.append(label_int)

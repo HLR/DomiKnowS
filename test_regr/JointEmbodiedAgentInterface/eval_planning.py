@@ -45,6 +45,7 @@ from .main import (
 from .models import DEFAULT_MODEL_ID, JointQwenVLPlanner
 from .program import _runtime_adapter
 from .utils.evaluation_protocol import evaluation_protocol
+from test_regr.VLABenchAgentInterface.research.config import default_perception_policy
 
 
 def build_eval_parser() -> argparse.ArgumentParser:
@@ -417,6 +418,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "knowledge_provenance": payload.get("knowledge_provenance", {"status": "unrecorded_legacy"}),
         "decoding": "free" if getattr(args, "no_dfa", False) else "dfa",
         "no_dfa_official": bool(getattr(args, "no_dfa_official", False)),
+        "perception_evidence_policy": default_perception_policy(),
         "planner_input_protocol": planner_input_protocol(),
         "free_decoding_min_steps": int(getattr(args, "no_dfa_min_steps", 0)),
         "holdout_tasks": list(holdout),

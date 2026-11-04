@@ -436,7 +436,9 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                adapt: dict[str, Any] | None = None, seed: int = 42,
                                causal: bool = False, perception: Any = None,
                                research_knowledge: Any = None, disabled_formulas: Sequence[str] = (),
-                               grounding_policy: str | None = None, disabled_official_formulas: Sequence[str] = ()
+                               grounding_policy: str | None = None, disabled_official_formulas: Sequence[str] = (),
+                               perception_policy: str = 'legacy', perception_weight: float = 0.5,
+                               perception_verifier: Any = None
                                ) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
@@ -475,6 +477,21 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         from native_planning import NativeConstraintProcessor, NativePlanDFA, NativePlanFailure
         from native_lookahead import DFAActionLookahead
     from domiknows.generation.applications.action_lookahead import TokenOperators
+    try:
+        from .grounding_policy import soft_observation, verified_observation
+    except ImportError:  # flat-module execution
+        from grounding_policy import soft_observation, verified_observation
+    import math
+    if perception_policy not in ('legacy', 'soft'):
+        raise ValueError('perception policy must be legacy or soft')
+    if not math.isfinite(perception_weight) or not 0 <= perception_weight <= 2:
+        raise ValueError('perception preference weight must be finite and in [0, 2]')
+    if perception_policy == 'soft' and grounding_policy is not None:
+        raise ValueError('soft perception cannot be combined with hard research grounding policies')
+    if perception_verifier is not None and (perception is None or perception_policy != 'soft'):
+        raise ValueError('perception verification requires soft image perception')
+    if perception_verifier is not None and perception_verifier.config.model_id == perception.config.model_id:
+        raise ValueError('verification requires a different frozen model, not repeated identical inference')
 
     try:
         from .knowledge_dfa import KnowledgePlanDFA
@@ -504,10 +521,10 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
 
     if perception is not None:
         try:
-            from .perception_observations import PerceivedGrounding, observe_episode
+            from .perception_observations import PerceivedGrounding, observe_episode, episode_inputs
             from ..knowledge.research_lcs import build_research_knowledge
         except ImportError:  # pragma: no cover - flat-module execution
-            from perception_observations import PerceivedGrounding, observe_episode
+            from perception_observations import PerceivedGrounding, observe_episode, episode_inputs
             from knowledge.research_lcs import build_research_knowledge
         knowledge_lcs = research_knowledge or build_research_knowledge()
 
@@ -583,6 +600,11 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
         bound = read_entity_count(items) if scene_ids else None
         chosen = choose_patterns(items) if pattern_first and not press_only else ()
         observed = observe_episode(perception, items, selection=selection) if perception is not None else None
+        if observed is not None and perception_policy == 'soft':
+            if perception_verifier is not None:
+                verification = observe_episode(perception_verifier, items, selection=selection)
+                observed = verified_observation(observed, verification, episode_inputs(items)[2], selection)
+            observed = soft_observation(observed)
         key, dfa = language(press_only, bound, tuple(sorted(chosen)), observed)
         steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
@@ -604,7 +626,9 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                      DFAActionLookahead(dfa, planner.tokenizer, operators))
             constraint = NativeConstraintProcessor(dfa, length, max_new_tokens, hmm=episode_hmm if steered else None,
                                                    weight=weight if steered else 0, action_lookahead=episode_lookahead,
-                                                   lookahead_score=lookahead_score)
+                                                   lookahead_score=lookahead_score,
+                                                   object_preferences=observed.soft_candidates if observed is not None and perception_policy == 'soft' else None,
+                                                   preference_weight=perception_weight)
             try:
                 output = planner.model.generate(
                     **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
@@ -628,6 +652,9 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
             if constraint.session is not None:
                 stats = constraint.session.stats
                 notes.append(f"<!-- hmm-action: changed={stats['changed']} scored={stats['scored_steps']} steps={stats['steps']} -->")
+            if constraint.preference is not None:
+                notes.append('<!-- perception-preference: ' + json.dumps({
+                    'weight': perception_weight, **constraint.preference.stats}, sort_keys=True) + ' -->')
             return "\n".join([*notes, reply])
         finally:
             for image in images:

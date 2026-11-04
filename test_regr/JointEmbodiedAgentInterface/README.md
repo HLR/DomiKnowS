@@ -117,6 +117,23 @@ does not run the auxiliary perception model. Missing visibility and candidate
 evidence remain unknown, so the corresponding official rules do not exclude
 objects. Omit `--research-perception off` for the standard official setting.
 
+For image-derived object guidance without hard visibility/candidate exclusions:
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.eval_planning \
+  --checkpoint /path/to/checkpoint.pt --split test \
+  --knowledge official --official-perception-policy soft
+```
+
+Joint keeps its legacy evidence policy unless soft is explicitly selected. The
+soft policy preserves images and anonymous pointers, applies bounded preferences
+only at object decisions, and uses the same distribution for RL sampling and
+replay. A changed training policy requires a new experiment; exact resumes reject
+policy changes. See [official grounding and reference review](../VLABenchAgentInterface/official/README.md)
+for optional frozen-model verification, independent calibration, and separate
+adjudicated-reference scoring. The trained Joint evaluator remains distinct from
+the frozen native official baseline.
+
 The `--no-dfa-official` flag is also available on `main evaluate-planning`. With `train-agent
 --two-stage`, it preserves the configured RL stage while disabling Stage 1
 planner DFA losses and Stage 2 DFA sampling/replay masks. Training still requires

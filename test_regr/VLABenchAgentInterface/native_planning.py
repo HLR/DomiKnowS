@@ -368,13 +368,20 @@ class NativeConstraintProcessor:
     """HF logits processor using the repository's CTRL-G success DP and belief update."""
 
     def __init__(self, dfa, prompt_length, max_tokens, *, hmm=None, weight=0, lookahead=50, table=None,
-                 action_lookahead=None, lookahead_score="joint"):
+                 action_lookahead=None, lookahead_score="joint", object_preferences=None, preference_weight=0.5):
         """``action_lookahead`` (a ``DFAActionLookahead`` for this DFA) replaces the token-level table:
         the HMM then only ranks tokens the DFA allows, per action, and never removes one."""
         self.dfa, self.prompt_length, self.max_tokens = dfa, prompt_length, max_tokens
         self.state = dfa.start_state
         self.consumed = 0
         self.weight = weight
+        self.preference = None
+        if object_preferences is not None:
+            try:
+                from .official.grounding_policy import SoftCandidatePreference
+            except ImportError:  # flat-module execution
+                from official.grounding_policy import SoftCandidatePreference
+            self.preference = SoftCandidatePreference(dfa, object_preferences, preference_weight)
         self.hmm = hmm
         self.table = table
         self.session = None
@@ -428,6 +435,8 @@ class NativeConstraintProcessor:
             result[0, label] = value
         if self.session is not None:
             self.session.apply(result, self.state, self.weight)
+        if self.preference is not None:
+            self.preference.apply(result, self.state)
         return result
 
 

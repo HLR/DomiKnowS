@@ -141,13 +141,31 @@ def record_measured_completion(context,operation):
 
 
 def joint_log_bias(dfa,state,labels):
-    """Incremental supplied prior over consistent hypotheses; no additional hard rejection."""
+    """Finite visual candidate preferences and supplied hypothesis priors; no hard rejection.
+
+    Collection and differentiable replay share this function, so the RL policy
+    likelihood includes exactly the preference used to select the trajectory.
+    """
     import math
     from domiknows.generation.dfa.predicate_monitor import find_predicate_monitor
     bound=find_predicate_monitor(dfa)
     if bound is None:return {}
+    result = {}
+    observation = research_block(getattr(bound, 'research_context', {})).get('perception', {})
+    decoded = state.semantic
+    if observation.get('constraint_policy') == 'soft' and decoded.skill and decoded.pending_argument:
+        candidates = next((set(ids) for skill, role, ids in observation.get('soft_candidates') or ()
+                           if (skill,role) == (decoded.skill,decoded.pending_argument)), None)
+        weight = observation.get('preference_weight', 0.5)
+        if not math.isfinite(weight) or not 0 <= weight <= 2:
+            raise ValueError('invalid soft perception preference weight')
+        if candidates:
+            for label in labels:
+                token = bound.adapter.vocabulary.token_for_label(int(label))
+                if token.startswith('obj:') and int(token[4:]) not in candidates:
+                    result[int(label)] = -float(weight)
     research=next((m for m in bound.adapter.requirements.planning.monitors if isinstance(m,ResearchMonitor)),None)
-    if research is None or research.config.grounding_policy!="joint":return {}
+    if research is None or research.config.grounding_policy!="joint":return result
     weights={h.id:h.weight for h in research.hypotheses}
     def weight(current):
         if current is None:return None
@@ -159,11 +177,10 @@ def joint_log_bias(dfa,state,labels):
         alive=research.state(semantic.grounded).alive
         return max((weights[h] for h in alive),default=0.)
     before=weight(state)
-    if not before:return {}
-    result={}
+    if not before:return result
     for label in labels:
         after=weight(bound.step(state,int(label)))
-        if after is not None and after>0:result[int(label)]=math.log(after)-math.log(before)
+        if after is not None and after>0:result[int(label)]=result.get(int(label),0.)+math.log(after)-math.log(before)
     return result
 
 

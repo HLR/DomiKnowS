@@ -37,7 +37,7 @@ try:
     from ..knowledge.research_lcs import build_research_knowledge
     from ..object_grounding import ObjectConstraints, perceived_object_constraints
     from .selection_graph import build_selection_graph
-    from .selection_observations import selection_constraints
+    from .selection_observations import selection_constraints, selection_request
 except ImportError:  # pragma: no cover - flat-module execution
     from research.config import ResearchConfig
     from research.monitor import ResearchMonitor, ResearchState
@@ -45,7 +45,7 @@ except ImportError:  # pragma: no cover - flat-module execution
     from knowledge.research_lcs import build_research_knowledge
     from object_grounding import ObjectConstraints, perceived_object_constraints
     from selection_graph import build_selection_graph
-    from selection_observations import selection_constraints
+    from selection_observations import selection_constraints, selection_request
 
 GROUNDING_POLICY = "joint"
 DESTINATION_ROLE = "target_container_name"
@@ -135,6 +135,7 @@ class EpisodePerception:
     categories: tuple[tuple[int, str], ...] = ()  # (tag, predicted kind) for confidently visible tags
     candidates: ObjectConstraints = ObjectConstraints()
     cards: tuple[tuple[int, tuple[int, str]], ...] = ()  # (tag, (rank 2..14, suit)) for read card faces
+    soft_candidates: ObjectConstraints = ObjectConstraints()
 
     @property
     def supplies_facts(self) -> bool:
@@ -148,8 +149,11 @@ class EpisodePerception:
         categories = json.dumps({str(tag): kind for tag, kind in self.categories})
         cards = json.dumps({str(tag): list(face) for tag, face in self.cards})
         candidates = json.dumps({f"{skill}.{role}": list(ids) for skill, role, ids in self.candidates.restrictions})
+        preferences = json.dumps({f"{s}.{r}": list(ids) for s, r, ids in self.soft_candidates.restrictions})
+        policy = self.audit.get('constraint_policy', 'legacy')
         return (f"<!-- perception: status={status} visible={visible} categories={categories} cards={cards} "
-                f"candidates={candidates} hypotheses={hypotheses} complete={str(complete).lower()} -->")
+                f"candidates={candidates} hypotheses={hypotheses} complete={str(complete).lower()} "
+                f"policy={policy} soft_candidates={preferences} -->")
 
 
 def observe_episode(model, items: list[list[Any]], episode: str = "official", selection=None) -> EpisodePerception:
@@ -166,7 +170,11 @@ def observe_episode(model, items: list[list[Any]], episode: str = "official", se
     if not grounding.get("requests") or not grounding.get("hypotheses"):
         grounding = None  # no role was bound: the grounding formulas have nothing to observe
     visible, categories, cards, candidates = perceived_observations(result, instruction, selection)
-    return EpisodePerception(visible, grounding, result["perception"], categories, candidates, cards)
+    reported = {int(tag) for tag in result['perception'].get('object_confidences', {})}
+    audit = {**result['perception'], 'selection_request': selection_request(instruction),
+             'boxes': {str(k): list(v) for k, v in perceived_boxes(result).items()},
+             'uncertain_inventory': bool(reported - set(visible or ())) or not result['grounding']['complete']}
+    return EpisodePerception(visible, grounding, audit, categories, candidates, cards)
 
 
 def perceived_observations(result, instruction: str, selection=None):

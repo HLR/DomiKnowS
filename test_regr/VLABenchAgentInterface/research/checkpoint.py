@@ -1,5 +1,5 @@
 """Additive policy lineage; does not change the eleven-skill weight schema."""
-from .config import ResearchConfig,default_config,default_loss_mode,default_training_options,default_compiled_loss,default_perception_options
+from .config import ResearchConfig,default_config,default_loss_mode,default_training_options,default_compiled_loss,default_perception_options,default_perception_policy
 
 
 def data_fingerprints(args):
@@ -76,6 +76,7 @@ def checkpoint_metadata(world,planner):
                     "primal_dual":options.get("stage1_pmd_weight",1.) if full else 0.},
                 "evidence_schema_version":1,"controller_conditioning_version":2,
                 "perception_configuration":default_perception_options(),
+                "perception_evidence_policy":default_perception_policy(),
                 "data_fingerprints":getattr(planner,"_research_data_fingerprints",{})},
             "research_training_state":provider() if callable(provider) else None}
 
@@ -90,6 +91,8 @@ def restore_metadata(payload,world,planner,*,training=False):
         raise ValueError("research resume changes supervised-loss mode")
     if training:
         if saved.get("perception_configuration")!=default_perception_options():raise ValueError("research resume changes image-perception configuration")
+        if saved.get('perception_evidence_policy', {'policy':'legacy','weight':0.5,'verifier_model':None}) != default_perception_policy():
+            raise ValueError('research resume changes perception evidence policy')
         if saved.get("observation_inputs")!=(config.enabled or default_compiled_loss()):raise ValueError("research resume changes observation-input mode")
         options={k:v for k,v in default_training_options().items() if k!="output"}
         if saved.get("loss_options",{})!=options:raise ValueError("research resume changes loss weights or dual optimization settings")
@@ -102,7 +105,8 @@ def restore_metadata(payload,world,planner,*,training=False):
     # Evaluation may deliberately ablate a profile; expose the override, do not claim a matching run.
     payload["research_evaluation_override"]=(saved is None or saved["fingerprint"]!=config.fingerprint
         or saved.get("observation_inputs")!=(config.enabled or default_compiled_loss())
-        or saved.get("perception_configuration")!=default_perception_options())
+        or saved.get("perception_configuration")!=default_perception_options()
+        or saved.get('perception_evidence_policy', {'policy':'legacy','weight':0.5,'verifier_model':None}) != default_perception_policy())
     planner.research_evaluation_override=payload["research_evaluation_override"]
     planner._research_checkpoint_profile=saved
     if payload.get("research_training_state") is not None:

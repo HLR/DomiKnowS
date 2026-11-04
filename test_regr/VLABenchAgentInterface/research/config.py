@@ -89,6 +89,15 @@ def add_research_arguments(parser):
     parser.add_argument("--perception-camera",type=int,default=0)
     parser.add_argument("--perception-load-in-4bit",action="store_true")
     parser.add_argument("--perception-local-files-only",action=argparse.BooleanOptionalAction,default=True)
+    # Shared with the native official CLI; existing Joint runs keep legacy unless explicit.
+    for option, options in (
+        ('--official-perception-policy', dict(choices=('legacy', 'soft'), default='legacy')),
+        ('--official-perception-weight', dict(type=float, default=0.5)),
+        ('--perception-verifier-model', dict(default=None)),
+        ('--perception-calibration-data', dict(default=None)),
+    ):
+        if option not in parser._option_string_actions:
+            parser.add_argument(option, **options)
     for option,kind,default in (("stage1-dfa-mass-weight",float,0.),("stage1-pmd-weight",float,1.),
             ("stage1-dual-lr",float,.05),("stage1-dual-warmup",int,10),("stage1-dual-every",int,10)):
         if "--"+option not in parser._option_string_actions:parser.add_argument("--"+option,type=kind,default=default)
@@ -120,6 +129,24 @@ def apply_research_arguments(args):
     # Explicit off is a diagnostic ablation: retain official declarations but
     # supply no visibility/candidate evidence. Auto keeps the standard behavior.
     args.research_perception=mode
+    policy = getattr(args, 'official_perception_policy', 'legacy')
+    weight = getattr(args, 'official_perception_weight', 0.5)
+    verifier = getattr(args, 'perception_verifier_model', None)
+    import math
+    if policy not in ('legacy', 'soft') or not math.isfinite(weight) or not 0 <= weight <= 2:
+        raise ValueError('invalid perception evidence policy or preference weight')
+    if verifier and (mode != 'image-vlm' or policy != 'soft'):
+        raise ValueError('a perception verifier requires soft image perception')
+    if mode == 'image-vlm' and policy == 'soft':
+        if not official or config.enabled or getattr(args, 'grounding_policy', None) is not None:
+            raise ValueError('soft evidence requires official knowledge without hard research grounding')
+        source = getattr(args, 'perception_calibration_data', None)
+        if (weight != 0.5 or getattr(args, 'perception_confidence', 0.85) != 0.85) and source is None:
+            raise ValueError('non-default perception weights/confidence require independent --perception-calibration-data')
+        if source is not None:
+            from ..dataset_protocol import assert_training_dataset
+            assert_training_dataset(source)
+    _PERCEPTION_POLICY.set({'policy': policy, 'weight': weight, 'verifier_model': verifier})
     if mode=="image-vlm":
         from .perception import PerceptionConfig
         from dataclasses import asdict
@@ -160,3 +187,9 @@ _PERCEPTION_OPTIONS=ContextVar("vlabench_perception_options",default=None)
 def default_perception_options():
     value=_PERCEPTION_OPTIONS.get()
     return dict(value) if value else None
+
+
+_PERCEPTION_POLICY = ContextVar('vlabench_perception_policy', default={'policy': 'legacy', 'weight': 0.5, 'verifier_model': None})
+
+def default_perception_policy():
+    return dict(_PERCEPTION_POLICY.get())

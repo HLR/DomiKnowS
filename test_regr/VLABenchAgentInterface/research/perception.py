@@ -391,6 +391,17 @@ def enrich_examples(examples,model=None):
     """Run once before both main pipelines' preparation, using only declared image pairs."""
     model=model or configured_model()
     if model is None:return examples
+    from .config import default_perception_policy
+    policy = default_perception_policy()
+    verifier = None
+    if policy['verifier_model']:
+        from dataclasses import asdict
+        config = PerceptionConfig(**{**asdict(model.config), 'model_id': policy['verifier_model']})
+        if config.model_id == model.config.model_id:
+            raise ValueError('verification requires a different frozen model')
+        if config.fingerprint not in _MODELS:
+            _MODELS[config.fingerprint] = ImagePerceptionModel.load(config)
+        verifier = _MODELS[config.fingerprint]
     result=[]
     for example in examples:
         pair=example.perception_image_paths
@@ -403,10 +414,37 @@ def enrich_examples(examples,model=None):
             observed=perceive(model,*pair,example.instruction,episode=example.episode_id,step=0,
                 entity_table=example.entities,requests=requests)
         except PerceptionUnavailable as error:observed=unavailable_result(model.config,example.episode_id,0,requests,error)
+        candidates = instruction_candidates(observed, example.instruction)
+        if policy['policy'] == 'soft':
+            from ..official.perception_observations import EpisodePerception, perceived_observations, perceived_boxes, selection_graph
+            from ..official.grounding_policy import verified_observation, soft_observation
+            from ..official.selection_observations import selection_request
+            def view(value):
+                visible, kinds, cards, preferred = perceived_observations(value, example.instruction)
+                reported = {int(tag) for tag in value['perception'].get('object_confidences', {})}
+                audit = {**value['perception'], 'selection_request': selection_request(example.instruction),
+                         'boxes': {str(k): list(v) for k,v in perceived_boxes(value).items()},
+                         'uncertain_inventory': bool(reported-set(visible or ())) or not value['grounding']['complete']}
+                return EpisodePerception(visible, None, audit, kinds, preferred, cards)
+            agreed = view(observed)
+            if verifier is not None:
+                try:
+                    second = perceive(verifier,*pair,example.instruction,episode=example.episode_id,step=0,entity_table=None)
+                except PerceptionUnavailable as error:
+                    second = unavailable_result(verifier.config,example.episode_id,0,None,error)
+                agreed = verified_observation(view(observed), view(second), example.instruction, selection_graph())
+                candidates = agreed.candidates.restrictions or None
+                observed['perception']['verification'] = agreed.audit['verification']
+            candidates = soft_observation(agreed).soft_candidates.restrictions or None
+            observed['perception'].update(constraint_policy='soft', soft_candidates=candidates,
+                                          preference_weight=policy['weight'])
+            # Positive observations may rank choices; they never establish exhaustive support.
+            observed['perception']['visible_entities'] = None
+            candidates = None
         context=merge_context({"planning_facts":dict(example.planning_facts or {})},observed)
         result.append(replace(example,planning_facts=context["planning_facts"],task_target_entity=None,task_target_container=None,
             visible_entities=tuple(context["visible_entities"]) if context["visible_entities"] is not None else None,
-            object_candidates=instruction_candidates(observed,example.instruction),
+            object_candidates=candidates,
             planning_observation_profile="image_vlm_unvalidated"))
     return result
 

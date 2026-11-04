@@ -43,7 +43,8 @@ def selection_request(instruction):
     if _NEGATION.search(text):
         return None
     if match := _FACE.search(text):
-        return {"kind": "face", "noun": "poker", "face": (CARD_RANKS[match["rank"]], match["suit"])}
+        rank = CARD_RANKS.get(match['rank'])
+        return None if rank is None else {"kind": "face", "noun": "poker", "face": (rank, match["suit"])}
     if match := _VALUE.search(text):
         return {"kind": "value", "noun": match["noun"], "rank": ordinal(match["ordinal"]) if match["ordinal"] else 1,
                 "start": "smallest" if match["which"] == "smallest" else "largest"}
