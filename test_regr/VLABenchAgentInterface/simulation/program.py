@@ -3872,9 +3872,22 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             return mean_absolute, maximum_absolute, approximate_kl
 
         for ppo_epoch in range(self.ppo_epochs):
+            # Accumulate the gradient of the full-batch mean, without keeping
+            # hundreds of independent controller graphs alive until one large
+            # autograd-engine invocation. Parameters stay fixed throughout the
+            # pass; the trust-region checks still precede one optimizer step.
+            self.controller_optimizer.zero_grad(set_to_none=True)
             losses = []
             action_log_ratios = []
+            invalid_loss = False
             for index, item in enumerate(transitions):
+                report_replay = index == 0 or (index + 1) % 16 == 0 or index + 1 == len(transitions)
+                replay_progress = (
+                    f"VLABench controller PPO {ppo_epoch + 1}/{self.ppo_epochs} "
+                    f"transition {index + 1}/{len(transitions)}"
+                )
+                if report_replay:
+                    self._report_progress(replay_progress + " forward")
                 logprob, entropy, value, std_penalty = self.controller.evaluate_action_chunk(
                     item.images.to(self.device_name),
                     item.state.to(self.device_name),
@@ -3956,7 +3969,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         dagger_loss = self.dagger_weight * d_loss
                     except (RuntimeError, ValueError):
                         dagger_loss = torch.zeros((), device=self.device_name)
-                losses.append(
+                transition_loss = (
                     policy_loss
                     + self.value_weight * value_loss
                     - entropy_bonus
@@ -3966,6 +3979,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     # executed; planner-only failures have no controller evidence.
                     + (std_penalty if actor_update_enabled else torch.zeros_like(std_penalty))
                 )
+                if not bool(torch.isfinite(transition_loss)):
+                    invalid_loss = True
+                    break
+                losses.append(transition_loss.detach())
+                if report_replay:
+                    self._report_progress(replay_progress + " backward")
+                if transition_loss.requires_grad:
+                    # Run backward on the calling thread, avoiding the shared
+                    # autograd worker's cuBLAS path seen in stalled PPO runs.
+                    # The context restores the caller's engine setting.
+                    with torch.autograd.set_multithreading_enabled(False):
+                        (transition_loss / len(transitions)).backward()
+                if report_replay:
+                    self._report_progress(replay_progress + " complete")
+            if invalid_loss:
+                self.controller_optimizer.zero_grad(set_to_none=True)
+                self._report_progress("VLABench controller PPO update skipped: non-finite transition loss")
+                break
             mean_action_log_ratio, max_action_log_ratio, approximate_kl = (
                 action_ratio_statistics(action_log_ratios)
             )
@@ -3989,19 +4020,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 )
                 break
             loss = torch.stack(losses).mean()
+            anchor = torch.zeros((), device=self.device_name)
             if actor_update_enabled:
-                loss = loss + self.controller_bc_weight * self._controller_anchor()
-            self.controller_optimizer.zero_grad(set_to_none=True)
+                anchor = self.controller_bc_weight * self._controller_anchor()
+                loss = loss + anchor.detach()
             if not bool(torch.isfinite(loss)):
+                self.controller_optimizer.zero_grad(set_to_none=True)
                 self._report_progress("VLABench controller PPO update skipped: non-finite loss")
                 break
             if abs(float(loss.detach())) > self.max_controller_loss:
+                self.controller_optimizer.zero_grad(set_to_none=True)
                 self._report_progress(
                     "VLABench controller PPO update skipped: "
                     f"loss={float(loss.detach()):.4f} exceeds {self.max_controller_loss:.4f}"
                 )
                 break
-            loss.backward()
+            if anchor.requires_grad:
+                with torch.autograd.set_multithreading_enabled(False):
+                    anchor.backward()
             try:
                 torch.nn.utils.clip_grad_norm_(
                     trainable,
@@ -4018,6 +4054,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 else [parameter.detach().clone() for parameter in trainable]
             )
             self.controller_optimizer.step()
+            self._report_progress(
+                f"VLABench controller PPO {ppo_epoch + 1}/{self.ppo_epochs} optimizer step complete"
+            )
             if not all(bool(torch.isfinite(parameter).all()) for parameter in trainable):
                 with torch.no_grad():
                     for parameter, previous in zip(trainable, backup):
@@ -4143,6 +4182,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "actor_update_attempted": actor_update_enabled,
             "rolled_back": rolled_back,
             "ppo_epochs_completed": int(completed_epochs),
+            "replay_transitions": len(transitions),
+            "backward_mode": "streamed_single_thread",
             "mean_action_log_ratio": float(last_action_log_ratio),
             "max_action_log_ratio": float(last_max_action_log_ratio),
             "approximate_kl": float(final_approximate_kl),
@@ -4154,6 +4195,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 float(group["lr"]) for group in self.controller_optimizer.param_groups
             ],
         }
+        self._report_progress("VLABench controller PPO update complete")
         return total / max(1, completed_epochs)
 
     def train_joint_epoch(self, descriptors: Sequence[Mapping[str, Any]], *, rollouts_per_update: int = 8):

@@ -3045,6 +3045,111 @@ def test_controller_ppo_rolls_back_complete_update_when_policy_drift_exceeds_lim
         torch.testing.assert_close(value, before[name])
 
 
+@pytest.mark.parametrize("count", [17, 291])
+def test_controller_ppo_bounds_live_graphs_and_preserves_full_batch_gradient(count):
+    world = build_vlabench_world_graph("test_streamed_ppo_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2,
+                                       name_prefix="test_streamed_ppo")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    graphs = {"live": 0, "peak": 0, "backwards": 0}
+
+    class Probe(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, value):
+            graphs["live"] += 1
+            graphs["peak"] = max(graphs["peak"], graphs["live"])
+            ctx.save_for_backward(value)
+            return value.clone()
+
+        @staticmethod
+        def backward(ctx, gradient):
+            assert not torch.autograd.is_multithreading_enabled()
+            graphs["live"] -= 1
+            graphs["backwards"] += 1
+            return gradient
+
+    class Controller(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.theta = torch.nn.Parameter(torch.zeros(count, 2))
+
+        def evaluate_action_chunk(self, images, state, task_index, actions, plan_context=None):
+            value = self.theta[int(task_index.item())]
+            if torch.is_grad_enabled():
+                # No optimizer step may interleave transition evaluations.
+                torch.testing.assert_close(self.theta, torch.zeros_like(self.theta))
+                value = Probe.apply(value)
+            return value[0].reshape(1, 1), torch.zeros(1, 1), value[1].reshape(1), torch.zeros(())
+
+    controller = Controller()
+    optimizer = torch.optim.SGD(controller.parameters(), lr=0.01)
+    messages = []
+    program = create_stage2_program(
+        runtime, planner, controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=optimizer, env_factory=lambda **kwargs: None,
+        ppo_epochs=1, value_weight=0.5, entropy_weight=0.0, feasibility_weight=0.0,
+        supervised_weight=0.0, controller_bc_weight=0.0,
+        progress_callback=messages.append,
+    )
+    transitions = [ControllerTransition(
+        images=torch.zeros(1, 1), state=torch.zeros(1, 1, 7),
+        task_index=torch.tensor([i]), actions=torch.zeros(1, 1, 7),
+        old_logprob=torch.zeros(()), old_value=torch.zeros(()),
+        reward=1.0, done=True, executed=1, advantage=1.0, return_value=0.5,
+    ) for i in range(count)]
+    engine_setting = torch.autograd.is_multithreading_enabled()
+
+    loss = program._update_controller([JointEpisode([], transitions, 1.0, True, True, count)])
+
+    # Analytic gradient of mean(-exp(logprob) + .5*smooth_l1(value,.5)).
+    expected = torch.tensor([0.01 / count, 0.0025 / count]).expand(count, 2)
+    torch.testing.assert_close(controller.theta, expected)
+    assert loss == pytest.approx(-0.9375)
+    assert graphs == {"live": 0, "peak": 1, "backwards": count}
+    assert torch.autograd.is_multithreading_enabled() == engine_setting
+    assert program.last_controller_update["ppo_epochs_completed"] == 1
+    assert messages[-1] == "VLABench controller PPO update complete"
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), 1000.0])
+def test_streamed_controller_ppo_discards_partial_gradients_on_invalid_batch(bad_value):
+    world = build_vlabench_world_graph("test_invalid_streamed_ppo_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2,
+                                       name_prefix="test_invalid_streamed_ppo")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class Controller(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.theta = torch.nn.Parameter(torch.zeros(2))
+
+        def evaluate_action_chunk(self, images, state, task_index, actions, plan_context=None):
+            value = self.theta[1] + (bad_value if task_index.item() else 0.0)
+            return self.theta[0].reshape(1, 1), torch.zeros(1, 1), value.reshape(1), torch.zeros(())
+
+    controller = Controller()
+    program = create_stage2_program(
+        runtime, planner, controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **kwargs: None, ppo_epochs=1, value_weight=0.5,
+        entropy_weight=0.0, feasibility_weight=0.0,
+        supervised_weight=0.0, controller_bc_weight=0.0,
+    )
+    transitions = [ControllerTransition(
+        images=torch.zeros(1, 1), state=torch.zeros(1, 1, 7), task_index=torch.tensor([i]),
+        actions=torch.zeros(1, 1, 7), old_logprob=torch.zeros(()), old_value=torch.zeros(()),
+        reward=1.0, done=True, executed=1, advantage=1.0, return_value=0.5,
+    ) for i in range(2)]
+
+    program._update_controller([JointEpisode([], transitions, 1.0, True, True, 2)])
+
+    torch.testing.assert_close(controller.theta, torch.zeros(2))
+    assert controller.theta.grad is None
+    assert program.last_controller_update["ppo_epochs_completed"] == 0
+
+
 def test_joint_simulator_training_updates_planner_and_controller():
     world = build_vlabench_world_graph("test_joint_world")
     runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint")
