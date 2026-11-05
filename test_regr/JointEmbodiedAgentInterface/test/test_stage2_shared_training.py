@@ -5,6 +5,7 @@ import torch
 
 from ..main import build_parser
 from ..utils.stage2_training import resolve_parameter_policy, selection_rejections, validate_shared_optimizer
+from ..utils.stage2_training import eai_retention_rejections
 from ..program import JointReinforcementProgram
 from ..models import FreeDecoding
 from test_regr.VLABenchAgentInterface.simulation.program import (
@@ -71,6 +72,70 @@ def test_nonfinite_metrics_cannot_pass_selection(field):
                "vlabench": {"success_rate": 1., "successful_task_count": 10, "ik_truncation_rate": 0.}}
     metrics["vlabench"][field] = float("nan")
     assert "nonfinite_rollout_metrics" in selection_rejections(metrics, min_success=.1, min_tasks=3, max_ik=.25)
+
+
+def test_retention_reports_one_eai_episode_regression_without_blaming_vlabench():
+    assert eai_retention_rejections(
+        {"success": 51 / 88, "goal_recall": .65},
+        {"goal_success": 52 / 88, "goal_recall": .65},
+        max_success_regression=0., max_recall_regression=0.,
+    ) == ["eai_success_regression"]
+
+
+@pytest.mark.parametrize("policy,epochs", [("abort", 1), ("continue", 4)])
+def test_rejected_epoch_continues_only_explicitly_and_never_becomes_best(
+        joint_fixture, tmp_path, monkeypatch, policy, epochs):
+    from .. import main
+    from test_regr.VLABenchAgentInterface import dataset_protocol
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    parsed = build_parser().parse_args(["train-agent", "--two-stage", "--stage1-epochs", "0",
+        "--stage2-epochs", "4", "--controller-warmup-steps", "0", "--stage1-eai-warmup-steps", "0",
+        "--no-stage2-eval-planning", "--stage2-retention-policy", policy,
+        "--task", "select_toy", "--device", "cpu", "--output", str(tmp_path/"run"),
+        "--stage2-eval-rollouts-per-task", "1"])
+    monkeypatch.setattr(dataset_protocol, "guard_training_dataset", lambda *a, **k: None)
+    monkeypatch.setattr(main, "_prepare", lambda *a: (runtime, examples, examples,
+        {"train": [], "validation": []}, {"train": [], "validation": []}))
+    monkeypatch.setattr(main.JointQwenVLPlanner, "from_pretrained", lambda **k: planner)
+    monkeypatch.setattr(main, "_controller", lambda *a: TinyController())
+    monkeypatch.setattr(main, "_control_loaders", lambda *a: {"train": [], "validation": []})
+    monkeypatch.setattr(main, "load_control_task_instructions", lambda *a: {})
+    monkeypatch.setattr(main, "JointSolverPOIProgram", lambda *a, **k: SimpleNamespace(round_robin_cursor=0))
+    monkeypatch.setattr(main, "_factory", lambda *a: None)
+    evaluations = iter([52/88] + [51/88]*4)
+    monkeypatch.setattr(main, "_evaluate_eai", lambda *a, **k:
+        {"goal_success": next(evaluations), "goal_recall": .65})
+    saved = []
+    def save(path, **kwargs):
+        saved.append((str(path), kwargs["metrics"]))
+        return str(path)
+    monkeypatch.setattr(main, "save_joint_checkpoint", save)
+    records = []
+    monkeypatch.setattr(main, "_json", records.append)
+    class Stage2:
+        def __init__(self, *a, **k): self.round_robin_cursor = 0
+        def evaluate_rollouts(self, *a, **k):
+            return {"success_rate": .2, "positive_return_rate": 1., "ik_truncation_rate": 0.,
+                    "successful_task_count": 3, "return": 1., "valid_rate": 1., "steps": 1.}
+        def train_alternating_epoch(self, *a, **k):
+            k["round_callback"](1, {"rounds": 1})
+            return {"eai": {"success": 1., "reward": 1., "goal_recall": 1.},
+                    "vlabench": self.evaluate_rollouts()}
+    monkeypatch.setattr(main, "JointReinforcementProgram", Stage2)
+    main.command_train_agent(parsed)
+    results = [r for r in records if r["stage"] == "stage2"]
+    assert len(results) == epochs
+    assert all(not r["best_candidate_eligible"] for r in results)
+    assert all(r["metrics"]["retention_rejection_reasons"] == ["eai_success_regression"] for r in results)
+    assert not any(r["stage"] == "stage2-best" for r in records)
+    if policy == "continue":
+        assert records[-1]["stage"] == "stage2-best-skipped"
+        progress = [m for path,m in saved if path.endswith("joint_stage2_progress.pt")]
+        assert [m["retention_eligible"] for m in progress] == [True, False, False, False]
+    else:
+        assert records[-1]["stage"] == "stage2-aborted"
+        assert records[-1]["retention_rejection_reasons"] == ["eai_success_regression"]
 
 
 @pytest.mark.parametrize("evaluate", [True, False])

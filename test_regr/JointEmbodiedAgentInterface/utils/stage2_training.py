@@ -59,6 +59,17 @@ class SharedUpdateEvidence:
                 "finite": math.isfinite(gradient_squared) and math.isfinite(delta_squared)}
 
 
+def eai_retention_rejections(metrics, baseline, *, max_success_regression, max_recall_regression):
+    if baseline is None:
+        return []
+    reasons = []
+    if not float(metrics["success"]) >= float(baseline["goal_success"]) - max_success_regression:
+        reasons.append("eai_success_regression")
+    if not float(metrics["goal_recall"]) >= float(baseline["goal_recall"]) - max_recall_regression:
+        reasons.append("eai_recall_regression")
+    return reasons
+
+
 def selection_rejections(metrics, *, min_success, min_tasks, max_ik):
     """Explain rejection without lowering gates or substituting training rollouts."""
     reasons = []

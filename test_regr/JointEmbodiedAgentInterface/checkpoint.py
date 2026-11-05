@@ -399,6 +399,7 @@ def load_joint_checkpoint(
     map_location: str | torch.device = "cpu",
     allow_planning_schema_migration: bool = False,
     allow_knowledge_ablation: bool = False,
+    allow_failed_retention_resume: bool = False,
 ) -> Mapping[str, Any]:
     """Restore an exact joint run, rejecting any schema/model drift."""
     payload = torch.load(
@@ -424,6 +425,8 @@ def load_joint_checkpoint(
         stage == "stage2"
         and isinstance(metrics, Mapping)
         and metrics.get("retention_eligible") is False
+        and not (allow_failed_retention_resume and planner_optimizer is not None
+                 and controller_optimizer is not None)
     ):
         raise ValueError(
             "joint Stage 2 checkpoint failed its fixed-seed retention gate; "

@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import torch
-from .utils.stage2_training import resolve_parameter_policy, selection_rejections
+from .utils.stage2_training import resolve_parameter_policy, selection_rejections, eai_retention_rejections
 
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
 from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset, split_train_dev
@@ -487,6 +487,7 @@ def command_train_agent(args):
             planner_optimizer=planner_optimizer,
             controller_optimizer=controller_optimizer,
             map_location=device,
+            allow_failed_retention_resume=args.stage2_retention_policy == "continue",
         )
         if payload.get("controller_migration_required"):
             controller_rewarm_required = True
@@ -951,6 +952,7 @@ def command_train_agent(args):
                 f"requires {args.stage2_min_vlabench_success_rate:.3f}"
             )
     stage2_aborted = False
+    last_retention_eligible = (resume_payload or {}).get("metrics", {}).get("retention_eligible", True)
     for epoch in range(start_stage2, args.stage2_epochs):
         _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} training")
         continuing_epoch = epoch == start_stage2 and start_stage2_round > 0
@@ -976,6 +978,8 @@ def command_train_agent(args):
                 metrics={
                     "stage2_dfa": "on" if stage2_dfa_enabled else "off",
                     "stage2_parameter_policy": stage2_policy,
+                    "stage2_retention_policy": args.stage2_retention_policy,
+                    "retention_eligible": last_retention_eligible,
                     "partial_training": dict(partial_metrics),
                     "prior_best": prior_best,
                     "baseline_reference": baseline_reference,
@@ -1003,6 +1007,7 @@ def command_train_agent(args):
         )
         metrics["stage2_dfa"] = "on" if stage2_dfa_enabled else "off"
         metrics["stage2_parameter_policy"] = stage2_policy
+        metrics["stage2_retention_policy"] = args.stage2_retention_policy
         metrics["stage2_evaluation"] = {
             "source": "fixed_seed_rollouts" if args.stage2_eval_rollouts_per_task > 0 else "training_rollouts",
             "rollouts_per_task": args.stage2_eval_rollouts_per_task,
@@ -1057,22 +1062,26 @@ def command_train_agent(args):
             baseline_reference,
             max_success_regression=args.stage2_max_baseline_success_regression,
         )
-        eai_baseline_ok = True
-        if eai_baseline_reference is not None:
-            eai_baseline_ok = (
-                float(metrics["eai"]["success"])
-                >= float(eai_baseline_reference["goal_success"])
-                - args.stage2_max_eai_success_regression
-                and float(metrics["eai"]["goal_recall"])
-                >= float(eai_baseline_reference["goal_recall"])
-                - args.stage2_max_eai_recall_regression
-            )
+        retention_reasons = []
+        if not retention_eligible:
+            retention_reasons.append("vlabench_preflight_gate_failed")
+        if not baseline_ok:
+            retention_reasons.append("vlabench_success_regression")
+        eai_reasons = eai_retention_rejections(
+            metrics["eai"], eai_baseline_reference,
+            max_success_regression=args.stage2_max_eai_success_regression,
+            max_recall_regression=args.stage2_max_eai_recall_regression,
+        )
+        retention_reasons.extend(eai_reasons)
+        eai_baseline_ok = not eai_reasons
         metrics["baseline_reference"] = baseline_reference
         metrics["eai_baseline_reference"] = eai_baseline_reference
         metrics["baseline_regression_eligible"] = baseline_ok
         metrics["eai_baseline_regression_eligible"] = eai_baseline_ok
         retention_eligible = retention_eligible and baseline_ok and eai_baseline_ok
         metrics["retention_eligible"] = retention_eligible
+        metrics["retention_rejection_reasons"] = retention_reasons
+        last_retention_eligible = retention_eligible
         metrics["fallback_path"] = (
             str(best_stage1) if best_stage1 is not None else None
         )
@@ -1111,6 +1120,11 @@ def command_train_agent(args):
             "metrics": metrics,
         })
         if not retention_eligible:
+            if args.stage2_retention_policy == "continue":
+                _json({"stage": "stage2-retention-rejected-continued", "epoch": epoch,
+                       "checkpoint": path, "retention_rejection_reasons": retention_reasons,
+                       "reason": "explicit diagnostic continuation; rejected epoch remains ineligible for best selection"})
+                continue
             restore_path = best_path or best_stage1
             if restore_path is not None:
                 restored = load_joint_checkpoint(
@@ -1125,7 +1139,8 @@ def command_train_agent(args):
                 stage2.round_robin_cursor = int(restored["round_robin_cursor"])
             _json({
                 "stage": "stage2-aborted",
-                "reason": "fixed-seed VLABench evaluation lost task signal or controller feasibility",
+                "reason": "fixed-seed retention gate failed",
+                "retention_rejection_reasons": retention_reasons,
                 "rejected_checkpoint": path,
                 "restored_checkpoint": restore_path,
                 "minimum_positive_return_rate": args.stage2_preflight_min_positive_return_rate,
@@ -1284,6 +1299,9 @@ def build_parser():
     agent.add_argument("--stage2-max-baseline-success-regression", type=_unit_interval, default=0.0,
         help="maximum fixed-seed VLABench success regression allowed relative to Stage 1",
     )
+    agent.add_argument("--stage2-retention-policy", choices=("abort", "continue"), default="abort",
+        help="abort on a failed retention gate (default), or explicitly continue a diagnostic experiment; "
+             "rejected epochs remain ineligible for best-checkpoint selection")
     agent.add_argument("--stage2-eai-anchor-weight", type=float, default=0.5,
                        help="Stage 2 EAI supervised anchor weight; 0 disables it for RL-only updates")
     agent.add_argument("--stage2-planner-anchor-weight", type=float, default=0.25,

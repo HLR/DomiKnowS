@@ -1126,6 +1126,17 @@ def test_joint_failed_retention_checkpoint_is_rejected(tmp_path, joint_fixture):
         load_joint_checkpoint(
             path, runtime=runtime, planner=planner, controller=controller
         )
+    # The diagnostic override is training-only: it cannot relax evaluation.
+    with pytest.raises(ValueError, match="failed its fixed-seed retention gate"):
+        load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller,
+                              allow_failed_retention_resume=True)
+    restored = load_joint_checkpoint(
+        path, runtime=runtime, planner=planner, controller=controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.01),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        allow_failed_retention_resume=True,
+    )
+    assert restored["metrics"]["retention_eligible"] is False
 
 
 def test_joint_checkpoint_loads_legacy_process_local_dfa_numbering(tmp_path, joint_fixture):
