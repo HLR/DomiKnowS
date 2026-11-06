@@ -41,6 +41,8 @@ from .enforcement import (
     mark_for_both,
     mark_for_dfa,
     mark_for_latent,
+    register_latent_compilers,
+    registered_latent_compilers,
 )
 from .losses import (
     GenerationLossBreakdown,
@@ -96,6 +98,8 @@ __all__ = [
     "mark_for_dfa",
     "mark_for_latent",
     "penalize_hmm_transition",
+    "register_latent_compilers",
+    "registered_latent_compilers",
     "soft_and",
     "soft_exists",
     "soft_not",

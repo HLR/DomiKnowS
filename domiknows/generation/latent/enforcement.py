@@ -15,6 +15,10 @@ constraints into a :class:`GenerationEnforcement` bundle:
 
 - :func:`discover_generation_enforcement`
 
+Discovery collects marked constraints, compiles adjacent ``is_next_rel`` rules
+it can represent faithfully, and runs compilers attached to the graph with
+:func:`register_latent_compilers`.
+
 **Data structures**:
 
 - :class:`LatentWindowSpec` — parameters for one soft window-formula loss term.
@@ -235,12 +239,48 @@ def mark_for_both(
     return lc
 
 
+def register_latent_compilers(graph, *compilers):
+    """Attach graph-to-latent compilers to *graph* for automatic discovery.
+
+    Every discovery function runs the compilers registered on the graph it is
+    given, so callers do not have to pass them around.  Registration is scoped
+    to this graph; other graphs in the process are unaffected.  Arguments may
+    be single compilers or sequences of them, such as the tuple returned by
+    :func:`~.compiler_recipes.common_latent_compiler_recipes`.  Registering a
+    compiler twice has no further effect.
+
+    Args:
+        graph: The DomiKnowS graph that discovery will be called with.
+        *compilers: :data:`GraphLatentCompiler` callables or sequences of them.
+
+    Returns:
+        *graph* unchanged (for chaining).
+
+    Raises:
+        TypeError: If an argument is not callable.
+    """
+    registered = list(registered_latent_compilers(graph))
+    for item in compilers:
+        for compiler in item if isinstance(item, Sequence) else (item,):
+            if not callable(compiler):
+                raise TypeError("latent compilers must be callable")
+            if not any(compiler is existing for existing in registered):
+                registered.append(compiler)
+    setattr(graph, "_generation_latent_compilers", tuple(registered))
+    return graph
+
+
+def registered_latent_compilers(graph) -> tuple[GraphLatentCompiler, ...]:
+    """Return the compilers attached to *graph* by :func:`register_latent_compilers`."""
+    return tuple(getattr(graph, "_generation_latent_compilers", ()))
+
+
 def discover_generation_enforcement(
     graph,
     bundle,
     *,
     on_unsupported: str = "warn",
-    latent_mode: str = "marked",
+    latent_mode: str = "default",
     extra_latent_compilers: Sequence[GraphLatentCompiler] = (),
 ) -> GenerationEnforcement:
     """Walk a built DomiKnowS graph and collect all enforcement annotations.
@@ -260,6 +300,10 @@ def discover_generation_enforcement(
             cannot be compiled to DFA.
             ``"warn"`` (default) emits a warning; ``"raise"`` raises;
             ``"ignore"`` silently skips.
+        latent_mode: Which latent rules to collect; see
+            :func:`discover_latent_window_specs`.
+        extra_latent_compilers: Compilers to run for this call only, before
+            those registered with :func:`register_latent_compilers`.
 
     Returns:
         A :class:`GenerationEnforcement` with the compiled DFA, latent specs,
@@ -303,39 +347,51 @@ def discover_latent_window_specs(
     graph,
     bundle=None,
     *,
-    mode: str = "marked",
+    mode: str = "default",
     on_unsupported: str = "warn",
     extra_compilers: Sequence[GraphLatentCompiler] = (),
     _compiler_results: Sequence[GraphLatentCompilerResult] | None = None,
 ) -> tuple[LatentWindowSpec, ...]:
     """Discover soft latent window specs from graph annotations or safe patterns.
 
-    ``mode="marked"`` preserves the original behavior.  ``"auto"`` compiles
-    adjacent ``is_next_rel`` rules over known generation/HMM/WFA enum concepts.
-    ``"marked_and_auto"`` returns both, deduplicated by normalized spec fields.
+    ``mode="default"`` collects marked specs and also compiles adjacent
+    ``is_next_rel`` rules over known generation/HMM/WFA enum concepts.  A rule
+    with marked specs keeps only those, and head constraints outside those
+    shapes are left alone without being reported, since most of them are not
+    latent rules (typically they compile to the DFA instead).
+
+    ``"marked"`` collects only marked specs.  ``"auto"`` compiles only the
+    adjacent rules and reports the latent-relevant constraints it cannot
+    compile.  ``"marked_and_auto"`` is the union of those two, deduplicated by
+    normalized spec fields.
+
+    Compilers from *extra_compilers* and :func:`register_latent_compilers` run
+    in every mode.
     """
     mode = str(mode).lower().replace("-", "_")
-    if mode not in {"marked", "auto", "marked_and_auto"}:
-        raise ValueError("mode must be 'marked', 'auto', or 'marked_and_auto'")
+    if mode not in {"default", "marked", "auto", "marked_and_auto"}:
+        raise ValueError("mode must be 'default', 'marked', 'auto', or 'marked_and_auto'")
     if on_unsupported not in {"ignore", "warn", "error"}:
         raise ValueError("on_unsupported must be 'ignore', 'warn', or 'error'")
-    extra_compilers = tuple(extra_compilers)
 
     specs: list[LatentWindowSpec] = []
     seen: set = set()
-    if mode in {"marked", "marked_and_auto"}:
+    if mode in {"default", "marked", "marked_and_auto"}:
         for spec in _discover_marked_latent_specs(graph):
             _append_unique_spec(specs, seen, spec)
-    if mode in {"auto", "marked_and_auto"}:
-        if bundle is None:
-            raise ValueError("bundle is required for auto latent discovery")
+    if mode in {"auto", "marked_and_auto"} and bundle is None:
+        raise ValueError("bundle is required for auto latent discovery")
+    if mode in {"auto", "marked_and_auto"} or (mode == "default" and bundle is not None):
         for lc_name, lc in graph.logicalConstrains.items():
             if not getattr(lc, "headLC", True):
+                continue
+            marked = bool(getattr(lc, "_generation_latent_specs", ()))
+            if mode == "default" and marked:
                 continue
             spec = _auto_latent_spec_from_lc(lc, bundle)
             if spec is not None:
                 _append_unique_spec(specs, seen, spec)
-            elif _is_latent_relevant(lc, bundle) and not getattr(lc, "_generation_latent_specs", ()):
+            elif mode != "default" and _is_latent_relevant(lc, bundle) and not marked:
                 _handle_latent_unsupported(lc_name, lc, on_unsupported)
     compiler_results = (
         tuple(_compiler_results)
@@ -392,29 +448,95 @@ def _compile_latent_loss(specs: tuple[LatentWindowSpec, ...]):
         scalar.  Returns ``probs.new_zeros(())`` when *specs* is empty so
         gradients still flow correctly in a training loop.
     """
+    select = _auto_spec_selector(specs)
+
     def latent_loss(probs: torch.Tensor | Mapping[str, torch.Tensor], **kwargs) -> torch.Tensor:
         # Coerce non-tensor inputs (e.g. numpy arrays) for flexibility.
         if not isinstance(probs, torch.Tensor) and not isinstance(probs, Mapping):
             probs = torch.as_tensor(probs, dtype=torch.float32)
+        active = select(probs)
         # Return a zero scalar on the same device when there are no specs.
-        if not specs:
+        if not active:
             reference = next(iter(probs.values())) if isinstance(probs, Mapping) else probs
             if not isinstance(reference, torch.Tensor):
                 reference = torch.as_tensor(reference, dtype=torch.float32)
             return reference.new_zeros(())
 
-        return evaluate_latent_loss(specs, probs, **kwargs).total
+        return evaluate_latent_loss(active, probs, **_token_scoped_eos(probs, kwargs)).total
 
     return latent_loss
 
 
 def _compile_latent_breakdown(specs: tuple[LatentWindowSpec, ...]):
+    select = _auto_spec_selector(specs)
+
     def latent_breakdown(probs: torch.Tensor | Mapping[str, torch.Tensor], **kwargs) -> LatentLossBreakdown:
         if not isinstance(probs, torch.Tensor) and not isinstance(probs, Mapping):
             probs = torch.as_tensor(probs, dtype=torch.float32)
-        return evaluate_latent_loss(specs, probs, **kwargs)
+        return evaluate_latent_loss(select(probs), probs, **_token_scoped_eos(probs, kwargs))
 
     return latent_breakdown
+
+
+def _token_scoped_eos(probs, kwargs: Mapping[str, object]) -> dict[str, object]:
+    """Bind an integer ``eos_label`` to the token concept for multi-concept input.
+
+    Callers pass the vocabulary's EOS id.  Left bare, a ``latent_state`` spec
+    would read that id as a state index and clip its window at the wrong step.
+    """
+    eos_label = kwargs.get("eos_label")
+    if isinstance(probs, Mapping) and "generated_token" in probs and isinstance(eos_label, int):
+        return {**kwargs, "eos_label": LabelRef("generated_token", eos_label)}
+    return dict(kwargs)
+
+
+def _auto_spec_selector(specs: tuple[LatentWindowSpec, ...]):
+    """Return ``select(probs)`` that drops auto specs *probs* cannot evaluate.
+
+    Automatically discovered specs may reference concepts such as
+    ``latent_state`` that the caller never asked about.  A bare tensor holds
+    generated-token probabilities, and evaluating a state rule on it would
+    silently read token probabilities as state probabilities.  Such specs are
+    skipped with one warning per concept set.  Specs the user declared
+    explicitly are always evaluated as given.
+    """
+    warned: set[frozenset[str]] = set()
+
+    def select(probs) -> tuple[LatentWindowSpec, ...]:
+        available = {str(name) for name in probs} if isinstance(probs, Mapping) else {"generated_token"}
+        active: list[LatentWindowSpec] = []
+        for spec in specs:
+            missing = _spec_concepts(spec) - available if spec.metadata.get("source") == "graph_auto" else set()
+            if not missing:
+                active.append(spec)
+                continue
+            key = frozenset(missing)
+            if key not in warned:
+                warned.add(key)
+                warnings.warn(
+                    f"skipping auto-discovered latent rule {spec.name!r}: no probabilities were given "
+                    f"for {sorted(missing)}; pass a mapping of concept name to probabilities to enforce it",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+        return tuple(active)
+
+    return select
+
+
+def _spec_concepts(spec: LatentWindowSpec) -> set[str]:
+    concepts = {str(spec.concept)}
+
+    def visit(node) -> None:
+        if isinstance(node, LabelRef):
+            concepts.add(str(node.concept))
+        elif isinstance(node, tuple):
+            for child in node[1:]:
+                visit(child)
+
+    visit(spec.if_label)
+    visit(spec.formula)
+    return concepts
 
 
 def discover_transition_potentials(
@@ -562,7 +684,11 @@ def _run_custom_latent_compilers(
 ) -> tuple[GraphLatentCompilerResult, ...]:
     if on_unsupported not in {"ignore", "warn", "error"}:
         raise ValueError("on_unsupported must be 'ignore', 'warn', or 'error'")
-    compilers = tuple(extra_compilers or ())
+    # Per-call compilers run first so they can override registered ones.
+    compilers = list(extra_compilers or ())
+    for compiler in registered_latent_compilers(graph):
+        if not any(compiler is existing for existing in compilers):
+            compilers.append(compiler)
     if not compilers:
         return ()
     if bundle is None:
@@ -650,10 +776,10 @@ def _auto_latent_spec_from_lc(lc, bundle) -> LatentWindowSpec | None:
     nested = next((item for item in getattr(lc, "e", ()) if getattr(item, "__class__", None).__name__ == "ifL"), None)
     if nested is None:
         return None
-    antecedent = _path_label_ref_from_expr(nested, bundle, relation_var, getattr(bundle, "current_token", None))
+    antecedent = _direct_label_ref(nested, bundle, relation_var, getattr(bundle, "current_token", None))
     if antecedent is None:
         return None
-    formula = _formula_from_expr(nested, bundle, relation_var, getattr(bundle, "next_token", None))
+    formula = _consequent_formula(nested, bundle, relation_var, getattr(bundle, "next_token", None))
     if formula is None:
         return None
     return LatentWindowSpec(
@@ -678,11 +804,11 @@ def _transition_potential_from_lc(lc, bundle, *, strength: float) -> LatentTrans
         return None
     current_role = getattr(bundle, "current_token", None)
     next_role = getattr(bundle, "next_token", None)
-    antecedent = _path_label_ref_from_expr(nested, bundle, relation_var, current_role)
+    antecedent = _direct_label_ref(nested, bundle, relation_var, current_role)
     consequent = nested.e[-1]
     if getattr(consequent, "__class__", None).__name__ != "notL":
         return None
-    blocked = _path_label_ref_from_expr(consequent, bundle, relation_var, next_role)
+    blocked = _direct_label_ref(consequent, bundle, relation_var, next_role)
     if antecedent is None or blocked is None or antecedent.concept != blocked.concept:
         return None
     if antecedent.concept not in {"latent_state", "wfa_state"}:
@@ -708,40 +834,67 @@ def _relation_variable(lc, bundle) -> str | None:
     return None
 
 
+def _consequent_formula(nested, bundle, relation_var: str, role) -> Formula | None:
+    """Compile the consequent of ``ifL(antecedent, consequent)``, or ``None``.
+
+    Window formulas only have AND/OR connectives, so a consequent using any
+    other operator (``notL``, ``nandL``, ...) cannot be represented.  Those
+    rules must not be compiled at all: dropping the operator would flip or
+    weaken what the rule means.
+    """
+    elements = list(getattr(nested, "e", ()))
+    if not elements:
+        return None
+    last = elements[-1]
+    if hasattr(last, "e"):
+        return _formula_from_expr(last, bundle, relation_var, role)
+    return _direct_label_ref(nested, bundle, relation_var, role)
+
+
 def _formula_from_expr(expr, bundle, relation_var: str, role) -> Formula | None:
     cls_name = getattr(expr, "__class__", None).__name__
-    if cls_name in {"andL", "orL"}:
-        op = "and" if cls_name == "andL" else "or"
-        children = []
-        for child in getattr(expr, "e", ()):
-            formula = _formula_from_expr(child, bundle, relation_var, role)
-            if formula is not None:
-                children.append(formula)
-        return (op, *children) if children else None
-    if cls_name == "notL":
+    if cls_name not in {"andL", "orL"}:
         return None
-    return _path_label_ref_from_expr(expr, bundle, relation_var, role)
-
-
-def _path_label_ref_from_expr(expr, bundle, relation_var: str, role) -> LabelRef | None:
-    elements = list(getattr(expr, "e", ())) if hasattr(expr, "e") else [expr]
-    for index, item in enumerate(elements):
-        concept_tuple = _concept_tuple(item)
-        if concept_tuple is None:
-            continue
-        next_item = elements[index + 1] if index + 1 < len(elements) else None
-        if role is not None and (not _is_v(next_item) or next_item.v != (relation_var, role)):
-            continue
-        concept_name = _concept_name(concept_tuple[0], bundle)
-        if concept_name is None or concept_tuple[2] is None:
-            continue
-        return LabelRef(concept_name, int(concept_tuple[2]))
-    for child in elements:
+    # Each child is either a nested AND/OR or a concept tuple followed by its
+    # variable.  One child that cannot be compiled rejects the whole formula.
+    children: list[Formula] = []
+    for index, child in enumerate(getattr(expr, "e", ())):
         if hasattr(child, "e"):
-            found = _path_label_ref_from_expr(child, bundle, relation_var, role)
-            if found is not None:
-                return found
+            formula = _formula_from_expr(child, bundle, relation_var, role)
+            if formula is None:
+                return None
+            children.append(formula)
+        elif _concept_tuple(child) is not None:
+            ref = _label_ref_at(getattr(expr, "e"), index, bundle, relation_var, role)
+            if ref is None:
+                return None
+            children.append(ref)
+        elif not _is_v(child):
+            return None
+    return ("and" if cls_name == "andL" else "or", *children) if children else None
+
+
+def _direct_label_ref(expr, bundle, relation_var: str, role) -> LabelRef | None:
+    """Return the label bound to *role* directly on *expr*, without descending."""
+    elements = list(getattr(expr, "e", ()))
+    for index, item in enumerate(elements):
+        if _concept_tuple(item) is None:
+            continue
+        ref = _label_ref_at(elements, index, bundle, relation_var, role)
+        if ref is not None:
+            return ref
     return None
+
+
+def _label_ref_at(elements, index: int, bundle, relation_var: str, role) -> LabelRef | None:
+    concept_tuple = elements[index]
+    next_item = elements[index + 1] if index + 1 < len(elements) else None
+    if role is not None and (not _is_v(next_item) or next_item.v != (relation_var, role)):
+        return None
+    concept_name = _concept_name(concept_tuple[0], bundle)
+    if concept_name is None or concept_tuple[2] is None:
+        return None
+    return LabelRef(concept_name, int(concept_tuple[2]))
 
 
 def _concept_name(concept, bundle) -> str | None:

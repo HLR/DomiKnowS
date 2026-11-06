@@ -1,5 +1,30 @@
 # Knowledge ablation of the champion Joint planner
 
+**Read this first: alignment bug in the champion, checked 4 November 2026.** Results measured on
+`joint_stage2_best.pt` (trained 7-8 October) show how much the rules help a head that can't see the plan or the
+instruction. They don't show what the rules do for a working model. The scores are correct for that checkpoint, but
+don't use them to judge the value of the rules.
+
+Commit `3bc2b88d` (28 October) fixed the cause, which the champion predates: after the first step, its label head reads from an
+image token instead of the end of the input.
+
+| Measured on the champion | Result |
+|---|---|
+| Read position on an image token (40 test episodes) | 40 of 40, about 15% into the input |
+| Largest logit change when an earlier plan token changes | 0.0 |
+| Largest logit change when the instruction changes | about 0.004 |
+| Largest logit change when the image changes | about 3.1 |
+| Top-1 accuracy on reference plans | 27% |
+| Decoding steps where the DFA overrides the head's top label (450 test episodes, `grammar`) | 80% |
+
+For comparison, `joint_ce_only_fixed_gpu2_20261028_3bc2b88d` (trained after the fix, CE only, epoch 2) had no overrides and
+0.03% of its probability on forbidden labels (`grammar`). That's one checkpoint on the first 150 test episodes, with object
+names in the prompt, so its Macro of 96.5 isn't directly comparable with the scores below. The knowledge levels haven't been
+re-measured on a checkpoint trained after the fix.
+
+The champion also no longer loads at the current commit, because the skills changed on 29 October (`6a30f42c`). Reproducing
+these results needs code from before that change.
+
 **Optional research profile, 29 October 2026:** `research_v1` adds declarative
 ambiguous-grounding, evidence-freshness and spatial/event constraints to the
 VLABench task tier. Robust is its default grounding policy; joint and abstain are
@@ -629,6 +654,8 @@ whether their generated plans are identical. The misclassifications otherwise fa
 nothing the instruction does not already give; the unseen-task test (Phase D) is what separates the two.
 
 ## Reading
+
+These readings describe the champion only; see the alignment note at the top of this document.
 
 - **The grammar is what makes the champion usable:** without it the plan is empty (Macro 0.2), and with the end label
   withheld for one step it reaches 26.6 against 60.9 with the grammar. Skill recall falls from 89.4 to 57.7 and graph

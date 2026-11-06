@@ -533,11 +533,13 @@ def train_planner_reinforcement_epoch(
 @torch.no_grad()
 def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstraintRuntime | None = None,
                      *, generation_mode: str = "graph", max_new_tokens: int = 768, decision_trace=None,
-                     prediction_observer=None) -> dict[str, Any]:
+                     prediction_observer=None, prompt_constraints: str | None = None) -> dict[str, Any]:
     """Apply the same scoring to graph plans or unconstrained native VLM text."""
     if generation_mode not in {"graph", "frozen-vlm"}:
         raise ValueError(f"unknown planner generation mode {generation_mode!r}")
     native = generation_mode == "frozen-vlm"
+    if prompt_constraints is not None and not native:
+        raise ValueError("prompt constraints are a frozen-vlm baseline; graph generation uses its DFA")
     if not native and runtime is None:
         raise ValueError("graph evaluation requires a constraint runtime")
     if max_new_tokens <= 0:
@@ -588,8 +590,9 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 print(f"[eval-planner] Evaluating example {count}/{total_examples}...", file=sys.stderr, flush=True)
             if native:
                 # No graph decoder, DFA, HMM, or instruction mask participates.
-                output, _tokens = planner.generate(example, mode="raw", sample=False,
-                                                   max_tokens=max_new_tokens)
+                output, _tokens = planner.generate(example, mode="raw", sample=False, max_tokens=max_new_tokens,
+                                                   **({} if prompt_constraints is None
+                                                      else {"prompt_constraints": prompt_constraints}))
                 from .native_planning import validate_native_plan
                 native_valid += int(validate_native_plan(output, _example_value(example, "entities", ()))[0])
             else:

@@ -126,6 +126,42 @@ uses it as a variant. They have added little so far:
 
 The full results are in the [README](../README.md).
 
+## Constraints in the prompt, no DFA (`--prompt-constraints`)
+
+`--prompt-constraints [grammar|causal|official]` is a baseline: the frozen VLM reads a level's constraints in plain
+English and generates freely. With no value, the level is `official`. Nothing enforces the rules, so the model can
+ignore them, and its replies are scored as written.
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --planning-dir test_regr/VLABenchAgentInterface/data/planning --protocol official --prompt-constraints
+```
+
+```bash
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --planning-dir test_regr/VLABenchAgentInterface/data/planning --generation-mode frozen-vlm --prompt-constraints
+```
+
+| Level | Rules stated in the prompt |
+|---|---|
+| `grammar` | end of plan, operation limit, skill parameters, subtask patterns |
+| `causal` | + no self-placement, distinct subtask destinations, a destination is never picked again |
+| `official` | + visible tags only, ids match what the instruction names, ordinal choice, named card face |
+
+- **No DFA or perception:** the run adds no model calls, so flags that enforce or observe rules are rejected:
+  `--knowledge`, `--constraints`, `--press-question`, `--scene-ids`, `--pattern-first`, `--hmm` and the formula and
+  perception options. Without `--protocol official`, `--generation-mode` defaults to `frozen-vlm`, and `graph` is
+  rejected.
+- **Operation limit:** under `--protocol official` the text states 16, the limit that protocol's DFA uses, and
+  `--max-operations` doesn't change it. With `--generation-mode frozen-vlm` the text states `--max-operations`.
+- **What is left out:** the press, scene-id and chosen-pattern constraints, because they act only on the answers from
+  the [flags that ask the model first](#flags-that-ask-the-model-first---protocol-official).
+- **Official protocol:** the rules follow the unchanged official prompt, so the report is marked `standard=false` and
+  isn't comparable with published numbers.
+- **Reports:** the report records the level, the exact text and its hash. Under `--protocol official`, resuming an
+  output directory with different text is an error.
+
+The text is in [`official/prompt_constraints.py`](../official/prompt_constraints.py). Each rule names the logical
+constraints it words, and a test checks those names against the declared graphs.
+
 ## Which flags do I need?
 
 **I want to train and evaluate with the official knowledge.** Pass `--knowledge official` to both training and

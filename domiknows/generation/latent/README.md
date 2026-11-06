@@ -25,7 +25,7 @@ automata transition reweighting that can be optimized with gradients.
 | enforcement.py | Graph marking and discovery helpers that build GenerationEnforcement bundles. |
 | losses.py | Unified generation-training loss combiner and probability conversion helpers. |
 | potentials.py | HMM/WFA transition potential definitions and application utilities. |
-| compiler_recipes.py | Optional, reusable recipe compilers for custom graph-to-latent mappings. |
+| compiler_recipes.py | Reusable recipe compilers for custom graph-to-latent mappings. |
 
 ## Core Data Structures
 
@@ -41,8 +41,9 @@ automata transition reweighting that can be optimized with gradients.
 
 ## Typical Workflow
 
-1. mark graph logical constraints with latent metadata using mark_for_latent,
-   mark_for_dfa, or mark_for_both;
+1. declare graph logical constraints, marking them with mark_for_latent,
+   mark_for_dfa, or mark_for_both where needed, and attach any project
+   compilers or recipes with register_latent_compilers;
 2. discover generation enforcement from the graph to obtain a
    GenerationEnforcement object;
 3. run latent_loss or latent_breakdown on model token probabilities during
@@ -62,10 +63,39 @@ The soft logic uses product t-norm style semantics:
 Formulas can be built from integer label ids and nested and/or expressions.
 Cross-concept references use LabelRef.
 
+## Discovery
+
+Discovery modes (`latent_mode` on `discover_generation_enforcement`, `mode` on
+`discover_latent_window_specs`):
+
+| Mode | Marked specs | Adjacent `is_next_rel` rules | Reports uncompilable rules |
+| --- | --- | --- | --- |
+| `default` | yes | yes, unless the rule has marked specs | no |
+| `marked` | yes | no | no |
+| `auto` | no | yes | yes |
+| `marked_and_auto` | yes | yes, alongside any marked specs | yes |
+
+Automatic compilation only accepts rules it can represent faithfully.
+`ifL(is_next, ifL(A(current), B(next)))` is compiled, including AND/OR
+consequents. Window formulas have no negation, so `A(current) => not B(next)`
+produces no window spec; it becomes a transition potential instead.
+
+Compilers and recipes run in every mode. Attach them to the graph with
+`register_latent_compilers(graph, ...)`, or pass `extra_latent_compilers` /
+`extra_compilers` for a single call. Per-call compilers run first, built-in
+support takes precedence over both, and registration never affects other
+graphs.
+
+Automatically discovered specs over a concept the caller did not supply are
+skipped with a warning, so a bare token tensor is never read as latent-state
+probabilities. Pass a mapping such as
+`{"generated_token": token_probs, "latent_state": state_probs}` to enforce them.
+
 ## Notes
 
 - latent constraints are soft and differentiable; they guide behavior but do
   not guarantee validity on their own;
 - hard validity is handled by DFA-side enforcement;
 - latent and hard pathways can be combined in one graph via mark_for_both;
-- recipe compilers are opt-in and intended for project-specific extensions.
+- recipe compilers need project-specific labels, so each graph chooses which
+  to register rather than having them installed process-wide.

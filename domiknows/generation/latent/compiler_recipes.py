@@ -1,9 +1,12 @@
 """Packaged custom graph-to-latent compiler recipes.
 
-The recipes in this module are small opt-in factories around the public
-``extra_latent_compilers`` hook in :mod:`domiknows.generation.latent.enforcement`.
-They do not broaden built-in DomiKnowS graph discovery by default; callers
-explicitly pass the returned compilers to discovery functions.
+The recipes in this module are small factories for
+:data:`~domiknows.generation.latent.enforcement.GraphLatentCompiler` callables.
+Attach the returned compilers to a graph with
+:func:`~domiknows.generation.latent.enforcement.register_latent_compilers` and
+every discovery function picks them up.  To apply a compiler to a single
+discovery call instead, pass it as ``extra_latent_compilers`` /
+``extra_compilers``.
 """
 from __future__ import annotations
 

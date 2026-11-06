@@ -257,21 +257,28 @@ latent_loss = breakdown.total
 `token_probs` may be shaped `[seq_len, label_count]` or
 `[batch, seq_len, label_count]`. Latent loss helpers also accept masks,
 lengths, EOS-aware clipping, and cross-concept dictionaries such as
-`{"generated_token": generated_probs, "latent_state": state_probs}`. Use
-`latent_mode="auto"` or `"marked_and_auto"` with
-`discover_generation_enforcement(...)` to compile conservative adjacent
-`is_next_rel` rules over generated-token, HMM, or WFA factor concepts into
-window losses. The default remains marked-only for source compatibility.
+`{"generated_token": generated_probs, "latent_state": state_probs}`.
 
-Project-specific graph fragments can opt in through explicit custom compilers.
-Built-in adjacent/windowable discovery runs first; custom compilers are called
-only for head logical constraints that the built-ins do not support.
+By default, `discover_generation_enforcement(...)` also compiles conservative
+adjacent `is_next_rel` rules over generated-token, HMM, or WFA factor concepts
+into window losses, unless the rule already has marked specs. Pass
+`latent_mode="marked"` for marked specs only. `"auto"` and `"marked_and_auto"`
+additionally report latent-relevant constraints they cannot compile. An
+automatically discovered rule over a concept missing from the probabilities
+you pass, such as a `latent_state` rule given a bare token tensor, is skipped
+with a warning.
+
+Project-specific graph fragments can use custom compilers attached to the
+graph, which every discovery function then runs. Built-in adjacent/windowable
+discovery runs first; custom compilers are called only for head logical
+constraints that the built-ins do not support.
 
 ```python
 from domiknows.generation import (
     LatentWindowSpec,
     discover_generation_enforcement,
     graph_latent_compiler_result,
+    register_latent_compilers,
 )
 
 def my_project_latent_compiler(lc, bundle):
@@ -287,40 +294,39 @@ def my_project_latent_compiler(lc, bundle):
         compiler_name="my_project",
     )
 
-enforcement = discover_generation_enforcement(
-    graph,
-    bundle,
-    extra_latent_compilers=[my_project_latent_compiler],
-)
+register_latent_compilers(graph, my_project_latent_compiler)
+enforcement = discover_generation_enforcement(graph, bundle)
 ```
 
-Custom compilers can also return `LatentTransitionPotential` objects or report
+To apply a compiler to one discovery call only, pass it as
+`extra_latent_compilers=[...]` instead. Custom compilers can also return
+`LatentTransitionPotential` objects or report
 `relevant=True, supported=False, reason="..."`; those reasons follow the same
 `on_unsupported="ignore" | "warn" | "error"` policy as built-in discovery.
 
 ### Packaged Compiler Recipes
 
-`latent/compiler_recipes.py` provides opt-in factory helpers for common
-downstream custom compilers. They are convenience wrappers over
-`GraphLatentCompiler`; they do not run unless passed explicitly.
+`latent/compiler_recipes.py` provides factory helpers for common downstream
+custom compilers. They are convenience wrappers over `GraphLatentCompiler`, and
+registering them on a graph makes every discovery function apply them.
 
 ```python
 from domiknows.generation import (
     common_latent_compiler_recipes,
     discover_generation_enforcement,
+    register_latent_compilers,
 )
 
-recipes = common_latent_compiler_recipes(
-    adjacent_lc_class_name="MyProjectAdjacentRule",
-    adjacent_if_token=" The",
-    adjacent_then_token=" cat",
-)
-
-enforcement = discover_generation_enforcement(
+register_latent_compilers(
     graph,
-    bundle,
-    extra_latent_compilers=recipes,
+    common_latent_compiler_recipes(
+        adjacent_lc_class_name="MyProjectAdjacentRule",
+        adjacent_if_token=" The",
+        adjacent_then_token=" cat",
+    ),
 )
+
+enforcement = discover_generation_enforcement(graph, bundle)
 ```
 
 Available recipes include adjacent implication, bounded lookahead,

@@ -553,6 +553,10 @@ def test_decode_hmm_dfa_trace_logger_writes_step_stats(tmp_path, monkeypatch):
 
     _reset_hmm_dfa_trace(monkeypatch)
     monkeypatch.setattr(__main__, "__file__", str(tmp_path / "driver.py"), raising=False)
+    # Run from the script's directory: otherwise the default log directory is
+    # namespaced by the working directory.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DOMIKNOWS_LOG_DIR", raising=False)
     tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
     prompt_ids = torch.tensor([[9]], dtype=torch.long)
     hmm = _strict_hmm_for_ab_path()

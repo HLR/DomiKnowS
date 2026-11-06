@@ -440,7 +440,7 @@ class NativeConstraintProcessor:
         return result
 
 
-def native_prompt(instruction, entities, grammar_profile="world"):
+def native_prompt(instruction, entities, grammar_profile="world", constraints=None):
     arguments, _ = native_schema(grammar_profile)
     return (
         ("Return only a compact JSON array of VLABench operations, with no explanation or markdown. "
@@ -451,6 +451,7 @@ def native_prompt(instruction, entities, grammar_profile="world"):
         'Example format: [{"name":"pick","params":{"target_entity_name":0}},'
         '{"name":"place","params":{"target_container_name":1}}].\n'
         f"Skills and required arguments: {json.dumps(dict(arguments))}\n"
+        + (f"{constraints}\n" if constraints else "") +
         f"Objects: {json.dumps(dict(enumerate(entities)))}\nInstruction: {instruction}"
     )
 
@@ -517,12 +518,15 @@ class FrozenNativePlanner:
     def generate(self, example, *, mode="raw", max_tokens=768, max_operations=16, seed=42, sample=False,
                  hmm=None, weight=0, grammar_profile="world", object_constraints="instruction",
                  reachability_policy=None, reachability_strict=True, max_state_expansions=10000,
-                 visible_entities=None):
+                 visible_entities=None, prompt_constraints=None):
         """Generate with optional action-budget reachability from a bound world policy.
 
         Supply runtime.dfa_for("vlabench", context) as reachability_policy.
         Strict mode requires known observations for applicable grounded rules.
+        ``prompt_constraints`` is plain-English rule text for raw generation; nothing enforces it.
         """
+        if prompt_constraints is not None and mode != "raw":
+            raise ValueError("prompt_constraints is a DFA-free baseline and requires raw generation")
         if reachability_policy is not None and mode == "raw":
             raise ValueError("reachability_policy requires constrained generation")
         if visible_entities is not None and mode == "raw":
@@ -533,7 +537,8 @@ class FrozenNativePlanner:
         images = [Image.open(path).convert("RGB") for path in paths]
         try:
             content = [{"type": "image", "image": image} for image in images]
-            content.append({"type": "text", "text": native_prompt(example.instruction, example.entities, grammar_profile)})
+            content.append({"type": "text", "text": native_prompt(example.instruction, example.entities, grammar_profile,
+                                                                  constraints=prompt_constraints)})
             messages = [{"role": "user", "content": content}]
             text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
             inputs = self.processor(text=[text], images=images, return_tensors="pt").to(next(self.model.parameters()).device)

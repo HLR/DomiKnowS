@@ -1022,10 +1022,39 @@ def official_perception_options(args):
     return options
 
 
+def prompt_constraints_level(args):
+    """The ``--prompt-constraints`` level, or ``None``; refuses anything that would enforce or observe the rules."""
+    level = getattr(args, "prompt_constraints", None)
+    if level is None:
+        return None
+    conflicts = [flag for flag, active in (
+        ("--generation-mode graph", getattr(args, "generation_mode", None) == "graph"),
+        ("--knowledge", getattr(args, "knowledge", None) is not None),
+        ("--constraints", getattr(args, "constraints", "none") != "none"),
+        ("--task-identity", getattr(args, "task_identity", None) is not None),
+        ("--task-classifier", getattr(args, "task_classifier", None) is not None),
+        ("--press-question", getattr(args, "press_question", False)),
+        ("--scene-ids", getattr(args, "scene_ids", False)),
+        ("--pattern-first", getattr(args, "pattern_first", False)),
+        ("--hmm", getattr(args, "hmm", None)),
+        ("--official-disable-formula", getattr(args, "official_disable_formula", None)),
+        ("--research-disable-formula", getattr(args, "research_disable_formula", None)),
+        ("--constraint-profile research_v1", getattr(args, "constraint_profile", "baseline") != "baseline"),
+        ("--grounding-policy", getattr(args, "grounding_policy", None)),
+        ("--perception-cache", getattr(args, "perception_cache", None)),
+    ) if active]
+    if conflicts:
+        raise ValueError("--prompt-constraints only states the rules in the prompt, with no DFA, perception or extra "
+                         f"model calls; omit {', '.join(conflicts)}")
+    return level
+
+
 def command_evaluate_official(args) -> None:
     """Standard VLABench VLM-planning protocol: every episode, official prompt and scoring."""
+    prompt_level = prompt_constraints_level(args)
     args.constraints = official_constraints(args)
-    perception_options = official_perception_options(args)
+    # Prompt constraints are told to the model, so even an official default level observes nothing here.
+    perception_options = None if prompt_level else official_perception_options(args)
     if args.resume_adapter or args.vocab:
         raise ValueError("--protocol official evaluates a frozen base VLM; omit --resume-adapter and --vocab")
     if getattr(args, "observation_mode", "visual") != "visual":
@@ -1036,12 +1065,20 @@ def command_evaluate_official(args) -> None:
         raise ValueError("--press-question, --scene-ids and --hmm extend the grammar DFA; add --knowledge grammar")
     from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
     from test_regr.VLABenchAgentInterface.official.official_protocol import (
-        load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
+        DFA_MAX_OPERATIONS, load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
     )
     examples = load_official_examples(args.planning_dir, tasks=args.tasks, limit=args.limit)
-    standard = args.limit is None and not args.tasks
-    if not standard:
+    standard = args.limit is None and not args.tasks and not prompt_level
+    if args.limit is not None or args.tasks:
         print("[official-vlm] --limit/--tasks select a subset; the report is marked standard=false", flush=True)
+    prompt_record = None
+    if prompt_level:
+        from test_regr.VLABenchAgentInterface.official.prompt_constraints import (
+            prompt_constraints_record, prompt_constraints_text,
+        )
+        prompt_record = prompt_constraints_record(prompt_level, prompt_constraints_text(
+            prompt_level, grammar_profile="benchmark", max_operations=DFA_MAX_OPERATIONS))
+        print("[official-vlm] --prompt-constraints changes the official prompt; the report is marked standard=false", flush=True)
     planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
     model_label = Path(str(args.planner_model)).name or "model"
     cot_label = "_cot" if args.with_cot else ""
@@ -1087,6 +1124,9 @@ def command_evaluate_official(args) -> None:
     suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + (("_perception" + (f"_{grounding_policy}" if grounding_policy else "")) if perception is not None else "")
     if perception is not None:
         suffix += '_' + perception_policy + ('_verified' if perception_verifier is not None else '')
+    if prompt_level:
+        decoding = f"greedy+prompt-constraints-{prompt_level}"
+        suffix += f"_prompt_{prompt_level}"
     output_dir = args.official_output_dir or Path("official_vlm_results") / f"{model_label}_{args.few_shot_num}shot{cot_label}{suffix}"
     generate = (make_grammar_dfa_generator(planner, args.max_new_tokens, press_question=args.press_question, scene_ids=args.scene_ids,
                                            pattern_first=args.pattern_first,
@@ -1100,7 +1140,7 @@ def command_evaluate_official(args) -> None:
     summary = run_official_protocol(
         examples, generate, output_dir=output_dir,
         model_name=str(args.planner_model), few_shot_num=args.few_shot_num, with_cot=args.with_cot,
-        seed=args.seed, standard=standard, decoding=decoding,
+        seed=args.seed, standard=standard, decoding=decoding, prompt_constraints=prompt_record,
         perception=None if perception is None else {
             "inputs": "unlabeled image, number-labeled image, instruction; no entity table",
             "config": perception_options, "fingerprint": perception.config.fingerprint,
@@ -1109,7 +1149,8 @@ def command_evaluate_official(args) -> None:
             "verifier_fingerprint": None if perception_verifier is None else perception_verifier.config.fingerprint,
             "grounding_policy": grounding_policy, "calibration": perception_calibration(args)})
     _json(summary | {"output_dir": str(output_dir), "load_in_4bit": args.load_in_4bit,
-                     "max_new_tokens": args.max_new_tokens})
+                     "max_new_tokens": args.max_new_tokens}
+          | ({"dfa_constrained": False} if prompt_level else {}))
 
 
 def command_fit_task_classifier(args) -> None:
@@ -1127,10 +1168,13 @@ def command_fit_task_classifier(args) -> None:
 
 
 def command_evaluate_planner(args) -> None:
+    prompt_level = prompt_constraints_level(args)
     if getattr(args, "protocol", "internal") == "official":
         return command_evaluate_official(args)
     observation_mode = getattr(args, "observation_mode", "visual")
     knowledge = apply_knowledge_argument(args)
+    # Omitted --generation-mode: prompt constraints have no DFA, so they run on the frozen VLM.
+    args.generation_mode = args.generation_mode or ("frozen-vlm" if prompt_level else "graph")
     if args.generation_mode == "frozen-vlm":
         if getattr(args,"constraint_profile","baseline")=="research_v1":
             raise ValueError("Unconstrained frozen-vlm generation does not enforce research_v1; select graph generation")
@@ -1152,13 +1196,25 @@ def command_evaluate_planner(args) -> None:
                 if (getattr(e, "dimension", None) and dim_str in str(e.dimension).lower())
                 or (getattr(e, "task", None) and dim_str in str(e.task).lower())
             ]
+        prompt_record = None
+        if prompt_level:
+            from test_regr.VLABenchAgentInterface.official.prompt_constraints import (
+                prompt_constraints_record, prompt_constraints_text,
+            )
+            # The frozen planner's raw prompt lists the "world" skills, so the rules are worded for them.
+            prompt_record = prompt_constraints_record(prompt_level, prompt_constraints_text(
+                prompt_level, grammar_profile="world", max_operations=args.max_operations))
         planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
         result = evaluate_planner(planner, eval_examples,
-                                  generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens)
+                                  generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens,
+                                  **({"prompt_constraints": prompt_record["text"]} if prompt_record else {}))
         _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
                         "dfa_constrained": False, "max_new_tokens": args.max_new_tokens,
-                        "observation_mode": observation_mode, "knowledge": knowledge,
-                        "task_identity": default_task_identity()})
+                        "observation_mode": observation_mode,
+                        # No constraint group is active: the rules reach the model only as prompt text.
+                        "knowledge": None if prompt_level else knowledge,
+                        "task_identity": None if prompt_level else default_task_identity(),
+                        **({"prompt_constraints": prompt_record} if prompt_record else {})})
         return
     if not args.resume_adapter:
         raise ValueError("graph evaluation requires --resume-adapter with trained graph-decoder weights; "
@@ -1584,8 +1640,15 @@ def build_parser() -> argparse.ArgumentParser:
     add_knowledge_argument(evaluate)
     evaluate.add_argument("--perception-calibration-data", type=Path, default=None,
                           help="--protocol official: the training dataset a non-default --perception-confidence was fit on")
-    evaluate.add_argument("--generation-mode", choices=["graph", "frozen-vlm"], default="graph",
-                          help="graph: trained adapter and DFA decoder; frozen-vlm: direct base VLM, no DFA")
+    evaluate.add_argument("--generation-mode", choices=["graph", "frozen-vlm"], default=None,
+                          help="graph (default): trained adapter and DFA decoder; frozen-vlm: direct base VLM, no DFA "
+                               "(the default with --prompt-constraints)")
+    evaluate.add_argument("--prompt-constraints", nargs="?", const="official", default=None,
+                          choices=["grammar", "causal", "official"],
+                          help="frozen VLM baseline with no DFA: add a level's constraints to the prompt in plain English "
+                               "(no value: official). Nothing enforces them. Works with --protocol official (the report "
+                               "is marked standard=false; the stated operation limit is that protocol's DFA limit, 16) and "
+                               "--generation-mode frozen-vlm (the stated limit is --max-operations)")
     evaluate.add_argument("--max-new-tokens", type=int, default=768,
                           help="native frozen-VLM continuation cap (graph uses its existing operation budget)")
     evaluate.add_argument("--vocab")

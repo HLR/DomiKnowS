@@ -1,7 +1,8 @@
 # Where constraints get their information
 
 A logical constraint decides what is allowed, but it needs observations to do that. This document lists where each
-constraint group gets them, and which groups need an extra prompt to the LLM.
+constraint group gets them, and which groups need an extra prompt to the LLM. The last section covers
+[where the constraints are used](#where-the-constraints-are-used), during decoding and elsewhere.
 
 For what each rule does, see [VLABenchLogicaConstraints.md](VLABenchLogicaConstraints.md). For how to select the
 groups, see [Knowledge_QuickStart.md](Knowledge_QuickStart.md).
@@ -481,3 +482,31 @@ The levels are defined in [`knowledge/__init__.py`](../knowledge/__init__.py).
 
 These defaults assume a standard `baseline` profile. `research_v1` turns perception on at any level, and the question
 flags add their own calls.
+
+## Where the constraints are used
+
+Limiting the decoder through the DFA is the main use, but not the only one. It depends on which graph declares the
+constraint:
+
+| Constraints | DFA decoding | Other uses |
+|---|---|---|
+| Official standalone graphs: [`causal_graph.py`](../official/causal_graph.py#L34), [`decoding_graph.py`](../official/decoding_graph.py#L52), [`selection_graph.py`](../official/selection_graph.py#L61) | yes | none: `--protocol official` uses a frozen model, so nothing is trained on them |
+| World graph, including its `official__*` rules (the `--knowledge` levels on the internal paths) | yes | plan checking, reward, training loss |
+| Research rules (`research__*`, under `research_v1`) | yes | research loss, execution checks |
+
+So a `--protocol official` run uses constraints only to limit what the decoder can write. The upstream VLABench scorer
+doesn't read them, so its score shows only their effect on the generated plans.
+
+The other uses are:
+
+| Use | What it does | When | Implementation |
+|---|---|---|---|
+| Plan checking | builds a DataNode from a finished plan and runs `verifyResultsLC` on every active constraint, separately from the DFA | agent plan decisions, plan rejection during Joint episode collection, structured candidate ranking, dataset audits | [`verify_plan_constraints`](../world_runtime.py#L240), called from [`agent.py`](../simulation/agent.py#L166), [`simulation/program.py`](../simulation/program.py#L1435), [`structured_inference.py`](../../JointEmbodiedAgentInterface/utils/structured_inference.py#L280) and [`audit_planner_lcs.py`](../dataset_tools/gpu2/audit_planner_lcs.py#L17) |
+| Reward | a plan scoring below 1.0 on those constraints gets a total reward of 0 | [training with the plan reward](../training.py#L226) | [`score_vlabench_plan`](../reward.py#L355) |
+| Primal-dual training loss | penalises the probabilities the model gives to constraint violations | Joint Stage 1, with [`--stage1-dfa-loss on`](../../JointEmbodiedAgentInterface/main.py#L1224) (the default) | [`PrimalDualProgram`](../../JointEmbodiedAgentInterface/program.py#L256) |
+| Masked cross entropy | trains on the labels the DFA allows at each step, so it uses the compiled DFA instead of reading the constraints | Joint Stage 1, same flag | [`masked_cross_entropy`](../../JointEmbodiedAgentInterface/program.py#L324) |
+| Research loss | penalises probability on labels the compiled policy doesn't admit | `research_v1` training | [`ProjectedPrimalDual`](../research/losses.py#L9) |
+| Execution checks | re-check an operation against fresh observations, and the motion before `env.step`, so they can stop a rollout after planning | simulator rollouts | [`admit_with_refresh`](../simulation/agent.py#L279), [`geometry_admission`](../simulation/agent.py#L297) |
+
+Perception can also act without any constraint firing: under the `soft` policy it only changes scores. See
+[Hard limit or preference](#hard-limit-or-preference).

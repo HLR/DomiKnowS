@@ -260,8 +260,13 @@ def run_official_protocol(
     decoding: str = "greedy",
     progress: Callable[[str], None] = print,
     perception: Mapping[str, Any] | None = None,
+    prompt_constraints: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Generate (resumably), score and summarize. ``generate`` maps a ti-list to reply text."""
+    """Generate (resumably), score and summarize. ``generate`` maps a ti-list to reply text.
+
+    ``prompt_constraints`` (from :mod:`.prompt_constraints`) adds its text after the official prompt, which
+    stays byte-identical to the pinned file; ``prompt_sha256`` keeps describing that file.
+    """
     prompt = load_official_prompt()
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -271,6 +276,9 @@ def run_official_protocol(
         config["decoding"] = decoding
     if perception is not None:  # the perception model, threshold and grounding policy of the run
         config["perception"] = dict(perception)
+    if prompt_constraints is not None:
+        config["prompt_constraints"] = dict(prompt_constraints)
+        prompt = f"{prompt}\n\n{prompt_constraints['text']}"
     run_path = output_dir / "run.json"
     if run_path.exists() and json.loads(run_path.read_text(encoding="utf-8")) != config:
         raise ValueError(f"{run_path} records a different configuration; use a new output directory")
@@ -354,6 +362,7 @@ def make_vlm_generator(planner: Any, max_new_tokens: int = 768) -> Callable[[lis
 
 
 DFA_ENTITY_CAP = 64
+DFA_MAX_OPERATIONS = 16  # the official protocol's operation limit; --max-operations does not change it
 PRESS_MARK = "press-question:"
 # One fixed question, asked once per episode. Three wordings were tried on 60 validation episodes
 # (30 question tasks, 30 others) and this one was kept: it recognised 13 of 30 question tasks with no
@@ -430,7 +439,7 @@ def prepare_inputs(planner: Any, items: list[list[Any]], prefix: str = ""):
 
 
 def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_cap: int = DFA_ENTITY_CAP,
-                               max_operations: int = 16, press_question: bool = False,
+                               max_operations: int = DFA_MAX_OPERATIONS, press_question: bool = False,
                                hmm: Any = None, weight: float = 0.0,
                                lookahead_score: str = "joint", scene_ids: bool = False, pattern_first: bool = False,
                                adapt: dict[str, Any] | None = None, seed: int = 42,
