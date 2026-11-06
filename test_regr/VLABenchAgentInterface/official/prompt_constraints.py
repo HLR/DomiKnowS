@@ -34,8 +34,10 @@ GRAMMAR_RULES = (
                ("plan_progress_positions",)),
     PromptRule("Give each skill exactly these parameters, each with one integer object ID, and no others: {arguments}.",
                ("plan_operation_arguments",)),
-    PromptRule("Follow the steps of a pattern in order. After each step, continue with the pattern's next step or, "
-               "if the pattern is complete, start another pattern or finish. The patterns are: {patterns}.",
+    # Selected on the validation split: a plain list of patterns shortened multi-object plans (Complex fell 14 points).
+    PromptRule("Build the plan as a sequence of subtasks, with one subtask for each object the instruction involves. "
+               "Each subtask follows one of these patterns, step by step: {patterns}. For example, moving two objects "
+               "is pick, place, pick, place.",
                ("plan_pattern_steps",)),
     PromptRule("Never finish the plan or start another pattern in the middle of a pattern. A pick on its own is "
                "not a plan, and a press cannot follow a pick.",

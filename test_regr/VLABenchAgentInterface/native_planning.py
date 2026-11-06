@@ -442,6 +442,9 @@ class NativeConstraintProcessor:
 
 def native_prompt(instruction, entities, grammar_profile="world", constraints=None):
     arguments, _ = native_schema(grammar_profile)
+    from .prompt_protocol import planner_input_protocol
+    if planner_input_protocol() == "anonymous_objects":  # the same rule as the graph planner's prompt
+        entities = tuple(f"numbered object {index}" for index in range(len(entities)))
     return (
         ("Return only a compact JSON array of VLABench operations, with no explanation or markdown. "
          if grammar_profile == "legacy" else

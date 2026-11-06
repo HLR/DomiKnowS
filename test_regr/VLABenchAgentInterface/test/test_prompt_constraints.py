@@ -62,6 +62,11 @@ def test_text_is_worded_from_the_language_of_the_path():
         prompt_constraints_text("grammar", grammar_profile="benchmark", max_operations=0)
 
 
+def test_the_pattern_rule_tells_the_model_that_plans_can_have_several_subtasks():
+    text = prompt_constraints_text("grammar", grammar_profile="benchmark", max_operations=12)
+    assert "one subtask for each object" in text and "pick, place, pick, place" in text
+
+
 def test_lower_levels_leave_out_the_higher_rules():
     grammar = prompt_constraints_text("grammar", grammar_profile="benchmark", max_operations=12)
     causal = prompt_constraints_text("causal", grammar_profile="benchmark", max_operations=12)

@@ -137,8 +137,14 @@ python -m test_regr.VLABenchAgentInterface.main evaluate-planner --planning-dir 
 ```
 
 ```bash
-python -m test_regr.VLABenchAgentInterface.main evaluate-planner --planning-dir test_regr/VLABenchAgentInterface/data/planning --generation-mode frozen-vlm --prompt-constraints
+python -m test_regr.VLABenchAgentInterface.main evaluate-planner --planning-dir test_regr/VLABenchAgentInterface/data/planning --split test --no-dfa-official --prompt-constraints
 ```
+
+Without `--protocol official` or `--no-dfa-official`, the frozen prompt lists scene object names such as
+`stone_cylinder`, so the scores include that [knowledge leak](../../JointEmbodiedAgentInterface/docs/KNOWLEDGE_LEAKAGE.md).
+`--no-dfa-official` replaces the names with numbered objects and keeps this repository's split and scoring. The number
+of listed objects still comes from the scene configuration. It runs on the frozen VLM and can't be combined with
+`--protocol official`, which shows no object list at all.
 
 | Level | Rules stated in the prompt |
 |---|---|

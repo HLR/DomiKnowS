@@ -1029,7 +1029,8 @@ def prompt_constraints_level(args):
         return None
     conflicts = [flag for flag, active in (
         ("--generation-mode graph", getattr(args, "generation_mode", None) == "graph"),
-        ("--knowledge", getattr(args, "knowledge", None) is not None),
+        # --no-dfa-official itself sets --knowledge grammar; the frozen path has no DFA for it to select.
+        ("--knowledge", getattr(args, "knowledge", None) is not None and not getattr(args, "no_dfa_official", False)),
         ("--constraints", getattr(args, "constraints", "none") != "none"),
         ("--task-identity", getattr(args, "task_identity", None) is not None),
         ("--task-classifier", getattr(args, "task_classifier", None) is not None),
@@ -1169,12 +1170,18 @@ def command_fit_task_classifier(args) -> None:
 
 def command_evaluate_planner(args) -> None:
     prompt_level = prompt_constraints_level(args)
+    anonymous = getattr(args, "no_dfa_official", False)
+    if anonymous and getattr(args, "protocol", "internal") == "official":
+        raise ValueError("--protocol official already shows no object names, and --no-dfa-official would select its "
+                         "grammar DFA; use one of them")
+    if anonymous and args.generation_mode == "graph":
+        raise ValueError("--no-dfa-official uses no DFA; omit --generation-mode graph")
     if getattr(args, "protocol", "internal") == "official":
         return command_evaluate_official(args)
     observation_mode = getattr(args, "observation_mode", "visual")
     knowledge = apply_knowledge_argument(args)
-    # Omitted --generation-mode: prompt constraints have no DFA, so they run on the frozen VLM.
-    args.generation_mode = args.generation_mode or ("frozen-vlm" if prompt_level else "graph")
+    # Omitted --generation-mode: without a DFA, these options run on the frozen VLM.
+    args.generation_mode = args.generation_mode or ("frozen-vlm" if prompt_level or anonymous else "graph")
     if args.generation_mode == "frozen-vlm":
         if getattr(args,"constraint_profile","baseline")=="research_v1":
             raise ValueError("Unconstrained frozen-vlm generation does not enforce research_v1; select graph generation")
@@ -1186,6 +1193,7 @@ def command_evaluate_planner(args) -> None:
             raise ValueError("--max-new-tokens must be positive")
         from test_regr.VLABenchAgentInterface.dataset import load_scene_planning_examples
         from test_regr.VLABenchAgentInterface.native_planning import FrozenNativePlanner
+        from test_regr.VLABenchAgentInterface.prompt_protocol import planner_input_protocol
         examples = load_scene_planning_examples(args.planning_dir, limit=args.limit, observation_mode=observation_mode)
         splits = deterministic_split(examples, seed=args.seed)
         eval_examples = examples if args.split == "all" else splits[args.split]
@@ -1211,9 +1219,10 @@ def command_evaluate_planner(args) -> None:
         _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
                         "dfa_constrained": False, "max_new_tokens": args.max_new_tokens,
                         "observation_mode": observation_mode,
-                        # No constraint group is active: the rules reach the model only as prompt text.
-                        "knowledge": None if prompt_level else knowledge,
-                        "task_identity": None if prompt_level else default_task_identity(),
+                        # No constraint group is active: any rules reach the model only as prompt text.
+                        "knowledge": None if prompt_level or anonymous else knowledge,
+                        "task_identity": None if prompt_level or anonymous else default_task_identity(),
+                        "no_dfa_official": anonymous, "planner_input_protocol": planner_input_protocol(),
                         **({"prompt_constraints": prompt_record} if prompt_record else {})})
         return
     if not args.resume_adapter:
@@ -1643,6 +1652,8 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--generation-mode", choices=["graph", "frozen-vlm"], default=None,
                           help="graph (default): trained adapter and DFA decoder; frozen-vlm: direct base VLM, no DFA "
                                "(the default with --prompt-constraints)")
+    from test_regr.VLABenchAgentInterface.prompt_protocol import add_no_dfa_official_argument
+    add_no_dfa_official_argument(evaluate)
     evaluate.add_argument("--prompt-constraints", nargs="?", const="official", default=None,
                           choices=["grammar", "causal", "official"],
                           help="frozen VLM baseline with no DFA: add a level's constraints to the prompt in plain English "
