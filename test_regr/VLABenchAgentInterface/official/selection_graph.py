@@ -1,14 +1,15 @@
-"""Ordinal and named-card selection, declared as logical constraints over image tags.
+"""Selection by position or by property, declared as logical constraints over image tags.
 
-Instructions such as "pick the 2nd poker from left to right", "fetch the first book from the
-left on the bottom layer", "add 3rd condiment from bottom" or "pick the 2nd largest poker" name
-a group of objects, an order and a position in it. The observations (which tags belong to the
-group, which tag precedes which, which card face a tag shows) come from image perception and
-the instruction (``selection_observations.py``). These formulas decide which tag may be chosen:
+An instruction can name a group of objects, an order and a position in it ("the first book from
+the left on the bottom layer", "the 2nd largest poker"), or a property the object must show
+("poker jack of spades"). The observations (which tags belong to the group, which tag precedes
+which, which tags show the property) come from image perception and the instruction
+(``selection_observations.py``). These formulas decide which tag may be chosen, and name no kind
+of object:
 
 * ``ordinal_rank_<k>``: the chosen tag is in the group and exactly ``k - 1`` group members
   precede it;
-* ``named_card_face``: the chosen tag shows the named card face.
+* ``chosen_has_requested_property``: the chosen tag shows the requested property.
 
 ``SelectionGraph.admitted`` grounds the formulas for every visible tag; the admitted tags become
 the instruction's candidates (``instruction_candidates_bound_targets`` in ``decoding_graph.py``).
@@ -37,15 +38,15 @@ class SelectionGraph:
         """Snapshot the active formulas again; rebuild after editing or deactivating a declaration."""
         return SelectionGraph(self.graph, self.bindings, compile_predicate_constraints(self.graph, list(self.bindings)))
 
-    def admitted(self, tags, rank=None, members=(), precedes=(), face_requested=False, face_matches=()):
+    def admitted(self, tags, rank=None, members=(), precedes=(), property_requested=False, shows_property=()):
         """The tags the compiled formulas allow as the chosen object (all of them when nothing is requested)."""
         tags = tuple(tags)
-        members, face_matches, precedes = set(members), set(face_matches), set(precedes)
+        members, shows_property, precedes = set(members), set(shows_property), set(precedes)
         values = {(f"rank_{k}", "request"): rank == k for k in range(1, MAX_GROUP + 1)}
-        values[("face_requested", "request")] = bool(face_requested)
+        values[("property_requested", "request")] = bool(property_requested)
         for tag in tags:
             values[("member", tag)] = tag in members
-            values[("face_matches", tag)] = tag in face_matches
+            values[("shows_property", tag)] = tag in shows_property
             for other in tags:
                 values[("precedes", other, tag)] = (other, tag) in precedes
         result = []
@@ -65,17 +66,17 @@ def build_selection_graph(name="vlabench_selection_knowledge"):
         precedes = Concept(name="selection_precedes")
         precedes.has_a(selection_before=tag, selection_after=tag)
         ranks = {k: request(name=f"rank_{k}") for k in range(1, MAX_GROUP + 1)}
-        face_requested = request(name="face_requested")
-        chosen, member, face_matches = (tag(name=n) for n in ("chosen", "member", "face_matches"))
+        property_requested = request(name="property_requested")
+        chosen, member, shows_property = (tag(name=n) for n in ("chosen", "member", "shows_property"))
 
         for k, rank in ranks.items():
             # The k-th of the group: a member with exactly k - 1 members before it.
             ifL(andL(rank("q"), chosen("s")),
                 andL(member("s"), exactL(andL(member("o"), precedes("o", "s")), limit=k - 1)),
                 name=f"ordinal_rank_{k}")
-        ifL(andL(face_requested("q"), chosen("s")), face_matches("s"), name="named_card_face")
+        ifL(andL(property_requested("q"), chosen("s")), shows_property("s"), name="chosen_has_requested_property")
 
     bindings = [PredicateBinding(concept, concept.name, DOMAIN)
-                for concept in (*ranks.values(), face_requested, chosen, member, face_matches)]
+                for concept in (*ranks.values(), property_requested, chosen, member, shows_property)]
     bindings.append(PredicateBinding(precedes, "precedes", DOMAIN))
     return SelectionGraph(graph, tuple(bindings), compile_predicate_constraints(graph, bindings))

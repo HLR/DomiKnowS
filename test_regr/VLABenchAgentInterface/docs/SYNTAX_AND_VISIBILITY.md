@@ -15,7 +15,8 @@ Visibility is a separate logical constraint, `observation_supported_references`.
 Every explicitly referenced subject or destination, including optional roles,
 must belong to the supplied initial-observation support set. It is active at the
 world graph's `scene` and `task` levels and is also declared in the native
-`decoding_graph`. Scene inventories, instruction candidates and largest-tag bounds
+`decoding_graph`. Image perception does not ground it, because its visible tags are not a complete list: it
+grounds `scene_ids_bound_targets` instead. Scene inventories, instruction candidates and largest-tag bounds
 remain distinct observations; they never create visibility support.
 
 ```python

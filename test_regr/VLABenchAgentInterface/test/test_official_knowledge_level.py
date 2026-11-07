@@ -15,7 +15,7 @@ from .test_constraint_equivalence import encode, op
 from .test_causal_knowledge_level import CAUSAL, active
 
 ENTITIES = ("numbered object 0", "numbered object 1", "numbered object 2", "numbered object 3")
-OFFICIAL = CAUSAL + ("official__observation_supported_references", "official__instruction_candidates_bound_targets")
+OFFICIAL = CAUSAL + ("official__scene_ids_bound_targets", "official__instruction_candidates_bound_targets")
 # The instruction names objects 1 and 2 for pick, and 0 or 3 as the place destination.
 CANDIDATES = (("pick", "target_entity_name", (1, 2)), ("place", "target_container_name", (0, 3)))
 
@@ -62,7 +62,8 @@ CASES = [
     ({"object_candidates": CANDIDATES}, [op("pick", 1), op("pour", 1)], False),     # causal: self-placement
     ({"object_candidates": CANDIDATES}, [op("pick", 2), op("pour", 3)], True),      # pour roles not restricted
     ({"visible_entities": (1, 3)}, [op("pick", 1), op("place", 3)], True),
-    ({"visible_entities": (1, 3)}, [op("pick", 2), op("place", 3)], False),         # not seen in the image
+    ({"visible_entities": (1, 3)}, [op("pick", 2), op("place", 3)], True),          # unseen but below the largest tag
+    ({"visible_entities": (0, 1)}, [op("pick", 1), op("place", 3)], False),         # above the largest tag
     ({}, [op("pick", 0), op("place", 1)], True),                                    # no observation: no restriction
 ]
 

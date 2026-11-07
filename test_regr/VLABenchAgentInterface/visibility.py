@@ -41,6 +41,17 @@ def reference_is_visible(value, entities, visible):
     return bool(ids <= visible)
 
 
+def reference_within_seen_range(value, entities, visible):
+    """The id is at most the largest visible one. Unseen ids below it stay allowed: an object can lack a visible tag."""
+    if not visible:
+        return True  # no tag read: no bound
+    try:
+        ids = visible_entity_ids((value,), entities)
+    except ValueError:
+        return False
+    return max(ids) <= max(visible)
+
+
 def instruction_candidate_ids(values, entities):
     """``{(skill, role): frozenset(ids)}`` from instruction candidates, or None when none were observed.
 

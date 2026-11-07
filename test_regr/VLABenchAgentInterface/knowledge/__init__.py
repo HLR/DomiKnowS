@@ -17,7 +17,7 @@ official    causal + official rules (outside the chain; see below)
 
 ``official`` is the knowledge of the standard VLABench protocol (``--protocol official``): the causal rules plus
 the ``official`` group, whose observations come only from image perception of the episode's two images and its
-instruction. ``official__observation_supported_references`` keeps plan ids to the confidently visible tags, and
+instruction. ``official__scene_ids_bound_targets`` keeps plan ids at or below the largest confidently visible tag, and
 ``official__instruction_candidates_bound_targets`` keeps them to the instruction's candidates (perceived object
 kinds named by its clauses, and the tags the ordinal and card-face formulas of ``official/selection_graph.py``
 admit). No entity table, scene fact or task enters. The level turns image perception on (``research/config.py``),

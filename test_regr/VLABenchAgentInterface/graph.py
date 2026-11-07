@@ -164,16 +164,19 @@ def create_plan_grammar_graph(
     ).build_graph()
     ctx = bundle.context
     with graph:
-        # EOS must occur; every position after the first EOS is also EOS.
-        mark_for_dfa(atLeastAL(ctx.token_value(vocabulary.eos_token, "position"), 1))
-        mark_for_dfa(ifL(ctx.is_before_rel("before"), ifL(
-            ctx.token_value(vocabulary.eos_token, "first", path=("before", ctx.first_token)),
-            ctx.token_value(vocabulary.eos_token, "next", path=("before", ctx.second_token)),
-        )))
-        mark_for_dfa(atMostAL(notL(ctx.token_value(vocabulary.eos_token, "position")), max_operations * 5))
-        mark_for_dfa(atMostAL(_any(
-            ctx.token_value(f"skill:{skill}", "position") for skill in vocabulary.skills
-        ), min(max_operations, language.maximum)))
+        # EOS must occur; every position after the first EOS is also EOS. The plan frame: ending and budgets.
+        bundle.plan_frame_rules = [
+            mark_for_dfa(atLeastAL(ctx.token_value(vocabulary.eos_token, "position"), 1, name="plan_requires_eos")),
+            mark_for_dfa(ifL(ctx.is_before_rel("before"), ifL(
+                ctx.token_value(vocabulary.eos_token, "first", path=("before", ctx.first_token)),
+                ctx.token_value(vocabulary.eos_token, "next", path=("before", ctx.second_token)),
+            ), name="plan_eos_closure")),
+            mark_for_dfa(atMostAL(notL(ctx.token_value(vocabulary.eos_token, "position")), max_operations * 5,
+                                  name="plan_token_budget")),
+            mark_for_dfa(atMostAL(_any(
+                ctx.token_value(f"skill:{skill}", "position") for skill in vocabulary.skills
+            ), min(max_operations, language.maximum), name="plan_operation_budget")),
+        ]
         # planner_grammar declares the positions; the other rules constrain how they follow each other.
         bundle.planner_grammar_rules = _declare_plan_grammar(bundle, vocabulary, language)
         bundle.planner_grammar = bundle.planner_grammar_rules[0]

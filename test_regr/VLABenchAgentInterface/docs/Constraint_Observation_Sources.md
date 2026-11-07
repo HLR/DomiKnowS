@@ -328,9 +328,9 @@ Two more details affect how to read this source:
 | Decoding | `scene_ids_bound_targets` | [`build_decoding_graph`](../official/decoding_graph.py#L52) | answer from [`read_entity_count`](../official/official_protocol.py#L576) | yes |
 | Decoding | `chosen_patterns_continue`, `chosen_patterns_complete` | [`build_decoding_graph`](../official/decoding_graph.py#L52) | answer from [`choose_patterns`](../official/official_protocol.py#L589) | yes |
 | Decoding | `instruction_candidates_bound_targets` | [`build_decoding_graph`](../official/decoding_graph.py#L52) | image perception and instruction text ([`perceived_observations`](../official/perception_observations.py#L180)) in the official decoder; see the note below for the internal decoder | depends on the path |
-| Decoding | `observation_supported_references` | [`build_decoding_graph`](../official/decoding_graph.py#L52) | image perception's visible tags, or a visible set the caller supplies | only through perception |
-| Selection | `ordinal_rank_1..8`, `named_card_face` | [`build_selection_graph`](../official/selection_graph.py#L61) | instruction text gives the request ([`selection_request`](../official/selection_observations.py#L40)); image perception gives the group, order and card faces ([`selection_constraints`](../official/selection_observations.py#L115)) | yes |
-| Official | `official__observation_supported_references` | [`_declare_official_rules`](../world_graph.py#L187) | image perception's visible tags | yes |
+| Decoding | `observation_supported_references` | [`build_decoding_graph`](../official/decoding_graph.py#L52) | a complete visible set the caller supplies; perception does not ground it, because correct targets can lack a visible tag | no |
+| Selection | `ordinal_rank_1..8`, `chosen_has_requested_property` | [`build_selection_graph`](../official/selection_graph.py#L61) | instruction text gives the request ([`selection_request`](../official/selection_observations.py#L40)); image perception gives the group, order and card faces ([`selection_constraints`](../official/selection_observations.py#L115)) | yes |
+| Official | `official__scene_ids_bound_targets` | [`_declare_official_rules`](../world_graph.py#L187) | image perception's largest visible tag | yes |
 | Official | `official__instruction_candidates_bound_targets` | [`_declare_official_rules`](../world_graph.py#L187) | image perception, instruction text and the selection rules | yes |
 | Research | `research__grounding_*` | [`declare_research`](../knowledge/research_lcs.py#L5) | image perception's role hypotheses, or research input | through perception |
 | Research | `research__fresh_*`, `research__spatial_*`, `research__temporal_*` | [`declare_research`](../knowledge/research_lcs.py#L5) | evidence records from [`compile_evidence`](../research/perception.py#L237) or research input, read by [`ResearchMonitor`](../research/monitor.py#L20) | through perception |
@@ -400,10 +400,10 @@ Each part of the reply feeds different constraints:
 
 | Part of the reply | Observation | Used by |
 |---|---|---|
-| Confident object ids | visible tags | `observation_supported_references`, `official__observation_supported_references` |
+| Confident object ids | largest visible tag | `scene_ids_bound_targets`, `official__scene_ids_bound_targets` |
 | `category` | kind of each tag, such as "tomato" | `instruction_candidates_bound_targets`, and the group in the selection rules |
 | `bbox` | order of the tags in the image | `ordinal_rank_1..8` |
-| `card` | card face | `named_card_face`, and card-value ranks |
+| `card` | card face, the reading source in use ([`card_observations.py`](../official/card_observations.py)) | `chosen_has_requested_property`, and value ranks |
 | `hypotheses`, `requests`, `complete` | which objects fill the instruction's roles | `research__grounding_*`, only with a `--grounding-policy` |
 | `states` | open or closed doors | existing door rules on the internal paths; the official decoder keeps no world state |
 
@@ -462,8 +462,8 @@ Perception doesn't always produce a hard limit. `--official-perception-policy` d
 
 | Policy | Effect | Default on |
 |---|---|---|
-| `soft` | visible tags and candidates are cleared, so those constraints don't fire; the candidates only add a bounded score preference ([`soft_observation`](../official/grounding_policy.py#L15)) | [VLABench `evaluate-planner`](../main.py#L1625) |
-| `legacy` | visible tags and candidates reach the constraints as hard limits | commands that take the option from [`research/config.py`](../research/config.py#L94) |
+| `soft` | the visible tags (so the largest-tag bound) and candidates are cleared, so those constraints don't fire; the candidates only add a bounded score preference ([`soft_observation`](../official/grounding_policy.py#L15)) | [VLABench `evaluate-planner`](../main.py#L1625) |
+| `legacy` | the largest visible tag and the candidates reach the constraints as hard limits | commands that take the option from [`research/config.py`](../research/config.py#L94) |
 
 The perception prompt runs under both policies. `soft` also requires official knowledge without hard research grounding.
 

@@ -344,7 +344,7 @@ def validate_plan(
         from domiknows.generation.dfa.predicate_monitor import find_predicate_monitor
         monitor = find_predicate_monitor(policy)
         if monitor is not None and not any(r.name in ("observation_supported_references",
-                                                      "official__observation_supported_references")
+                                                      "official__scene_ids_bound_targets")
                                            for r in monitor.program.rules):
             supplied = None
     if supplied is not None and entity_table is None:

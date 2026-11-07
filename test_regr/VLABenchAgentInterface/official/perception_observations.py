@@ -9,12 +9,15 @@ with a scene inventory.
 
 The facts reach the plan DFA only as observations of compiled logical constraints:
 
-* the visible tags ground ``observation_supported_references`` (``decoding_graph.py``);
+* the largest visible tag grounds ``scene_ids_bound_targets`` (``decoding_graph.py``). The visible tags are not
+  a complete list: correct targets can lack a tag, so ``observation_supported_references`` is left to callers who
+  supply a complete set;
 * the predicted kinds named by the instruction's source and destination clauses ground
   ``instruction_candidates_bound_targets`` (``object_grounding.perceived_object_constraints``);
-* ordinal and named-card requests ("2nd poker from left to right", "3rd largest poker",
+* ordinal and property requests ("2nd poker from left to right", "3rd largest poker",
   "poker jack of spades") ground the selection formulas of ``selection_graph.py`` from the
-  perceived boxes and card faces; the tags they admit join the same candidate LC;
+  perceived boxes and readings (card faces are the reading in use); the tags they admit join
+  the same candidate LC;
 * with ``--grounding-policy joint|robust|abstain`` (opt-in), the hypotheses ground the research
   grounding formulas (``knowledge/research_lcs.py``), evaluated by the same ``ResearchMonitor``
   as the internal runtime. Joint needs the plan's ids to keep at least one hypothesis alive;
@@ -136,6 +139,11 @@ class EpisodePerception:
     candidates: ObjectConstraints = ObjectConstraints()
     cards: tuple[tuple[int, tuple[int, str]], ...] = ()  # (tag, (rank 2..14, suit)) for read card faces
     soft_candidates: ObjectConstraints = ObjectConstraints()
+
+    @property
+    def scene_bound(self) -> int | None:
+        """One past the largest visible tag: ids below it stay allowed whether or not their tag was seen."""
+        return max(self.visible) + 1 if self.visible else None
 
     @property
     def supplies_facts(self) -> bool:

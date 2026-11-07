@@ -545,7 +545,9 @@ def command_train_agent(args):
             else:
                 _status(
                     "resume checkpoint has no available Stage 1/controller-warm-up fallback; "
-                    "a failed retention gate will abort without restoring an older policy"
+                    + ("diagnostic continuation keeps the trajectory; rejected epochs remain ineligible for best selection"
+                       if args.stage2_retention_policy == "continue" else
+                       "a failed retention gate will abort without restoring an older policy")
                 )
     if resume_stage != "stage2":
         stage1 = JointSolverPOIProgram(
@@ -1073,6 +1075,18 @@ def command_train_agent(args):
             max_recall_regression=args.stage2_max_eai_recall_regression,
         )
         retention_reasons.extend(eai_reasons)
+        for reason in eai_reasons:
+            field, baseline_field, tolerance = (
+                ("success", "goal_success", args.stage2_max_eai_success_regression)
+                if reason == "eai_success_regression" else
+                ("goal_recall", "goal_recall", args.stage2_max_eai_recall_regression)
+            )
+            _status(
+                f"EAI {field} retention rejected: observed={float(metrics['eai'][field]):.6f}, "
+                f"baseline={float(eai_baseline_reference[baseline_field]):.6f}, "
+                f"allowed_regression={tolerance:.6f}; "
+                f"retention_policy={args.stage2_retention_policy}"
+            )
         eai_baseline_ok = not eai_reasons
         metrics["baseline_reference"] = baseline_reference
         metrics["eai_baseline_reference"] = eai_baseline_reference

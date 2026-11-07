@@ -13,9 +13,9 @@ from dataclasses import dataclass, replace
 from domiknows.generation.grounded import GroundedState, PlanningFacts, Operation
 from typing import Any, Mapping, Sequence
 try:
-    from .visibility import instruction_candidate_ids, reference_is_candidate, visible_entity_ids, reference_is_visible
+    from .visibility import instruction_candidate_ids, reference_is_candidate, visible_entity_ids, reference_is_visible, reference_within_seen_range
 except ImportError:
-    from visibility import instruction_candidate_ids, reference_is_candidate, visible_entity_ids, reference_is_visible
+    from visibility import instruction_candidate_ids, reference_is_candidate, visible_entity_ids, reference_is_visible, reference_within_seen_range
 
 
 # Every benchmark subtask pattern begins with a pick or a press; its destinations are tracked from there.
@@ -268,6 +268,8 @@ class PlanSemantics:
             "visibility_supplied": self.visible_entities is not None,
             "entity_seen_initially": reference_is_visible(params.get("target_entity_name"), self.entities, self.visible_entities),
             "container_seen_initially": reference_is_visible(params.get("target_container_name"), self.entities, self.visible_entities),
+            "entity_within_seen_range": reference_within_seen_range(params.get("target_entity_name"), self.entities, self.visible_entities),
+            "container_within_seen_range": reference_within_seen_range(params.get("target_container_name"), self.entities, self.visible_entities),
             "entity_value_usable": usable("target_entity_name"),
             "container_value_usable": usable("target_container_name"),
             "entity_resolves": resolve_pointer(params.get("target_entity_name"), self.entities)[1],

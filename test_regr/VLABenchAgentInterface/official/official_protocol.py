@@ -369,6 +369,10 @@ PRESS_MARK = "press-question:"
 # false positives, against 0 of 30 for a generic description of "choose one object and press its
 # button" and 0 of 30 for a pick-or-press choice. It names the property topics of the benchmark's
 # question tasks, so it encodes benchmark knowledge; the model, not a keyword rule, makes the call.
+# The formula it feeds names no topic, only this observation does, and the flag is off by default.
+# Four topic-free wordings were tried on all 450 validation episodes, needing at most 1% false Yes (a false
+# Yes refuses every correct plan): recall 0/54 with 0 false, 26/54 with 13, 0/54 with 4, 47/54 with 147. This
+# wording has 16/54 with 0 false. No topic-free wording usefully qualified, so this one stays.
 PRESS_QUESTION = (
     "Question: Does the instruction above ask a question about the objects' properties or behaviour "
     "(such as density, friction, magnetism, reflection, the speed of sound or thermal expansion) that is "
@@ -547,10 +551,11 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
             # One episode's perception: built per episode and not cached.
             grounding = (PerceivedGrounding(observed.grounding, knowledge_lcs, disabled_formulas, grounding_policy)
                          if observed.grounding is not None and grounding_policy is not None else None)
+            limits = [limit for limit in (bound, observed.scene_bound) if limit is not None]
             dfa = KnowledgePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, causal=causal,
                                    decoding_graph=decoding_graph,
-                                   press_answer=press_only, scene_bound=bound, chosen_patterns=patterns,
-                                   visible_entities=observed.visible, grounding=grounding,
+                                   press_answer=press_only, scene_bound=min(limits, default=None), chosen_patterns=patterns,
+                                   grounding=grounding,
                                    object_candidates=observed.candidates, **common)
             return None, dfa
         knowledge = causal or press_only or bound is not None or bool(patterns)

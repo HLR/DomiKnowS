@@ -49,6 +49,15 @@ def test_visible_tags_bound_references():
     assert not dfa.accepts(labels([op("pick", 3), op("place", container=2)]))
 
 
+def test_perceived_tags_bound_ids_without_requiring_each_tag_to_be_seen():
+    from ..official.perception_observations import EpisodePerception
+    observed = EpisodePerception((0, 2, 4), None, {})
+    assert observed.scene_bound == 5 and EpisodePerception(None, None, {}).scene_bound is None
+    dfa = knowledge(entity_count=8, scene_bound=observed.scene_bound)
+    assert dfa.accepts(labels([op("press", 3)]))  # a button without a visible tag
+    assert not dfa.accepts(labels([op("press", 5)]))
+
+
 class FakeModel:
     config = PerceptionConfig(model_id="frozen")
 
@@ -294,6 +303,30 @@ def test_deactivating_a_selection_formula_removes_it():
     assert graph.admitted(tags, rank=2, members=tags, precedes=order) == (3,)
     next(lc for lc in graph.graph.logicalConstrains.values() if lc.name == "ordinal_rank_2").active = False
     assert graph.recompiled().admitted(tags, rank=2, members=tags, precedes=order) == tags
+
+
+def test_requested_property_formula_is_about_any_readable_property():
+    from ..official.selection_graph import build_selection_graph
+    from ..official.selection_observations import selection_observations
+    graph = build_selection_graph()
+    # Bottles with printed numbers: no card in sight, the same formula decides.
+    request = {"kind": "property", "noun": "bottle", "value": (7,)}
+    observed = selection_observations(request, (1, 2, 3), {}, {1: "bottle", 2: "bottle", 3: "cup"}, {1: (7,), 2: (9,)})
+    assert observed == {"property_requested": True, "shows_property": {1}}
+    assert graph.admitted((1, 2, 3), **observed) == (1,)
+    next(lc for lc in graph.graph.logicalConstrains.values() if lc.name == "chosen_has_requested_property").active = False
+    assert graph.recompiled().admitted((1, 2, 3), **observed) == (1, 2, 3)
+
+
+def test_constraints_name_no_kind_of_object_or_benchmark_topic():
+    from ..official.decoding_graph import OPERATION_OBSERVATIONS, PLAN_OBSERVATIONS, build_decoding_graph
+    from ..official.selection_graph import build_selection_graph
+    names = {*OPERATION_OBSERVATIONS, *PLAN_OBSERVATIONS}
+    for graph in (build_decoding_graph("generic_decoding").graph, build_selection_graph("generic_selection").graph):
+        names |= {lc.name for lc in graph.logicalConstrains.values()}
+        names |= {concept for concept in graph.concepts}
+    for word in ("card", "poker", "face", "suit", "mirror", "density", "friction", "magnet", "reflection", "sound", "thermal"):
+        assert not [name for name in map(str, names) if word in name.lower()], word
 
 
 @pytest.mark.parametrize("value", [{"rank": "13", "suit": "hearts"}, {"rank": "ace", "suit": "stars"}, "ace of spades"])

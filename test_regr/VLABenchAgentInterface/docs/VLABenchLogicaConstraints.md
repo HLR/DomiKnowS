@@ -7,9 +7,16 @@ accept the same language. The grammar has eight formulas (one `atLeastAL`, four 
 `andL`); the counts in this document include them (grammar + world 97, and the official causal setting
 enables 8 + 3). See [Grammar rule families](#grammar-rule-families-eight-logical-constraints).
 
+**2026-11-07 update:** the official constraints name no kind of object or benchmark topic. `named_card_face` is now
+`chosen_has_requested_property`, over the concepts `property_requested` and `shows_property`; card vocabulary is one
+observation source (`official/card_observations.py`). Image perception grounds `scene_ids_bound_targets` from its
+largest visible tag instead of `observation_supported_references`, which requires a complete set; in the world graph
+`official__observation_supported_references` is replaced by `official__scene_ids_bound_targets`. Formula counts are
+unchanged.
+
 **2026-10-30 update:** the [official protocol with image perception](IMAGE_PERCEPTION.md#official-protocol)
-adds `official/selection_graph.py`: nine formulas (`ordinal_rank_1` .. `ordinal_rank_8`, `named_card_face`)
-grounded by perceived boxes and card faces, giving 296 formulas across paths. See
+adds `official/selection_graph.py`: nine formulas (`ordinal_rank_1` .. `ordinal_rank_8`, `chosen_has_requested_property`)
+grounded by perceived boxes and readings, giving 296 formulas across paths. See
 [Official selection knowledge](#official-selection-knowledge-9-logical-constraints).
 
 **2026-10-29 update:** [Syntax and visibility](SYNTAX_AND_VISIBILITY.md) strengthens
@@ -324,7 +331,7 @@ The examples expand the skill-schema and exact-position helpers so their conditi
 
 ## Grammar rule families: eight logical constraints
 
-All rows in this section belong to the grammar and remain enforced at every DFA-enabled level. The first four logical constraints have automatically assigned names (`LC0`, etc. in a fresh standalone graph); the last four have the explicit names shown below. Use the source/formula to identify these rules rather than depending on auto-generated names.
+All rows in this section belong to the grammar and remain enforced at every DFA-enabled level. Each has the explicit name shown below; prompt rules 1 and 2 of `--prompt-constraints` word the first four (`official/prompt_constraints.py`).
 
 <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
   <colgroup>
@@ -343,22 +350,23 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
   </thead>
   <tbody>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">EOS existence</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>plan_requires_eos</code></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A sequence without EOS cannot accept. At least one end token is required.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L168">test_regr/VLABenchAgentInterface/graph.py:168</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L169">test_regr/VLABenchAgentInterface/graph.py:169</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>atLeastAL(
     eos(&#x27;p&#x27;),
     1,
+    name=&#x27;plan_requires_eos&#x27;,
 )</code></pre></td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">EOS closure</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>plan_eos_closure</code></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">After EOS, the only legal labels are further EOS labels. Repeated EOS is permitted; <code style="white-space: normal; overflow-wrap: anywhere;">EOS, skill:pick</code> is rejected.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L169">test_regr/VLABenchAgentInterface/graph.py:169</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L170">test_regr/VLABenchAgentInterface/graph.py:170</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>ifL(
@@ -367,25 +375,27 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
         eos(&#x27;first_position&#x27;, path=(&#x27;t&#x27;, first_token_relation)),
         eos(&#x27;next_position&#x27;, path=(&#x27;t&#x27;, second_token_relation)),
     ),
+    name=&#x27;plan_eos_closure&#x27;,
 )</code></pre></td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Non-EOS token budget</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>plan_token_budget</code></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At most <code style="white-space: normal; overflow-wrap: anywhere;">12 * 5 = 60</code> non-EOS tokens in the baseline. EOS padding does not consume this budget.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L173">test_regr/VLABenchAgentInterface/graph.py:173</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L174">test_regr/VLABenchAgentInterface/graph.py:174</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>atMostAL(
     notL(eos(&#x27;p&#x27;)),
     operation_limit * 5,
+    name=&#x27;plan_token_budget&#x27;,
 )</code></pre></td>
     </tr>
     <tr>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">Operation budget</td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>plan_operation_budget</code></td>
       <td style="text-align: right; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td>
       <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">At most 12 skill tokens; a custom language may tighten the limit through <code style="white-space: normal; overflow-wrap: anywhere;">language.maximum</code>.</td>
-      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L174">test_regr/VLABenchAgentInterface/graph.py:174</a></td>
+      <td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../graph.py#L176">test_regr/VLABenchAgentInterface/graph.py:176</a></td>
     </tr>
     <tr data-constraint-example="true">
       <td colspan="4" style="text-align: left; vertical-align: top; padding: 0.35em 0.65em 0.85em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.5em 0; line-height: 1.45;"><code>atMostAL(
@@ -396,6 +406,7 @@ All rows in this section belong to the grammar and remain enforced at every DFA-
         ),
     ),
     min(operation_limit, skill_language.maximum),
+    name=&#x27;plan_operation_budget&#x27;,
 )</code></pre></td>
     </tr>
     <tr>
@@ -644,11 +655,11 @@ Ordinal and named-card instructions under `--protocol official` with image perce
     andL(member(&quot;s&quot;), exactL(andL(member(&quot;o&quot;), selection_precedes(&quot;o&quot;, &quot;s&quot;)), limit=k - 1)),
     name=&quot;ordinal_rank_k&quot;,
 )</code></pre></td></tr>
-<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>named_card_face</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A named card request admits only tags whose read face matches. Example: "Please pick the poker jack of clubs" admits the tag read as (11, clubs).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/selection_graph.py#L76">official/selection_graph.py:76</a></td></tr>
+<tr><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><code>chosen_has_requested_property</code></td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">1</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;">A named card request admits only tags whose read face matches. Example: "Please pick the poker jack of clubs" admits the tag read as (11, clubs).</td><td style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><a href="../official/selection_graph.py#L76">official/selection_graph.py:76</a></td></tr>
 <tr data-constraint-example="true"><td colspan="4" style="text-align: left; vertical-align: top; padding: 0.55em 0.65em; overflow-wrap: anywhere;"><strong>DomiKnowS formula</strong><pre style="white-space: pre-wrap; overflow-wrap: anywhere;"><code>ifL(
-    andL(face_requested(&quot;q&quot;), chosen(&quot;s&quot;)),
-    face_matches(&quot;s&quot;),
-    name=&quot;named_card_face&quot;,
+    andL(property_requested(&quot;q&quot;), chosen(&quot;s&quot;)),
+    shows_property(&quot;s&quot;),
+    name=&quot;chosen_has_requested_property&quot;,
 )</code></pre></td></tr>
 </tbody>
 </table>

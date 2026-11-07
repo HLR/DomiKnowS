@@ -1692,7 +1692,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--official-output-dir", type=Path, help="official protocol: resumable outputs and summary.json")
     evaluate.add_argument("--official-disable-formula", action="append", default=[],
                           help="official protocol ablation: deactivate a named decoding or selection formula "
-                               "(e.g. observation_supported_references, ordinal_rank_2); recorded in the decoding label")
+                               "(e.g. scene_ids_bound_targets, ordinal_rank_2); recorded in the decoding label")
     evaluate.add_argument("--perception-cache", type=Path,
                           help="official protocol: directory of raw perception replies reused across runs "
                                "(keyed by perception fingerprint, instruction and image hashes)")

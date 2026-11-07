@@ -1,14 +1,16 @@
 """Observations for ``selection_graph.py`` from the instruction and image perception.
 
-The instruction is parsed into a request: a group noun ("poker", "book"), an ordinal and an
-order (left/right/bottom/top in the image, or card value), an optional shelf layer, or a named
-card face. Perception supplies the group (tags whose predicted kind names the noun, or tags
-showing a card face), the order (normalized image boxes, compared strictly) and the faces.
+The instruction is parsed into a request: a group noun, an ordinal and an order (left/right/
+bottom/top in the image, or a read value), an optional shelf layer, or a named property.
+Perception supplies the group (tags whose predicted kind names the noun, or tags with a reading
+of that noun), the order (normalized image boxes, compared strictly) and the readings. Which
+words name a readable property is the business of a reading source: ``card_observations.py`` is
+the one in use.
 
 "Left" is the viewer's left in the image the model sees; this convention is declared, not
 fitted. Every unsure observation abstains rather than restricting: a low-confidence or
 unreadable object, a group larger than ``MAX_GROUP``, two members whose order the boxes do
-not settle, equal card values, or a request no tag satisfies. Rows and columns of a grid are
+not settle, equal read values, or a request no tag satisfies. Rows and columns of a grid are
 not read: an empty grid slot has no tag, so the image cannot fix a column number.
 """
 from __future__ import annotations
@@ -17,20 +19,20 @@ import re
 
 try:
     from ..object_grounding import ObjectConstraints, _category_named
+    from .card_observations import CARD_NOUNS, card_request
     from .selection_graph import MAX_GROUP
 except ImportError:  # pragma: no cover - flat-module execution
     from object_grounding import ObjectConstraints, _category_named
+    from card_observations import CARD_NOUNS, card_request
     from selection_graph import MAX_GROUP
 
 ORDINAL_WORDS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8}
 _ORDINAL = r"(?:\d+(?:st|nd|rd|th)|" + "|".join(ORDINAL_WORDS) + ")"
 _SPATIAL = re.compile(rf"\b(?P<ordinal>{_ORDINAL})\s+(?P<noun>[a-z]+)\s+from\s+(?:the\s+)?(?P<start>left|right|bottom|top)\b")
-_VALUE = re.compile(rf"\bthe\s+(?:(?P<ordinal>{_ORDINAL})\s+)?(?P<which>largest|biggest|smallest)\s+(?P<noun>poker|card)s?\b")
-_FACE = re.compile(r"\b(?:poker|card)\s+(?P<rank>\d+|jack|queen|king|ace)\s+of\s+(?P<suit>spades|clubs|diamonds|hearts)\b")
 _LAYER = re.compile(r"\bon\s+the\s+(?P<layer>bottom|bottommost|lowest|top|topmost|highest|upper)\s+(?:layer|shelf)\b")
 _NEGATION = re.compile(r"\b(?:not|except|without|instead|rather|besides)\b|\bother\s+than\b")
-CARD_NOUNS = ("poker", "card")
-CARD_RANKS = {**{str(n): n for n in range(2, 11)}, "jack": 11, "queen": 12, "king": 13, "ace": 14}
+READING_SOURCES = (card_request,)  # each turns an instruction into a request about a readable property
+READING_NOUNS = CARD_NOUNS  # the nouns whose group members are known by having a reading
 
 
 def ordinal(text):
@@ -42,12 +44,9 @@ def selection_request(instruction):
     text = " ".join(str(instruction).lower().replace("_", " ").split())
     if _NEGATION.search(text):
         return None
-    if match := _FACE.search(text):
-        rank = CARD_RANKS.get(match['rank'])
-        return None if rank is None else {"kind": "face", "noun": "poker", "face": (rank, match["suit"])}
-    if match := _VALUE.search(text):
-        return {"kind": "value", "noun": match["noun"], "rank": ordinal(match["ordinal"]) if match["ordinal"] else 1,
-                "start": "smallest" if match["which"] == "smallest" else "largest"}
+    for source in READING_SOURCES:
+        if (request := source(text, _ORDINAL, ordinal)) is not None:
+            return request
     if match := _SPATIAL.search(text):
         layer = _LAYER.search(text)
         return {"kind": "spatial", "noun": match["noun"],
@@ -79,26 +78,29 @@ def _layer(group, boxes, which):
     return set(pick(clusters, key=lambda c: sum(boxes[t][3] for t in c) / len(c)))
 
 
-def selection_observations(request, visible, boxes, categories, cards):
-    """The selection graph's observations for one episode, or None to abstain."""
-    cards_requested = request["kind"] in ("face", "value") or request["noun"] in CARD_NOUNS
-    noun = " ".join(CARD_NOUNS) if cards_requested else request["noun"]
-    # A member is a tag whose predicted kind the noun names ("red book" for "book"), or a tag showing a card face.
-    group = {t for t in visible if (cards_requested and t in cards)
+def selection_observations(request, visible, boxes, categories, readings):
+    """The selection graph's observations for one episode, or None to abstain.
+
+    ``readings`` maps a tag to what could be read on it, a tuple whose first element orders the objects.
+    """
+    by_reading = request["kind"] in ("property", "value") or request["noun"] in READING_NOUNS
+    noun = " ".join(READING_NOUNS) if by_reading else request["noun"]
+    # A member is a tag whose predicted kind the noun names ("red book" for "book"), or a tag with a reading.
+    group = {t for t in visible if (by_reading and t in readings)
              or (categories.get(t) and _category_named(categories[t], noun))}
     if not group:
         return None
-    if request["kind"] == "face":
-        matches = {t for t in group if cards.get(t) == request["face"]}
-        return {"face_requested": True, "face_matches": matches} if matches else None
+    if request["kind"] == "property":
+        matches = {t for t in group if readings.get(t) == request["value"]}
+        return {"property_requested": True, "shows_property": matches} if matches else None
     if len(group) > MAX_GROUP:
         return None
     if request["kind"] == "value":
-        if any(t not in cards for t in group) or len({cards[t][0] for t in group}) != len(group):
+        if any(t not in readings for t in group) or len({readings[t][0] for t in group}) != len(group):
             return None
         larger = request["start"] == "largest"
         precedes = {(a, b) for a in group for b in group
-                    if (cards[a][0] > cards[b][0] if larger else cards[a][0] < cards[b][0])}
+                    if (readings[a][0] > readings[b][0] if larger else readings[a][0] < readings[b][0])}
         return {"rank": request["rank"], "members": group, "precedes": precedes}
     if any(t not in boxes for t in group):
         return None
@@ -112,14 +114,14 @@ def selection_observations(request, visible, boxes, categories, cards):
     return {"rank": request["rank"], "members": group, "precedes": precedes}
 
 
-def selection_constraints(graph, instruction, visible, boxes, categories, cards, uncertain=False):
+def selection_constraints(graph, instruction, visible, boxes, categories, readings, uncertain=False):
     """Pick candidates admitted by the selection formulas, or no restriction when any observation is unsure."""
     request = selection_request(instruction)
     if request is None:
-        return ObjectConstraints(evidence=("selection: no ordinal or named-card request",))
+        return ObjectConstraints(evidence=("selection: no ordinal or property request",))
     if uncertain or not visible:
         return ObjectConstraints(evidence=("selection: abstain, perception uncertain",))
-    observed = selection_observations(request, tuple(visible), boxes, categories, cards)
+    observed = selection_observations(request, tuple(visible), boxes, categories, readings)
     if observed is None:
         return ObjectConstraints(evidence=("selection: abstain, request not settled by the image",))
     admitted = graph.admitted(visible, **observed)

@@ -29,7 +29,7 @@ The first five levels are cumulative: each one keeps everything below it.
 | `generic` | + entity-type rules: static fixtures are never picked, press needs a button, destinations must be containers, no redundant repeated picks | entity table |
 | `scene` | + scene-grounded rules: plans refer only to entities the observation supports | entity table, scene |
 | `task` | + task rules: skill sequences, obligations, physics and complex-task knowledge | task identity |
-| `official` | `causal` + the `official` group (perceived visible tags, instruction candidates) | image perception (turned on automatically) |
+| `official` | `causal` + the `official` group (largest perceived tag, instruction candidates) | image perception (turned on automatically) |
 
 `official` sits outside the chain. Its observations come only from what the benchmark gives:
 - the episode's two images;
@@ -150,7 +150,7 @@ of listed objects still comes from the scene configuration. It runs on the froze
 |---|---|
 | `grammar` | end of plan, operation limit, skill parameters, subtask patterns |
 | `causal` | + no self-placement, distinct subtask destinations, a destination is never picked again |
-| `official` | + visible tags only, ids match what the instruction names, ordinal choice, named card face |
+| `official` | + ids at most the largest visible tag, ids match what the instruction names, ordinal choice, requested property |
 
 - **No DFA or perception:** the run adds no model calls, so flags that enforce or observe rules are rejected:
   `--knowledge`, `--constraints`, `--press-question`, `--scene-ids`, `--pattern-first`, `--hmm` and the formula and

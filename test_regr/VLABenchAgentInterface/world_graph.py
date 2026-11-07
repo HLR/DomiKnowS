@@ -85,7 +85,8 @@ class VLABenchWorldGraphBundle:
 # Primitive facts are observations, not precomputed policy verdicts. The same
 # bindings feed ordinary DataNode verification and incremental DFA monitoring.
 WORLD_FACT_DOMAINS = {
-    **dict.fromkeys(("has_undeclared_argument", "visibility_supplied", "entity_seen_initially", "container_seen_initially"), "operation"),
+    **dict.fromkeys(("has_undeclared_argument", "visibility_supplied", "entity_seen_initially", "container_seen_initially",
+                     "entity_within_seen_range", "container_within_seen_range"), "operation"),
     **dict.fromkeys(("entity_candidates_known", "entity_is_instruction_candidate",
                      "container_candidates_known", "container_is_instruction_candidate"), "operation"),
     **dict.fromkeys(("entity_value_usable", "container_value_usable", "entity_resolves", "container_resolves",
@@ -187,17 +188,18 @@ def _declare_causal_rules(world, level):
 def _declare_official_rules(world, level):
     """The official protocol's perception rules, active at ``official`` only.
 
-    Their observations come from image perception of the episode's images and instruction: the confidently
-    visible tags and the instruction's candidates per skill and role (``official/perception_observations.py``).
+    Their observations come from image perception of the episode's images and instruction: the largest confidently
+    visible tag and the instruction's candidates per skill and role (``official/perception_observations.py``). The
+    largest tag is only a bound: correct targets can lack a visible tag, so an unseen id below it stays allowed.
     Without an observation (``visibility_supplied`` or ``*_candidates_known`` false) a rule does not restrict.
     """
     from domiknows.graph.logicalConstrain import andL, ifL
     rule = lambda a, b, name: _record_rule(world, "official", a, b, name, level)
     op, facts = world.operation, world.facts
     rule(andL(op("op"), facts["visibility_supplied"]("op")), andL(
-        ifL(world.has_target_entity("op"), facts["entity_seen_initially"]("op")),
-        ifL(world.has_target_container("op"), facts["container_seen_initially"]("op")),
-    ), "official__observation_supported_references")
+        ifL(world.has_target_entity("op"), facts["entity_within_seen_range"]("op")),
+        ifL(world.has_target_container("op"), facts["container_within_seen_range"]("op")),
+    ), "official__scene_ids_bound_targets")
     rule(op("op"), andL(
         ifL(andL(world.has_target_entity("op"), facts["entity_candidates_known"]("op")),
             facts["entity_is_instruction_candidate"]("op")),

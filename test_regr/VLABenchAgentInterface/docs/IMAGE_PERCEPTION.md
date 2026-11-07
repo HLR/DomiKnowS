@@ -121,8 +121,10 @@ The run stays within the protocol's inputs and scoring:
 
 The facts reach the plan only through compiled logical constraints:
 
-- the visible tags ground `observation_supported_references` (`official/decoding_graph.py`): an id the
-  perception did not confidently see is refused;
+- the largest visible tag grounds `scene_ids_bound_targets` (`official/decoding_graph.py`): an id above it is
+  refused. A lower id whose tag was not seen stays allowed, because correct targets can lack a visible tag: on the
+  validation split, requiring each id to be seen refused 39 of 450 reference plans, 36 of them presses of untagged
+  buttons, while the bound refused none;
 - the predicted kinds ground `instruction_candidates_bound_targets`: when the instruction's source clause names a
   predicted kind ("put the **apple** in the bowl"), `pick` takes only tags of that kind, and a kind named in the
   destination clause bounds `place`, `insert`, `pour` and `push` the same way
@@ -130,7 +132,7 @@ The facts reach the plan only through compiled logical constraints:
   plural ("red apple" matches "apples"). Tags whose kind could not be read stay candidates, so only tags seen as
   another kind are excluded. Negation, spatial or ordinal wording and source relations ("from the plate") abstain,
   as in the scene-name filter;
-- ordinal and named-card requests ground the selection formulas of `official/selection_graph.py`, and the tags they
+- ordinal and property requests ground the selection formulas of `official/selection_graph.py`, and the tags they
   admit join the same candidate LC for `pick` (see below);
 - with `--grounding-policy` (opt-in; none runs by default, see the ablation below), the role hypotheses ground the
   research grounding formulas (`knowledge/research_lcs.py`), evaluated by the same `ResearchMonitor` as the internal
@@ -143,7 +145,7 @@ The facts reach the plan only through compiled logical constraints:
 When several sources bound the same skill and role, a tag must satisfy all of them; if they leave no tag in common,
 that role is left unrestricted.
 
-### Ordinal and named-card selection
+### Ordinal and property selection
 
 Each confidently visible object may also report a `card` face (`rank` 2..10, jack, queen, king or ace; `suit`
 spades, clubs, diamonds or hearts), recorded as `visual_card:<id>`. `official/selection_observations.py` parses
@@ -157,7 +159,7 @@ these requests from the instruction:
 | Named card | "Please pick the poker jack of spades" | Tags showing a face | — |
 
 `official/selection_graph.py` declares nine formulas: `ordinal_rank_1` .. `ordinal_rank_8` (the chosen tag is a
-group member with exactly k − 1 members before it, an `exactL` count) and `named_card_face`. The compiled program is
+group member with exactly k − 1 members before it, an `exactL` count) and `chosen_has_requested_property`, which names no kind of object: card faces are the one reading source in use (`official/card_observations.py`). The compiled program is
 grounded for every visible tag, and the admitted tags become `pick` candidates.
 
 "Left" and "bottom" are the viewer's directions in the image the model sees. This convention is declared, not
@@ -227,14 +229,14 @@ python -m test_regr.VLABenchAgentInterface.main evaluate-planner --protocol offi
 ```
 
 `--official-disable-formula` takes any formula of `official/decoding_graph.py` or `official/selection_graph.py`
-(`observation_supported_references`, `instruction_candidates_bound_targets`, `ordinal_rank_1` .. `_8`,
-`named_card_face`) and may be repeated; `--grounding-policy joint|robust|abstain` adds a grounding policy. Both are
+(`scene_ids_bound_targets`, `instruction_candidates_bound_targets`, `ordinal_rank_1` .. `_8`,
+`chosen_has_requested_property`) and may be repeated; `--grounding-policy joint|robust|abstain` adds a grounding policy. Both are
 recorded in the run's decoding label.
 
 ### The official knowledge level for training and evaluation
 
 `--knowledge official` brings the same knowledge to the trained planners. It activates the world graph's causal group
-and its `official` group, `official__observation_supported_references` and
+and its `official` group, `official__scene_ids_bound_targets` and
 `official__instruction_candidates_bound_targets`. The level also turns image perception on, so every example is read
 from its image pair and instruction by `research/perception.py:enrich_examples`. Each example then stores its visible
 tags and the candidates of `official/perception_observations.perceived_observations`: perceived kinds named by the

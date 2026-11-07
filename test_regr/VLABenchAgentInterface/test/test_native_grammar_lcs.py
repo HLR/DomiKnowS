@@ -123,3 +123,18 @@ def test_deactivating_the_declared_grammar_changes_the_language():
     bundle.planner_grammar.active = False
     assert dfa().accepts(labels(lone_pick))
 
+
+def test_the_plan_frame_rules_are_named_and_editable():
+    vocabulary, graph, bundle = benchmark_grammar(operations=2)
+    assert [rule.name for rule in bundle.plan_frame_rules] == [
+        "plan_requires_eos", "plan_eos_closure", "plan_token_budget", "plan_operation_budget"]
+    assert all(rule in graph.logicalConstrains.values() for rule in bundle.plan_frame_rules)
+    step = {"name": "pick", "params": {"target_entity_name": 1}}, {"name": "place", "params": {"target_container_name": 2}}
+    two_subtasks = [*step, *step]
+    dfa = lambda: NativePlanDFA(BYTES, EOS, entity_count=4, max_operations=4,
+                                language=compile_plan_language(graph, bundle, vocabulary))
+    assert not dfa().accepts(labels(two_subtasks))  # four operations over a budget of two
+    for rule in bundle.plan_frame_rules[2:]:
+        rule.active = False
+    assert dfa().accepts(labels(two_subtasks))
+

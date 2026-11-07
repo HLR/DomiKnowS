@@ -1,8 +1,8 @@
 """Episode knowledge for constrained plan decoding, declared as logical constraints.
 
 The frozen model's own answers (the press question, the largest tag number it read,
-the subtask patterns it named) and the instruction's object candidates are
-observations of one episode. These formulas decide which operations they allow;
+the subtask patterns it named), image perception's largest visible tag and the
+instruction's object candidates are observations of one episode. These formulas decide which operations they allow;
 ``KnowledgePlanDFA`` grounds the observations and compiles the formulas.
 """
 from dataclasses import dataclass
@@ -19,13 +19,13 @@ OPERATION_OBSERVATIONS = (
     "first_operation",                   # it is the plan's first operation
     "press_answer_yes",                  # the model answered Yes to the press question
     "has_target",                        # it names an object id
-    "scene_bound_read",                  # the model read the largest tag number in the labeled image
+    "scene_bound_read",                  # the largest tag number in the labeled image was read
     "target_within_scene_bound",         # its id is at most that number
     "patterns_chosen",                   # the model named subtask patterns for this episode
     "continues_chosen_pattern",          # it extends a named pattern that still fits the operation budget
     "instruction_candidates_known",      # the instruction grounds candidates for this skill and role
     "target_is_instruction_candidate",   # its id is one of them
-    "visibility_supplied",              # explicit support set from the initial observation
+    "visibility_supplied",              # a set of ids its supplier knows to be complete; perception's is not
     "target_seen_initially",            # this id belongs to that set (not merely to an id range)
 )
 PLAN_OBSERVATIONS = (
@@ -60,7 +60,8 @@ def build_decoding_graph(name="vlabench_decoding_knowledge"):
         ifL(o["press_answer_yes"]("operation"),
             andL(o["press"]("operation"), o["first_operation"]("operation")),
             name="press_answer_single_press")
-        # Object ids stay within the tags the model read in the labeled image.
+        # Object ids stay within the largest tag read in the labeled image. Lower ids stay allowed:
+        # a correct target can lack a visible tag.
         ifL(andL(o["scene_bound_read"]("operation"), o["has_target"]("operation")),
             o["target_within_scene_bound"]("operation"),
             name="scene_ids_bound_targets")

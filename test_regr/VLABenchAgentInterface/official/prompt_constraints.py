@@ -5,8 +5,10 @@ perception call and no extra question, so the model may ignore a rule and is sco
 The logical constraints stay the single declaration of the rules. Each rule below names the ones it
 words, and ``test_prompt_constraints.py`` fails if the declarations and this text drift apart.
 
-``ANSWER_GATED_LCS`` are left out: they fire only on an answer to ``--press-question``, ``--scene-ids``
-or ``--pattern-first``, which are off by default and need extra model calls.
+``UNWORDED_LCS`` are left out: the pattern rules fire only on an answer to ``--pattern-first``, which is off by
+default and needs extra model calls, and ``observation_supported_references`` only on a complete set of ids
+that a caller supplies. In a prompt the press rule needs no such answer: the
+model applies it itself, so it is worded even though the DFA ties it to ``--press-question``.
 """
 from __future__ import annotations
 
@@ -17,19 +19,20 @@ from typing import Any
 
 LEVELS = ("grammar", "causal", "official")
 DEFAULT_LEVEL = "official"
-ANSWER_GATED_LCS = ("press_answer_single_press", "scene_ids_bound_targets",
-                    "chosen_patterns_continue", "chosen_patterns_complete")
+UNWORDED_LCS = ("observation_supported_references", "chosen_patterns_continue", "chosen_patterns_complete")
 
 
 @dataclass(frozen=True)
 class PromptRule:
     text: str
-    lcs: tuple[str, ...] = ()  # declared names; the end-of-plan and budget rules are unnamed DFA constraints
+    lcs: tuple[str, ...] = ()  # the names of the declared logical constraints the rule words
 
 
 GRAMMAR_RULES = (
-    PromptRule("Finish the plan once it is complete, and write nothing after it."),
-    PromptRule("Use at most {max_operations} skill calls in total."),
+    PromptRule("Finish the plan once it is complete, and write nothing after it.",
+               ("plan_requires_eos", "plan_eos_closure")),
+    PromptRule("Use at most {max_operations} skill calls in total.",
+               ("plan_operation_budget", "plan_token_budget")),
     PromptRule("Start the plan with the first skill of one of the patterns listed in the rule below.",
                ("plan_progress_positions",)),
     PromptRule("Give each skill exactly these parameters, each with one integer object ID, and no others: {arguments}.",
@@ -55,20 +58,28 @@ CAUSAL_RULES = (
                ("destinations_stay_put",)),
 )
 OFFICIAL_RULES = (
-    PromptRule("Use only object IDs whose numbered tags you can see in the labeled image. For example, if tags "
-               "1, 2 and 3 are visible, pick 9 is not allowed.",
-               ("observation_supported_references",)),
+    PromptRule("No object ID is larger than the largest numbered tag you can see in the labeled image. For example, "
+               "if the largest visible tag is 7, pick 9 is not allowed. An object without a visible tag can still "
+               "have a lower ID.",
+               ("scene_ids_bound_targets",)),
     PromptRule("When the instruction names an object or a destination, use only the tag of something that matches "
                "it. For example, if the apple is tag 2 and the instruction says to pick the apple, pick 5 is not "
                "allowed.",
                ("instruction_candidates_bound_targets",)),
     PromptRule("When the instruction asks for the k-th object of a group in some order, choose the group member "
-               "with exactly k - 1 group members before it in that order. For example, for the 2nd poker from "
+               "with exactly k - 1 group members before it in that order. For example, for the 2nd object from "
                "left to right among tags 4, 7 and 9, choose tag 7.",
                tuple(f"ordinal_rank_{k}" for k in range(1, 9))),
-    PromptRule("When the instruction names a card, choose the tag that shows that card face. For example, for the "
-               "ace of spades, choose only the tag showing that card.",
-               ("named_card_face",)),
+    PromptRule("When the instruction asks for an object by something you can read on it, choose only a tag whose "
+               "object shows exactly that. For example, for the object marked 7, choose only the tag of the object "
+               "marked 7.",
+               ("chosen_has_requested_property",)),
+    # Chosen on the validation split over two wordings that named property topics or button numbering: this one names
+    # neither. Added alone: Macro +2.72 (95% CI 1.20 to 4.37), other five dimensions +0.16, 3 of 396 false presses.
+    # With the final wording of the other rules: Macro +2.24 (0.53 to 4.01), other five -0.43, 10 of 396 false presses.
+    PromptRule("When the instruction asks you to choose an answer and the scene has buttons for the options, do not "
+               "move the objects. The plan is one press of the button for your choice, and nothing else.",
+               ("press_answer_single_press",)),
 )
 _SECTIONS = {"grammar": ("Plan structure", GRAMMAR_RULES),
              "causal": ("Causal rules", CAUSAL_RULES),

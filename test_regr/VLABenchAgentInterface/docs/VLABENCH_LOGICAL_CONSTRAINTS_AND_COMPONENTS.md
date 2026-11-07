@@ -69,7 +69,7 @@ The following are summaries of the actual declarations in [world_graph.py](../wo
 | `open_before_enclosed_placement` | Require observed/prior opening for enclosed placements when access is known. Explicit planning facts with unknown access remain unknown; the no-facts path retains legacy closed-world behavior. |
 | `task_skill_sequence`, `task_initial_target`, `task_sequence_completion`, `composite_subgoal_completion` | Enforce explicit sequence/cycle, first-target and final minimum/history obligations through request concepts and phase guards. |
 | `task__{task}__skill_sequence[__{interface}]`, `task__{task}__completion[__{interface}]`, `task__{task}__obligations` | Declare task-specific sequences and final obligations. An explicit sequence overrides the task's default sequence. |
-| `official__observation_supported_references`, `official__instruction_candidates_bound_targets` | Constrain known visible tags and known per-skill/role instruction candidates from image perception; absent observations do not establish support. |
+| `official__scene_ids_bound_targets`, `official__instruction_candidates_bound_targets` | Constrain ids to the largest visible tag and known per-skill/role instruction candidates from image perception; absent observations do not establish support. |
 
 ### Grounded planning rules in both domains
 

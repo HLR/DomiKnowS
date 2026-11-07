@@ -10,7 +10,7 @@ from ..official import official_protocol as op
 from ..official.causal_graph import build_causal_graph
 from ..official.decoding_graph import build_decoding_graph
 from ..official.prompt_constraints import (
-    ANSWER_GATED_LCS, CAUSAL_RULES, DEFAULT_LEVEL, GRAMMAR_RULES, OFFICIAL_RULES, prompt_constraints_record,
+    CAUSAL_RULES, DEFAULT_LEVEL, GRAMMAR_RULES, OFFICIAL_RULES, UNWORDED_LCS, prompt_constraints_record,
     prompt_constraints_text, prompt_rules,
 )
 from ..official.selection_graph import build_selection_graph
@@ -30,12 +30,19 @@ def worded(rules):
 
 def test_every_rule_matches_a_declared_logical_constraint():
     grammar = native_planning.NativePlanDFA(BYTES, EOS, entity_count=4, max_operations=4).language.bundle
-    assert worded(GRAMMAR_RULES) == {rule.name for rule in grammar.planner_grammar_rules}
+    assert worded(GRAMMAR_RULES) == {rule.name for rule in (*grammar.plan_frame_rules, *grammar.planner_grammar_rules)}
+    assert all(rule.lcs for rule in GRAMMAR_RULES + CAUSAL_RULES + OFFICIAL_RULES)
     assert worded(CAUSAL_RULES) == named_lcs(build_causal_graph("prompt_test_causal").graph)
     declared = (named_lcs(build_decoding_graph("prompt_test_decoding").graph)
                 | named_lcs(build_selection_graph("prompt_test_selection").graph))
-    assert worded(OFFICIAL_RULES) | set(ANSWER_GATED_LCS) == declared
-    assert not worded(OFFICIAL_RULES) & set(ANSWER_GATED_LCS)
+    assert worded(OFFICIAL_RULES) | set(UNWORDED_LCS) == declared
+    assert not worded(OFFICIAL_RULES) & set(UNWORDED_LCS)
+
+
+def test_rules_name_no_benchmark_task_or_topic():
+    text = prompt_constraints_text("official", grammar_profile="benchmark", max_operations=16).lower()
+    for word in ("poker", "card", "mirror", "density", "friction", "magnet", "reflection", "speed of sound", "thermal"):
+        assert word not in text, word
 
 
 def test_levels_are_cumulative_and_official_is_the_default():

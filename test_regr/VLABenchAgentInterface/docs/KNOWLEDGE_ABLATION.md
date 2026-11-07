@@ -58,8 +58,8 @@ What each knowledge tier of the world graph contributes when the same checkpoint
 `causal` is a `--knowledge` level on every path: it enables only **3 DomiKnowS logical constraints**, the world graph's `causal` group for the Joint and internal graph decoders and the equivalent official causal graph for `--protocol official` (where `--constraints causal` remains an alias). It is the first cumulative tier above `grammar`, so `generic` and every higher level also keep the causal group active, and its result-table rows come from `eval_planning --knowledge causal`. Rows from `generic` up were measured before causal joined them (see Caveats).
 `official` is the standard protocol's knowledge as a `--knowledge` level on the same paths (`train-agent`, `eval_planning`, `evaluate-planner`). It sits outside the cumulative chain. It enables the causal group plus the world graph's **2-constraint** `official` group:
 
-- `official__observation_supported_references`: plan ids are confidently visible tags.
-- `official__instruction_candidates_bound_targets`: plan ids are the instruction's candidates, meaning perceived object kinds named by its clauses and the tags admitted by the ordinal and card-face formulas of `official/selection_graph.py`.
+- `official__scene_ids_bound_targets`: plan ids are at most the largest confidently visible tag.
+- `official__instruction_candidates_bound_targets`: plan ids are the instruction's candidates, meaning perceived object kinds named by its clauses and the tags admitted by the ordinal and requested-property formulas of `official/selection_graph.py`.
 
 The level turns image perception on: `--research-perception auto` becomes `image-vlm`. Observations then come only from the episode's two images and its instruction, and the entity table is shown as numbered objects. No scene fact or task enters, in training or in evaluation. Under `--protocol official` the level is `causal` with image perception. No score has been measured at this level yet.
 

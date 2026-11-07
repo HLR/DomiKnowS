@@ -84,7 +84,7 @@ def test_retention_reports_one_eai_episode_regression_without_blaming_vlabench()
 
 @pytest.mark.parametrize("policy,epochs", [("abort", 1), ("continue", 4)])
 def test_rejected_epoch_continues_only_explicitly_and_never_becomes_best(
-        joint_fixture, tmp_path, monkeypatch, policy, epochs):
+        joint_fixture, tmp_path, monkeypatch, capsys, policy, epochs):
     from .. import main
     from test_regr.VLABenchAgentInterface import dataset_protocol
     examples, runtime = joint_fixture
@@ -125,6 +125,9 @@ def test_rejected_epoch_continues_only_explicitly_and_never_becomes_best(
     monkeypatch.setattr(main, "JointReinforcementProgram", Stage2)
     main.command_train_agent(parsed)
     results = [r for r in records if r["stage"] == "stage2"]
+    output = capsys.readouterr().err
+    assert "EAI success retention rejected: observed=0.579545, baseline=0.590909" in output
+    assert f"allowed_regression=0.000000; retention_policy={policy}" in output
     assert len(results) == epochs
     assert all(not r["best_candidate_eligible"] for r in results)
     assert all(r["metrics"]["retention_rejection_reasons"] == ["eai_success_regression"] for r in results)
