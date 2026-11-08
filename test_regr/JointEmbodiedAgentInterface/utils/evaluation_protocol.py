@@ -11,7 +11,9 @@ def training_data_protocol(args, resume_payload=None):
         and previous.get("vlabench_holdout_tasks") == tasks
     ))
     return {"vlabench_split": "deterministic_episode_split", "split_seed": args.seed,
-            "vlabench_holdout_tasks": tasks, "holdout_history_verified": verified}
+            "vlabench_holdout_tasks": tasks, "holdout_history_verified": verified,
+            "official_evaluation_training_seen": bool(getattr(args, "allow_internal_evaluation_training", False)
+                or previous.get("official_evaluation_training_seen", False))}
 
 
 def evaluation_protocol(args, payload):

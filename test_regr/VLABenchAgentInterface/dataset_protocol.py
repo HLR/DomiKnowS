@@ -19,19 +19,19 @@ def episode_fingerprint(episode):
     instruction=""
     for p in sorted((episode/"input").glob("*instruction*")):
         if p.suffix.lower()==".json":
-            value=json.loads(p.read_text())
+            value=json.loads(p.read_text(encoding="utf-8"))
             instruction=str(value.get("instruction",value.get("text",""))) if isinstance(value,dict) else str(value)
-        else: instruction=p.read_text()
+        else: instruction=p.read_text(encoding="utf-8")
         break
-    value={"scene":json.loads(configs[0].read_text()),"instruction":instruction.strip()}
+    value={"scene":json.loads(configs[0].read_text(encoding="utf-8")),"instruction":instruction.strip()}
     research=episode/"input/research_observations.json"
-    if research.is_file():value["research_observations"]=json.loads(research.read_text())
+    if research.is_file():value["research_observations"]=json.loads(research.read_text(encoding="utf-8"))
     return _json_digest(value)
 
 def scene_fingerprint(episode):
     configs=sorted((Path(episode)/"env_config").glob("*.json"))
     if not configs:raise ValueError(f"Missing scene configuration: {episode}")
-    return config_scene_fingerprint(json.loads(configs[0].read_text()))
+    return config_scene_fingerprint(json.loads(configs[0].read_text(encoding="utf-8")))
 
 def config_scene_fingerprint(config):
     task=config.get("task",config)
@@ -50,7 +50,7 @@ def protected_scene_fingerprints():
     scenes={scene_fingerprint(p) for p in dataset_episodes(OFFICIAL_EVALUATION)} if OFFICIAL_EVALUATION.exists() else set()
     if SIMULATOR_TRACKS.exists():
         for path in sorted(SIMULATOR_TRACKS.glob("*.json")):
-            for configs in json.loads(path.read_text()).values():
+            for configs in json.loads(path.read_text(encoding="utf-8")).values():
                 scenes.update(config_scene_fingerprint(config) for config in configs)
     return scenes
 
@@ -64,7 +64,7 @@ def assert_training_dataset(root, *, protected_root=None, simulator_root=None):
     marker=root/ROLE_FILE
     if not marker.is_file():
         raise ValueError(f"Unclassified planning dataset: {root}. A {ROLE_FILE} with role=training and provenance is required.")
-    role=json.loads(marker.read_text())
+    role=json.loads(marker.read_text(encoding="utf-8"))
     if role.get("role")!="training" or not role.get("provenance"):
         raise ValueError(f"Dataset role is not independently sourced training: {root}")
     if "vlm_evaluation" in json.dumps(role).lower():
@@ -75,7 +75,7 @@ def assert_training_dataset(root, *, protected_root=None, simulator_root=None):
         manifest_path=root/"dataset_manifest.json"
         if not manifest_path.is_file() or hashlib.sha256(manifest_path.read_bytes()).hexdigest()!=role["manifest_sha256"]:
             raise ValueError("Training dataset manifest changed after validation")
-        for relative,expected in json.loads(manifest_path.read_text()).get("files",{}).items():
+        for relative,expected in json.loads(manifest_path.read_text(encoding="utf-8")).get("files",{}).items():
             source=(root/relative).resolve()
             if not source.is_relative_to(root) or not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest()!=expected:
                 raise ValueError(f"Training file changed after validation: {relative}")
@@ -89,7 +89,7 @@ def assert_training_dataset(root, *, protected_root=None, simulator_root=None):
     tracks=Path(simulator_root) if simulator_root is not None else SIMULATOR_TRACKS if protected_root is None else None
     if tracks is not None and tracks.exists():
         for path in sorted(tracks.glob("*.json")):
-            payload=json.loads(path.read_text())
+            payload=json.loads(path.read_text(encoding="utf-8"))
             for track_configs in payload.values():
                 for config in track_configs:
                     protected_scenes.add(config_scene_fingerprint(config))
@@ -104,14 +104,46 @@ def assert_training_dataset(root, *, protected_root=None, simulator_root=None):
     if overlap:raise ValueError(f"Official evaluation scene overlap: {overlap[:5]}")
     return {"role":"training","root":str(root),"episodes":len(episodes),"scene_manifest_sha256":_json_digest(sorted(digests)),"official_evaluation_overlap":0,"provenance":role["provenance"]}
 
-def guard_training_dataset(root, output=None, *, resume=None):
+def _internal_evaluation_dataset(root):
+    """Explicit historical experiment; never certify these episodes as clean."""
+    root = Path(root).resolve()
+    if not OFFICIAL_EVALUATION.is_dir() or not os.path.samefile(root, OFFICIAL_EVALUATION):
+        raise ValueError("internal evaluation training is restricted to the canonical official evaluation root")
+    role = json.loads((root / ROLE_FILE).read_text(encoding="utf-8"))
+    if role.get("role") != "evaluation" or role.get("provenance", {}).get("repo_id") != "VLABench/vlm_evaluation_v1.0":
+        raise ValueError("internal evaluation training requires the original evaluation provenance")
+    episodes = dataset_episodes(root)
+    if not episodes:
+        raise ValueError("internal evaluation corpus is empty")
+    return {"role": "internal_evaluation_training", "root": str(root), "episodes": len(episodes),
+            "scene_manifest_sha256": _json_digest([episode_fingerprint(p) for p in episodes]),
+            "official_evaluation_training_seen": True, "provenance": role["provenance"],
+            "checkpoint_lineage_note": "Internal seen-task experiment, not an untouched official benchmark."}
+
+
+def guard_training_dataset(root, output=None, *, resume=None, allow_internal_evaluation_training=False):
+    if allow_internal_evaluation_training:
+        report = _internal_evaluation_dataset(root)
+        if resume:
+            checkpoint = Path(resume).resolve()
+            prior = json.loads((checkpoint.parent / "dataset_protocol.json").read_text(encoding="utf-8"))
+            if (prior.get("official_evaluation_training_seen") is not True
+                    or prior.get("scene_manifest_sha256") != report["scene_manifest_sha256"]):
+                raise ValueError("internal checkpoint dataset lineage differs")
+        if output:
+            path = Path(output) / "dataset_protocol.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.exists() and json.loads(path.read_text(encoding="utf-8")) != report:
+                raise ValueError("output directory has different dataset lineage")
+            path.write_text(json.dumps(report, indent=2) + "\n")
+        return report
     report=assert_training_dataset(root)
     if resume:
         checkpoint=Path(resume).resolve()
         candidate=checkpoint.parent/"dataset_protocol.json"
         if not candidate.is_file():
             raise ValueError("Cannot resume under the corrected dataset protocol: checkpoint has no verified training-data lineage. Start from the original pretrained backbone.")
-        prior=json.loads(candidate.read_text())
+        prior=json.loads(candidate.read_text(encoding="utf-8"))
         if prior.get("official_evaluation_training_seen") is not False:
             raise ValueError("Cannot resume a checkpoint exposed to official evaluation training data.")
     report["official_evaluation_training_seen"]=False
@@ -121,7 +153,7 @@ def guard_training_dataset(root, output=None, *, resume=None):
         if out.suffix.lower() in {".pt",".pth",".bin",".json",".pkl"}:out=out.parent/(out.name+".dataset_protocol.json")
         else:out=out/"dataset_protocol.json"
         out.parent.mkdir(parents=True,exist_ok=True)
-        if out.exists() and json.loads(out.read_text()).get("official_evaluation_training_seen") is True:
+        if out.exists() and json.loads(out.read_text(encoding="utf-8")).get("official_evaluation_training_seen") is True:
             raise ValueError("Choose a new output directory; this directory belongs to an evaluation-exposed historical run")
         out.write_text(json.dumps(report,indent=2)+"\n")
     return report

@@ -226,7 +226,7 @@ def _unit_interval(value: str) -> float:
 
 
 @torch.no_grad()
-def _evaluate_eai(planner, runtime, examples, *, limit=32):
+def _evaluate_eai(planner, runtime, examples, *, limit=32, prediction_observer=None):
     view = planner.for_domain("eai")
     exact = success = recall = positive = 0.0
     selected = list(examples)[:limit]
@@ -254,6 +254,8 @@ def _evaluate_eai(planner, runtime, examples, *, limit=32):
                 )
                 success += float(result["is_success"])
                 recall += float(result["recall"])
+                if prediction_observer is not None:
+                    prediction_observer(item, labels, result)
                 reward = item["reward_function"](labels, data_item=item)
                 positive += float(float(torch.as_tensor(reward).mean()) > 0.0)
     finally:
@@ -292,12 +294,22 @@ def _prepare(args, device):
         )
 
     _status(f"loading VLABench planning data from {args.vlabench_planning_dir}")
-    vlabench_examples = load_planning_examples(args.vlabench_planning_dir, limit=args.vlabench_limit)
+    vlabench_examples = load_planning_examples(args.vlabench_planning_dir, limit=args.vlabench_limit,
+        observation_mode=getattr(args, "observation_mode", "visual"))
+    if getattr(args, "allow_internal_evaluation_training", False) and len(vlabench_examples) != 4500:
+        raise ValueError("historical internal experiment requires all 4,500 canonical episodes")
+    if getattr(args, "scene_verified_training_references", False):
+        from .utils.generalization_protocol import corrected_references
+        vlabench_examples = corrected_references(vlabench_examples, args.output)
     vlabench_examples, held_out = partition(vlabench_examples, args)  # held-out tasks never reach training
     if not vlabench_examples:
         raise ValueError("VLABench planning dataset is empty")
     _status(f"loaded VLABench planning examples={len(vlabench_examples)} held out={len(held_out)}")
     vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
+    if getattr(args, "save_initialization", False):
+        from .utils.generalization_protocol import freeze_json
+        freeze_json(Path(args.output) / "split_identities.json", {
+            "seed": args.seed, "splits": {k: [e.episode_id for e in v] for k, v in vlabench_splits.items()}})
     runtime = build_joint_runtime(
         world,
         vocabulary,
@@ -318,6 +330,9 @@ def _prepare(args, device):
         for item, example in zip(items, vlabench_splits[name]):
             item["planner_context"] = planner_context(
                 "vlabench", example, context=item.get("planner_context"))
+    if getattr(args, "scene_verified_training_references", False):
+        from .utils.generalization_protocol import audit_training_paths
+        audit_training_paths(runtime, prepared, args.output)
     # Match the standalone EAI workflow exactly so standalone and joint
     # checkpoints are selected and compared on the same row identities.
     eai_train, eai_valid = split_train_dev(eai_examples, dev_fraction=0.2)
@@ -377,7 +392,10 @@ def command_train_agent(args):
     from test_regr.VLABenchAgentInterface.dataset_protocol import guard_training_dataset
     if getattr(args, "initialize_from", None) and (args.resume or args.resume_adapter):
         raise ValueError("--initialize-from cannot be combined with --resume or --resume-adapter")
-    guard_training_dataset(args.vlabench_planning_dir, args.output, resume=getattr(args, "resume", None) or getattr(args,"resume_adapter",None) or getattr(args, "initialize_from", None))
+    guard_kwargs = {"resume": getattr(args, "resume", None) or getattr(args,"resume_adapter",None) or getattr(args, "initialize_from", None)}
+    if getattr(args, "allow_internal_evaluation_training", False):
+        guard_kwargs["allow_internal_evaluation_training"] = True
+    guard_training_dataset(args.vlabench_planning_dir, args.output, **guard_kwargs)
     if (getattr(args,"constraint_profile","baseline")=="research_v1" or getattr(args,"research_rollout_manifest",None)) and not (Path(args.control_source)/"research_control.json").is_file():
         raise ValueError("Research agent training requires measured, explicitly segmented control data")
     ce_only = getattr(args, "ce_only", False)
@@ -398,6 +416,8 @@ def command_train_agent(args):
             raise ValueError(f"--{training_mode} cannot run Stage 2 assist ablations")
     random.seed(args.seed)
     torch.manual_seed(args.seed)
+    import numpy as np
+    np.random.seed(args.seed)
     _status(f"knowledge level={apply_knowledge_argument(args)} task identity={default_task_identity()} "
             f"held-out tasks={apply_holdout_arguments(args)}")
     # Fail on a mistyped component or mode before loading any model.
@@ -562,6 +582,19 @@ def command_train_agent(args):
             dfa_loss=_dfa_loss_config(args),
         )
         stage1.round_robin_cursor = cursor
+        if getattr(args, "save_initialization", False) and not args.resume:
+            if args.resume_adapter or getattr(args, "initialize_from", None):
+                raise ValueError("fresh initialization snapshot cannot use adapted weights")
+            from .utils.generalization_protocol import freeze_inputs, freeze_model_source
+            freeze_model_source(output, args.planner_model, args.vision_model)
+            manifest_hash = freeze_inputs(output, planner, eai_train, eai_valid, vla_splits, runtime)
+            save_joint_checkpoint(output / "joint_initialization.pt", runtime=runtime, planner=planner,
+                controller=controller, planner_optimizer=planner_optimizer,
+                controller_optimizer=controller_optimizer, stage="initialization", epoch=-1,
+                round_robin_cursor=0, metrics={"training_updates": 0, "training_mode": training_mode,
+                    "training_data_protocol": training_data_protocol(args, None),
+                    "generation_inputs_sha256": manifest_hash})
+            _status("saved untrained Joint initialization before EAI warm-up or controller updates")
         if start_stage1 == 0 and getattr(args, "stage1_eai_warmup_steps", 0) > 0:
             _status(f"Stage 1 EAI pre-training warmup steps={args.stage1_eai_warmup_steps}")
             stage1.train_eai_warmup(eai_train, steps=args.stage1_eai_warmup_steps)
@@ -1239,6 +1272,8 @@ def build_parser():
     agent.add_argument("--eai-max-steps", type=int, default=60)
     agent.add_argument("--eai-reward-mode", choices=["binary", "dense"], default="dense")
     add_knowledge_argument(agent)
+    agent.add_argument("--observation-mode", choices=("visual", "metadata-assisted"), default="visual",
+                       help="ground property observations from vision or privileged scene metadata")
     add_holdout_arguments(agent)
     agent.add_argument("--vlabench-planning-dir", default=str(DEFAULT_VLABENCH_PLANNING.parent / "planning_train"))
     agent.add_argument("--control-source", default=str(DEFAULT_VLABENCH_CONTROL))
@@ -1253,6 +1288,11 @@ def build_parser():
     agent.add_argument("--device")
     agent.add_argument("--seed", type=int, default=42)
     agent.add_argument("--stage1-epochs", type=int, default=5)
+    agent.add_argument("--save-initialization", action="store_true")
+    agent.add_argument("--allow-internal-evaluation-training", action="store_true",
+                       help="explicit historical internal experiment on the canonical official evaluation corpus")
+    agent.add_argument("--scene-verified-training-references", action="store_true",
+                       help="freeze audited density references in memory without altering dataset files")
     agent.add_argument("--stage2-epochs", type=int, default=3)
     agent.add_argument("--stage2-dfa", choices=("on", "off"), default="on",
                        help="Stage 2 planner DFA masking for both domains; off uses free sampling, replay "

@@ -385,9 +385,44 @@ def save_joint_checkpoint(
         payload["stage2_planner_regularization"] = planner._stage2_regularization_state
     from test_regr.VLABenchAgentInterface.research.checkpoint import checkpoint_metadata
     payload.update(checkpoint_metadata(runtime.world.vlabench,planner))
+    if (target.parent / "split_identities.json").exists():
+        from .utils.generalization_protocol import file_hash
+        import subprocess
+        payload["campaign_provenance"] = {
+            "source_commit": subprocess.check_output(
+                ["git", "-C", str(Path(__file__).parent), "rev-parse", "HEAD"], text=True).strip(),
+            "manifests": {name: file_hash(target.parent / name) for name in (
+                "split_identities.json", "training_reference_policy.json", "training_reference_hashes.json",
+                "generation_inputs.json", "model_source.json", "campaign_configuration.json")
+                if (target.parent / name).exists()},
+            "initialization_sha256": file_hash(target.parent / "joint_initialization.pt")
+                if target.name != "joint_initialization.pt" and (target.parent / "joint_initialization.pt").exists()
+                else None,
+        }
     torch.save(payload, temporary)
     os.replace(temporary, target)
     return target
+
+
+def _restore_quantized_bias_representation(planner, payload):
+    """Recreate Linear4bit's frozen first-forward bias cast, only on exact match."""
+    expected = payload.get("compatibility", {}).get("parameter_ownership_checksum")
+    checksum = getattr(planner, "compute_parameter_ownership_checksum", None)
+    if not expected or not callable(checksum) or checksum() == expected:
+        return
+    changes = []
+    for name, module in planner.named_modules():
+        bias = getattr(module, "bias", None)
+        dtype = getattr(module, "compute_dtype", None)
+        if (type(module).__name__ == "Linear4bit" and bias is not None
+                and not bias.requires_grad and dtype is not None and bias.dtype != dtype):
+            changes.append((name, bias, bias.data))
+            bias.data = bias.data.to(dtype=dtype)
+    if checksum() != expected:
+        for _, bias, original in changes:
+            bias.data = original
+        return  # Native strict compatibility checks report the remaining drift.
+    payload["representation_restoration"] = [name + ".bias" for name, _, _ in changes]
 
 
 def load_joint_checkpoint(
@@ -438,6 +473,7 @@ def load_joint_checkpoint(
             "joint Stage 2 checkpoint failed its fixed-seed retention gate; "
             "resume the Stage 1/controller-warm-up checkpoint or an eligible Stage 2 checkpoint"
         )
+    _restore_quantized_bias_representation(planner, payload)
     expected = _compatibility(runtime, planner, controller)
     actual = payload.get("compatibility", {})
     if actual.get("controller_instruction_fingerprint") is not None and expected.get("controller_instruction_fingerprint") is not None and actual["controller_instruction_fingerprint"]!=expected["controller_instruction_fingerprint"]:
