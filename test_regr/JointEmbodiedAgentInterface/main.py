@@ -12,6 +12,7 @@ from pathlib import Path
 
 import torch
 from .utils.stage2_training import resolve_parameter_policy, selection_rejections, eai_retention_rejections
+from .utils.policy_reference import resolve_regularization
 
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
 from test_regr.EmbodiedAgentInterface.dataset import EOS_TOKEN, load_eai_dataset, split_train_dev
@@ -741,6 +742,10 @@ def command_train_agent(args):
             f"lr={args.controller_rl_learning_rate:g}; BC moments reset"
         )
     stage2_policy = resolve_parameter_policy(args, resume_payload)
+    planner_kl_weight, planner_reward_policy, reference_replay_count, planner_reference_state = resolve_regularization(args, resume_payload)
+    _status(f"Stage 2 planner KL weight={planner_kl_weight:g}; reward={planner_reward_policy}; "
+            f"reference={'restored' if planner_reference_state is not None else 'Stage 2 initialization' if planner_kl_weight else 'disabled'}; "
+            f"reference replay observations per domain update={reference_replay_count}")
 
     if stage2_policy == "freeze_shared":
         _status(
@@ -796,6 +801,11 @@ def command_train_agent(args):
         controller_anchor_loader=control_loaders["train"],
         eai_num_samples=args.eai_samples,
         eai_supervised_weight=args.stage2_eai_anchor_weight,
+        planner_kl_weight=planner_kl_weight,
+        planner_reward_policy=planner_reward_policy,
+        planner_reference_state=planner_reference_state,
+        reference_replay_per_update=reference_replay_count,
+        reference_replay_cursors=((resume_payload or {}).get("stage2_planner_regularization") or {}).get("replay_cursors"),
         dfa_enabled=stage2_dfa_enabled,
         parameter_policy=None if stage2_policy == "none" else stage2_policy,
         device=device,
@@ -1318,6 +1328,12 @@ def build_parser():
              "rejected epochs remain ineligible for best-checkpoint selection")
     agent.add_argument("--stage2-eai-anchor-weight", type=float, default=0.5,
                        help="Stage 2 EAI supervised anchor weight; 0 disables it for RL-only updates")
+    agent.add_argument("--stage2-planner-kl-weight", type=float, default=None,
+                       help="frozen initialization-policy KL weight (fresh Stage 2: 0.05; resume: saved value)")
+    agent.add_argument("--stage2-planner-reward", choices=("dense", "success-gated"), default=None,
+                       help="planner reward (fresh Stage 2: success-gated; resume: saved policy); controller keeps dense rewards")
+    agent.add_argument("--stage2-reference-replay-per-update", type=int, default=None,
+                       help="task-balanced frozen-policy KL replay of training observations per domain update (fresh: 2; resume: saved)")
     agent.add_argument("--stage2-planner-anchor-weight", type=float, default=0.25,
         help="Stage 1 supervised planner-anchor weight during Joint RL",
     )

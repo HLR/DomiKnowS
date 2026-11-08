@@ -732,6 +732,7 @@ class JointQwenVLPlanner(nn.Module):
         *,
         max_steps: int | None = None,
         stop_policy: StopPolicy | None = None,
+        _return_policy: bool = False,
     ) -> torch.Tensor:
         """Re-evaluate a sampled DFA trajectory with differentiable masked logits in a single forward pass."""
         policy = stop_policy_from_legacy(max_new_tokens=max_steps, stop_policy=stop_policy)
@@ -740,7 +741,11 @@ class JointQwenVLPlanner(nn.Module):
         if not label_list:
             if not dfa.is_accepting(dfa.start_state):
                 raise RuntimeError(f"{domain} replay trajectory is not accepting")
-            return torch.zeros((), device=self.device, requires_grad=True)
+            empty = torch.zeros((), device=self.device, requires_grad=True)
+            if _return_policy:
+                from .utils.policy_reference import PolicyReplay
+                return PolicyReplay(empty, ())
+            return empty
         if policy.max_steps is not None and len(label_list) > policy.max_steps:
             raise RuntimeError(f"{domain} replay trajectory exceeds its maximum length")
 
@@ -763,6 +768,7 @@ class JointQwenVLPlanner(nn.Module):
 
         state = dfa.start_state
         logprob = torch.zeros((), device=self.device)
+        replay_distributions = []
         replay_policy = replace(policy, timeout_seconds=None, external_stop_fn=None)
         update_progress = make_progress_tracker()
         for step, label_value in enumerate(label_list):
@@ -784,6 +790,8 @@ class JointQwenVLPlanner(nn.Module):
                 dist = torch.distributions.Categorical(logits=masked)
             target = torch.tensor(label_value, dtype=torch.long, device=logits.device)
             logprob = logprob + dist.log_prob(target)
+            if _return_policy:
+                replay_distributions.append(dist.logits.index_select(0, indices))
             state = dfa.step(state, label_value)
             if state is None:
                 raise RuntimeError(f"{domain} replay trajectory contains a rejected DFA transition")
@@ -795,7 +803,14 @@ class JointQwenVLPlanner(nn.Module):
         if not dfa.is_accepting(state):
             raise RuntimeError(f"{domain} replay trajectory is not accepting")
 
+        if _return_policy:
+            from .utils.policy_reference import PolicyReplay
+            return PolicyReplay(logprob, tuple(replay_distributions))
         return logprob
+
+    def replay_labels_policy(self, domain, prepared_context, labels, dfa, **kwargs):
+        return self.replay_labels_logprob(domain, prepared_context, labels, dfa,
+                                          _return_policy=True, **kwargs)
 
     def labels_logprob_from_context(
         self,
@@ -924,6 +939,9 @@ class JointPlannerDomainView(nn.Module):
             max_steps=max_steps,
             stop_policy=stop_policy,
         )
+
+    def replay_labels_policy(self, prepared_context, labels, dfa, **kwargs):
+        return self.joint.replay_labels_policy(self.domain, prepared_context, labels, dfa, **kwargs)
 
     def sample_labels_from_context(self, context_vector, dfa, *, max_steps=None, deterministic=False, stop_policy=None):
         return self.joint.sample_labels_from_context(

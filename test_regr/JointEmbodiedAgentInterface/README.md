@@ -292,11 +292,40 @@ already-completed warm-up. Configure or disable it with
 
 Stage 2 constructs one
 `JointReinforcementProgram(ReinforcementProgram)` over the same root and the
-exact same `JointQwenVLPlanner`. By default Stage 2 freezes the shared
-Qwen/LoRA and trains only the separate EAI and VLABench graph-token decoders;
-this prevents one domain's policy gradient from erasing the other domain's
-representation. Use `--no-stage2-freeze-shared-backbone` only as an explicit
-shared-adapter ablation.
+exact same `JointQwenVLPlanner`. Fresh Stage 2 runs use
+`--stage2-parameter-policy freeze_inactive`: shared trainable Qwen/LoRA parameters
+and the active domain head learn, while the inactive head and frozen base weights
+remain fixed. `freeze_shared` remains available for historical ablations.
+
+Fresh Stage 2 runs also use `--stage2-planner-kl-weight 0.05`,
+`--stage2-planner-reward success-gated`, and
+`--stage2-reference-replay-per-update 2`. The KL term preserves the frozen
+Stage 2 initialization policy (the selected CE policy for a CE-to-RL run).
+It compares full allowed-label distributions at each replayed prefix, including
+unchosen actions. Policy-gradient and KL terms use a consistent per-token scale.
+It still executes when EAI rewards are identical and their
+centered policy-gradient advantages are zero; no artificial reward differences
+are introduced. Two additional training observations per domain update are
+cycled by task, using frozen-policy-generated prefixes rather than gold plans.
+Validation/test observations never enter this reference replay. The reference
+stores only optimizer-owned trainable parameters on CPU, not another 8B backbone.
+Replay disables dropout while retaining activation checkpointing for backward.
+
+Success-gated planner credit clips positive returns from unsuccessful or invalid simulator
+episodes to zero, preserving negative rejection penalties. The controller keeps
+its dense motion-progress rewards and PPO objective. This prevents partial motion
+progress alone from reinforcing a failed high-level plan, but does not solve
+planner/controller credit assignment or guarantee an improvement in Macro.
+All CE/BC anchor weights can remain zero: KL replay uses no reference labels.
+Existing fixed-seed execution and EAI retention gates remain in force.
+
+Epoch and progress checkpoints save the frozen reference, its content fingerprint,
+KL weight, reward policy, and reference-replay cursors. Resumes restore these
+settings and reject changes; historical Stage 2 checkpoints without this state
+retain their original dense-reward/no-KL behavior. Start a new run from a selected
+CE checkpoint to adopt the fix. For a fresh legacy-objective ablation, set
+`--stage2-planner-kl-weight 0 --stage2-planner-reward dense
+--stage2-reference-replay-per-update 0`.
 
 To run Stage 2 RL without DFA activation, use `--stage2-dfa off` (default:
 `on`). This applies to both EAI and VLABench planner sampling, differentiable
@@ -344,8 +373,9 @@ With the default DFA-on setting:
    REINFORCE, plus a `0.5` teacher-forced EAI anchor.
 2. VLABench performs eight simulator rollouts. Each replan samples four
    constrained graph plans. Simulator return-to-go trains the planner with
-   REINFORCE plus a `0.1` supervised planner anchor. Controller actions use
-   PPO/GAE with a `0.05` behavior-cloning anchor.
+   REINFORCE plus a `0.25` supervised planner anchor. Controller actions use
+   PPO/GAE with a `0.25` behavior-cloning anchor. Fresh runs additionally use
+   the frozen-policy KL and success-gated planner credit described above.
 
 The controller uses the official LeRobot `task_index` for all 128 language
 instructions from `meta/tasks.parquet`; it does not collapse distinct target

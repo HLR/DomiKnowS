@@ -185,5 +185,7 @@ def test_cli_wires_free_stage2_and_records_mode_in_progress_and_epoch_checkpoint
         "--stage2-eai-anchor-weight", "0",
     ])
     cli.command_train_agent(args)
-    assert {"joint_stage2_progress.pt", "joint_stage2_epoch_000.pt", "joint_stage2_best.pt"}.issubset(saved)
+    assert {"joint_stage2_progress.pt", "joint_stage2_epoch_000.pt"}.issubset(saved)
+    # Training rollout success does not certify an eligible validation-selected best.
+    assert "joint_stage2_best.pt" not in saved
     assert all(payload["metrics"]["stage2_dfa"] == "off" for payload in saved.values())

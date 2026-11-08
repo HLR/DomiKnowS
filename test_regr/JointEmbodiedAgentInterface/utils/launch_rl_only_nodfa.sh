@@ -12,6 +12,8 @@ exec "${PYTHON:-python}" -u -m test_regr.JointEmbodiedAgentInterface.main train-
   --stage1-epochs 0 --stage1-eai-warmup-steps 0 --controller-warmup-steps 0 \
   --stage2-epochs "${STAGE2_EPOCHS:-4}" --stage2-rounds-per-epoch "${STAGE2_ROUNDS:-10}" \
   --stage2-dfa off --stage2-parameter-policy freeze_inactive \
+  --stage2-planner-kl-weight "${PLANNER_KL_WEIGHT:-0.05}" \
+  --stage2-planner-reward success-gated --stage2-reference-replay-per-update 2 \
   --stage2-eai-anchor-weight 0 --stage2-planner-anchor-weight 0 \
   --stage2-controller-bc-weight 0 --dagger-weight 0 --feasibility-weight 0 \
   --execution-assistance off --stage2-eval-rollouts-per-task 10 \

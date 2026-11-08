@@ -616,6 +616,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         controller_anchor_loader=None,
         eai_num_samples: int = 8,
         eai_supervised_weight: float = 0.5,
+        planner_kl_weight: float = 0.0,
+        planner_reward_policy: str = "dense",
+        planner_reference_state=None,
+        reference_replay_per_update: int = 0,
+        reference_replay_cursors=None,
         dfa_enabled: bool = True,
         parameter_policy: str | None = "freeze_inactive",
         device: str | torch.device = "cpu",
@@ -632,6 +637,13 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         self.eai_num_samples = int(eai_num_samples)
         self.eai_supervised_weight = float(eai_supervised_weight)
         self.parameter_policy = parameter_policy
+        self.reference_replay_per_update = int(reference_replay_per_update)
+        if self.reference_replay_per_update < 0 or (self.reference_replay_per_update and not planner_kl_weight):
+            raise ValueError("reference replay requires a positive KL weight and nonnegative count")
+        self.reference_replay_cursors = dict(reference_replay_cursors or {"eai": 0, "vlabench": 0})
+        if (set(self.reference_replay_cursors) != {"eai", "vlabench"}
+                or any(type(v) is not int or v < 0 for v in self.reference_replay_cursors.values())):
+            raise ValueError("invalid reference replay cursors")
         if self.parameter_policy is None:
             import warnings
             warnings.warn(
@@ -664,6 +676,103 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             poi.extend(attach_planner_sensors(_runtime_adapter(runtime, domain), view, device=device))
         self.parameter_coordinator = SolverModel(runtime.root, poi=list(dict.fromkeys(poi)), device=device)
         validate_shared_optimizer(planner, planner_optimizer, self.parameter_policy)
+        from .utils.policy_reference import FrozenPolicyReference
+        self.planner_kl_weight = float(planner_kl_weight)
+        self.planner_reward_policy = planner_reward_policy
+        if not math.isfinite(self.planner_kl_weight) or self.planner_kl_weight < 0:
+            raise ValueError("planner KL weight must be finite and nonnegative")
+        if planner_reward_policy not in ("dense", "success-gated"):
+            raise ValueError("unknown planner reward policy")
+        self.policy_reference = (FrozenPolicyReference(planner, planner_optimizer, state=planner_reference_state)
+                                 if self.planner_kl_weight else None)
+        self._reference_kls = {domain: [] for domain in ("eai", "vlabench")}
+        planner._stage2_regularization_state = {
+            "version": 1, "kl_weight": self.planner_kl_weight,
+            "reward_policy": self.planner_reward_policy,
+            "reference": self.policy_reference.state_dict() if self.policy_reference else None,
+            "replay_per_update": self.reference_replay_per_update,
+            "replay_cursors": self.reference_replay_cursors,
+        }
+
+    def _reference_retention_update(self, domain):
+        from .utils.policy_reference import balanced_reference_example
+        examples = self.eai_supervised_examples if domain == "eai" else self.supervised_examples
+        if not self.reference_replay_per_update:
+            return 0.0
+        total = 0.0
+        for _ in range(self.reference_replay_per_update):
+            cursor = self.reference_replay_cursors[domain]
+            example = balanced_reference_example(examples, cursor)
+            context = _context(example, domain)
+            if domain == "vlabench" and not context.get("images"):
+                get = example.get if isinstance(example, Mapping) else lambda key, default=(): getattr(example, key, default)
+                context["images"] = get("segmented_image_paths", ()) or get("image_paths", ())
+            view = self.joint_planner.for_domain(domain)
+            prepared = view.prepare_replay_context(context)
+            dfa = self._policy_dfa(domain, context)
+            limit = self.joint_runtime.max_eai_steps if domain == "eai" else self.runtime.max_tokens
+            # These prefixes come from the frozen policy, never target labels.
+            with self.policy_reference.activate(self.joint_planner):
+                labels, _ = view.sample_labels_from_context(context, dfa, max_steps=limit, deterministic=True)
+            term = self._regularized_replay_loss(domain, prepared, labels, dfa,
+                torch.zeros((), device=self.joint_planner.device), max_steps=limit) / self.reference_replay_per_update
+            self._planner_replay_backward(term)
+            total += float(term.detach())
+            self.reference_replay_cursors[domain] = cursor + 1
+        _emit_progress(f"{domain} frozen-policy retention replay observations={self.reference_replay_per_update} "
+                       f"cursor={self.reference_replay_cursors[domain]} loss={total:.6g}")
+        return total
+
+    def _planner_retention_update(self):
+        return self._reference_retention_update("vlabench")
+
+    def _planner_replay_backward(self, loss):
+        from .utils.policy_reference import deterministic_policy
+        if self.policy_reference is None:
+            return super()._planner_replay_backward(loss)
+        with deterministic_policy(self.joint_planner):
+            loss.backward()
+
+    def _regularized_replay_loss(self, domain, context, labels, dfa, advantage, **stopping):
+        from .utils.policy_reference import deterministic_policy
+        with self.policy_reference.activate(self.joint_planner):
+            reference = self.joint_planner.replay_labels_policy(domain, context, labels, dfa, **stopping)
+        # The reference pass precedes the only live autograd graph. Both passes
+        # disable dropout, but gradients remain enabled for the current policy.
+        with deterministic_policy(self.joint_planner):
+            current = self.joint_planner.replay_labels_policy(domain, context, labels, dfa, **stopping)
+        kl = current.kl_from(reference)
+        self._reference_kls[domain].append(float(kl.detach()))
+        # Match the per-token KL scale; a longer emitted trajectory must not
+        # dilute its preservation penalty relative to the summed logprob.
+        policy_loss = -current.logprob * advantage.to(current.logprob) / max(1, len(current.log_probs))
+        return policy_loss + self.planner_kl_weight * kl
+
+    def _regularization_metrics(self, domain):
+        values = self._reference_kls[domain]
+        return {"kl_weight": self.planner_kl_weight, "reward_policy": self.planner_reward_policy,
+                "reference_fingerprint": self.policy_reference.fingerprint if self.policy_reference else None,
+                "reference_kl_sum": sum(values), "reference_kl_trajectories": len(values)}
+
+    def _planner_returns_for_update(self, episode):
+        returns = super()._planner_returns_for_update(episode)
+        if self.planner_reward_policy == "success-gated" and not (episode.success and episode.valid):
+            # Motion progress is useful to the controller, but does not certify
+            # the sampled high-level plan. Keep rejection penalties, not positive
+            # imitation credit for failed episodes. Never modify controller data.
+            return [min(0.0, float(value)) for value in returns]
+        return returns
+
+    def _planner_replay_required(self, advantage):
+        return self.policy_reference is not None or super()._planner_replay_required(advantage)
+
+    def _planner_replay_loss(self, evidence, advantage):
+        if self.policy_reference is None:
+            return super()._planner_replay_loss(evidence, advantage)
+        stopping = ({"stop_policy": evidence.stop_policy} if evidence.stop_policy is not None
+                    else {"max_steps": evidence.max_steps})
+        return self._regularized_replay_loss("vlabench", evidence.prepared_context,
+                                             evidence.labels, evidence.dfa, advantage, **stopping)
 
     def _policy_dfa(self, domain, context):
         if not self.planner_dfa_enabled:
@@ -708,6 +817,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
 
     def train_eai_update(self, item: Mapping[str, Any]) -> dict[str, float]:
         self.joint_planner.train()
+        self._reference_kls["eai"] = []
         reward_fn = item.get("reward_function")
         if not callable(reward_fn):
             raise ValueError("EAI reinforcement items require reward_function")
@@ -753,17 +863,21 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             count = max(1, len(samples))
             for i, (labels, _, _, _, policy_dfa) in enumerate(samples):
                 adv = advantages[i].detach()
-                if adv.abs() > 1e-6:
+                if adv.abs() > 1e-6 or self.policy_reference is not None:
                     _emit_progress(f"EAI replay {i + 1}/{count}: policy gradient")
-                    logprob = self.eai_planner.replay_labels_logprob(
-                        prepared_context,
-                        labels,
-                        policy_dfa,
-                        max_steps=self.joint_runtime.max_eai_steps,
-                    )
-                    sample_loss = -(logprob * adv) / count
-                    sample_loss.backward()
+                    if self.policy_reference is not None:
+                        sample_loss = self._regularized_replay_loss(
+                            "eai", prepared_context, labels, policy_dfa, adv,
+                            max_steps=self.joint_runtime.max_eai_steps) / count
+                    else:
+                        logprob = self.eai_planner.replay_labels_logprob(
+                            prepared_context, labels, policy_dfa,
+                            max_steps=self.joint_runtime.max_eai_steps)
+                        sample_loss = -(logprob * adv) / count
+                    self._planner_replay_backward(sample_loss)
                     total_loss += float(sample_loss.detach())
+
+            total_loss += self._reference_retention_update("eai")
 
             if self.parameter_policy == "pcgrad_protected_eai":
                 rl_grads = []
@@ -803,6 +917,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "success": sum(s[3] for s in samples) / len(samples),
             "samples": len(samples),
             "planner_update": shared_evidence,
+            "planner_regularization": self._regularization_metrics("eai"),
         }
 
     def train_vlabench_update(
@@ -813,6 +928,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
     ) -> dict[str, float]:
         self.joint_planner.train()
         self.controller.train()
+        self._reference_kls["vlabench"] = []
         with self.joint_runtime.domain_scope("vlabench", parameter_policy=self.parameter_policy):
             shared_update = SharedUpdateEvidence(self.joint_planner, self.planner_optimizer)
             planner = self.planner_head
@@ -823,6 +939,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                     rollouts_per_update=rollouts_per_update,
                 )
                 metrics["planner_update"] = shared_update.report()
+                metrics["planner_regularization"] = self._regularization_metrics("vlabench")
                 _emit_progress(f"VLABench shared planner update {metrics['planner_update']}")
                 return metrics
             finally:
@@ -882,7 +999,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         planner_evidence = {domain: {"updates": 0, "updates_with_shared_change": 0,
             "shared_trainable_parameters": 0, "shared_optimizer_parameters": 0,
             "shared_gradient_norm_sum": 0.0, "sampled_shared_delta_l2_sum": 0.0,
-            "nonfinite_updates": 0} for domain in ("eai", "vlabench")}
+            "nonfinite_updates": 0, "reference_kl_sum": 0.0,
+            "reference_kl_trajectories": 0} for domain in ("eai", "vlabench")}
         if initial_metrics is not None:
             for domain, values in planner_evidence.items():
                 values.update(initial_metrics.get("planner_evidence", {}).get(domain, {}))
@@ -962,6 +1080,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 "rounds": int(completed),
                 "round_robin_cursor": self.round_robin_cursor,
                 "planner_evidence": {domain: dict(values) for domain, values in planner_evidence.items()},
+                "planner_regularization": {
+                    **{key: value for key, value in self.joint_planner._stage2_regularization_state.items()
+                       if key not in ("reference", "replay_cursors")},
+                    "reference_fingerprint": self.policy_reference.fingerprint if self.policy_reference else None,
+                },
             }
 
         progress = _TrainingProgress("Stage 2 rounds", rounds, initial=start_round)
@@ -1021,6 +1144,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                     totals["shared_gradient_norm_sum"] += evidence["shared_gradient_norm"]
                     totals["sampled_shared_delta_l2_sum"] += evidence["sampled_shared_delta_l2"]
                     totals["nonfinite_updates"] += int(not evidence["finite"])
+                    regularization = update.get("planner_regularization", {})
+                    for name in ("reference_kl_sum", "reference_kl_trajectories"):
+                        totals[name] += regularization.get(name, 0)
             for key in eai_totals:
                 eai_totals[key] += float(eai[key])
             for key in vla_totals:

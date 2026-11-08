@@ -53,6 +53,8 @@ def build_eval_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Evaluate non-interactive VLABench planning progress score for a joint checkpoint"
     )
+    parser.add_argument("--diagnostic-checkpoint", action="store_true",
+                        help="explicitly evaluate a retention-rejected checkpoint; results remain diagnostic")
     parser.add_argument(
         "--checkpoint",
         type=Path,
@@ -299,6 +301,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         planner=planner,
         controller=controller,
         map_location=device,
+        allow_failed_retention_evaluation=bool(getattr(args, "diagnostic_checkpoint", False)),
         allow_planning_schema_migration=getattr(args, "allow_planning_schema_migration", False),
         # An explicit evaluation knowledge level changes decoding constraints,
         # not the trained weights. Keep vocabulary, model and EAI checks active.
@@ -407,6 +410,11 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "checkpoint": str(checkpoint_path),
         "stage": payload.get("stage"),
         "epoch": payload.get("epoch"),
+        "checkpoint_selection": {
+            "diagnostic_evaluation": bool(getattr(args, "diagnostic_checkpoint", False)),
+            "retention_eligible": (payload.get("metrics") or {}).get("retention_eligible"),
+            "training_metrics": payload.get("metrics"),
+        },
         "split": args.split,
         "evaluation_protocol": evaluation_protocol(args, payload),
         "strict_plan_match": metrics.get("strict_plan_match"),

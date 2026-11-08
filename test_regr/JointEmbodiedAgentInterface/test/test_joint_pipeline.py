@@ -1138,6 +1138,28 @@ def test_joint_failed_retention_checkpoint_is_rejected(tmp_path, joint_fixture):
     )
     assert restored["metrics"]["retention_eligible"] is False
 
+    diagnostic = load_joint_checkpoint(
+        path, runtime=runtime, planner=planner, controller=controller,
+        allow_failed_retention_evaluation=True,
+    )
+    assert diagnostic["metrics"]["retention_eligible"] is False
+    # Diagnostic scoring must still reject incompatible model/domain state.
+    incompatible = torch.load(path, weights_only=False)
+    incompatible["compatibility"]["combined_domain_checksum"] = "wrong-domain"
+    incompatible_path = tmp_path / "incompatible_diagnostic.pt"
+    torch.save(incompatible, incompatible_path)
+    with pytest.raises(ValueError, match="combined_domain_checksum differs"):
+        load_joint_checkpoint(
+            incompatible_path, runtime=runtime, planner=planner, controller=controller,
+            allow_failed_retention_evaluation=True,
+        )
+    with pytest.raises(ValueError, match="cannot restore training optimizers"):
+        load_joint_checkpoint(
+            path, runtime=runtime, planner=planner, controller=controller,
+            planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.01),
+            allow_failed_retention_evaluation=True,
+        )
+
 
 def test_joint_checkpoint_loads_legacy_process_local_dfa_numbering(tmp_path, joint_fixture):
     _examples, runtime = joint_fixture

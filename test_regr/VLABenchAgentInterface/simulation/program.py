@@ -3639,12 +3639,33 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             for image in images:
                 image.close()
 
+    def _planner_returns_for_update(self, episode):
+        returns = episode.planner_returns
+        if returns is None:
+            returns = [episode.total_return] * len(episode.planner_logprobs)
+        if len(returns) != len(episode.planner_logprobs):
+            raise ValueError("planner returns and replay decisions have different lengths")
+        if not all(math.isfinite(float(value)) for value in returns):
+            raise ValueError("planner returns must be finite")
+        return returns
+
+    def _planner_replay_required(self, advantage):
+        return float(advantage) != 0.0
+
+    def _planner_replay_loss(self, evidence, advantage):
+        logprob = evidence.logprob(self.planner_head)
+        return -(logprob * advantage.to(device=logprob.device, dtype=logprob.dtype))
+
+    def _planner_retention_update(self):
+        return 0.0
+
+    def _planner_replay_backward(self, loss):
+        loss.backward()
+
     def _update_planner(self, episodes: Sequence[JointEpisode]) -> float:
         pairs = []
         for episode in episodes:
-            returns = episode.planner_returns
-            if returns is None:
-                returns = [episode.total_return] * len(episode.planner_logprobs)
+            returns = self._planner_returns_for_update(episode)
             pairs.extend(zip(episode.planner_logprobs, returns))
         if not pairs:
             return 0.0
@@ -3681,16 +3702,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         # autograd graph is resident, so memory does not grow with rollout
         # count or episode length while return-to-go still updates LoRA.
         for decision_index, ((evidence, _reward), advantage) in enumerate(zip(pairs, advantages), 1):
-            if not isinstance(evidence, PlannerReplayDecision) or float(advantage) == 0.0:
+            if not isinstance(evidence, PlannerReplayDecision) or not self._planner_replay_required(advantage):
                 continue
             self._report_progress(
                 f"VLABench planner replay {decision_index}/{count} advantage={float(advantage):.4f}"
             )
-            logprob = evidence.logprob(self.planner_head)
-            term = -(logprob * advantage.to(device=logprob.device, dtype=logprob.dtype)) / count
-            term.backward()
+            term = self._planner_replay_loss(evidence, advantage) / count
+            self._planner_replay_backward(term)
             policy_value += float(term.detach())
 
+        policy_value += self._planner_retention_update()
         anchor = self.supervised_weight * self._planner_anchor()
         if anchor.requires_grad:
             anchor.backward()

@@ -381,6 +381,8 @@ def save_joint_checkpoint(
         if int(next_round) < 0:
             raise ValueError("next Stage 2 round cannot be negative")
         payload["next_round"] = int(next_round)
+    if stage == "stage2" and getattr(planner, "_stage2_regularization_state", None) is not None:
+        payload["stage2_planner_regularization"] = planner._stage2_regularization_state
     from test_regr.VLABenchAgentInterface.research.checkpoint import checkpoint_metadata
     payload.update(checkpoint_metadata(runtime.world.vlabench,planner))
     torch.save(payload, temporary)
@@ -400,6 +402,7 @@ def load_joint_checkpoint(
     allow_planning_schema_migration: bool = False,
     allow_knowledge_ablation: bool = False,
     allow_failed_retention_resume: bool = False,
+    allow_failed_retention_evaluation: bool = False,
 ) -> Mapping[str, Any]:
     """Restore an exact joint run, rejecting any schema/model drift."""
     payload = torch.load(
@@ -415,6 +418,8 @@ def load_joint_checkpoint(
     if checkpoint_version not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
         raise ValueError("unsupported or standalone checkpoint; a joint checkpoint is required")
     stage = payload.get("stage")
+    if allow_failed_retention_evaluation and (planner_optimizer is not None or controller_optimizer is not None):
+        raise ValueError("diagnostic checkpoint evaluation cannot restore training optimizers")
     if int(checkpoint_version) < JOINT_CHECKPOINT_VERSION and stage == "stage2":
         raise ValueError(
             "joint Stage 2 checkpoint predates the robot-frame rollout contract; "
@@ -425,6 +430,7 @@ def load_joint_checkpoint(
         stage == "stage2"
         and isinstance(metrics, Mapping)
         and metrics.get("retention_eligible") is False
+        and not allow_failed_retention_evaluation
         and not (allow_failed_retention_resume and planner_optimizer is not None
                  and controller_optimizer is not None)
     ):
@@ -616,6 +622,7 @@ def load_joint_checkpoint(
         if controller_optimizer is not None:
             controller_optimizer.state.clear()
         payload["controller_critic_migration_required"] = True
+    planner._stage2_regularization_state = payload.get("stage2_planner_regularization")
     random.setstate(payload["python_rng"])
     np.random.set_state(payload["numpy_rng"])
     torch.set_rng_state(_cpu_rng_state(payload["torch_rng"]))
