@@ -21,7 +21,8 @@ def overlap_report(manifest, reports):
          'VLABench':'anti_self_placement', 'LIBERO':'same compiled LC and pick/place role meanings',
          'RLBench':'potentially groundable, not declared/enforced by this adapter'},
         {'family':'static_fixture_affordance', 'EAI':'task argument/precondition rules; no universal skill-name equivalence',
-         'VLABench':'pick_excludes_static_fixtures', 'LIBERO':'same LC; fixture labels available in input ontology',
+         'VLABench':'pick_excludes_static_fixtures; shared adapter has no verified fixture-role binding',
+         'LIBERO':'same LC; explicit all-object movable/fixture declarations; private semantic IDs preserve pointers',
          'RLBench':'scene geometry available; adapter/proof absent'},
         {'family':'holding_and_closed_container_preconditions',
          'EAI':'native source-holding and destination-open-if-known LCs',
@@ -49,6 +50,7 @@ def overlap_report(manifest, reports):
                            else 'pointer/fixture/role facts from all-entity input; no held-out task targets'),
             'applicable_event_denominator': 'candidate-transition events matching each rule domain and phase',
             'applicable_events': report.get('applicable_events', {}),
+            'groundable_rule_episodes': report.get('groundable_rule_episodes', {}),
             'actually_triggered_rejections': report.get('triggered_rejections', {})}
     active_vla = sum(r['active'] for r in inventories['vlabench_world'])
     return {'version': 1, 'inventories': inventories, 'families': families, 'measured': measured,

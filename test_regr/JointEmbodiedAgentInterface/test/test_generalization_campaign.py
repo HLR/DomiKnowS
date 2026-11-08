@@ -80,6 +80,12 @@ def test_shared_rules_keep_legitimate_rearrangement_and_reject_self_placement(jo
     assert not dfa.accepts(labels([pick(0), place(0)]))
     trace = rule_trace(dfa, labels([pick(0), place(1)]))
     assert trace['triggered_rejections'].get('anti_self_placement', 0) > 0
+    # Static roles come from observed fixture declarations, never substrings.
+    context['entity_table'] = ('table_salt', 'plate', 'floor')
+    context['generation_static_fixture_ids'] = [2]
+    dfa = bind_shared(vocab, 6, context)
+    assert dfa.accepts(labels([pick(0), place(1)]))
+    assert not dfa.accepts(labels([pick(2), place(1)]))
 
 
 def test_overlap_inventory_uses_actual_runtime_manifest(joint_fixture):

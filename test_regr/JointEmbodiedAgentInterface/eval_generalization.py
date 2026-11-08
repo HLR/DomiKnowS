@@ -84,6 +84,10 @@ def evaluate_vlabench(planner, runtime, examples, policy, output, settings):
         dimensions=dimensions, Macro=sum(dimensions.values())/len(dimensions),
         progress_score=metric['overall']['score'], generation_errors=errors,
         input_hashes=inputs, triggered_rejections=dict(traces), applicable_events=dict(applicable), settings=settings)
+    if policy == 'shared-verified':
+        report['groundable_rule_episodes'] = {name: (0 if name == 'pick_excludes_static_fixtures' else len(examples))
+                                               for name in SHARED_RULES}
+        report['fixture_evidence'] = 'not provided to the VLABench shared adapter; unknown permits candidates'
     freeze_json(root/'report.json', report)
     return report
 
@@ -107,7 +111,9 @@ def evaluate_libero(planner, runtime, manifest_path, policy, output, settings):
             public = json.loads(Path(episode['generation_input']).read_text())
             context = {'instruction': public['instruction']+'\nInitial scene relations: '+json.dumps(public['initial_relations']),
                 'entity_table': public['entities'], 'images': tuple(public['images']),
-                'generation_entity_types': public['entity_types']}
+                'generation_entity_types': public['entity_types'],
+                'generation_static_fixture_ids': [i for i, name in enumerate(public['entities'])
+                                                  if name not in public['movable']]}
             record = input_record(planner, context); inputs[episode['episode_id']] = digest(record)
             freeze_json(output/'libero_inputs'/f'{index:04d}.json', {'episode_id': episode['episode_id'], **record})
             planner.decision_observer = lambda row: decisions.write(json.dumps(
@@ -132,6 +138,8 @@ def evaluate_libero(planner, runtime, manifest_path, policy, output, settings):
         'abstract_rule_violations': dict(violations), 'abstract_rule_violation_episode_denominator': 100,
         'triggered_rejections': dict(totals), 'applicable_events': dict(applicable), 'settings': settings,
         'execution': 'separate fixed-executor evaluation gated on calibration; not learned-controller transfer'}
+    if policy == 'shared-verified':
+        report['groundable_rule_episodes'] = {name:100 for name in SHARED_RULES}
     freeze_json(root/'report.json', report)
     return report
 

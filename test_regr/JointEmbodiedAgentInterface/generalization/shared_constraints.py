@@ -50,7 +50,17 @@ def bind_shared(vocabulary, max_operations, context):
     from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
     # Only observational bindings; task identity / obligations / reference goals
     # must never activate task-specific knowledge in the external profile.
-    safe = {k: context[k] for k in ('entity_table', 'entities', 'generation_entity_types') if k in context}
+    table = context.get('entity_table') or context.get('entities') or ()
+    table = dict(table) if isinstance(table, dict) else dict(enumerate(table))
+    fixture_ids = set(context.get('generation_static_fixture_ids', ()))
+    if any(type(index) is not int or index not in table for index in fixture_ids):
+        raise ValueError('invalid observational fixture ID')
+    # Native static-fixture predicates inspect entity strings. Project declared
+    # roles onto private semantic IDs, preserving pointers. Never infer a role
+    # from a substring: "vegetable" and "table_salt" are not static tables.
+    # Missing role evidence is unknown and causes no fixture exclusion.
+    safe = {'entity_table': {index: ('static_fixture_floor' if index in fixture_ids else 'entity')
+                            + f'__{index}' for index in table}}
     return bind_vlabench_contextual_dfa(shared_profile(vocabulary, max_operations), vocabulary, safe)
 
 

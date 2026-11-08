@@ -67,7 +67,7 @@ entity IDs for **every** object/fixture, and initial physical-parent relations.
 IDs follow an all-entity ordering independent of goals. Images preserve that
 ordering. It excludes native task names, BDDL goals, reference plans,
 `obj_of_interest` and raw region names such as `target_object_region`. Object
-types are observational bindings for affordance rules. Both constraint conditions
+roles are observational bindings for affordance rules. Both constraint conditions
 use byte-identical prompts and images, verified by hashes.
 
 The `shared-verified` whitelist reuses five existing graph LCs: one skill per
@@ -76,6 +76,13 @@ self-placement, and no picking static fixtures. Tests include legitimate
 re-picking and moving earlier destinations. Benchmark-specific task templates,
 repeated-destination prohibitions, destinations-stay-put and physical-property QA
 are excluded. LIBERO tasks never alias VLABench task identities.
+
+Fixture facts use explicit LIBERO movable/fixture declarations and private
+semantic IDs with unchanged pointer indices. They never use name substrings
+(for example, `table_salt` is movable). The VLABench shared adapter currently
+has no verified fixture-role binding: this rule is declared but ungrounded there
+and imposes no fixture exclusion. Reports separate groundable episode counts
+from applicable transition events. Full-metadata retains the native bindings.
 
 `overlap_report.py` inventories declared rules and eight semantic families across
 EAI, VLABench, LIBERO and RLBench. It distinguishes observational grounding from
