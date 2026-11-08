@@ -100,6 +100,26 @@ def test_overlap_inventory_uses_actual_runtime_manifest(joint_fixture):
     assert 'privileged' in report['measured']['vlabench:full-metadata']['groundable']
 
 
+def test_sampler_checks_actual_bound_prompt_and_restores_input_method(joint_fixture, monkeypatch):
+    from ..eval_generalization import generate
+    _, runtime = joint_fixture
+    planner = make_planner(runtime)
+    original = planner._prepare_inputs_and_boundaries
+    original_sample = planner.sample_labels
+    context = {'instruction':'pick the object', 'entity_table':('apple','plate'), 'images':()}
+    def altered(domain, context, dfa, **kwargs):
+        planner._prepare_inputs_and_boundaries(domain, {**context,'instruction':'changed input'})
+        pytest.fail('input mismatch must stop before model inference')
+    monkeypatch.setattr(planner, 'sample_labels', altered)
+    with pytest.raises(AssertionError, match='actual generation inputs'):
+        generate(planner, runtime, context, 'none')
+    assert planner._prepare_inputs_and_boundaries == original
+    monkeypatch.setattr(planner, 'sample_labels', original_sample)
+    # Actual native binding must preserve the same prompt in every condition.
+    for policy in ('none', 'shared-verified', 'full-metadata'):
+        generate(planner, runtime, context, policy)
+
+
 def test_osc_translation_rotation_and_gripper_bounds():
     action = bounded_osc_action([.2, -.2, .01], [0, 0, 0], [.2, -.2, 0], [.05]*3+[.1]*3, 1)
     assert np.allclose(action, [1, -1, .2, 1, -1, 0, 1])

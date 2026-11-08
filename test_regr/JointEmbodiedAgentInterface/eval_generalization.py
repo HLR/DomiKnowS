@@ -36,6 +36,17 @@ def generate(planner, runtime, context, policy):
     else:
         dfa = runtime.dfa_for('vlabench', context)
     labels = []; error = None
+    expected_input = input_record(planner, context)
+    original_prepare = planner._prepare_inputs_and_boundaries
+    verified = False
+    def checked_prepare(domain, effective_context, active_tokens=()):
+        nonlocal verified
+        if not verified:
+            if domain != 'vlabench' or input_record(planner, effective_context) != expected_input:
+                raise AssertionError('bound constraint policy changed the actual generation inputs')
+            verified = True
+        return original_prepare(domain, effective_context, active_tokens)
+    planner._prepare_inputs_and_boundaries = checked_prepare
     try:
         with torch.no_grad(), runtime.domain_scope('vlabench'):
             labels, _ = planner.sample_labels('vlabench', context, dfa,
@@ -44,6 +55,8 @@ def generate(planner, runtime, context, policy):
     except (ValueError, RuntimeError, KeyError) as exc:
         error = {'type': type(exc).__name__, 'message': str(exc)}
         prediction = []
+    finally:
+        planner._prepare_inputs_and_boundaries = original_prepare
     trace = rule_trace(dfa, labels) if policy != 'none' else {'declared': [], 'applicable_events': {}, 'triggered_rejections': {}, 'events': []}
     return prediction, error, trace, dfa
 
