@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "name": "rlbench_pick_place_followup",
+  "status": "planned_requires_rlbench_adapter_and_calibrated_executor",
+  "source": {
+    "repository": "https://github.com/stepjam/RLBench",
+    "commit": "02720bba4c73fe02eb75df946b8791b806028a9d"
+  },
+  "checkpoint_campaign": "joint_stage1_metadata_generalization_20261108",
+  "snapshots": ["initialization", "epoch1", "epoch2", "epoch3", "epoch4"],
+  "constraint_policies": ["shared-verified", "none"],
+  "seed": 42,
+  "tasks": [
+    {"task": "put_rubbish_in_bin", "variations": [0], "skills": ["pick", "place"], "native_conditions": ["DetectedCondition"]},
+    {"task": "put_groceries_in_cupboard", "variations": [0, 1, 2, 3, 4, 5, 6, 7, 8], "skills": ["pick", "place"], "native_conditions": ["DetectedCondition", "NothingGrasped"]}
+  ],
+  "reset_indices": {"evaluation": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "calibration": [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]},
+  "reset_protocol": "deterministic_seed_then_freeze_simulator_and_robot_state_before_model_scoring_not_official_initial_states",
+  "robot": "panda",
+  "executor": {"kind": "separate_goal_blind_RLBench_bridge_required", "horizon_simulator_steps": 1000, "calibration_min_success_rate": 0.9, "use_task_waypoints": false, "use_goal_sensors_for_control": false, "teleportation": false},
+  "generation_inputs": ["instruction", "RGB", "numbered_RGB", "anonymous_all_scene_physical_entity_ids", "target_independent_initial_observations"],
+  "forbidden_generation_inputs": ["native_object_names", "task_id", "variation_id", "success_conditions", "success_sensor_poses", "task_low_dim_state", "registered_graspable_object_list", "demonstrations", "task_waypoints", "reference_plans"],
+  "measurements": ["native_execution_success", "execution_success_wilson_ci95", "valid_plan_rate", "rule_violations", "paired_predictions_and_rule_traces"],
+  "abstract_goal_scoring": "requires_independently_adjudicated_mapping_no_invented_BDDL_or_VLABench_dimensions",
+  "excluded": [
+    {"task": "pick_and_lift", "reason": "Terminal held-object target pose is not equivalent to place."},
+    {"task": "put_item_in_drawer", "reason": "Requires opening a selected drawer; pick/place-only executor cannot silently replace open."},
+    {"task": "put_plate_in_colored_dish_rack", "reason": "A selected rack slot and insertion orientation need a verified sub-entity and execution mapping."},
+    {"task": "stack_blocks", "reason": "Counted stacking at a selected zone needs a verified region/count goal and executor mapping."}
+  ],
+  "required_gates": ["isolated_CoppeliaSim_PyRep_runtime", "all_scene_entity_and_observation_audit", "native_goal_to_physical_destination_review", "reset_and_native_grasp_attachment_semantics_audit", "frozen_reset_states_and_input_hashes", "reference_prompt_separation_tests", "fixed_executor_90_percent_calibration", "checkpoint_manifest_resume_validation"],
+  "automatic_launch": false,
+  "retraining": false
+}

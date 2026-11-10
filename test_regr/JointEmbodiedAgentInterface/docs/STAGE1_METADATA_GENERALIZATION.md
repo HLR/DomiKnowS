@@ -116,7 +116,7 @@ or queries success to steer manipulation. The outer evaluator checks native
 LIBERO success only after execution. Each condition uses identical frozen resets.
 
 Calibration uses reference plans only on states5–9, never evaluation states0–4.
-Require at least90/100 native successes and an unchanged executor source hash.
+Require at least 90/100 native successes and an unchanged executor source hash.
 Keep failed calibration attempts; do not exclude difficult tasks. Report Wilson
 95% intervals for execution, plus paired successes/failures. Describe the result
 as **planner transfer through a fixed executor**, not learned-controller transfer.
@@ -125,3 +125,101 @@ as **planner transfer through a fixed executor**, not learned-controller transfe
 model evaluation on free GPUs, executes the plans only after the calibration
 gate, and produces `campaign_results.json`/`.md`. It stops after these snapshots.
 The Google report receives a separate section, preserving its existing tables.
+
+## Next test: RLBench follow-up
+
+RLBench is now configured as a **separate follow-up evaluation**, rather than
+being added to or changing this running LIBERO campaign. The design is in
+[`rlbench_next_test.json`](../generalization/configs/rlbench_next_test.json).
+It reuses Joint initialization and epochs 1–4, with `shared-verified` and `none`,
+without retraining or selecting checkpoints using external results.
+
+The initial suite has **two native task classes and ten task-variation cases**:
+`put_rubbish_in_bin` variation0 and `put_groceries_in_cupboard` variations0–8.
+Their task sources declare detection-in-destination success; groceries also
+requires an empty gripper. The exact scene destination mapping still needs
+independent review. These are candidates for the existing abstract pick/place
+vocabulary, not a claim that the LIBERO executor runs in RLBench.
+
+Reserve ten evaluation resets and ten calibration resets per case: 100 episodes
+in each split. The design assigns deterministic distinct seeds; these are **reset
+blueprints**, not official initialization states. The RLBench adapter must freeze
+actual simulator/robot states and rendered inputs before any model scoring.
+
+```powershell
+python test_regr/JointEmbodiedAgentInterface/generalization/rlbench_next_test.py `
+  --output OUTPUT/rlbench_next_test_plan.json
+```
+
+The generator rejects overlapping reset splits, duplicate cases, unsupported
+skills, changed frozen designs and incorrect episode counts. Optionally pass
+`--rlbench-root` to verify the pinned checkout and archive native task-source
+hashes. Source revision: `02720bba4c73fe02eb75df946b8791b806028a9d`.
+
+The isolated runtime and separate goal-blind Panda execution bridge are now
+implemented; see [RLBench bridge commands and protocol](RLBENCH_BRIDGE.md).
+The reserved 100-reset calibration now passes: 93/100 native goal successes,
+including 91 fully completed successful plans. Use the matching `source_v33`
+controller and calibration summary; RLBench model evaluation has not been
+automatically launched. Audit reset reproducibility, native grasp
+attachment behavior, quaternion/frame/gripper conventions, wrong-object plans,
+timeouts and native success detection. Require at least 90/100 independent
+calibration successes with the same bridge/settings used for evaluation. Do not
+use task waypoints, success sensors, goal-selected graspable-object lists or
+demonstrations to select model/executor targets. The public entity inventory must
+cover all physical scene objects independently of task goals, with anonymous
+IDs; native names can contain `target` or `distractor`. Exclude task-specific
+low-dimensional state, which can expose selected targets or success poses.
+
+Drawer opening, target-pose lifting, selected rack-slot insertion and counted
+stacking are explicitly excluded pending verified skill/region/goal mappings.
+Do not silently approximate these as generic placement or remove difficult
+evaluation cases after calibration. Report native execution success with Wilson
+intervals, plan validity, rule violations and paired predictions/traces. Abstract
+goal scoring requires its own adjudicated mapping; do not invent BDDL goals or
+VLABench dimensions/Macro for RLBench. Report declared, groundable, applicable
+and triggered constraints using this adapter's actual coverage. The LIBERO
+96/100 calibration result does not qualify an RLBench executor.
+
+Primary task sources:
+[rubbish](https://github.com/stepjam/RLBench/blob/02720bba4c73fe02eb75df946b8791b806028a9d/rlbench/tasks/put_rubbish_in_bin.py),
+[groceries](https://github.com/stepjam/RLBench/blob/02720bba4c73fe02eb75df946b8791b806028a9d/rlbench/tasks/put_groceries_in_cupboard.py),
+[native conditions](https://github.com/stepjam/RLBench/blob/02720bba4c73fe02eb75df946b8791b806028a9d/rlbench/backend/conditions.py).
+
+### Completed RLBench snapshot evaluation (10 November 2026)
+
+The explicitly requested follow-up evaluated all five snapshots on the same
+100 frozen evaluation episodes under both policies (1,000 executions). The
+archived `source_v33` controller was unchanged; its reset verifier was corrected
+to audit unused helper dummies separately, then independently revalidated at
+91/100 native and completed successes on reserved calibration resets. Physical
+bodies, scoring sensors, roots and joints retained their strict reset checks.
+The working-tree contact-aware replacement remains unqualified and was not used.
+
+| Snapshot | No DFA native success | Shared-verified native success | No DFA valid plans | Shared-verified valid plans |
+|---|---:|---:|---:|---:|
+| Joint initialization (untrained heads) | 0/100 | 0/100 | 0/100 | 0/100 |
+| Epoch 1 | 0/100 | 0/100 | 92/100 | 100/100 |
+| Epoch 2 | 0/100 | 0/100 | 95/100 | 99/100 |
+| Epoch 3 | 0/100 | 0/100 | 92/100 | 100/100 |
+| Epoch 4 | 0/100 | 1/100 | 90/100 | 97/100 |
+
+The 95% Wilson intervals are 0.0–3.7% for 0/100 and 0.2–5.4% for 1/100.
+Completed successful plans equal native successes in every condition. All
+generation error counts are zero. Shared rules improve structural validity
+without reliable goal transfer: predictions repeatedly choose destination
+entity 1, while the cupboard is entity 9. This is a metadata-assisted subset of
+two task classes and ten variations, not the full RLBench benchmark. Dynamic-role
+metadata can identify the only movable rubbish object. Joint initialization is
+not a native Base Qwen baseline.
+
+All conditions have 100 unique episode IDs, matched input hashes across policies,
+and verified prediction hashes; all 1,200 frozen data-file hashes are unchanged.
+Source, checkpoint, runtime hashes, physical GPU UUIDs, PIDs, commands, logs,
+paired failures and per-case scores are archived on `gpu2.ihmc.us` at
+`/home/auszok/experiments/rlbench_model_evaluation_v33_20261110_attempt2/`:
+`results.json`, `RESULTS.md`, `COMMANDS.md`, `manifest.json` and
+`execution_manifest.json`. Native scoring used CPU software rendering. Section 13
+of the Google report contains the separate results table and paired examples;
+its 16 earlier tables were verified unchanged. No additional training or executor
+promotion followed this evaluation.
