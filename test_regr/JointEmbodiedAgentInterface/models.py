@@ -338,10 +338,12 @@ class JointQwenVLPlanner(nn.Module):
             )
         else:
             from test_regr.VLABenchAgentInterface.research.prompt import observation_prompt
+            from test_regr.VLABenchAgentInterface.prompt_protocol import prompt_knowledge_text
             return observation_prompt(context)+planner_prompt(
                 context.get("instruction", ""),
                 context.get("entity_table", ()),
                 vocabulary,
+                knowledge=prompt_knowledge_text(context),
             )
 
     def _chat(self, prompt: str, image_count: int) -> str:

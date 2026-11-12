@@ -261,11 +261,13 @@ def run_official_protocol(
     progress: Callable[[str], None] = print,
     perception: Mapping[str, Any] | None = None,
     prompt_constraints: Mapping[str, Any] | None = None,
+    episode_facts: Callable[[OfficialExample], str] | None = None,
 ) -> dict[str, Any]:
     """Generate (resumably), score and summarize. ``generate`` maps a ti-list to reply text.
 
     ``prompt_constraints`` (from :mod:`.prompt_constraints`) adds its text after the official prompt, which
-    stays byte-identical to the pinned file; ``prompt_sha256`` keeps describing that file.
+    stays byte-identical to the pinned file; ``prompt_sha256`` keeps describing that file. ``episode_facts`` adds
+    each episode's own text after that (``--prompt-constraints metadata``); ``outputs.jsonl`` keeps it per episode.
     """
     prompt = load_official_prompt()
     output_dir = Path(output_dir)
@@ -279,6 +281,8 @@ def run_official_protocol(
     if prompt_constraints is not None:
         config["prompt_constraints"] = dict(prompt_constraints)
         prompt = f"{prompt}\n\n{prompt_constraints['text']}"
+    if episode_facts is not None:
+        config["episode_facts"] = True
     run_path = output_dir / "run.json"
     if run_path.exists() and json.loads(run_path.read_text(encoding="utf-8")) != config:
         raise ValueError(f"{run_path} records a different configuration; use a new output directory")
@@ -291,9 +295,12 @@ def run_official_protocol(
             if example.episode_id in done:
                 continue
             shots = sample_few_shots(examples, example, few_shot_num, seed)
-            text = generate(build_ti_list(prompt, example, shots, with_cot))
+            facts = None if episode_facts is None else episode_facts(example)
+            stated = prompt if facts is None else f"{prompt}\n\n{facts}"
+            text = generate(build_ti_list(stated, example, shots, with_cot))
             ok, sequence = parse_official_output(text)
             row = {"episode_id": example.episode_id, "task": example.task, "origin_output": text,
+                   **({} if facts is None else {"episode_facts": facts}),
                    **({"skill_sequence": sequence} if ok else {"format_error": "format_error"})}
             stream.write(json.dumps(row) + "\n")
             stream.flush()

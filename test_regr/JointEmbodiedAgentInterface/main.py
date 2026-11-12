@@ -53,6 +53,7 @@ DEFAULT_OUTPUT = PACKAGE_DIR / "checkpoints"
 
 from .utils.planner_context import planner_context
 from .utils.evaluation_protocol import training_data_protocol
+from test_regr.VLABenchAgentInterface.prompt_protocol import prompt_knowledge_record
 
 def _ordered_union(examples, key):
     vocabulary = examples[0]["generation_vocab"] if examples else ()
@@ -270,7 +271,7 @@ def _evaluate_eai(planner, runtime, examples, *, limit=32, prediction_observer=N
     }
 
 
-def _prepare(args, device):
+def _prepare(args, device, *, path_auditor=None):
     _status(f"loading EAI dataset name={args.eai_dataset} split={args.eai_split}")
     eai_examples = load_eai_dataset(
         dataset_name=args.eai_dataset,
@@ -332,7 +333,7 @@ def _prepare(args, device):
                 "vlabench", example, context=item.get("planner_context"))
     if getattr(args, "scene_verified_training_references", False):
         from .utils.generalization_protocol import audit_training_paths
-        audit_training_paths(runtime, prepared, args.output)
+        (path_auditor or audit_training_paths)(runtime, prepared, args.output)
     # Match the standalone EAI workflow exactly so standalone and joint
     # checkpoints are selected and compared on the same row identities.
     eai_train, eai_valid = split_train_dev(eai_examples, dev_fraction=0.2)
@@ -383,12 +384,19 @@ def _dfa_loss_config(args) -> DFALossConfig | None:
 
 
 def command_train_agent(args):
-    from test_regr.VLABenchAgentInterface.prompt_protocol import apply_no_dfa_official_argument
+    from test_regr.VLABenchAgentInterface.prompt_protocol import (
+        apply_no_dfa_official_argument, apply_prompt_knowledge_argument,
+    )
+    # Before --no-dfa-official, which would otherwise set --knowledge grammar that this refuses.
+    prompt_level = apply_prompt_knowledge_argument(args)
     apply_no_dfa_official_argument(args)
     if getattr(args, "no_dfa_official", False):
         from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
         apply_research_arguments(args)
         _status("anonymous object prompts; no name-based button hints, planner DFA losses or decoding masks")
+    if prompt_level:
+        _status(f"--prompt-constraints {prompt_level}: the rules and episode facts are in the planner prompt; "
+                "no planner DFA losses, decoding masks or Stage 2 DFA")
     from test_regr.VLABenchAgentInterface.dataset_protocol import guard_training_dataset
     if getattr(args, "initialize_from", None) and (args.resume or args.resume_adapter):
         raise ValueError("--initialize-from cannot be combined with --resume or --resume-adapter")
@@ -450,7 +458,7 @@ def command_train_agent(args):
     if args.resume_adapter:
         from test_regr.VLABenchAgentInterface.research.checkpoint import load_adapter_metadata
         load_adapter_metadata(args.resume_adapter,planner,training=True)
-    planner.free_decoding = ce_only or bool(getattr(args, "no_dfa_official", False))
+    planner.free_decoding = ce_only or bool(getattr(args, "no_dfa_official", False)) or bool(prompt_level)
     _status(f"loading controller vision encoder {args.vision_model if not args.tiny_vision else 'tiny'}")
     controller = _controller(args, device)
     initialization = None
@@ -640,6 +648,7 @@ def command_train_agent(args):
                 "training_mode": training_mode,
                 "decoding": "free" if planner.free_decoding else "dfa",
                 "no_dfa_official": bool(getattr(args, "no_dfa_official", False)),
+                "prompt_constraints": prompt_knowledge_record(),
                 "training_data_protocol": training_data_protocol(args, resume_payload or initialization_payload),
                 "train": train_metrics,
                 "eai": eai_metrics,
@@ -1251,6 +1260,8 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", required=True)
     agent = subparsers.add_parser("train-agent", help="run joint SolverPOI then joint reinforcement learning")
     add_no_dfa_official_argument(agent)
+    from test_regr.VLABenchAgentInterface.prompt_protocol import add_prompt_knowledge_argument
+    add_prompt_knowledge_argument(agent)
     mode = agent.add_mutually_exclusive_group(required=True)
     mode.add_argument("--two-stage", action="store_true", help="run supervised training followed by RL")
     mode.add_argument("--ce-only", action="store_true",
@@ -1573,6 +1584,7 @@ def build_parser():
     add_knowledge_argument(eval_planning)
     eval_planning.add_argument("--no-dfa", action="store_true")
     add_no_dfa_official_argument(eval_planning)
+    add_prompt_knowledge_argument(eval_planning)
     eval_planning.add_argument("--no-dfa-min-steps", type=int, default=0)
     eval_planning.add_argument("--input-probe", choices=("original", "permuted-entities", "no-images", "shuffled-images", "shuffled-instructions"), default="original")
     eval_planning.add_argument("--audit-probes", action="store_true",

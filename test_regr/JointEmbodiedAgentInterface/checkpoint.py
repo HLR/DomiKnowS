@@ -358,9 +358,10 @@ def save_joint_checkpoint(
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(target.suffix + ".tmp")
     compatibility = _compatibility(runtime, planner, controller)
-    from test_regr.VLABenchAgentInterface.prompt_protocol import planner_input_protocol
+    from test_regr.VLABenchAgentInterface.prompt_protocol import planner_input_protocol, prompt_knowledge_record
     payload = {
         "planner_input_protocol": planner_input_protocol(),
+        "prompt_knowledge": prompt_knowledge_record(),
         "joint_checkpoint_version": JOINT_CHECKPOINT_VERSION,
         "compatibility": compatibility,
         "knowledge_manifest_version": compatibility["knowledge_manifest"]["version"],
@@ -445,6 +446,9 @@ def load_joint_checkpoint(
         map_location=_checkpoint_staging_location(map_location),
         weights_only=False,
     )
+    if ((payload.get("metrics") or {}).get("grounding_required")
+            and not getattr(planner, "_grounding_extension_active", False)):
+        raise ValueError("This snapshot requires the anonymous_grounding loader and its verified grounding-head sidecar")
     checkpoint_version = payload.get("joint_checkpoint_version")
     if planner_optimizer is not None or controller_optimizer is not None:
         from test_regr.VLABenchAgentInterface.prompt_protocol import validate_training_input_protocol

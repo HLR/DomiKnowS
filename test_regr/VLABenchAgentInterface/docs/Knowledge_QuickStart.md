@@ -168,6 +168,49 @@ of listed objects still comes from the scene configuration. It runs on the froze
 The text is in [`official/prompt_constraints.py`](../official/prompt_constraints.py). Each rule names the logical
 constraints it words, and a test checks those names against the declared graphs.
 
+### All the metadata knowledge in the prompt (`--prompt-constraints metadata`)
+
+`metadata` states in English everything `--knowledge metadata` would enforce, and enforces none of it. It's
+privileged: it uses the scene configuration and the oracle task. The prompt has two parts:
+
+- **31 rules:** the grammar and causal rules above, then the general, scene and task rules of
+  [`knowledge/prompt_knowledge.py`](../knowledge/prompt_knowledge.py). The task rules include the physics, cooking,
+  book, chemistry, hammer, poker and articulation families.
+- **The episode's facts:** the facts those rules read, grounded by `task_requirements` exactly as the DFA would ground
+  them:
+  - the task name and its declared skill sequence, cycle or obligations;
+  - which object ids are buttons, static fixtures or enclosed containers, and which may be picked again;
+  - each answer button's object properties, the declared property order, and the criterion the instruction asks for;
+  - the scene roles, the recipe and the book years.
+
+  A grounding the dataset can't supply is stated as not observed. The reference plan and the goal conditions never
+  enter.
+
+It runs on these paths:
+
+| Path | Command |
+|---|---|
+| Frozen VLM, no training | `evaluate-planner --prompt-constraints metadata`; with `--protocol official` each prompt gets the episode's facts after the official template, ids taken from the entity table (assumed equal to the image tags), and the run is marked privileged |
+| Joint training | `train-agent --two-stage` (or `--ce-only`) `--prompt-constraints metadata` |
+| Joint evaluation | `evaluate-planning --checkpoint <ckpt> --prompt-constraints metadata` |
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage --prompt-constraints metadata ...
+```
+
+```bash
+python -m test_regr.JointEmbodiedAgentInterface.main evaluate-planning --checkpoint <ckpt> --planning-dir test_regr/VLABenchAgentInterface/data/planning --split test --prompt-constraints metadata --output out/prompt_metadata.json
+```
+
+- **Nothing enforces the rules:** the option sets `--knowledge metadata` and `--observation-mode metadata-assisted`,
+  which only ground the stated facts. It also turns on free decoding (`--no-dfa`) and turns off
+  `--stage1-dfa-loss` and `--stage2-dfa`. `--no-dfa-official`, another `--knowledge`, `--task-identity predicted`,
+  the DFA-masked CE modes, `research_v1`, compiled loss and image perception are rejected.
+- **Checkpoints:** a checkpoint stores the level, the operation limit and the hash of the rule text. Resuming or
+  evaluating it with different prompt rules, or none, is an error, and so is the reverse.
+- **Prompt length:** the rules are about 1,000 words, and the facts add a few lines per episode, so training needs more
+  memory per example.
+
 ## Which flags do I need?
 
 **I want to train and evaluate with the official knowledge.** Pass `--knowledge official` to both training and

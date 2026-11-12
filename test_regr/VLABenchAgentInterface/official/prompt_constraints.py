@@ -9,6 +9,10 @@ words, and ``test_prompt_constraints.py`` fails if the declarations and this tex
 default and needs extra model calls, and ``observation_supported_references`` only on a complete set of ids
 that a caller supplies. In a prompt the press rule needs no such answer: the
 model applies it itself, so it is worded even though the DFA ties it to ``--press-question``.
+
+``metadata`` is the privileged level: the grammar and causal rules, then the generic, scene and task rules of
+``knowledge/prompt_knowledge.py``, followed for each episode by the facts those rules read (``episode_facts_text``).
+It is not cumulative over ``official``, as ``--knowledge`` levels are not.
 """
 from __future__ import annotations
 
@@ -17,8 +21,14 @@ import hashlib
 import json
 from typing import Any
 
-LEVELS = ("grammar", "causal", "official")
+LEVELS = ("grammar", "causal", "official", "metadata")
 DEFAULT_LEVEL = "official"
+# The rule sections of each level, in prompt order.
+LEVEL_SECTIONS = {"grammar": ("grammar",), "causal": ("grammar", "causal"),
+                  "official": ("grammar", "causal", "official"),
+                  "metadata": ("grammar", "causal", "generic", "scene", "task")}
+# Levels whose prompt also states the facts of the episode; they need its scene metadata.
+EPISODE_LEVELS = frozenset({"metadata"})
 UNWORDED_LCS = ("observation_supported_references", "chosen_patterns_continue", "chosen_patterns_complete")
 
 
@@ -86,33 +96,55 @@ _SECTIONS = {"grammar": ("Plan structure", GRAMMAR_RULES),
              "official": ("Rules about the images and the instruction", OFFICIAL_RULES)}
 
 
+def _sections():
+    if "task" not in _SECTIONS:
+        try:
+            from ..knowledge.prompt_knowledge import GENERIC_RULES, SCENE_RULES, TASK_RULES
+        except ImportError:  # pragma: no cover - flat-module execution
+            from knowledge.prompt_knowledge import GENERIC_RULES, SCENE_RULES, TASK_RULES
+        _SECTIONS.update({"generic": ("General rules", GENERIC_RULES), "scene": ("Scene rules", SCENE_RULES),
+                          "task": ("Task rules", TASK_RULES)})
+    return _SECTIONS
+
+
 def prompt_rules(level: str = DEFAULT_LEVEL) -> tuple[PromptRule, ...]:
     """The rules of a level. Each level keeps the ones below it, as ``--knowledge`` does."""
     if level not in LEVELS:
         raise ValueError(f"unknown prompt constraint level {level!r}; expected one of {LEVELS}")
-    return tuple(rule for name in LEVELS[:LEVELS.index(level) + 1] for rule in _SECTIONS[name][1])
+    sections = _sections()
+    return tuple(rule for name in LEVEL_SECTIONS[level] for rule in sections[name][1])
 
 
-def _arguments_text(arguments) -> str:
-    return "; ".join(f"{skill} takes {' and '.join(roles)}" if roles else f"{skill} takes no parameters"
-                     for skill, roles in arguments.items())
+def _arguments_text(arguments, optional=None) -> str:
+    def text(skill, roles):
+        extra = tuple((optional or {}).get(skill, ()))
+        if not roles and not extra:
+            return f"{skill} takes no parameters"
+        parts = [*roles, *(f"optionally {role}" for role in extra)]
+        return f"{skill} takes {' and '.join(parts)}"
+    return "; ".join(text(skill, roles) for skill, roles in arguments.items())
 
 
-def prompt_constraints_text(level: str = DEFAULT_LEVEL, *, grammar_profile: str, max_operations: int) -> str:
-    """The rules as prompt text, worded for the skill language of ``grammar_profile``."""
+def prompt_constraints_text(level: str = DEFAULT_LEVEL, *, grammar_profile: str = "world", max_operations: int,
+                            schema=None) -> str:
+    """The rules as prompt text, worded for the skill language of ``grammar_profile``.
+
+    ``schema`` is ``(skill arguments, subtask patterns, optional arguments)`` of another skill language, such as a
+    world graph's; it replaces the native profile's.
+    """
     try:
         from ..native_planning import native_schema
     except ImportError:  # pragma: no cover - flat-module execution
         from native_planning import native_schema
     if max_operations <= 0:
         raise ValueError("--max-operations must be positive")
-    arguments, patterns = native_schema(grammar_profile)
-    values = {"max_operations": max_operations, "arguments": _arguments_text(arguments),
+    arguments, patterns, optional = schema if schema is not None else (*native_schema(grammar_profile), None)
+    values = {"max_operations": max_operations, "arguments": _arguments_text(arguments, optional),
               "patterns": ", ".join(json.dumps(list(pattern)) for pattern in patterns)}
     prompt_rules(level)  # rejects an unknown level before anything is worded
     lines, number = ["### Plan constraints:", "", "The skill sequence you generate must follow all of these rules."], 0
-    for name in LEVELS[:LEVELS.index(level) + 1]:
-        title, rules = _SECTIONS[name]
+    for name in LEVEL_SECTIONS[level]:
+        title, rules = _sections()[name]
         lines += ["", f"{title}:"]
         for rule in rules:
             number += 1
@@ -123,3 +155,26 @@ def prompt_constraints_text(level: str = DEFAULT_LEVEL, *, grammar_profile: str,
 def prompt_constraints_record(level: str, text: str) -> dict[str, Any]:
     """What a report keeps: the exact wording decides the result, so it is stored with its hash."""
     return {"level": level, "text": text, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
+
+
+_EPISODE_WORLD = []
+
+
+def episode_prompt_text(rules: str, example) -> str:
+    """``rules`` followed by the facts of ``example`` (an episode level), grounded as ``--knowledge metadata`` would."""
+    return f"{rules}\n\n{episode_facts_for(example)}"
+
+
+def episode_facts_for(example) -> str:
+    """The facts section of a ``PlanningExample``, grounded on a task-level world graph with the oracle task."""
+    try:
+        from ..knowledge.prompt_knowledge import episode_facts_text
+        from ..world_graph import build_vlabench_world_graph
+    except ImportError:  # pragma: no cover - flat-module execution
+        from knowledge.prompt_knowledge import episode_facts_text
+        from world_graph import build_vlabench_world_graph
+    from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context
+    if not _EPISODE_WORLD:
+        _EPISODE_WORLD.append(build_vlabench_world_graph(graph_name="vlabench_prompt_episode_facts",
+                                                         knowledge_level="task", task_identity="oracle"))
+    return episode_facts_text(planner_context('vlabench', example), _EPISODE_WORLD[0])

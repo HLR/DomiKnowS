@@ -82,6 +82,8 @@ def build_eval_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-dfa", action="store_true",
                         help="decode without the grammar DFA or any constraint (baseline below --knowledge grammar)")
     add_no_dfa_official_argument(parser)
+    from test_regr.VLABenchAgentInterface.prompt_protocol import add_prompt_knowledge_argument
+    add_prompt_knowledge_argument(parser)
     parser.add_argument("--audit-probes", action="store_true",
                         help="also score paired no-images, shuffled-images and permuted-entities inputs")
     from .utils.leakage_pilot import add_pilot_arguments
@@ -233,7 +235,12 @@ def _evaluation_shard(examples, count=1, index=0):
 
 
 def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
-    from test_regr.VLABenchAgentInterface.prompt_protocol import apply_no_dfa_official_argument, planner_input_protocol
+    from test_regr.VLABenchAgentInterface.prompt_protocol import (
+        apply_no_dfa_official_argument, apply_prompt_knowledge_argument, planner_input_protocol, prompt_knowledge_record,
+        validate_prompt_knowledge,
+    )
+    # The rules reach the planner only through its prompt: this also selects free decoding (--no-dfa).
+    apply_prompt_knowledge_argument(args)
     apply_no_dfa_official_argument(args)
     if getattr(args, "no_dfa_official", False):
         from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
@@ -310,6 +317,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         ),
     )
 
+    validate_prompt_knowledge(payload, "evaluation")
     planner.eval()
     planner.free_decoding = bool(getattr(args, "no_dfa", False))
     planner.free_decoding_min_steps = int(getattr(args, "no_dfa_min_steps", 0))
@@ -428,6 +436,7 @@ def run_planning_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         "no_dfa_official": bool(getattr(args, "no_dfa_official", False)),
         "perception_evidence_policy": default_perception_policy(),
         "planner_input_protocol": planner_input_protocol(),
+        "prompt_constraints": prompt_knowledge_record(),
         "free_decoding_min_steps": int(getattr(args, "no_dfa_min_steps", 0)),
         "holdout_tasks": list(holdout),
         "declare_heldout_knowledge": bool(getattr(args, "declare_heldout_knowledge", False)),

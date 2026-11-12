@@ -533,8 +533,11 @@ def train_planner_reinforcement_epoch(
 @torch.no_grad()
 def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstraintRuntime | None = None,
                      *, generation_mode: str = "graph", max_new_tokens: int = 768, decision_trace=None,
-                     prediction_observer=None, prompt_constraints: str | None = None) -> dict[str, Any]:
-    """Apply the same scoring to graph plans or unconstrained native VLM text."""
+                     prediction_observer=None, prompt_constraints=None) -> dict[str, Any]:
+    """Apply the same scoring to graph plans or unconstrained native VLM text.
+
+    ``prompt_constraints`` is rule text, or a function of the example for text that states its facts.
+    """
     if generation_mode not in {"graph", "frozen-vlm"}:
         raise ValueError(f"unknown planner generation mode {generation_mode!r}")
     native = generation_mode == "frozen-vlm"
@@ -590,9 +593,9 @@ def evaluate_planner(planner, examples: Iterable[Any], runtime: PlannerConstrain
                 print(f"[eval-planner] Evaluating example {count}/{total_examples}...", file=sys.stderr, flush=True)
             if native:
                 # No graph decoder, DFA, HMM, or instruction mask participates.
+                stated = prompt_constraints(example) if callable(prompt_constraints) else prompt_constraints
                 output, _tokens = planner.generate(example, mode="raw", sample=False, max_tokens=max_new_tokens,
-                                                   **({} if prompt_constraints is None
-                                                      else {"prompt_constraints": prompt_constraints}))
+                                                   **({} if stated is None else {"prompt_constraints": stated}))
                 from .native_planning import validate_native_plan
                 native_valid += int(validate_native_plan(output, _example_value(example, "entities", ()))[0])
             else:

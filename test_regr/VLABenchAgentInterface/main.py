@@ -1053,6 +1053,7 @@ def prompt_constraints_level(args):
 def command_evaluate_official(args) -> None:
     """Standard VLABench VLM-planning protocol: every episode, official prompt and scoring."""
     prompt_level = prompt_constraints_level(args)
+    from test_regr.VLABenchAgentInterface.official.prompt_constraints import EPISODE_LEVELS
     args.constraints = official_constraints(args)
     # Prompt constraints are told to the model, so even an official default level observes nothing here.
     perception_options = None if prompt_level else official_perception_options(args)
@@ -1080,6 +1081,19 @@ def command_evaluate_official(args) -> None:
         prompt_record = prompt_constraints_record(prompt_level, prompt_constraints_text(
             prompt_level, grammar_profile="benchmark", max_operations=DFA_MAX_OPERATIONS))
         print("[official-vlm] --prompt-constraints changes the official prompt; the report is marked standard=false", flush=True)
+    episode_facts = None
+    if prompt_level in EPISODE_LEVELS:
+        # Privileged: the facts come from each episode's scene configuration (entity table, simulator metadata)
+        # and oracle task, which the official protocol does not give. Their object ids are the entity-table ids.
+        from test_regr.VLABenchAgentInterface.official.prompt_constraints import episode_facts_for
+        planning = {example.episode_id: example for example in load_planning_examples(
+            args.planning_dir, observation_mode="metadata-assisted")}
+        missing = [example.episode_id for example in examples if example.episode_id not in planning]
+        if missing:
+            raise ValueError(f"--prompt-constraints {prompt_level} needs the scene configuration of {missing[:3]}")
+        episode_facts = lambda example: episode_facts_for(planning[example.episode_id])
+        print(f"[official-vlm] --prompt-constraints {prompt_level} adds each episode's scene-metadata facts "
+              "(privileged)", flush=True)
     planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
     model_label = Path(str(args.planner_model)).name or "model"
     cot_label = "_cot" if args.with_cot else ""
@@ -1142,6 +1156,7 @@ def command_evaluate_official(args) -> None:
         examples, generate, output_dir=output_dir,
         model_name=str(args.planner_model), few_shot_num=args.few_shot_num, with_cot=args.with_cot,
         seed=args.seed, standard=standard, decoding=decoding, prompt_constraints=prompt_record,
+        episode_facts=episode_facts,
         perception=None if perception is None else {
             "inputs": "unlabeled image, number-labeled image, instruction; no entity table",
             "config": perception_options, "fingerprint": perception.config.fingerprint,
@@ -1178,6 +1193,13 @@ def command_evaluate_planner(args) -> None:
         raise ValueError("--no-dfa-official uses no DFA; omit --generation-mode graph")
     if getattr(args, "protocol", "internal") == "official":
         return command_evaluate_official(args)
+    from test_regr.VLABenchAgentInterface.official.prompt_constraints import EPISODE_LEVELS
+    if prompt_level in EPISODE_LEVELS:
+        if getattr(args, "observation_mode", "visual") != "visual" or args.generation_mode == "graph":
+            raise ValueError(f"--prompt-constraints {prompt_level} selects the metadata observations and the frozen "
+                             "VLM itself; omit --observation-mode and --generation-mode graph")
+        # The stated facts are grounded from the scene metadata, as --knowledge metadata would ground them.
+        args.observation_mode = "metadata-assisted"
     observation_mode = getattr(args, "observation_mode", "visual")
     knowledge = apply_knowledge_argument(args)
     # Omitted --generation-mode: without a DFA, these options run on the frozen VLM.
@@ -1185,7 +1207,7 @@ def command_evaluate_planner(args) -> None:
     if args.generation_mode == "frozen-vlm":
         if getattr(args,"constraint_profile","baseline")=="research_v1":
             raise ValueError("Unconstrained frozen-vlm generation does not enforce research_v1; select graph generation")
-        if observation_mode != "visual":
+        if observation_mode != "visual" and prompt_level not in EPISODE_LEVELS:
             raise ValueError("frozen-vlm evaluation uses visual observation mode; metadata-assisted requires graph generation")
         if args.resume_adapter or args.vocab:
             raise ValueError("frozen-vlm evaluation loads only the base VLM; omit --resume-adapter and --vocab")
@@ -1212,10 +1234,15 @@ def command_evaluate_planner(args) -> None:
             # The frozen planner's raw prompt lists the "world" skills, so the rules are worded for them.
             prompt_record = prompt_constraints_record(prompt_level, prompt_constraints_text(
                 prompt_level, grammar_profile="world", max_operations=args.max_operations))
+        stated = None if prompt_record is None else prompt_record["text"]
+        if prompt_level in EPISODE_LEVELS:
+            from test_regr.VLABenchAgentInterface.official.prompt_constraints import episode_prompt_text
+            rules, stated = prompt_record["text"], lambda example: episode_prompt_text(rules, example)
+            prompt_record = {**prompt_record, "episode_facts": "per episode, after the rules"}
         planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)
         result = evaluate_planner(planner, eval_examples,
                                   generation_mode="frozen-vlm", max_new_tokens=args.max_new_tokens,
-                                  **({"prompt_constraints": prompt_record["text"]} if prompt_record else {}))
+                                  **({"prompt_constraints": stated} if stated is not None else {}))
         _json(result | {"generation_mode": "frozen-vlm", "planner_model": args.planner_model,
                         "dfa_constrained": False, "max_new_tokens": args.max_new_tokens,
                         "observation_mode": observation_mode,
@@ -1655,11 +1682,13 @@ def build_parser() -> argparse.ArgumentParser:
     from test_regr.VLABenchAgentInterface.prompt_protocol import add_no_dfa_official_argument
     add_no_dfa_official_argument(evaluate)
     evaluate.add_argument("--prompt-constraints", nargs="?", const="official", default=None,
-                          choices=["grammar", "causal", "official"],
+                          choices=["grammar", "causal", "official", "metadata"],
                           help="frozen VLM baseline with no DFA: add a level's constraints to the prompt in plain English "
                                "(no value: official). Nothing enforces them. Works with --protocol official (the report "
                                "is marked standard=false; the stated operation limit is that protocol's DFA limit, 16) and "
-                               "--generation-mode frozen-vlm (the stated limit is --max-operations)")
+                               "--generation-mode frozen-vlm (the stated limit is --max-operations). metadata (privileged) "
+                               "words every rule of --knowledge metadata and states each episode's "
+                               "facts: oracle task, declared sequence, object kinds and simulator metadata")
     evaluate.add_argument("--max-new-tokens", type=int, default=768,
                           help="native frozen-VLM continuation cap (graph uses its existing operation budget)")
     evaluate.add_argument("--vocab")

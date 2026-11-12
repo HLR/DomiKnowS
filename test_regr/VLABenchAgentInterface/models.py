@@ -290,7 +290,9 @@ def vision_language_hidden_size(model: nn.Module) -> int | None:
     return None
 
 
-def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: PlanVocabulary) -> str:
+def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: PlanVocabulary,
+                   knowledge: str | None = None) -> str:
+    """``knowledge``: plain-English rules and episode facts (``--prompt-constraints``), placed before the skills."""
     from .prompt_protocol import planner_input_protocol
     if planner_input_protocol() == "anonymous_objects":
         entity_table = tuple(f"numbered object {i}" for i in range(len(entity_table)))
@@ -314,6 +316,7 @@ def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: Pl
         "Predict a compact VLABench plan using only graph labels. "
         "A skill label is followed by its graph-declared argument and object pointer labels."
         f"{directive}\n"
+        + (f"{knowledge}\n" if knowledge else "") +
         f"Skills: {skills}\nObjects:\n{entities}\nInstruction: {instruction}\nPlan labels:"
     )
 
@@ -490,7 +493,9 @@ class QwenVLPlanner(nn.Module):
             for label in prefix_labels
             if int(label) != self.eos_label
         )
-        prompt = planner_prompt(context["instruction"], context.get("entity_table", ()), self.vocabulary)
+        from .prompt_protocol import prompt_knowledge_text
+        prompt = planner_prompt(context["instruction"], context.get("entity_table", ()), self.vocabulary,
+                                knowledge=prompt_knowledge_text(context))
         from .research.prompt import observation_prompt
         prompt += observation_prompt(context)
         if prefix:
