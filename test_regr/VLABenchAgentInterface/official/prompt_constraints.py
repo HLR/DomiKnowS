@@ -11,7 +11,7 @@ that a caller supplies. In a prompt the press rule needs no such answer: the
 model applies it itself, so it is worded even though the DFA ties it to ``--press-question``.
 
 ``metadata`` is the privileged level: the grammar and causal rules, then the generic, scene and task rules of
-``knowledge/prompt_knowledge.py``, followed for each episode by the facts those rules read (``episode_facts_text``).
+``prompt_metadata.py``, followed for each episode by the facts those rules read (``episode_facts_text``).
 It is not cumulative over ``official``, as ``--knowledge`` levels are not.
 """
 from __future__ import annotations
@@ -99,11 +99,10 @@ _SECTIONS = {"grammar": ("Plan structure", GRAMMAR_RULES),
 def _sections():
     if "task" not in _SECTIONS:
         try:
-            from ..knowledge.prompt_knowledge import GENERIC_RULES, SCENE_RULES, TASK_RULES
+            from .prompt_metadata import METADATA_SECTIONS
         except ImportError:  # pragma: no cover - flat-module execution
-            from knowledge.prompt_knowledge import GENERIC_RULES, SCENE_RULES, TASK_RULES
-        _SECTIONS.update({"generic": ("General rules", GENERIC_RULES), "scene": ("Scene rules", SCENE_RULES),
-                          "task": ("Task rules", TASK_RULES)})
+            from official.prompt_metadata import METADATA_SECTIONS
+        _SECTIONS.update(METADATA_SECTIONS)
     return _SECTIONS
 
 
@@ -155,26 +154,3 @@ def prompt_constraints_text(level: str = DEFAULT_LEVEL, *, grammar_profile: str 
 def prompt_constraints_record(level: str, text: str) -> dict[str, Any]:
     """What a report keeps: the exact wording decides the result, so it is stored with its hash."""
     return {"level": level, "text": text, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
-
-
-_EPISODE_WORLD = []
-
-
-def episode_prompt_text(rules: str, example) -> str:
-    """``rules`` followed by the facts of ``example`` (an episode level), grounded as ``--knowledge metadata`` would."""
-    return f"{rules}\n\n{episode_facts_for(example)}"
-
-
-def episode_facts_for(example) -> str:
-    """The facts section of a ``PlanningExample``, grounded on a task-level world graph with the oracle task."""
-    try:
-        from ..knowledge.prompt_knowledge import episode_facts_text
-        from ..world_graph import build_vlabench_world_graph
-    except ImportError:  # pragma: no cover - flat-module execution
-        from knowledge.prompt_knowledge import episode_facts_text
-        from world_graph import build_vlabench_world_graph
-    from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context
-    if not _EPISODE_WORLD:
-        _EPISODE_WORLD.append(build_vlabench_world_graph(graph_name="vlabench_prompt_episode_facts",
-                                                         knowledge_level="task", task_identity="oracle"))
-    return episode_facts_text(planner_context('vlabench', example), _EPISODE_WORLD[0])

@@ -1085,7 +1085,7 @@ def command_evaluate_official(args) -> None:
     if prompt_level in EPISODE_LEVELS:
         # Privileged: the facts come from each episode's scene configuration (entity table, simulator metadata)
         # and oracle task, which the official protocol does not give. Their object ids are the entity-table ids.
-        from test_regr.VLABenchAgentInterface.official.prompt_constraints import episode_facts_for
+        from test_regr.VLABenchAgentInterface.official.prompt_metadata import episode_facts_for
         planning = {example.episode_id: example for example in load_planning_examples(
             args.planning_dir, observation_mode="metadata-assisted")}
         missing = [example.episode_id for example in examples if example.episode_id not in planning]
@@ -1236,7 +1236,7 @@ def command_evaluate_planner(args) -> None:
                 prompt_level, grammar_profile="world", max_operations=args.max_operations))
         stated = None if prompt_record is None else prompt_record["text"]
         if prompt_level in EPISODE_LEVELS:
-            from test_regr.VLABenchAgentInterface.official.prompt_constraints import episode_prompt_text
+            from test_regr.VLABenchAgentInterface.official.prompt_metadata import episode_prompt_text
             rules, stated = prompt_record["text"], lambda example: episode_prompt_text(rules, example)
             prompt_record = {**prompt_record, "episode_facts": "per episode, after the rules"}
         planner = FrozenNativePlanner.load(args.planner_model, load_in_4bit=args.load_in_4bit)

@@ -174,7 +174,7 @@ constraints it words, and a test checks those names against the declared graphs.
 privileged: it uses the scene configuration and the oracle task. The prompt has two parts:
 
 - **31 rules:** the grammar and causal rules above, then the general, scene and task rules of
-  [`knowledge/prompt_knowledge.py`](../knowledge/prompt_knowledge.py). The task rules include the physics, cooking,
+  [`official/prompt_metadata.py`](../official/prompt_metadata.py). The task rules include the physics, cooking,
   book, chemistry, hammer, poker and articulation families.
 - **The episode's facts:** the facts those rules read, grounded by `task_requirements` exactly as the DFA would ground
   them:

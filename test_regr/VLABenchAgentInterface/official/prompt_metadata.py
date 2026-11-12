@@ -1,18 +1,19 @@
-"""The ``metadata`` knowledge level in plain English: every rule family and the episode's facts.
+"""The ``metadata`` prompt level in plain English: every rule family of ``--knowledge metadata`` and the episode's facts.
 
 ``--prompt-constraints metadata`` tells a planner what ``--knowledge metadata`` (the task level with the oracle task
-identity and metadata-assisted observations) would enforce, and enforces nothing:
+identity and metadata-assisted observations) would enforce, and enforces nothing. The prompt has two parts:
 
-* the rules: the grammar and causal rules of ``official/prompt_constraints.py``, then the generic, scene and task
-  groups of the world graph and the physics, complex, poker and articulation knowledge they relay;
-* the facts those rules read for one episode: the task name, its declared skill sequence or obligations, which
-  objects are buttons, static fixtures or enclosed containers, and the simulator metadata of the answer options and
-  scene roles. They come from ``task_policy.task_requirements``, the grounding the DFA binds, so the prompt states
-  what the DFA would know and nothing else (no reference plan, goal condition or derived answer).
+* the rules (``METADATA_SECTIONS``): the grammar and causal rules of ``prompt_constraints.py``, then the generic,
+  scene and task groups of the world graph and the physics, complex, poker and articulation knowledge they relay. The
+  ``official`` image rules are not part of this level;
+* the facts those rules read for one episode (``episode_facts``): the task name, its declared skill sequence or
+  obligations, which objects are buttons, static fixtures or enclosed containers, and the simulator metadata of the
+  answer options and scene roles. They come from ``task_policy.task_requirements``, the grounding the DFA binds, so the
+  prompt states what the DFA would know and nothing else (no reference plan, goal condition or derived answer).
 
 Each rule names the logical constraints it words as ``fnmatch`` patterns over their names (one rule covers a family
-such as ``task__*__skill_sequence``). ``test_prompt_knowledge.py`` fails when a declared LC or relayed family matches
-no rule and is not listed in ``UNWORDED``.
+such as ``task__*__skill_sequence``). ``test_prompt_metadata.py`` fails when a declared LC or relayed family matches no
+rule and is not listed in ``UNWORDED``.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from fnmatch import fnmatchcase
 from typing import Any, Mapping
 
 try:
-    from ..official.prompt_constraints import PromptRule
+    from .prompt_constraints import PromptRule
 except ImportError:  # pragma: no cover - flat-module execution
     from official.prompt_constraints import PromptRule
 
@@ -102,6 +103,9 @@ TASK_RULES = (
                "position.",
                ("articulation__*",)),
 )
+# The world-graph sections of the level, in prompt order, after the grammar and causal rules.
+METADATA_SECTIONS = {"generic": ("General rules", GENERIC_RULES), "scene": ("Scene rules", SCENE_RULES),
+                     "task": ("Task rules", TASK_RULES)}
 # Declared LCs left out, with the reason; each is a pattern like the rules' names.
 UNWORDED = {
     # It restricts only with explicit initial-visibility evidence, which no planning episode supplies.
@@ -185,7 +189,7 @@ def _task_lines(requirements, ids):
 
 def _physics_lines(block, task, ids):
     try:
-        from .tables import PHYSICS_PROPERTIES, PHYSICS_REVERSED
+        from ..knowledge.tables import PHYSICS_PROPERTIES, PHYSICS_REVERSED
     except ImportError:  # pragma: no cover
         from knowledge.tables import PHYSICS_PROPERTIES, PHYSICS_REVERSED
     lines = []
@@ -201,8 +205,8 @@ def _physics_lines(block, task, ids):
             values = ", ".join(f"{key} {value}" for key, value in sorted(observed.items()))
             lines.append(f"The object of button {_named([candidate], ids)}: {values}.")
     try:
-        from .physics_lcs import criterion_chain
-        from .tables import PHYSICS_PHRASES
+        from ..knowledge.physics_lcs import criterion_chain
+        from ..knowledge.tables import PHYSICS_PHRASES
     except ImportError:  # pragma: no cover
         from knowledge.physics_lcs import criterion_chain
         from knowledge.tables import PHYSICS_PHRASES
@@ -229,7 +233,7 @@ def _physics_lines(block, task, ids):
 
 def _complex_lines(block, ids):
     try:
-        from .tables import RECIPES
+        from ..knowledge.tables import RECIPES
     except ImportError:  # pragma: no cover
         from knowledge.tables import RECIPES
     lines = []
@@ -292,3 +296,30 @@ def episode_facts_text(context: Any, world) -> str:
     lines = episode_facts(context, world)
     body = "\n".join(f"- {line}" for line in lines) if lines else "- No facts are known about this episode."
     return "### Facts about this episode:\n\n" + body
+
+
+_EPISODE_WORLD = []
+
+
+def episode_world():
+    """The task-level world graph with the oracle task identity: the facts are grounded as ``--knowledge metadata``
+    grounds them, whatever decodes the plan."""
+    try:
+        from ..world_graph import build_vlabench_world_graph
+    except ImportError:  # pragma: no cover - flat-module execution
+        from world_graph import build_vlabench_world_graph
+    if not _EPISODE_WORLD:
+        _EPISODE_WORLD.append(build_vlabench_world_graph(graph_name="vlabench_prompt_episode_facts",
+                                                         knowledge_level="task", task_identity="oracle"))
+    return _EPISODE_WORLD[0]
+
+
+def episode_facts_for(example) -> str:
+    """The facts section of a ``PlanningExample``."""
+    from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context
+    return episode_facts_text(planner_context('vlabench', example), episode_world())
+
+
+def episode_prompt_text(rules: str, example) -> str:
+    """``rules`` followed by the facts of ``example``."""
+    return f"{rules}\n\n{episode_facts_for(example)}"

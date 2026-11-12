@@ -136,7 +136,7 @@ def prompt_knowledge_text(context):
               "task_skill_sequence", "task_target_entity", "task_target_container", "planning_interface")
     key = json.dumps([get(field) for field in fields], sort_keys=True, default=str)
     if key not in _FACT_CACHE:
-        from .knowledge.prompt_knowledge import episode_facts_text
+        from .official.prompt_metadata import episode_facts_text
         _FACT_CACHE[key] = episode_facts_text(context, _prompt_world())
     return f"{rules}\n\n{_FACT_CACHE[key]}"
 
