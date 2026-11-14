@@ -29,11 +29,13 @@ def load_snapshot(checkpoint,*,runtime,planner,controller,device):
     return head,payload
 
 
-def predicted_context(planner,head,context,features,visible):
+def predicted_context(planner,head,context,features,visible,*,grounding_instruction=None):
     if any(key in context for key in ('reference','reference_plan','operation_sequence','target_plan_labels',
             'native_success','hidden_goal','goal','goals','obj_of_interest','scoring_private','reference_labels')):
         raise ValueError('generation context contains supervision or evaluator state')
-    logits=head(instruction_query(planner,context['instruction']),features,visible)
+    query=context.get('grounding_instruction',context['instruction']) if grounding_instruction is None else grounding_instruction
+    if not isinstance(query,str):raise TypeError('grounding instruction must be public text')
+    logits=head(instruction_query(planner,query),features,visible)
     predictions=predict_roles(logits,visible)
     return condition(context,predictions),predictions,logits
 

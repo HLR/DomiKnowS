@@ -67,10 +67,11 @@ def public_input(episode):
 def context(public, dataset):
     if dataset == 'rlbench':
         from ..generalization.rlbench_protocol import planning_context
-        return planning_context(public)
+        return {**planning_context(public), 'grounding_instruction': public['instruction']}
     if dataset != 'libero':
         raise ValueError('unsupported external dataset')
-    return {'instruction': public['instruction'] + '\nInitial scene relations: '
+    return {'grounding_instruction': public['instruction'],
+            'instruction': public['instruction'] + '\nInitial scene relations: '
             + json.dumps(public['initial_relations']),
             'entity_table': public['entities'], 'images': tuple(public['images']),
             'generation_entity_types': public['entity_types'],

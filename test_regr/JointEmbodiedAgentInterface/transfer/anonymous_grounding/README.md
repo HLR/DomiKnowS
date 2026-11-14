@@ -98,3 +98,49 @@ encoder, source, checkpoint, dataset and resume fingerprints must match.
 
 No LIBERO/RLBench test scoring or target adaptation launches automatically. Four
 source epochs and their fixed validation are the scope of this experiment.
+
+## Explicit selected-snapshot evaluation
+
+After training, `deploy_evaluation` separately freezes the validation-selected
+checkpoint and head, evaluation-only source, 450 VLABench test identities,
+88 EAI validation examples, and the archived 100 LIBERO evaluation episodes.
+It retains the training runtime's `main.py` and checkpoint loader, preventing
+newer local prompt interfaces from mixing with older frozen dependencies.
+No retraining or target-domain adaptation runs.
+
+```powershell
+python -m test_regr.JointEmbodiedAgentInterface.transfer.anonymous_grounding.deploy_evaluation `
+  --training-run /home/auszok/experiments/COMPLETED_TRAINING_RUN `
+  --output /home/auszok/experiments/NEW_EVALUATION_DIRECTORY
+```
+
+VLABench uses original RGB and canonical reannotation with the training-only
+glyph atlas. LIBERO's original raw and numbered planner images stay unchanged;
+unique complete public numeric stamps supply crop anchors. Missing and ambiguous
+bindings remain unknown. The external single camera is scaled to 480 pixels for
+the frozen 64/192-pixel crop encoder, populating only camera slot zero. Names,
+object types, BDDL goals, reference plans and success sensors do not supply
+grounding features. The predicted head roles alone condition the planner.
+
+The evaluator binds constraints to the original canonical observation context
+and verifies the actual neural inputs. It compares no DFA and shared verified
+rules on both datasets, plus full metadata on VLABench only. Corrected density
+references remain scorer-only. Frozen rendered prompts, images, token decisions,
+predictions, role predictions, rule traces and original/corrected scores are
+saved. Constraint conditions must have identical rendered-input hashes.
+LIBERO execution uses the unchanged Section 12 executor with its 96/100
+calibration; physical success remains planner transfer through a fixed executor.
+VLABench input reannotation and the new role prompt distinguish this combined
+experiment from the earlier baseline; scores alone cannot attribute a gain to
+one component. New Google report tables must label pending results explicitly.
+
+## Object-transfer diagnostics
+
+`object_fixes/` adds an explicit raw-instruction grounding query, a declared
+pick/place executor contract over the native shared-rule decoder, and paired
+SigLIP source/destination phrase retrieval over RGB object regions. Its six
+frozen conditions reproduce the selected-snapshot baseline before testing the
+three changes and two explicit combinations on all 100 retained LIBERO episodes.
+See `object_fixes/README.md` for interfaces, leakage boundaries, tests and launch
+commands. This is a diagnostic regression without training updates; it records
+competing-object scores but does not claim hard-negative fine-tuning.
