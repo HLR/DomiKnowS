@@ -458,7 +458,8 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                research_knowledge: Any = None, disabled_formulas: Sequence[str] = (),
                                grounding_policy: str | None = None, disabled_official_formulas: Sequence[str] = (),
                                perception_policy: str = 'legacy', perception_weight: float = 0.5,
-                               perception_verifier: Any = None
+                               perception_verifier: Any = None,
+                               episode_policy: Callable[[list[list[Any]]], Any] | None = None,
                                ) -> Callable[[list[list[Any]]], str]:
     """Greedy generation under the DomiKnowS grammar DFA, with no scene information.
 
@@ -489,6 +490,11 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
     the research grounding formulas). ``grounding_policy`` (``joint``, ``robust`` or ``abstain``) turns on the
     research grounding formulas over the perceived role hypotheses; ``None`` leaves them out. They are opt-in
     because on the official episodes every policy lowered the score (see docs/IMAGE_PERCEPTION.md).
+    ``episode_policy`` (``--knowledge metadata``, privileged) maps the episode's items to its bound world LC policy:
+    the plan is decoded under a :class:`..reachability.ReachablePlanDFA` over that policy and the same grammar,
+    causal and decoding LCs, non-strict (an LC whose observation is missing does not refuse), with the entity-table
+    ids. When the policy's search exceeds its limit or proves no plan reachable, the episode falls back to the
+    grammar and causal DFA, and the reply's ``metadata-dfa`` comment says so.
     """
     import torch
     from transformers import LogitsProcessorList
@@ -576,6 +582,33 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                  NativePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, **common))
         return key, planner.dfas[key]
 
+    if episode_policy is not None:
+        from domiknows.generation.dfa.productive import SemanticSearchLimitExceeded
+        try:
+            from ..reachability import ReachablePlanDFA
+        except ImportError:  # pragma: no cover - flat-module execution
+            from reachability import ReachablePlanDFA
+        if operators is not None or press_question or scene_ids or pattern_first or perception is not None:
+            raise ValueError("the metadata DFA takes no HMM, model question or image perception")
+    else:
+        class SemanticSearchLimitExceeded(Exception):  # never raised without a metadata policy
+            pass
+
+    def metadata_language(items, fallback):
+        """The episode's metadata DFA and its note, or the grammar and causal DFA when the policy cannot decide."""
+        policy = episode_policy(items)
+        try:
+            dfa = ReachablePlanDFA(planner.token_bytes, planner.tokenizer.eos_token_id, policy=policy, strict=False,
+                                   causal=causal, decoding_graph=decoding_graph,
+                                   entity_count=len(policy.adapter.entities),
+                                   max_operations=min(max_operations, policy.base_dfa.max_operations),
+                                   grammar_profile="benchmark")
+            if dfa.can_reach_goal() is not True:
+                return fallback, "fallback-unreachable"
+        except SemanticSearchLimitExceeded:
+            return fallback, "fallback-search-limit"
+        return dfa, "bound"
+
     def lookahead_for(key, dfa):
         slot = ("action-lookahead", operators.size, id(operators)) + key
         if slot not in planner.tables:
@@ -630,6 +663,10 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                 observed = verified_observation(observed, verification, episode_inputs(items)[2], selection)
             observed = soft_observation(observed)
         key, dfa = language(press_only, bound, tuple(sorted(chosen)), observed)
+        metadata_note = None
+        if episode_policy is not None:
+            dfa, metadata_note = metadata_language(items, dfa)
+            key = None
         steered = operators is not None and not press_only
         inputs, images = prepare_inputs(planner, items, prefix="```json\n")
         try:
@@ -653,16 +690,26 @@ def make_grammar_dfa_generator(planner: Any, max_new_tokens: int = 768, entity_c
                                                    lookahead_score=lookahead_score,
                                                    object_preferences=observed.soft_candidates if observed is not None and perception_policy == 'soft' else None,
                                                    preference_weight=perception_weight)
+            def decode(constraint):
+                try:
+                    return planner.model.generate(
+                        **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
+                        logits_processor=LogitsProcessorList([constraint]),
+                        eos_token_id=planner.tokenizer.eos_token_id)[0, length:].tolist()
+                except NativePlanFailure as failure:  # no legal completion: an unfenced reply, i.e. a format error
+                    return list(failure.tokens)
             try:
-                output = planner.model.generate(
-                    **inputs, max_new_tokens=max_new_tokens, do_sample=False, use_cache=True,
-                    logits_processor=LogitsProcessorList([constraint]),
-                    eos_token_id=planner.tokenizer.eos_token_id)[0, length:].tolist()
-            except NativePlanFailure as failure:  # no legal completion: an unfenced reply, i.e. a format error
-                output = list(failure.tokens)
+                output = decode(constraint)
+            except SemanticSearchLimitExceeded:  # the metadata policy's search ran out mid-plan
+                key, dfa = language(press_only, bound, tuple(sorted(chosen)), observed)
+                metadata_note = "fallback-search-limit"
+                constraint = NativeConstraintProcessor(dfa, length, max_new_tokens)
+                output = decode(constraint)
             plan = planner.tokenizer.decode(output, skip_special_tokens=True).strip()
             reply = f"```json\n{plan}\n```" if dfa.accepts(output) else plan
             notes = []
+            if metadata_note is not None:
+                notes.append(f"<!-- metadata-dfa: {metadata_note} -->")
             if press_question:
                 notes.append(f"<!-- {PRESS_MARK} {'yes' if press_only else 'no'} -->")
             if kept is not None:

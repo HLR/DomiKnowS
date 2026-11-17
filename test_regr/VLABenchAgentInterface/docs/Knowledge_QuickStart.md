@@ -87,11 +87,18 @@ observations. It isn't a fair comparison with `visual` runs or with published re
 | Model | trained adapter / checkpoint | frozen base VLM (`--resume-adapter` and `--vocab` are rejected) |
 | Inputs | entity table, scene, task (as the level allows) | the two images and the instruction only |
 | Scoring | internal metrics | upstream VLABench prompt and scorer |
-| Allowed `--knowledge` | any level | `grammar`, `causal` or `official` |
-| Comparable to published numbers | no | yes |
+| Allowed `--knowledge` | any level | `grammar`, `causal`, `official` or `metadata` (privileged) |
+| Comparable to published numbers | no | yes (except `metadata`) |
 
 Under `--protocol official`, the knowledge must come from `--knowledge` (or its `--constraints` alias). If both are
 omitted, the decoder runs with no constraints at all, not even the grammar.
+
+`--protocol official --knowledge metadata` is privileged and marked `standard=false`. Each episode decodes under its
+own world policy, bound from the episode's scene configuration and the oracle task as the internal `--knowledge
+metadata` binds it, together with the grammar and causal rules. The policy is non-strict: an LC whose observation is
+missing doesn't refuse. Its ids are the entity-table ids, assumed equal to the image tags. When the policy's search
+hits its limit or finds no reachable plan, the episode falls back to the grammar and causal DFA, and the reply's
+`metadata-dfa` comment says so. It takes no image perception, model questions or `--hmm`.
 
 ## Flags that ask the model first (`--protocol official`)
 

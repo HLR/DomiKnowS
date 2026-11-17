@@ -949,7 +949,8 @@ def command_train_agent(args) -> None:
         })
 
 
-OFFICIAL_KNOWLEDGE = ("grammar", "causal", "official")
+# metadata is privileged: per-episode scene metadata and the oracle task bind the world LCs (see official_protocol).
+OFFICIAL_KNOWLEDGE = ("grammar", "causal", "official", "metadata")
 
 
 def official_constraints(args) -> str:
@@ -964,9 +965,9 @@ def official_constraints(args) -> str:
     if knowledge not in OFFICIAL_KNOWLEDGE:
         raise ValueError("--protocol official shows no entity table and no task, so --knowledge must be grammar, "
                          f"causal or official, not {knowledge!r}")
-    if knowledge == "official":
+    if knowledge in ("official", "metadata"):
         if constraints not in ("none", "causal"):
-            raise ValueError(f"--knowledge official decodes with the causal rules; it conflicts with --constraints {constraints}")
+            raise ValueError(f"--knowledge {knowledge} decodes with the causal rules; it conflicts with --constraints {constraints}")
         return "causal"
     if constraints not in ("none", knowledge):
         raise ValueError(f"--knowledge {knowledge} conflicts with --constraints {constraints}")
@@ -1050,10 +1051,39 @@ def prompt_constraints_level(args):
     return level
 
 
+def official_metadata_policy(args, examples):
+    """``items -> bound world policy`` for ``--knowledge metadata`` under the official protocol (privileged).
+
+    The task level with the oracle task binds each episode's scene configuration, as the internal protocol's
+    ``--knowledge metadata`` does. The episode is found by its number-labeled image, the last image of its items.
+    Policy ids are the entity-table ids, assumed equal to the image tags.
+    """
+    from types import SimpleNamespace
+    from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context
+    from test_regr.VLABenchAgentInterface.official.official_protocol import DFA_MAX_OPERATIONS
+    apply_knowledge_argument(SimpleNamespace(knowledge="metadata", task_identity=None,
+                                             observation_mode="metadata-assisted"))
+    planning = {example.episode_id: example for example in load_planning_examples(
+        args.planning_dir, observation_mode="metadata-assisted")}
+    missing = [example.episode_id for example in examples if example.episode_id not in planning]
+    if missing:
+        raise ValueError(f"--knowledge metadata needs the scene configuration of {missing[:3]}")
+    by_mask = {str(example.mask_path): planning[example.episode_id] for example in examples}
+    world = build_vlabench_world_graph("vlabench_official_metadata_world")
+    runtime = build_constraint_runtime(world, max_entities=64, max_operations=DFA_MAX_OPERATIONS,
+                                       name_prefix="vlabench_official_metadata")
+
+    def policy(items):
+        mask = str([value for kind, value in items if kind == "image"][-1])
+        return runtime.dfa_for("vlabench", planner_context("vlabench", by_mask[mask]))
+    return policy
+
+
 def command_evaluate_official(args) -> None:
     """Standard VLABench VLM-planning protocol: every episode, official prompt and scoring."""
     prompt_level = prompt_constraints_level(args)
     from test_regr.VLABenchAgentInterface.official.prompt_constraints import EPISODE_LEVELS
+    metadata_dfa = getattr(args, "knowledge", None) == "metadata"
     args.constraints = official_constraints(args)
     # Prompt constraints are told to the model, so even an official default level observes nothing here.
     perception_options = None if prompt_level else official_perception_options(args)
@@ -1070,7 +1100,15 @@ def command_evaluate_official(args) -> None:
         DFA_MAX_OPERATIONS, load_official_examples, make_grammar_dfa_generator, make_vlm_generator, run_official_protocol,
     )
     examples = load_official_examples(args.planning_dir, tasks=args.tasks, limit=args.limit)
-    standard = args.limit is None and not args.tasks and not prompt_level
+    standard = args.limit is None and not args.tasks and not prompt_level and not metadata_dfa
+    episode_policy = None
+    if metadata_dfa:
+        if args.press_question or args.scene_ids or args.pattern_first or args.hmm or perception_options is not None:
+            raise ValueError("--knowledge metadata binds the scene metadata; omit the model questions, --hmm and "
+                             "image perception")
+        episode_policy = official_metadata_policy(args, examples)
+        print("[official-vlm] --knowledge metadata binds each episode's scene metadata and oracle task (privileged); "
+              "the report is marked standard=false", flush=True)
     if args.limit is not None or args.tasks:
         print("[official-vlm] --limit/--tasks select a subset; the report is marked standard=false", flush=True)
     prompt_record = None
@@ -1139,6 +1177,9 @@ def command_evaluate_official(args) -> None:
     suffix = ("_causal" if causal else "_grammar" if grammar else "") + ("_press" if args.press_question else "") + ("_scene" if args.scene_ids else "") + ("_pattern" if args.pattern_first else "") + ("_hmm" if args.hmm else "") + (("_perception" + (f"_{grounding_policy}" if grounding_policy else "")) if perception is not None else "")
     if perception is not None:
         suffix += '_' + perception_policy + ('_verified' if perception_verifier is not None else '')
+    if metadata_dfa:
+        decoding += "+metadata-world-policy-nonstrict"
+        suffix += "_metadata"
     if prompt_level:
         decoding = f"greedy+prompt-constraints-{prompt_level}"
         suffix += f"_prompt_{prompt_level}"
@@ -1150,7 +1191,8 @@ def command_evaluate_official(args) -> None:
                                            grounding_policy=grounding_policy,
                                            perception_policy=perception_policy, perception_weight=perception_weight,
                                            perception_verifier=perception_verifier,
-                                           disabled_official_formulas=disabled_official) if grammar
+                                           disabled_official_formulas=disabled_official,
+                                           episode_policy=episode_policy) if grammar
                 else make_vlm_generator(planner, args.max_new_tokens))
     summary = run_official_protocol(
         examples, generate, output_dir=output_dir,
