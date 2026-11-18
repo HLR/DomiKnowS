@@ -43,7 +43,8 @@ def shared_profile(vocabulary, max_operations):
         raise ValueError(f'shared rule declarations differ: {retained ^ SHARED_RULES}')
     graph, bundle = create_planner_generation_graph(world, vocabulary, max_operations=max_operations,
                                                    graph_name='shared_transfer_grammar')
-    return compile_planner_dfa(graph, bundle, world, vocabulary, max_operations=max_operations)
+    return compile_planner_dfa(graph, bundle, world, vocabulary, max_operations=max_operations,
+                               annotate_history=False)
 
 
 def bind_shared(vocabulary, max_operations, context):

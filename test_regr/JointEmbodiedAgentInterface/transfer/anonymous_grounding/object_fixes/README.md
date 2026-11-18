@@ -1,5 +1,29 @@
 # Object-transfer repairs
 
+All planning restrictions originate in DomiKnowS syntax and are compiled.
+`executor_graph.py` declares the pick/place grammar, termination and operation
+limits, plus pointer, movability and self-placement LCs. `contract.py` supplies
+primitive observations to the generic compiled monitor; it does not define a
+separate procedural legality policy. Saved settings fingerprint both policy
+declarations and compilers and reject resumes from the historical Python mask.
+
+Historical executor-mask scores in `RESULTS.md` and Google report Sections 12.3
+and 12.5 were generated with the earlier Python implementation. Preserve their
+artifacts, but do not label them as results of this compiled replacement.
+
+Validation on 17 November 2026 passed 76 checks and replayed 2,100/2,100 archived
+token masks exactly across the validation Epoch-1 and confirmation initialization
+and Epoch-1 executor trajectories (300 episodes). No greedy choice changed.
+This is compiled-mask/logit replay, not fresh neural or simulator evaluation.
+Its isolated CPU artifacts are in
+`/home/auszok/experiments/joint_executor_lc_validation_20261117`.
+
+Reproduce the read-only archive check with a fresh output directory:
+
+```text
+python -m test_regr.JointEmbodiedAgentInterface.transfer.anonymous_grounding.object_fixes.replay_compiled --archive /home/auszok/experiments/joint_matched_transfer_verification_20261115 --output <fresh-output>
+```
+
 These are independent inference diagnostics on the frozen selected anonymous-ID +
 grounding snapshot. They do not retrain weights, change references, or replace a
 qualified controller. They use the existing 100 LIBERO episodes (50 Object, 50

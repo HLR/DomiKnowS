@@ -1,5 +1,15 @@
 # LIBERO object-transfer diagnostics
 
+Implementation provenance correction (17 November 2026): the historical
+`contract`, `raw-contract` and `aligned-contract` measurements below used a
+handwritten Python contract. They are preserved historical measurements, not
+results of the DomiKnowS-compiled replacement in `executor_graph.py`. The new
+implementation passed 76 regression checks and exact replay of 2,100 archived
+token masks on 300 episodes (zero mask or greedy-choice differences). This was
+CPU replay, not fresh neural inference or physical execution; never relabel
+these archived runs as having executed the replacement. Evidence is in
+`/home/auszok/experiments/joint_executor_lc_validation_20261117/replay/summary.json`.
+
 Frozen continuation epoch-2 snapshot; no training updates. Same 100 previously inspected episodes. Baseline generation and scores reproduced; baseline physical execution is the explicitly reused archive. Five intervention executions are fresh, using the unchanged 96/100-calibrated executor and 1,000-step horizon.
 
 | Condition | Native /100 | Object /50 | Spatial /50 | Valid /100 | Grounder source Object /50 | Planner source Object /50 |

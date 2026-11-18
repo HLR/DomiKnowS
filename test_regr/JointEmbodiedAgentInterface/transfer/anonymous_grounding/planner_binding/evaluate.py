@@ -42,6 +42,9 @@ def main():
         'manifest_sha256':sha(c['external_manifest']),'inputs_sha256':sha(root/'inputs_complete.json'),
         'source_sha256':c['source_manifest_sha256'],'constraint_policy':a.constraint_policy,'seed':42,
         'selection':'source validation only','fresh_states':[40,41,42,43,44],'role_references_in_generation':False}
+    if a.constraint_policy == 'executor':
+        from ..object_fixes.contract import executor_policy_metadata
+        settings['executor_policy'] = executor_policy_metadata()
     freeze(out/'settings.json',settings)
     if (out/'predictions.jsonl').exists():raise ValueError('preserve incomplete evaluation; use a fresh output')
     rows=[]

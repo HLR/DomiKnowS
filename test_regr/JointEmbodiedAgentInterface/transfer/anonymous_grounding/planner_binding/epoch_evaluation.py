@@ -194,6 +194,9 @@ def evaluate():
         'grounding_sha256': payload['metrics']['grounding']['sha256'], 'prepared_sha256': sha(Path(c['output'])/'prepared/manifest.json'),
         'policy': a.constraint_policy, 'seed': 42, 'selection': 'all four epochs; diagnostic only; original best unchanged',
         'source_manifest_sha256': c['evaluation_source_sha256']}
+    if a.constraint_policy == 'executor':
+        from ..object_fixes.contract import executor_policy_metadata
+        settings['executor_policy'] = executor_policy_metadata()
     freeze(out/'settings.json', settings)
     if (out/'complete.json').exists(): return
     text = torch.load(proof['text_path'], map_location='cpu', weights_only=True)

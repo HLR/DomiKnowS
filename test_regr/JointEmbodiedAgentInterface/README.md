@@ -6,6 +6,14 @@ Qwen3-VL-8B-Instruct backbone with one 4-bit LoRA adapter, two compact label hea
 and one sequential program lifecycle. The standalone EAI and VLABench CLIs
 remain supported for component debugging.
 
+Planning constraints must start as DomiKnowS declarations and be compiled.
+Python adapters may supply primitive observations, update observed state, and
+execute compiled automata. Handwritten legality checks, token masks, and fallback
+constraint implementations are not permitted. Unsupported declarations must
+fail explicitly or receive compiler support; they must never fall back to
+procedural rules. This applies to executor-capability constraints as well as
+task and scene constraints.
+
 The planner uses one shared causal Qwen backbone and separate EAI/VLABench
 graph-label heads. Teacher forcing and differentiable trajectory replay each
 use one full-sequence forward pass. With a cache-capable backbone, gradient-free

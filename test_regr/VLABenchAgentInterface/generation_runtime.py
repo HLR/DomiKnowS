@@ -146,7 +146,8 @@ def plan_language(skill_arguments: tuple, patterns: tuple, max_entities: int, ma
     return compile_plan_language(graph, bundle, vocabulary)
 
 
-def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_operations: int = 12):
+def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_operations: int = 12,
+                        annotate_history: bool = True):
     """Intersect graph LCs with the complete language declared by the world."""
     from domiknows.generation.dfa.core import product_dfa, minimize_dfa
 
@@ -165,13 +166,18 @@ def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_oper
     except ImportError:
         from constraint_compiler import CompiledPlannerDFA, compile_world_constraints
     program = compile_world_constraints(world)
-    operation_dfa = _with_operation_history(graph_dfa, vocabulary, max_operations)
+    # History decorates states for optional completion bounds; it does not
+    # define a restriction. Profiles without task-history rules can use the
+    # identical compiled language without enumerating unused skill subsets.
+    operation_dfa = (_with_operation_history(graph_dfa, vocabulary, max_operations)
+                     if annotate_history else graph_dfa)
     # Preserve any explicit bounds/edits of this compiled policy when its
     # progress is also used to verify a materialized candidate plan.
     pattern_dfa = project_skill_progress(graph_dfa, vocabulary)
     grammar = product_dfa([token_dfa, operation_dfa])
     return CompiledPlannerDFA.from_dfa(grammar, program, world_constraint_bundle=world, token_dfa=token_dfa,
-                                     max_operations=max_operations, operation_dfa=operation_dfa,
+                                     max_operations=max_operations,
+                                     operation_dfa=operation_dfa if annotate_history else None,
                                      pattern_dfa=pattern_dfa)
 
 

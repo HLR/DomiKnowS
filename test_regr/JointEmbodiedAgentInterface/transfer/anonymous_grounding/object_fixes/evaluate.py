@@ -9,7 +9,7 @@ from ...campaign import save,utc
 from ..agent import load_snapshot,predicted_context
 from ..grounder import condition as add_roles
 from ..eval_observations import verify_configuration
-from .contract import ExecutorContract
+from .contract import ExecutorContract, executor_policy_metadata
 from .provenance import validate_inputs
 
 CONDITIONS=('baseline','raw','contract','raw-contract','aligned','aligned-contract')
@@ -118,6 +118,8 @@ def main():
         'manifest_sha256':sha(config['libero_manifest']),'observations_sha256':sha(config['observations']),
         'features_sha256':sha(config['features']),'condition':args.condition,'seed':42,'greedy':True,
         'training_updates':0,'capabilities':CAPABILITIES,'target_training':False}
+    if args.condition.endswith('contract'):
+        settings['executor_policy'] = executor_policy_metadata()
     aligned={}
     if args.condition.startswith('aligned'):
         path=Path(config['output'])/'aligned/manifest.json';data=read(path)
