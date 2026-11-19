@@ -158,6 +158,8 @@ def main():
         if args.num_shards != 1:
             raise ValueError('RLBench preparation is not sharded')
         records = prepare_rlbench(config, args.output)
+    from .repair.reservations import guard
+    guard({'episodes':records})
     reserved = read(config['datasets'][dataset]['manifest'])['episodes']
     integrity = audit_disjoint([fingerprints(r, dataset) for r in records],
                               [fingerprints(r, dataset) for r in reserved])

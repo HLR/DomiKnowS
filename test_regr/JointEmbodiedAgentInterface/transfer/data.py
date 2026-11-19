@@ -30,6 +30,8 @@ def allocation(dataset, cases, seed=42):
 
 def audit_disjoint(prepared, reserved):
     """Fail on overlap rather than replacing hard scenes or filtering examples."""
+    from .repair.reservations import guard
+    guard({'episodes':prepared})
     required = ('episode_id', 'scene_fingerprint', 'input_fingerprint', 'split')
     for row in [*prepared, *reserved]:
         if any(key not in row for key in required):

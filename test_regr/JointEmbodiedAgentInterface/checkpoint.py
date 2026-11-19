@@ -446,6 +446,8 @@ def load_joint_checkpoint(
         map_location=_checkpoint_staging_location(map_location),
         weights_only=False,
     )
+    if payload.get('format') == 'fresh-source-decoder-repair-v1':
+        raise ValueError('Fresh decoder-repair snapshots require transfer.repair.evaluate with their native-JSON or Joint-label arm; legacy evaluators are incompatible')
     if ((payload.get("metrics") or {}).get("grounding_required")
             and not getattr(planner, "_grounding_extension_active", False)):
         raise ValueError("This snapshot requires the anonymous_grounding loader and its verified grounding-head sidecar")
