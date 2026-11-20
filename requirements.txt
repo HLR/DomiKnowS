@@ -60,7 +60,7 @@ cymem==2.0.11
     #   preshed
     #   spacy
     #   thinc
-dnspython==2.8.0
+dnspython==2.9.2
     # via domiknows
 filelock==3.19.1
     # via
