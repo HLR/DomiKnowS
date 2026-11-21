@@ -153,6 +153,9 @@ def joint_log_bias(dfa,state,labels):
     result = {}
     observation = research_block(getattr(bound, 'research_context', {})).get('perception', {})
     decoded = state.semantic
+    preference = getattr(bound, 'generation_preference', None)
+    if preference is not None:
+        result.update(preference.log_bias(decoded.skill, decoded.pending_argument, labels, bound.adapter.vocabulary))
     if observation.get('constraint_policy') == 'soft' and decoded.skill and decoded.pending_argument:
         candidates = next((set(ids) for skill, role, ids in observation.get('soft_candidates') or ()
                            if (skill,role) == (decoded.skill,decoded.pending_argument)), None)
@@ -163,7 +166,7 @@ def joint_log_bias(dfa,state,labels):
             for label in labels:
                 token = bound.adapter.vocabulary.token_for_label(int(label))
                 if token.startswith('obj:') and int(token[4:]) not in candidates:
-                    result[int(label)] = -float(weight)
+                    result[int(label)] = result.get(int(label), 0.) - float(weight)
     research=next((m for m in bound.adapter.requirements.planning.monitors if isinstance(m,ResearchMonitor)),None)
     if research is None or research.config.grounding_policy!="joint":return result
     weights={h.id:h.weight for h in research.hypotheses}

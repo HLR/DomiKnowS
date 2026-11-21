@@ -16,8 +16,8 @@ EXCLUDED_NONUNIVERSAL = {
 }
 
 
-@lru_cache(maxsize=4)
-def shared_profile(vocabulary, max_operations):
+@lru_cache(maxsize=16)
+def shared_profile(vocabulary, max_operations, supported=None, grounded_rules=frozenset()):
     from test_regr.VLABenchAgentInterface.world_graph import build_vlabench_world_graph
     from test_regr.VLABenchAgentInterface.knowledge import TaskKnowledge
     from test_regr.VLABenchAgentInterface.graph import create_planner_generation_graph
@@ -26,6 +26,7 @@ def shared_profile(vocabulary, max_operations):
         task_knowledge=TaskKnowledge({}, {}, {}, {}), task_identity='oracle')
     # Any schema-valid skill sequence; no VLABench subtask template restriction.
     world = replace(world, subtask_patterns=tuple((skill,) for skill in vocabulary.skills))
+    rules = SHARED_RULES | grounded_rules
     retained = set()
     def graphs(graph):
         yield graph
@@ -36,19 +37,21 @@ def shared_profile(vocabulary, max_operations):
             if not getattr(constraint, 'headLC', True):
                 continue
             name = getattr(constraint, 'name', None)
-            constraint.active = name in SHARED_RULES
+            constraint.active = name in rules
             if constraint.active:
                 retained.add(name)
-    if retained != SHARED_RULES:
-        raise ValueError(f'shared rule declarations differ: {retained ^ SHARED_RULES}')
+    if retained != rules:
+        raise ValueError(f'shared rule declarations differ: {retained ^ rules}')
     graph, bundle = create_planner_generation_graph(world, vocabulary, max_operations=max_operations,
                                                    graph_name='shared_transfer_grammar')
+    if supported is not None:
+        from ..transfer.anonymous_grounding.object_fixes.executor_graph import declare_supported_skills
+        declare_supported_skills(graph, bundle, vocabulary, supported)
     return compile_planner_dfa(graph, bundle, world, vocabulary, max_operations=max_operations,
                                annotate_history=False)
 
 
-def bind_shared(vocabulary, max_operations, context):
-    from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
+def shared_observations(context):
     # Only observational bindings; task identity / obligations / reference goals
     # must never activate task-specific knowledge in the external profile.
     table = context.get('entity_table') or context.get('entities') or ()
@@ -60,9 +63,13 @@ def bind_shared(vocabulary, max_operations, context):
     # roles onto private semantic IDs, preserving pointers. Never infer a role
     # from a substring: "vegetable" and "table_salt" are not static tables.
     # Missing role evidence is unknown and causes no fixture exclusion.
-    safe = {'entity_table': {index: ('static_fixture_floor' if index in fixture_ids else 'entity')
-                            + f'__{index}' for index in table}}
-    return bind_vlabench_contextual_dfa(shared_profile(vocabulary, max_operations), vocabulary, safe)
+    return {index: ('static_fixture_floor' if index in fixture_ids else 'entity') + f'__{index}' for index in table}
+
+
+def bind_shared(vocabulary, max_operations, context):
+    from test_regr.VLABenchAgentInterface.generation_runtime import bind_vlabench_contextual_dfa
+    return bind_vlabench_contextual_dfa(shared_profile(vocabulary, max_operations), vocabulary,
+                                       {'entity_table': shared_observations(context)})
 
 
 def rule_trace(dfa, labels):

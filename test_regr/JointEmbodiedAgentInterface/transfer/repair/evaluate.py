@@ -1,16 +1,20 @@
 """Fixed confirmation inference; private goals are opened only after generation."""
 import argparse
+from dataclasses import asdict
 import json
 from pathlib import Path
 import torch
 from ..protocol import read,freeze,sha,digest,episodes,public_input
 from ..matched_baseline.protocol import common_prompt,raw_format_valid
 from ..matched_baseline.evaluate import input_record
-from ...generalization.shared_constraints import bind_shared,SHARED_RULES,rule_trace
+from ...generalization.shared_constraints import rule_trace
+from ...generalization.executor_policy import (CAPABILITIES, EXECUTOR, POLICIES, bind_plan_policy,
+    compiled_rule_names, pick_place_profile)
 from ...generalization.libero_protocol import abstract_score
 from .common import build_runtime,fresh_planner,load_checkpoint,native_decode,graph_decode
 from .protocol import verify,normalize_anonymous_prediction,anonymous_entities
 from .surface import surface_decoder,SURFACE_VERSION
+from .preference import VISUAL_SOURCE, FrozenVisualSource, bind_visual_evidence
 from .input_protocol import (INPUT_PROTOCOLS, IMAGE_INSTRUCTION, generation_context,
     constraint_context, constraint_public, contract_record, validate_resume_contract)
 
@@ -21,10 +25,14 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--config',type=Path,required=True);p.add_argument('--arm',choices=SYSTEMS,required=True)
     p.add_argument('--checkpoint',type=Path,required=True);p.add_argument('--manifest',type=Path,required=True)
-    p.add_argument('--output',type=Path,required=True);p.add_argument('--policy',choices=['none','shared-verified'],required=True)
+    p.add_argument('--output',type=Path,required=True);p.add_argument('--policy',choices=POLICIES,required=True)
     p.add_argument('--input-protocol',choices=INPUT_PROTOCOLS,default=IMAGE_INSTRUCTION)
+    p.add_argument('--preference', choices=['none', VISUAL_SOURCE], default='none')
     p.add_argument('--seed',type=int,default=42)
     a=p.parse_args();c=read(a.config);verify(c)
+    if a.preference != 'none' and (SYSTEMS[a.arm] != 'joint' or a.policy != EXECUTOR
+                                  or a.input_protocol != IMAGE_INSTRUCTION):
+        p.error('visual-source requires Joint labels, strict image/instruction inputs, and shared-verified-executor')
     if a.seed!=42:raise ValueError('seed differs')
     if c.get('evaluation_input_protocol',a.input_protocol)!=a.input_protocol:
         raise ValueError('input protocol differs from frozen evaluation campaign')
@@ -42,13 +50,23 @@ def main():
     _,(runtime,_,_,_,_)=build_runtime(c,output/'runtime')
     arm=SYSTEMS[a.arm];planner=fresh_planner(c,runtime,arm)
     payload=load_checkpoint(a.checkpoint,planner,arm);planner.eval();vocab=runtime.vlabench_vocabulary
+    executor = pick_place_profile() if a.policy in (CAPABILITIES, EXECUTOR) else None
+    rules = compiled_rule_names(a.policy, executor, vocab)
+    unsupported_labels = ({'skill:' + skill for skill in vocab.skills
+                           if skill not in {action.name for action in executor.actions}} if executor else set())
     settings={'config_sha256':sha(a.config),'source_manifest_sha256':sha(c['source_manifest']),'checkpoint_sha256':sha(a.checkpoint),'arm':a.arm,
         'manifest_sha256':sha(a.manifest),'source_selection_sha256':sha(Path(c['output'])/'frozen_selection.json'),
-        'policy':a.policy,'surface':SURFACE_VERSION,'shared_rules':sorted(SHARED_RULES),
+        'policy':a.policy,'surface':SURFACE_VERSION,
+        'shared_rules':compiled_rule_names('shared-verified'),
         'native_budget':768,'graph_budget':61,'horizon':1000,'seed':42,'precision':'NF4/BF16',
         **contract_record(a.input_protocol),'representation':arm,
         'quant_matmul_policy':planner.quant_matmul_policy,
         'source_qualified':spec['qualified']}
+    if executor:
+        settings.update(executor_profile=json.loads(json.dumps(asdict(executor))), compiled_rules=rules)
+    visual = FrozenVisualSource(c['vision_model'], planner.device) if a.preference == VISUAL_SOURCE else None
+    if visual:
+        settings['preference'] = visual.settings
     freeze(output/'settings.json',settings)
     if (output/'report.json').exists():return
     if (output/'predictions.jsonl').exists():raise ValueError('partial condition preserved; explicit new output required')
@@ -62,19 +80,30 @@ def main():
             dfa_bound=constraint_context(public) if a.policy!='none' else None
             if dfa_bound is not None:
                 freeze(output/'constraint_inputs'/f'{i:04d}.json',{'episode_id':identity,
-                    'compiled_rules':sorted(SHARED_RULES),'bindings':dfa_bound,
+                    'compiled_rules':rules,'bindings':dfa_bound,
                     'goals_or_references_used':False,'model_receives_bindings':a.input_protocol!=IMAGE_INSTRUCTION})
             raw_inputs,_=planner._prepare_inputs_and_boundaries('vlabench',bound,())
             rendered=input_record(planner.processor,core,public,None,raw_inputs)
             freeze(output/'inputs'/f'{i:04d}.json',{'episode_id':identity,**rendered})
-            prediction=[];error=None;labels=[];raw='';graph_decisions=[]
+            preference = None
+            if visual:
+                evidence = visual.observe(public)
+                preference = bind_visual_evidence(evidence, len(public['entities']))
+                freeze(output/'preference_inputs'/f'{i:04d}.json', {
+                    'episode_id': identity, 'image_hashes': rendered['image_hashes'],
+                    'model_input_hash': digest(rendered), 'observation': evidence,
+                    'bound_evidence': preference.evidence,
+                })
+            prediction=[];error=None;labels=[];raw='';graph_decisions=[];policy=None
             try:
                 if arm=='native':
-                    policy=None
                     if a.policy!='none':
                         observed=constraint_public(public)
                         slot=(tuple(observed['entities']),tuple(observed['movable']))
-                        if slot not in decoder_cache:decoder_cache[slot]=surface_decoder(token_bytes,planner.processor.tokenizer.eos_token_id,observed,vocab,12)
+                        if slot not in decoder_cache:
+                            decoder_cache[slot]=surface_decoder(token_bytes,planner.processor.tokenizer.eos_token_id,
+                                observed,vocab,12,policy_name=a.policy,executor_profile=executor,
+                                constraint_bindings=dfa_bound)
                         policy=decoder_cache[slot]
                     length=raw_inputs['input_ids'].shape[1]
                     mask=NativeConstraintProcessor(policy,length,768) if policy else None
@@ -92,8 +121,14 @@ def main():
                     prediction,labels,raw=native_decode(planner,bound,observer=Observer())
                     if policy and not policy.accepts(labels):raise ValueError('nonaccepting constrained JSON')
                 else:
-                    policy=bind_shared(vocab,12,dfa_bound) if a.policy!='none' else None
+                    policy=bind_plan_policy(a.policy,vocab,12,dfa_bound,executor)
+                    if preference is not None:
+                        policy.generation_preference = preference
                     def observe(row):
+                        rejection = row.get('rejection')
+                        if executor and rejection and rejection['kind'] == 'grammar':
+                            if row['raw_argmax'] in unsupported_labels:
+                                rejection['violated_rules'] = [{'rule': 'executor_unsupported_skill', 'phase': 'skill'}]
                         graph_decisions.append(row)
                         decisions.write(json.dumps({'episode_id':identity,**row},default=str)+'\n')
                     planner.decision_observer=observe
@@ -121,7 +156,8 @@ def main():
                 from test_regr.VLABenchAgentInterface.plan_codec import plan_to_tokens
                 try:
                     canonical=[vocab.label_for_token(t) for t in plan_to_tokens(prediction,public['entities'],world=runtime.world.vlabench)]
-                    trace=rule_trace(bind_shared(vocab,12,dfa_bound),canonical)
+                    canonical_policy = policy if arm == 'joint' else bind_plan_policy(a.policy,vocab,12,dfa_bound,executor)
+                    trace=rule_trace(canonical_policy,canonical)
                 except (ValueError,KeyError) as exc:trace={'unavailable':str(exc)}
             decisions.write(json.dumps({'episode_id':identity,'compiled_rule_trace':trace})+'\n')
             record={'episode_id':identity,'prediction':prediction,'raw_prediction':original,

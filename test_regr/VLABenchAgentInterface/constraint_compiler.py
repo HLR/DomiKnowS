@@ -88,7 +88,8 @@ class PlanDecodingState:
 class VLABenchPredicateAdapter:
     """Interpret plan tokens and emit predicate valuations at operation boundaries."""
 
-    def __init__(self, vocabulary, world, entities, schema=None, requirements=None, pattern_dfa=None):
+    def __init__(self, vocabulary, world, entities, schema=None, requirements=None, pattern_dfa=None,
+                 operation_binding=None):
         self.vocabulary = vocabulary
         self.world = world
         try:
@@ -98,7 +99,8 @@ class VLABenchPredicateAdapter:
         self.requirements = requirements or TaskRequirements(schema=schema)
         self.semantics = PlanSemantics(entities, world.skill_arguments, self.requirements.planning,
                                        visible_entities=self.requirements.visible_entities,
-                                       object_candidates=self.requirements.object_candidates)
+                                       object_candidates=self.requirements.object_candidates,
+                                       operation_binding=operation_binding)
         self.schema = self.requirements.schema
         self.entities = self.semantics.entities
         self.pattern_dfa = pattern_dfa if pattern_dfa is not None else pattern_progress_for(world, self.requirements)
@@ -115,7 +117,7 @@ class VLABenchPredicateAdapter:
         # Observe the same compiled progress used by standalone verification;
         # never assert legality merely because another layer checks grammar.
         from domiknows.generation.grounded import observations, requirement_events
-        _successor, grounded_checks = self.semantics.grounded_transition(state.semantic, state.skill, params)
+        successor, grounded_checks = self.semantics.grounded_transition(state.semantic, state.skill, params)
         values.update(observations(grounded_checks))
         next_pattern = (None if state.pattern_state is None else
                         self.pattern_dfa.step(state.pattern_state, state.skill))
@@ -131,7 +133,7 @@ class VLABenchPredicateAdapter:
         if completed_in_plan:
             events.append(PredicateEvent("transition", values))
         return SemanticTransition(
-            PlanDecodingState(self.semantics.advance(state.semantic, state.skill, params),
+            PlanDecodingState(self.semantics.advance(state.semantic, state.skill, params, grounded=successor),
                               last_values=tuple(sorted(values.items())), pattern_state=next_pattern), tuple(events),
         )
 
@@ -221,9 +223,11 @@ class VLABenchPredicateAdapter:
 class WorldConstraintDFA(PredicateMonitorDFA):
     """Compatibility entry point binding VLABench to the reusable monitor."""
 
-    def __init__(self, base_dfa, vocabulary, world, program, entities, schema=None, *, requirements=None):
+    def __init__(self, base_dfa, vocabulary, world, program, entities, schema=None, *, requirements=None,
+                 operation_binding=None):
         adapter = VLABenchPredicateAdapter(vocabulary, world, entities, schema, requirements,
-                                           pattern_dfa=getattr(base_dfa, "pattern_dfa", None))
+                                           pattern_dfa=getattr(base_dfa, "pattern_dfa", None),
+                                           operation_binding=operation_binding)
         bounds = task_completion_bounds(base_dfa, vocabulary, adapter, program)
         from .research.runtime import config_for
         self.research_search_limit=config_for(world=world).max_state_expansions

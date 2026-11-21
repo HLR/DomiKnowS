@@ -127,12 +127,21 @@ class PlanSemantics:
     """Scene-bound predicate meanings reusable by verification and decoding."""
 
     def __init__(self, entity_table, skill_arguments, planning_facts=None, *, visible_entities=None,
-                 object_candidates=None):
+                 object_candidates=None, operation_binding=None):
         self.entities = entity_mapping(entity_table)
         self.skill_arguments = skill_arguments
         self.planning = planning_facts or PlanningFacts()
         self.visible_entities = visible_entity_ids(visible_entities, self.entities)
         self.object_candidates = instruction_candidate_ids(object_candidates, self.entities)
+        self.operation_binding = operation_binding
+
+    def _subject(self, state, skill, entity, container):
+        if self.operation_binding is not None:
+            operation = self.operation_binding(skill, entity, container)
+            if operation.subject is not None:
+                return operation.subject
+            return dict(state.grounded.holdings).get(operation.hand)
+        return entity if entity is not None else state.held_entity
 
     def initial_state(self):
         initial = self.planning.initial
@@ -157,6 +166,10 @@ class PlanSemantics:
 
     def grounded_transition(self, state, skill, params):
         entity, container = self._arguments(params)
+        if self.operation_binding is not None:
+            operation = self.operation_binding(skill, entity, container)
+            return self.planning.evaluate(state.grounded, operation,
+                                          holding_fact=lambda hand, obj: ("held", hand, obj))
         subject = entity if entity is not None else state.held_entity
         places = skill in ("place", "insert", "pour")
         capabilities = []
@@ -215,7 +228,7 @@ class PlanSemantics:
     def evaluate_operation(self, state: PlanSemanticState, skill: str, params: Mapping[str, Any]) -> OperationPredicates:
         entity, container = self._arguments(params)
         placement = skill in ("place", "pour", "insert")
-        subject = entity if entity is not None else state.held_entity
+        subject = self._subject(state, skill, entity, container)
         return OperationPredicates(
             valid_skill_type=skill in self.skill_arguments,
             valid_operation=not operation_schema_errors(skill, params, self.skill_arguments, self.entities),
@@ -243,7 +256,7 @@ class PlanSemantics:
         ``pick`` with ``entity_is_static_fixture``, not by this adapter.
         """
         entity, container = self._arguments(params)
-        subject = entity if entity is not None else state.held_entity
+        subject = self._subject(state, skill, entity, container)
         expected = self.planning.destination_for(skill, subject)
         try:
             from .world_domain import OPTIONAL_SKILL_ARGUMENTS
@@ -295,9 +308,13 @@ class PlanSemantics:
             "target_was_destination": entity is not None and entity in state.former_destinations,
         }
 
-    def advance(self, state: PlanSemanticState, skill: str, params: Mapping[str, Any]) -> PlanSemanticState:
-        grounded, _checks = self.grounded_transition(state, skill, params)
+    def advance(self, state: PlanSemanticState, skill: str, params: Mapping[str, Any], *, grounded=None) -> PlanSemanticState:
+        if grounded is None:
+            grounded, _checks = self.grounded_transition(state, skill, params)
         entity, container = self._arguments(params)
+        if self.operation_binding is not None:
+            return replace(state, grounded=grounded, completed_operations=state.completed_operations + 1,
+                           completed_skills=state.completed_skills | {skill})
         held = dict(grounded.holdings).get("right", state.held_entity)
         if skill == "pick":
             held = entity

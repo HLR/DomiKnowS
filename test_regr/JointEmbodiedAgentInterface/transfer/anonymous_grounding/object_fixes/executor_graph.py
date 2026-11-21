@@ -27,6 +27,16 @@ class ExecutorDeclarations:
     program: object
 
 
+def declare_supported_skills(graph, bundle, vocabulary, supported):
+    """Compile the executor's action inventory without changing label IDs."""
+    unsupported = [bundle.context.token_value('skill:' + skill, 'position')
+                   for skill in vocabulary.skills if skill not in supported]
+    if unsupported:
+        with graph:
+            mark_for_dfa(atMostAL(unsupported[0] if len(unsupported) == 1 else orL(*unsupported), 0,
+                                 name='executor_unsupported_skill'))
+
+
 @lru_cache(maxsize=16)
 def executor_declarations(vocabulary, max_operations=12):
     from test_regr.VLABenchAgentInterface.graph import create_plan_grammar_graph
@@ -40,12 +50,8 @@ def executor_declarations(vocabulary, max_operations=12):
     graph, bundle = create_plan_grammar_graph(schema, (('pick', 'place'),),
         max_operations=max_operations, graph_name=f'executor_language_{serial}')
     ctx = bundle.context
+    declare_supported_skills(graph, bundle, vocabulary, CAPABILITIES)
     with graph:
-        unsupported = [ctx.token_value('skill:' + skill, 'position')
-                       for skill in vocabulary.skills if skill not in CAPABILITIES]
-        if unsupported:
-            mark_for_dfa(atMostAL(unsupported[0] if len(unsupported) == 1 else orL(*unsupported), 0,
-                                 name='executor_unsupported_skill'))
         mark_for_dfa(exactAL(ctx.token_value(vocabulary.eos_token, 'position'), 1,
                             name='executor_single_termination'))
     language = compile_plan_language(graph, bundle, schema)

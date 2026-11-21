@@ -9,7 +9,7 @@ from itertools import product,combinations,permutations
 import json
 
 from ..native_baseline import ProjectedSharedDFA,CompiledLanguage
-from ...generalization.shared_constraints import bind_shared
+from ...generalization.executor_policy import bind_plan_policy
 
 SURFACE_VERSION='normalized-public-alias-json-v1'
 
@@ -129,10 +129,12 @@ class AliasSurfaceDFA:
         return self.is_accepting(state)
 
 
-def surface_decoder(token_bytes,eos_id,public,vocabulary,max_operations=12):
-    context={'entity_table':public['entities'],'generation_static_fixture_ids':[
-        i for i,n in enumerate(public['entities']) if n not in public['movable']]}
-    policy=bind_shared(vocabulary,max_operations,context)
+def surface_decoder(token_bytes,eos_id,public,vocabulary,max_operations=12, *,
+                    policy_name='shared-verified', executor_profile=None, constraint_bindings=None):
+    context = constraint_bindings if constraint_bindings is not None else {
+        'entity_table': public['entities'], 'generation_static_fixture_ids': [
+            i for i, n in enumerate(public['entities']) if n not in public['movable']]}
+    policy=bind_plan_policy(policy_name,vocabulary,max_operations,context,executor_profile)
     return AliasSurfaceDFA(AliasJSON(token_bytes,eos_id,entities=public['entities'],
         entity_count=len(public['entities']),max_operations=max_operations,grammar_profile='world',
         language=CompiledLanguage(vocabulary,policy)))
