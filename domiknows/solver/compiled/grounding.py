@@ -227,6 +227,7 @@ class ProbabilityStore:
                 self.device = matrix.device
 
         entry = {'dns': dns, 'row_by_id': row_by_id, 'matrix': matrix, 'xPkey': xPkey,
+                 'unstacked': {},
                  'fixed_gate': None, 'fixed_label': None}
 
         spec = self._fixed_spec(conceptName)
@@ -292,8 +293,13 @@ class ProbabilityStore:
         matrix = entry['matrix']
         if matrix is None:
             # Concept has no complete prediction matrix; fall back to the raw
-            # attribute read so partially-predicted concepts keep working.
-            v = dn.getAttribute(entry['xPkey'])
+            # attribute, caching missing reads as well as present predictions.
+            # Many enum literals share this attribute within the same binding.
+            unstacked = entry['unstacked']
+            node_id = id(dn)
+            if node_id not in unstacked:
+                unstacked[node_id] = dn.getAttribute(entry['xPkey'])
+            v = unstacked[node_id]
             if v is None or not torch.is_tensor(v):
                 return None
             fixed = self._fixed_scalar(dn, entry, class_index if fixed_index is None else fixed_index)

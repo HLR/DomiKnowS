@@ -7,15 +7,16 @@ verification, ILP, and executable inference:
 
 * identity-grounded unary implications are grouped across the graph and run as
   ``[rules, groundings]`` tensors, bypassing per-formula Python dispatch;
+* aligned scalar Boolean groundings inside formulas run as vectors while
+  preserving the original grounding order;
 * common candidate/path joins (identity, forward and ``.reversed`` relation
   paths, expansion and intersection) use tensorized binding plans; complex
   forms retain the established ``getCandidates`` fallback;
 * fuzzy per-datanode probability reads are replaced by batched gathers through
   ``ProbabilityStore`` (``grounding.py``); other modes gather their native
   sampled vectors, circuit literals, discrete values, or ILP variables;
-* the t-norm operators themselves are the original ``lcLossBooleanMethods``
-  implementations invoked through each constraint's ``__call__`` — the
-  numerics are shared with the interpreter by construction, not duplicated.
+* fuzzy loss uses the original ``lcLossBooleanMethods`` operators, directly
+  for fast paths and through each constraint's ``__call__`` otherwise.
 
 ``CompiledLossCalculator`` mirrors ``LossCalculator``. Every loss-producing
 ``LogicalConstrain`` subclass that follows the standard formula ``__call__``
@@ -36,7 +37,7 @@ import torch
 from domiknows.graph import LcElement, LogicalConstrain, V, CandidateSelection, fixedL
 from domiknows.graph.concept import Concept, EnumConcept
 from domiknows.graph.logicalConstrain import (
-    ifL, sumL, queryL, iotaL, miotaL, eqL,
+    andL, orL, ifL, sumL, queryL, iotaL, miotaL, eqL,
 )
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
 from domiknows.solver.lossCalculator import LossCalculator, multi_query_joint_nll
@@ -44,6 +45,53 @@ from domiknows.solver.adaptiveTNormLossCalculator import TNormSelector, get_cons
 
 from .grounding import ProbabilityStore
 from .plan import CompiledPlanCache, TensorizedCandidateResolver
+
+
+_ELEMENTWISE_LOSS = {andL: 'andVar', orL: 'orVar', ifL: 'ifVar'}
+
+
+def _batch_elementwise_loss(lc, processor, operands, head):
+    """Batch aligned scalar groundings using the standard fuzzy operators."""
+    method = _ELEMENTWISE_LOSS.get(type(lc))
+    if method is None:
+        return None
+    from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
+
+    if type(processor) is not lcLossBooleanMethods:
+        return None
+    if len(operands) < 2 or (type(lc) is ifL and len(operands) != 2):
+        return None
+    rows = len(next(iter(operands.values())))
+    if rows < 2 or any(len(groups) != rows for groups in operands.values()):
+        return None
+
+    with torch.set_grad_enabled(processor.grad):
+        zero = torch.zeros((), device=processor.current_device, dtype=processor._get_dtype())
+        columns = []
+        for groups in operands.values():
+            values = []
+            for group in groups:
+                if len(group) != 1:
+                    return None
+                value = group[0]
+                if value is not None and (
+                    not torch.is_tensor(value) or value.ndim > 1 or value.numel() != 1
+                    or value.dtype != zero.dtype
+                ):
+                    return None
+                values.append(value)
+            if all(value is None for value in values):
+                columns.append(zero.expand(rows))
+                continue
+            column = torch.stack([
+                zero if value is None else value.reshape(()).to(zero) for value in values
+            ])
+            # The scalar fuzzy path treats its missing-value sentinel as zero.
+            columns.append(torch.where(column == -100, zero, column))
+
+        result = getattr(processor, method)(None, *columns, onlyConstrains=head)
+        # Restore the row layout expected by parent formulas and loss reporting.
+        return [[value] for value in result.split(1)]
 
 
 def shared_plan_cache(solver):
@@ -709,10 +757,14 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
             begin_operator = lambda m: None
             record_evaluation = lambda *a, **kw: None
         row_start = begin_operator(model)
-        output = lc(
-            model, booleanProcessor, useLcVariables, headConstrain=headLC,
-            integrate=integrate,
-            **({"label": label} if isinstance(lc, sumL) else {}))
+        output = None
+        if loss and not sample and not circuit and model is None:
+            output = _batch_elementwise_loss(lc, booleanProcessor, useLcVariables, headLC)
+        if output is None:
+            output = lc(
+                model, booleanProcessor, useLcVariables, headConstrain=headLC,
+                integrate=integrate,
+                **({"label": label} if isinstance(lc, sumL) else {}))
         record_evaluation(lc, lcVariablesDns, useLcVariables, output,
                           head=headLC, compiled=True, model=model, row_start=row_start,
                           grounding=getattr(self, '_pending_joint_binding', None))

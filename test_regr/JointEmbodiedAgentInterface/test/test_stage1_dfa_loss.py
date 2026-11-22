@@ -110,6 +110,46 @@ def test_constraint_violation_gives_the_loss_and_the_multipliers_ascend(joint_fi
     assert any(float(after.detach().sum()) > float(old.sum()) for after, old in zip(params, before))
 
 
+def test_batched_pmd_matches_rowwise_loss_and_gradients(joint_fixture, monkeypatch):
+    from domiknows.solver.compiled import formula
+
+    _, runtime = joint_fixture
+    planner = make_planner(runtime)
+    item = vlabench_item(runtime)
+    violating_logits(runtime, planner, len(item["token_positions"]))
+    program = program_with(runtime, planner, domains=("vlabench",), pmd_domains=("vlabench",))
+    pmd = program.pmd_programs["vlabench"]
+    multipliers = tuple(pmd.cmodel.parameters())
+    original = formula._batch_elementwise_loss
+    batched = []
+
+    def track(*args):
+        result = original(*args)
+        if result is not None:
+            batched.append(True)
+        return result
+
+    def evaluate():
+        with runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
+            _, _, _, builder = pmd.model(item)
+            loss, _, _ = pmd.cmodel(builder)
+            gradients = torch.autograd.grad(loss, (planner.last_logits, *multipliers), allow_unused=True)
+        return loss.detach(), gradients
+
+    monkeypatch.setattr(formula, "_batch_elementwise_loss", lambda *args: None)
+    reference_loss, reference_gradients = evaluate()
+    monkeypatch.setattr(formula, "_batch_elementwise_loss", track)
+    loss, gradients = evaluate()
+    assert batched
+    torch.testing.assert_close(loss, reference_loss)
+    assert reference_gradients[0].abs().sum() > 0
+    for actual, expected in zip(gradients, reference_gradients):
+        if expected is None:
+            assert actual is None
+        else:
+            torch.testing.assert_close(actual, expected)
+
+
 def test_eai_domain_uses_the_same_loss(joint_fixture):
     examples, runtime = joint_fixture
     planner = make_planner(runtime)
