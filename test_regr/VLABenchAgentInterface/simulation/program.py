@@ -6,7 +6,7 @@ import json
 import math
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -4374,7 +4374,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     torch.manual_seed(rollout_seed)
                     if torch.cuda.is_available():
                         torch.cuda.manual_seed_all(rollout_seed)
-                    episodes.append(self.collect_episode(descriptor))
+                    # Evaluation needs outcomes and diagnostics. Release the CPU
+                    # image tensors and planner inputs before collecting again.
+                    episodes.append(replace(
+                        self.collect_episode(descriptor),
+                        planner_logprobs=[], controller=[], planner_returns=None,
+                    ))
                     names.append(task_name)
         finally:
             random.setstate(python_state)

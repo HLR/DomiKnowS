@@ -41,7 +41,7 @@ def fingerprints(record, dataset):
                                          'images': [sha(p) for p in public['images']]})}
 
 
-def prepare_libero(config, output, shard_index=0, num_shards=1):
+def prepare_libero(config, output, shard_index=0, num_shards=1, *, exclude_libero_confirmation=False):
     import numpy as np
     from PIL import Image
     from libero.libero import benchmark
@@ -50,7 +50,8 @@ def prepare_libero(config, output, shard_index=0, num_shards=1):
     bridge = importlib.import_module('libero_campaign')
     base_manifest = read(config['datasets']['libero']['manifest'])
     bddl_by_case = {f"{e['suite']}/{e['task']}": e['bddl'] for e in base_manifest['episodes']}
-    blueprints = allocation('libero', list(bddl_by_case), config['seed'])
+    blueprints = allocation('libero', list(bddl_by_case), config['seed'],
+                            exclude_libero_confirmation=exclude_libero_confirmation)
     suite_cache = {}; records = []
     for case in shard_cases(list(bddl_by_case), shard_index, num_shards):
         suite_name, task_name = case.split('/', 1)
@@ -59,7 +60,7 @@ def prepare_libero(config, output, shard_index=0, num_shards=1):
         suite = suite_cache[suite_name]
         task_index = next(i for i in range(suite.n_tasks) if suite.get_task(i).name == task_name)
         states = suite.get_task_init_states(task_index)
-        if len(states) < 40:
+        if len(states) < (35 if exclude_libero_confirmation else 40):
             raise ValueError('required initialization states unavailable: ' + case)
         spec = bridge.specification(bddl_by_case[case])
         env = bridge.environment(bddl_by_case[case], render=True)
@@ -91,7 +92,7 @@ def prepare_libero(config, output, shard_index=0, num_shards=1):
                     'state': str(folder/'initial_state.npy'), 'generation_input': str(folder/'generation_input.json'),
                     'scoring_private': str(folder/'scoring_private.json'), 'files': {str(p): sha(p) for p in paths}}
                 freeze(folder/'record.json', record); records.append(record)
-                print(f'[transfer-data] libero {len(records)}/600', flush=True)
+                print(f'[transfer-data] libero {len(records)} prepared in this shard', flush=True)
         finally:
             env.close()
     return records
@@ -136,6 +137,27 @@ def prepare_rlbench(config, output):
     return records
 
 
+def reuse_libero_records(config, archive):
+    heldout = config['datasets']['libero']['manifest']
+    saved = read(archive)
+    if saved['dataset'] != 'libero' or saved['reserved_manifest_sha256'] != sha(heldout):
+        raise ValueError('archived LIBERO data used a different holdout')
+    cases = {f"{row['suite']}/{row['task']}" for row in read(heldout)['episodes']}
+    blueprints = allocation('libero', sorted(cases), config['seed'], exclude_libero_confirmation=True)
+    records = {row['episode_id']: row for row in saved['episodes']}
+    if len(records) != len(saved['episodes']):
+        raise ValueError('duplicate identities in archived LIBERO data')
+    selected = []
+    for blueprint in blueprints:
+        row = records[blueprint['episode_id']]
+        if any(row[key] != value for key, value in blueprint.items()):
+            raise ValueError('archived LIBERO reset differs from the reserved-safe allocation')
+        if any(sha(path) != value for path, value in row['files'].items()):
+            raise ValueError('archived LIBERO data changed')
+        selected.append(row)
+    return selected
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, required=True)
@@ -144,16 +166,32 @@ def main():
     parser.add_argument('--shard-index', type=int, default=0)
     parser.add_argument('--num-shards', type=int, default=1)
     parser.add_argument('--finalize', action='store_true')
+    parser.add_argument('--exclude-libero-confirmation', action='store_true',
+                        help='use only states 30–34 for LIBERO validation')
+    parser.add_argument('--reuse-libero-manifest', type=Path,
+                        help='reuse verified archived resets for the reserved-safe LIBERO allocation')
     args = parser.parse_args(); config = read(args.config); dataset = args.dataset
+    if args.exclude_libero_confirmation and dataset != 'libero':
+        parser.error('--exclude-libero-confirmation applies to LIBERO')
+    if args.reuse_libero_manifest and (not args.exclude_libero_confirmation or args.num_shards != 1 or args.finalize):
+        parser.error('--reuse-libero-manifest requires --exclude-libero-confirmation without sharding')
     args.output.mkdir(parents=True, exist_ok=True)
-    freeze(args.output/'settings.json', {'config_sha256': sha(args.config), 'dataset': dataset,
-        'source_sha256': sha(__file__), 'seed': config['seed'], 'num_shards': args.num_shards})
+    settings = {'config_sha256': sha(args.config), 'dataset': dataset,
+                'source_sha256': sha(__file__), 'seed': config['seed'], 'num_shards': args.num_shards}
+    if args.exclude_libero_confirmation:
+        settings['exclude_libero_confirmation'] = True
+    if args.reuse_libero_manifest:
+        settings['reused_manifest_sha256'] = sha(args.reuse_libero_manifest)
+    freeze(args.output/'settings.json', settings)
     if args.finalize:
         records = [r for i in range(args.num_shards)
                    for r in read(args.output/'shards'/f'{i:03d}.json')['episodes']]
         records.sort(key=lambda r: r['episode_id'])
+    elif args.reuse_libero_manifest:
+        records = reuse_libero_records(config, args.reuse_libero_manifest)
     elif dataset == 'libero':
-        records = prepare_libero(config, args.output, args.shard_index, args.num_shards)
+        records = prepare_libero(config, args.output, args.shard_index, args.num_shards,
+                                 exclude_libero_confirmation=args.exclude_libero_confirmation)
     else:
         if args.num_shards != 1:
             raise ValueError('RLBench preparation is not sharded')
@@ -167,7 +205,7 @@ def main():
         freeze(args.output/'shards'/f'{args.shard_index:03d}.json',
                {'episodes': records, 'integrity': integrity})
         return
-    expected = 600 if dataset == 'libero' else 300
+    expected = (500 if args.exclude_libero_confirmation else 600) if dataset == 'libero' else 300
     if len(records) != expected:
         raise ValueError('target preparation incomplete')
     freeze(args.output/'integrity.json', integrity)

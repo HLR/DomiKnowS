@@ -108,6 +108,15 @@ class FrozenPolicyReference:
             self._active = False
 
 
+def regularized_policy_replay(planner, reference, domain, context, labels, dfa, advantage, **stopping):
+    with reference.activate(planner):
+        frozen = planner.replay_labels_policy(domain, context, labels, dfa, **stopping)
+    with deterministic_policy(planner):
+        current = planner.replay_labels_policy(domain, context, labels, dfa, **stopping)
+    policy_loss = -current.logprob * advantage.to(current.logprob) / max(1, len(current.log_probs))
+    return policy_loss, current.kl_from(frozen)
+
+
 def resolve_regularization(args, resume_payload=None):
     """Keep historical resumes exact; never recapture an RL policy as CE."""
     saved = (resume_payload or {}).get("stage2_planner_regularization")

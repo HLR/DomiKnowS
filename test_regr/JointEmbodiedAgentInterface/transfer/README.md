@@ -70,6 +70,46 @@ The tests cover prompt/reference separation, pointer preservation, changed-image
 rejection, resume mismatches, exact archived-baseline checks, sequential rollout,
 training/validation allocation, scene-overlap rejection, and CLI compatibility.
 
+## Planner-only target reinforcement learning
+
+`target_rl` starts from the qualified `joint-trained` checkpoint in the decoder
+repair campaign's frozen source selection. It updates LoRA and the VLABench
+graph-label head using native task success from a qualified LIBERO or RLBench
+executor. It keeps the EAI head frozen and uses supervised EAI and VLABench
+replay plus a 0.05 KL penalty to the initialization. A batch needs different
+rewards among samples of at least one reset to make an optimizer update.
+Invalid graph emissions stay in the denominator as zero-reward samples.
+
+For LIBERO, prepare a new target manifest with
+`prepare_data --exclude-libero-confirmation`. Validation uses states 30–34.
+Add `--reuse-libero-manifest PATH` to reuse the archived training resets and
+the predeclared validation subset after verifying all retained files. Both
+simulators require separate frozen target train, validation, and evaluation
+resets. Supply the original holdout manifest with `--holdout-manifest` if it
+differs from the evaluation manifest. LIBERO also audits the repair campaign's
+historical and confirmation manifests.
+
+```sh
+python -m test_regr.JointEmbodiedAgentInterface.transfer.target_rl \
+  --dataset libero --source-config REPAIR_CONFIG --target-manifest TRAIN_VALID_MANIFEST \
+  --evaluation-manifest EVAL_MANIFEST --executor-source QUALIFIED_EXECUTOR_DIR \
+  --calibration MATCHING_CALIBRATION_JSON --output NEW_RUN_DIR --validate-only
+```
+
+This checks artifact hashes, calibration, and split disjointness before model
+load. Run with a fresh output directory and omit `--validate-only` to train.
+When the model and simulator use separate environments, supply `--worker`
+as a JSON argument array ending in the path to `target_rl_rollout.py`. The
+trainer appends the request and result file arguments. Both environments must
+see those files and the frozen assets at the same paths.
+
+Selection ranks source-retaining epochs by native success on target validation.
+The selected checkpoint and frozen initialization are then scored on identical
+evaluation resets with the same executor and decoding policy. `report.json`
+records native success rates and paired gains and losses. Per-rollout files
+include plan validity and executor outcomes. Each attempt uses a fresh output
+directory.
+
 ## Entity-ID sensitivity phase
 
 `launch_bindings` freezes an independent method-2 source and verifies the original

@@ -223,6 +223,70 @@ def test_supervised_command_trains_both_heads_without_rl(joint_fixture, monkeypa
     assert all(not torch.equal(before[d], planner.label_heads[d].weight) for d in before)
 
 
+def test_repair_initialization_warms_controller_without_supervised_planner_updates(joint_fixture, monkeypatch, tmp_path):
+    from .. import main as cli
+    from ..transfer.protocol import freeze, sha
+    from ..transfer.repair import common, protocol
+
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = torch.nn.Linear(1, 1)
+    checkpoint = tmp_path / "repair.pt"
+    checkpoint.write_bytes(b"repair weights")
+    config = tmp_path / "config.json"
+    freeze(config, {"model": "test-model", "decoder_hidden_size": 512, "original_configuration": "source.json"})
+    item = vlabench_item(runtime)
+    saved = {}
+    warmup_calls = []
+
+    class WarmupOnly:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def train_controller_warmup(self, loader, *, steps):
+            warmup_calls.append(steps)
+            return {"loss": .2}
+
+    def save(path, **kwargs):
+        saved[path.name] = kwargs
+        return path
+
+    def stage2(*args, **kwargs):
+        raise RuntimeError("Stage 2 reached")
+
+    monkeypatch.setattr(protocol, "verify", lambda config: None)
+    monkeypatch.setattr(common, "build_runtime", lambda *a, **kw: (None, (
+        runtime, examples, examples, {"train": [item], "validation": [item]}, {"validation": [item]})))
+    monkeypatch.setattr(common, "fresh_planner", lambda *args: planner)
+    monkeypatch.setattr(common, "load_checkpoint", lambda *args: {"epoch": 4, "fresh_pretrained_initialization": True})
+    monkeypatch.setattr(cli, "apply_knowledge_argument", lambda args: "test")
+    monkeypatch.setattr(cli, "apply_holdout_arguments", lambda args: ())
+    monkeypatch.setattr("test_regr.VLABenchAgentInterface.dataset_protocol.guard_training_dataset",
+                        lambda *args, **kwargs: {})
+    monkeypatch.setattr(cli, "_controller", lambda *args: controller)
+    monkeypatch.setattr(cli, "_control_loaders", lambda args: {"train": [None], "validation": [None]})
+    monkeypatch.setattr(cli, "load_control_task_instructions", lambda *args: {})
+    monkeypatch.setattr(cli, "_evaluate_eai", lambda *args, **kwargs: {"goal_success": .5, "goal_recall": .5})
+    monkeypatch.setattr(cli, "evaluate_controller", lambda *args, **kwargs: {})
+    monkeypatch.setattr(cli, "JointSolverPOIProgram", WarmupOnly)
+    monkeypatch.setattr(cli, "JointReinforcementProgram", stage2)
+    monkeypatch.setattr(cli, "save_joint_checkpoint", save)
+    monkeypatch.setattr(cli, "load_joint_checkpoint", lambda path, **kwargs: saved[path.name])
+    args = cli.build_parser().parse_args([
+        "train-agent", "--two-stage", "--initialize-from-repair", str(config), str(checkpoint),
+        "--planner-model", "test-model", "--allow-internal-evaluation-training",
+        "--scene-verified-training-references", "--stage1-dfa-loss", "off",
+        "--stage1-epochs", "0", "--stage1-eai-warmup-steps", "0",
+        "--controller-warmup-steps", "2", "--device", "cpu", "--output", str(tmp_path / "run"),
+    ])
+    with pytest.raises(RuntimeError, match="Stage 2 reached"):
+        cli.command_train_agent(args)
+    assert warmup_calls == [2]
+    assert list(saved) == ["joint_repair_warm_start.pt", "joint_controller_warmup.pt"]
+    for value in saved.values():
+        assert value["metrics"]["initialization"]["checkpoint_sha256"] == sha(checkpoint)
+
+
 @pytest.mark.parametrize("modes", [("--ce-only", "--two-stage"), ("--ce-dfa-only", "--two-stage"),
                                   ("--ce-only", "--ce-dfa-only")])
 def test_training_modes_are_mutually_exclusive(modes):

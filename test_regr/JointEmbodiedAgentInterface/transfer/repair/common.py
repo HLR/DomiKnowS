@@ -32,16 +32,18 @@ def source_context(planner,row):
     return context
 
 
-def build_runtime(c,output,device='cuda:0'):
+def build_runtime(c,output,device='cuda:0',*,training_args=None):
     from ... import main as joint
     from test_regr.VLABenchAgentInterface.knowledge import apply_knowledge_argument
     from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
-    args=joint.build_parser().parse_args(read(c['original_configuration'])['arguments'])
-    args.output=str(output);args.initialize_from=None;args.resume=None;args.device=device
-    args.save_initialization=False;args.stage1_eai_warmup_steps=0
-    args.ce_only=True;args.ce_dfa_mass_only=False;args.ce_dfa_mass_weight=0.
-    args.no_dfa_official=False;args.allow_internal_evaluation_training=True
-    args.scene_verified_training_references=True
+    args=training_args
+    if args is None:
+        args=joint.build_parser().parse_args(read(c['original_configuration'])['arguments'])
+        args.output=str(output);args.initialize_from=None;args.resume=None;args.device=device
+        args.save_initialization=False;args.stage1_eai_warmup_steps=0
+        args.ce_only=True;args.ce_dfa_mass_only=False;args.ce_dfa_mass_weight=0.
+        args.no_dfa_official=False;args.allow_internal_evaluation_training=True
+        args.scene_verified_training_references=True
     apply_research_arguments(args);apply_knowledge_argument(args)
     Path(output).mkdir(parents=True,exist_ok=True)
     def audit(runtime,prepared,out):
@@ -95,7 +97,7 @@ def fresh_planner(c,runtime,arm):
     return planner
 
 
-def save_checkpoint(path,planner,runtime,arm,epoch,settings_sha,optimizer=None,scheduler=None):
+def save_checkpoint(path,planner,runtime,arm,epoch,settings_sha,optimizer=None,scheduler=None,*,provenance=None):
     path=Path(path)
     if path.exists():raise ValueError('preserve existing checkpoint')
     names={n for n,p in planner.named_parameters() if p.requires_grad or n.startswith('label_heads.')}
@@ -104,7 +106,8 @@ def save_checkpoint(path,planner,runtime,arm,epoch,settings_sha,optimizer=None,s
         'planner':state,'settings_sha256':settings_sha,
         'vocabularies':{d:list(planner.vocabulary(d).tokens) for d in ('eai','vlabench')},
         'optimizer':optimizer.state_dict() if optimizer else None,'scheduler':scheduler.state_dict() if scheduler else None,
-        'grounding_residual':False,'primary_role_hints':False,'fresh_pretrained_initialization':True}
+        'grounding_residual':False,'primary_role_hints':False,'fresh_pretrained_initialization':provenance is None}
+    if provenance is not None:payload['provenance']=provenance
     payload['quant_matmul_policy']=planner.quant_matmul_policy
     temporary=path.with_suffix('.tmp');torch.save(payload,temporary);temporary.replace(path)
     freeze(path.with_suffix('.json'),{k:v for k,v in payload.items() if k not in ('planner','optimizer','scheduler')})

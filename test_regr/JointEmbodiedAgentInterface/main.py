@@ -400,7 +400,33 @@ def command_train_agent(args):
     from test_regr.VLABenchAgentInterface.dataset_protocol import guard_training_dataset
     if getattr(args, "initialize_from", None) and (args.resume or args.resume_adapter):
         raise ValueError("--initialize-from cannot be combined with --resume or --resume-adapter")
+    repair_init = getattr(args, "initialize_from_repair", None)
+    repair_config_path = getattr(args, "repair_source_config", None)
+    repair_config = None
+    if repair_init:
+        if args.resume or args.resume_adapter or args.initialize_from or repair_config_path:
+            raise ValueError("--initialize-from-repair requires fresh optimizer state")
+        if (not args.two_stage or args.stage1_epochs != 0 or args.stage1_eai_warmup_steps != 0
+                or args.stage2_epochs <= 0 or args.controller_warmup_steps <= 0
+                or args.save_initialization):
+            raise ValueError("repair initialization requires Stage 2, controller BC warm-up, and zero Stage 1 planner updates")
+        repair_config_path = repair_init[0]
+    elif repair_config_path and not args.resume:
+        raise ValueError("--repair-source-config requires --resume")
+    if repair_config_path:
+        if not args.allow_internal_evaluation_training or not args.scene_verified_training_references:
+            raise ValueError("repair initialization requires the historical audited source protocol")
+        from .transfer.protocol import read, sha
+        from .transfer.repair.protocol import verify
+        repair_config = read(repair_config_path)
+        verify(repair_config)
+        if (args.planner_model != repair_config["model"]
+                or args.planner_decoder_hidden_dim != repair_config["decoder_hidden_size"]
+                or not args.load_in_4bit):
+            raise ValueError("repair backbone, decoder size, or precision differs")
     guard_kwargs = {"resume": getattr(args, "resume", None) or getattr(args,"resume_adapter",None) or getattr(args, "initialize_from", None)}
+    if repair_init:
+        guard_kwargs["resume"] = repair_config["original_configuration"]
     if getattr(args, "allow_internal_evaluation_training", False):
         guard_kwargs["allow_internal_evaluation_training"] = True
     guard_training_dataset(args.vlabench_planning_dir, args.output, **guard_kwargs)
@@ -410,6 +436,8 @@ def command_train_agent(args):
     ce_dfa_only = getattr(args, "ce_dfa_only", False)
     ce_dfa_mass_only = getattr(args, "ce_dfa_mass_only", False)
     supervised_only = ce_only or ce_dfa_only or ce_dfa_mass_only
+    if repair_init and supervised_only:
+        raise ValueError("--initialize-from-repair requires reinforcement learning")
     training_mode = "ce-only" if ce_only else "ce-dfa-only" if ce_dfa_only else "ce-dfa-mass-only" if ce_dfa_mass_only else "two-stage"
     if not args.two_stage and not supervised_only:
         raise ValueError("train-agent requires --two-stage or a supervised CE training mode")
@@ -437,21 +465,37 @@ def command_train_agent(args):
         assist_ablation_modes = parse_assist_modes(args.assist_ablation_modes)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     _status(f"starting joint {training_mode} training device={device}")
-    runtime, eai_train, eai_valid, vla_splits, prepared = _prepare(args, device)
+    if repair_config is not None:
+        from .transfer.repair.common import build_runtime
+        _, prepared_runtime = build_runtime(repair_config, args.output, device, training_args=args)
+    else:
+        prepared_runtime = _prepare(args, device)
+    runtime, eai_train, eai_valid, vla_splits, prepared = prepared_runtime
     _status(
         f"prepared splits: EAI train={len(eai_train)} validation={len(eai_valid)}; "
         + "VLABench "
         + " ".join(f"{name}={len(values)}" for name, values in vla_splits.items())
     )
     _status(f"loading planner backbone {args.planner_model}")
-    planner = JointQwenVLPlanner.from_pretrained(
-        eai_vocabulary=runtime.eai_vocabulary,
-        vlabench_vocabulary=runtime.vlabench_vocabulary,
-        model_id=args.planner_model,
-        adapter_path=args.resume_adapter,
-        load_in_4bit=args.load_in_4bit,
-        decoder_hidden_size=args.planner_decoder_hidden_dim,
-    )
+    if repair_config is not None:
+        from .transfer.repair.common import fresh_planner
+        planner = fresh_planner(repair_config, runtime, "joint")
+        if repair_init:
+            from .transfer.repair.common import load_checkpoint
+            checkpoint_hash = sha(repair_init[1])
+            repair_payload = load_checkpoint(repair_init[1], planner, "joint")
+            if repair_payload["epoch"] <= 0 or not repair_payload.get("fresh_pretrained_initialization"):
+                raise ValueError("a trained source-only Joint repair snapshot is required")
+            _status(f"initialized Joint planner from repair epoch {repair_payload['epoch']} sha256={checkpoint_hash}")
+    else:
+        planner = JointQwenVLPlanner.from_pretrained(
+            eai_vocabulary=runtime.eai_vocabulary,
+            vlabench_vocabulary=runtime.vlabench_vocabulary,
+            model_id=args.planner_model,
+            adapter_path=args.resume_adapter,
+            load_in_4bit=args.load_in_4bit,
+            decoder_hidden_size=args.planner_decoder_hidden_dim,
+        )
     _status("planner backbone and graph-token decoders ready")
     from test_regr.VLABenchAgentInterface.research.checkpoint import data_fingerprints
     planner._research_data_fingerprints=data_fingerprints(args)
@@ -496,6 +540,27 @@ def command_train_agent(args):
     _status("all model and data components are ready")
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
+
+    repair_seed = None
+    if repair_init:
+        repair_seed = output / "joint_repair_warm_start.pt"
+        if repair_seed.exists():
+            raise ValueError("repair warm start already exists; use a fresh run directory")
+        initialization = {
+            "checkpoint": str(Path(repair_init[1]).resolve()),
+            "checkpoint_sha256": checkpoint_hash,
+            "configuration_sha256": sha(repair_init[0]),
+            "epoch": repair_payload["epoch"],
+            "optimizers": "fresh",
+        }
+        del repair_payload
+        repair_seed = save_joint_checkpoint(
+            repair_seed, runtime=runtime, planner=planner, controller=controller,
+            planner_optimizer=planner_optimizer, controller_optimizer=controller_optimizer,
+            stage="stage1", epoch=-1, round_robin_cursor=0,
+            metrics={"initialization": initialization, "training_mode": training_mode,
+                     "training_data_protocol": training_data_protocol(args, None)},
+        )
 
     resume_stage = None
     resume_payload = None
@@ -558,7 +623,7 @@ def command_train_agent(args):
         else:
             raise ValueError(f"unknown joint checkpoint stage {resume_stage!r}")
 
-    best_stage1 = (
+    best_stage1 = repair_seed or (
         Path(args.resume).resolve()
         if resume_stage in {"stage1", "controller_warmup"}
         else None
@@ -578,6 +643,16 @@ def command_train_agent(args):
                        if args.stage2_retention_policy == "continue" else
                        "a failed retention gate will abort without restoring an older policy")
                 )
+    if args.resume and repair_config is not None:
+        initialization = resume_payload.get("metrics", {}).get("initialization")
+        if initialization is None and best_stage1 is not None and best_stage1 != Path(args.resume).resolve():
+            # Older progress checkpoints link the controller warm-up snapshot,
+            # which contains the original repair initialization record.
+            fallback = torch.load(best_stage1, map_location="cpu", mmap=True, weights_only=False)
+            initialization = fallback.get("metrics", {}).get("initialization")
+            del fallback
+        if not initialization or initialization.get("configuration_sha256") != sha(repair_config_path):
+            raise ValueError("resume checkpoint does not match the frozen repair source configuration")
     if resume_stage != "stage2":
         stage1 = JointSolverPOIProgram(
             runtime,
@@ -1008,10 +1083,13 @@ def command_train_agent(args):
     stage2_aborted = False
     last_retention_eligible = (resume_payload or {}).get("metrics", {}).get("retention_eligible", True)
     for epoch in range(start_stage2, args.stage2_epochs):
-        _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} training")
         continuing_epoch = epoch == start_stage2 and start_stage2_round > 0
         first_round = start_stage2_round if continuing_epoch else 0
         initial_metrics = resumed_stage2_metrics if continuing_epoch else None
+        if first_round == args.stage2_rounds_per_epoch:
+            _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} resuming evaluation after {first_round} completed training rounds")
+        else:
+            _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} training")
 
         def save_round_progress(next_round, partial_metrics, *, current_epoch=epoch):
             prior_best = None
@@ -1038,6 +1116,7 @@ def command_train_agent(args):
                     "prior_best": prior_best,
                     "baseline_reference": baseline_reference,
                     "eai_baseline_reference": eai_baseline_reference,
+                    **({"initialization": initialization} if initialization is not None else {}),
                     "fallback_path": (
                         str(best_stage1) if best_stage1 is not None else None
                     ),
@@ -1147,6 +1226,8 @@ def command_train_agent(args):
         retention_eligible = retention_eligible and baseline_ok and eai_baseline_ok
         metrics["retention_eligible"] = retention_eligible
         metrics["retention_rejection_reasons"] = retention_reasons
+        if initialization is not None:
+            metrics["initialization"] = initialization
         last_retention_eligible = retention_eligible
         metrics["fallback_path"] = (
             str(best_stage1) if best_stage1 is not None else None
@@ -1238,6 +1319,14 @@ def command_train_agent(args):
             metrics=payload.get("metrics", {}),
         )
         _json({"stage": "stage2-best", "checkpoint": selected, "source": best_path})
+        if repair_config is not None:
+            from .transfer.repair.common import save_checkpoint as save_repair_planner
+            selected_hash = sha(selected)
+            export = output / "joint_source_rl_planner.pt"
+            save_repair_planner(export, planner, runtime, "joint", int(payload["epoch"]) + 1, selected_hash,
+                                provenance={"method": "source-only-joint-rl", "initialization": initialization,
+                                            "joint_checkpoint_sha256": selected_hash})
+            _json({"stage": "source-rl-planner-export", "checkpoint": export, "source": selected})
     elif not stage2_aborted:
         _json({
             "stage": "stage2-best-skipped",
@@ -1292,6 +1381,10 @@ def build_parser():
     agent.add_argument("--output", default=str(DEFAULT_OUTPUT))
     agent.add_argument("--resume")
     agent.add_argument("--initialize-from", help="load Stage 1 weights with fresh optimizers and a new epoch counter")
+    agent.add_argument("--initialize-from-repair", nargs=2, metavar=("CONFIG", "CHECKPOINT"),
+                       help="start source Stage 2 from a trained Joint repair planner after controller BC warm-up")
+    agent.add_argument("--repair-source-config", type=Path,
+                       help="reuse the frozen repair source audit when resuming source-only Joint RL")
     agent.add_argument("--resume-adapter")
     agent.add_argument("--planner-model", default=DEFAULT_MODEL_ID)
     agent.add_argument("--planner-decoder-hidden-dim", type=int, default=512)

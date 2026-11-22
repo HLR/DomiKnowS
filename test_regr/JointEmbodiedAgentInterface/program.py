@@ -734,18 +734,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             loss.backward()
 
     def _regularized_replay_loss(self, domain, context, labels, dfa, advantage, **stopping):
-        from .utils.policy_reference import deterministic_policy
-        with self.policy_reference.activate(self.joint_planner):
-            reference = self.joint_planner.replay_labels_policy(domain, context, labels, dfa, **stopping)
-        # The reference pass precedes the only live autograd graph. Both passes
-        # disable dropout, but gradients remain enabled for the current policy.
-        with deterministic_policy(self.joint_planner):
-            current = self.joint_planner.replay_labels_policy(domain, context, labels, dfa, **stopping)
-        kl = current.kl_from(reference)
+        from .utils.policy_reference import regularized_policy_replay
+        policy_loss, kl = regularized_policy_replay(
+            self.joint_planner, self.policy_reference, domain, context, labels, dfa, advantage, **stopping,
+        )
         self._reference_kls[domain].append(float(kl.detach()))
-        # Match the per-token KL scale; a longer emitted trajectory must not
-        # dilute its preservation penalty relative to the summed logprob.
-        policy_loss = -current.logprob * advantage.to(current.logprob) / max(1, len(current.log_probs))
         return policy_loss + self.planner_kl_weight * kl
 
     def _regularization_metrics(self, domain):

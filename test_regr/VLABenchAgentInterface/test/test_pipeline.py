@@ -1,6 +1,7 @@
 import importlib
 import json
 import sys
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -3210,11 +3211,17 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     program = _joint_program(runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=True), num_samples=1)
     program.execution_assistance = "train-only"
     assistance_states = []
+    replay_refs = []
     original_collect_episode = program.collect_episode
 
     def collect_with_assistance_audit(descriptor):
+        assert all(ref() is None for ref in replay_refs)
         assistance_states.append(program._execution_assistance_override)
-        return original_collect_episode(descriptor)
+        episode = original_collect_episode(descriptor)
+        assert episode.controller and episode.planner_logprobs
+        replay_refs.extend(weakref.ref(item.images) for item in episode.controller)
+        replay_refs.extend(weakref.ref(item) for item in episode.planner_logprobs)
+        return episode
 
     program.collect_episode = collect_with_assistance_audit
     planner_before = planner.preference.detach().clone()
@@ -3231,6 +3238,7 @@ def test_fixed_seed_rollout_evaluation_does_not_update_models():
     assert metrics["assisted_episode_rate"] == 0.0
     assert metrics["unassisted_success_rate"] == 1.0
     assert assistance_states == [False, False]
+    assert all(ref() is None for ref in replay_refs)
     assert program._execution_assistance_override is None
     assert metrics["per_task"]["select_book"]["progress"] == pytest.approx(1.0)
     assert metrics["per_task"]["select_fruit"]["progress"] == pytest.approx(1.0)

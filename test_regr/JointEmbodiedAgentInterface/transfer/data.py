@@ -9,13 +9,13 @@ def shard_cases(cases, index, count):
     return sorted(cases)[index::count]
 
 
-def allocation(dataset, cases, seed=42):
+def allocation(dataset, cases, seed=42, *, exclude_libero_confirmation=False):
     """Blueprints only: native preparation must freeze actual states and images."""
     if dataset not in ('libero', 'rlbench'):
         raise ValueError('unsupported dataset')
     if len(set(cases)) != len(cases):
         raise ValueError('duplicate task cases')
-    ranges = ({'training': range(10, 30), 'validation': range(30, 40)} if dataset == 'libero'
+    ranges = ({'training': range(10, 30), 'validation': range(30, 35 if exclude_libero_confirmation else 40)} if dataset == 'libero'
               else {'training': range(20, 40), 'validation': range(40, 50)})
     rows = []
     for case in sorted(cases):
