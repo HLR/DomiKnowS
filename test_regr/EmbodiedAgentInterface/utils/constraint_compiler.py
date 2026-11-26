@@ -66,6 +66,14 @@ _UNSET = object()
 _FINISHED_LIMIT = 1 << 16
 
 
+def observed_entity_allowed(entity, entities, indexed_categories):
+    """Allow explicit identities and indexed labels of class-only observations."""
+    from test_regr.EmbodiedAgentInterface.reward import _entity_parts
+
+    category, instance = _entity_parts(entity)
+    return entity in entities or (instance is not None and category in indexed_categories)
+
+
 @dataclass(frozen=True)
 class EAIState:
     grounded: object
@@ -161,6 +169,14 @@ class EAIExecutor:
             )
         entity = args[0] if args else None
         relation = _placement_relation(name)
+        effect_name = name
+        if self.context.get("observed_placement_semantics") and name == "putback" and entity:
+            # VirtualHome flattens the same PUTBACK token for surfaces and
+            # containers. Resolve an inside placement from observed capability.
+            if (("containers", entity) in state.facts.positive
+                    and ("surfaces", entity) not in state.facts.positive):
+                effect_name = "putin"
+                relation = _placement_relation(effect_name)
         destination = entity if relation or name == "pour" else None
         subject = holdings.get(hand) if destination is not None else entity
         release = bool(relation) or any(
@@ -208,7 +224,7 @@ class EAIExecutor:
         for h, obj in state.holdings:
             if obj is not None:
                 source.add(("holds_lh" if h == "left" else "holds_rh", "character", obj))
-        predicted = apply_observed_action(_ActionEvent(name, args), source, world_bundle=self.world)
+        predicted = apply_observed_action(_ActionEvent(effect_name, args), source, world_bundle=self.world)
         predicted_signed = self.signed(FactState(frozenset(predicted)))
         next_state, checks = self.planning.evaluate(
             state,
@@ -294,6 +310,9 @@ class EAIAdapter:
                 x for x in vocabulary.tokens if x not in world.actions and x != vocabulary.eos_token
             )
         self.executor = EAIExecutor(world, context, entities)
+        self.aliases = context.get("observation_entity_aliases") or {}
+        self.observed_entities = frozenset(entities) if context.get("require_observed_entities") else None
+        self.indexed_categories = frozenset(context.get("observation_indexed_categories") or ())
         self.start_state = EAIState(self.executor.planning.initial)
         self._finished = {}
 
@@ -348,7 +367,12 @@ class EAIAdapter:
             return SemanticTransition(successor, previous.events)
         if state.pending is None:
             return None
-        successor = replace(state, args=state.args + (token,))
+        entity = self.aliases.get(token, token)
+        if self.observed_entities is not None and not observed_entity_allowed(
+            entity, self.observed_entities, self.indexed_categories
+        ):
+            return None
+        successor = replace(state, args=state.args + (entity,))
         if len(successor.args) >= ACTION_SPECS[state.pending].max_args:
             return self.finish(successor)
         return SemanticTransition(successor)
@@ -380,7 +404,7 @@ def bind_eai_policy(dfa, vocabulary, context):
     completion = adapter.executor.planning.completion(adapter.start_state.grounded)
     from domiknows.generation.dfa.core import with_initial_completion
 
-    allow_noop = bool(
+    allow_noop = bool(context.get("allow_empty_observed_plan")) or bool(
         completion.applicable
         and completion.satisfied is True
         and not completion.missing

@@ -152,3 +152,26 @@ regenerated. The campaign stops before training, preserves every failed attempt,
 and does not fill these properties from references or remove affected episodes.
 Use the existing source images with a verified complete tag-relabeling bridge, or
 recover authoritative missing simulator properties, before enabling this path.
+
+## Shared completed-plan reranker
+
+`shared_reranker` provides a second, independent scoring head for constrained
+beams. It sees generic operation families, anonymous source/destination
+relationships, changes in holding, and open-world public goal evidence. The
+state sequences are symbolic projections from the bound policy's existing
+effects. EAI supports grounded conjunctions of public SimpleTL literals.
+External adapters without a verified public goal binding leave progress unknown.
+
+The score adds the frozen beam log probability, a bounded learned residual,
+and a soft DomiKnowS transition potential for losing a known satisfied public
+goal literal. The bound DFA remains responsible for plan legality. The ranker
+returns indices into the original beam and records each score component.
+
+Use `encode_candidates` on the same frozen beams for both heads. Supply
+independent replay success labels in `ReplayPool` and the frozen source
+training identities to `fit_shared_reranker`. Save the resulting head with
+`SharedPlanReranker.save`. Use `rerank_candidates` to score a held-out beam
+without loading replay results. The EAI latent audit accepts
+`--shared-reranker PATH` when a fresh audit protocol records that file's
+`shared_reranker_sha256`. LIBERO and RLBench can use the same head API with
+their public-input Joint graph-label executor policies and no goal binding.
