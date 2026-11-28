@@ -240,7 +240,7 @@ def reset_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     import open3d
-    open3d.utility.random.seed(seed)
+    open3d.utility.random.seed(int(seed) & 0x7fffffff)
 
 
 class MatchedArm:

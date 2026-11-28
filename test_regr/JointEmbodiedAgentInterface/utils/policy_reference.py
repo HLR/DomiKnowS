@@ -32,16 +32,20 @@ class PolicyReplay:
 
 
 @contextmanager
-def deterministic_policy(model, *, inference=False):
+def deterministic_policy(model, *, inference=False, training=False):
     """Disable dropout while preserving training-mode activation checkpointing.
 
     Call again during backward so checkpointed layers recompute the same policy.
     Reference forwards alone may enter inference mode (they have no live graph).
     """
+    if inference and training:
+        raise ValueError("policy scope must choose inference or training")
     modes = [(module, module.training) for module in model.modules()]
     attention_dropout = []
     if inference:
         model.eval()
+    elif training:
+        model.train()
     for module, _ in modes:
         if isinstance(module, torch.nn.modules.dropout._DropoutNd):
             module.training = False

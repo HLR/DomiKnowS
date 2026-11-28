@@ -206,17 +206,19 @@ def test_balanced_reference_replay_visits_tasks_before_reusing_a_group():
     assert [balanced_reference_example(examples, i)["id"] for i in range(6)] == [0, 3, 1, 3, 2, 3]
 
 
-def test_dropout_disabled_in_checkpointed_forward_and_backward_without_disabling_training():
+@pytest.mark.parametrize("starts_training", [True, False])
+def test_dropout_disabled_in_checkpointed_forward_and_backward_without_disabling_training(starts_training):
     from torch.utils.checkpoint import checkpoint
     model = torch.nn.Sequential(torch.nn.Dropout(0.9), torch.nn.Linear(2, 1, bias=False))
+    model.train(starts_training)
     x = torch.ones(1, 2, requires_grad=True)
-    with deterministic_policy(model):
+    with deterministic_policy(model, training=not starts_training):
         assert model.training  # retain activation checkpointing in the real VLM
         loss = checkpoint(model, x, use_reentrant=False).sum()
-    with deterministic_policy(model):
+    with deterministic_policy(model, training=not starts_training):
         loss.backward()
     assert torch.equal(model[1].weight.grad, torch.ones(1, 2))
-    assert model[0].training
+    assert model.training == starts_training and model[0].training == starts_training
 
 
 @pytest.mark.parametrize("domain", ["eai", "vlabench"])

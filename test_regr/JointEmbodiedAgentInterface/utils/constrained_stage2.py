@@ -23,7 +23,7 @@ SIGMA = 0.001
 STEP_SIZE = 0.0005
 EVALUATION_SEED = 100042
 SETTINGS = {
-    "version": 2, "generations": GENERATIONS, "pairs": PAIRS, "sigma": SIGMA,
+    "version": 3, "generations": GENERATIONS, "pairs": PAIRS, "sigma": SIGMA,
     "step_size": STEP_SIZE, "eai_per_domain": 8, "vlabench_resets": 4,
 }
 
@@ -97,7 +97,10 @@ def es_generation(head, cohort, rollout, seed, *, progress):
                 for param, center in zip(params, centers):
                     param.copy_(center)
         rewards, spread, weights = _weights(outcomes)
-        if spread:
+        changed = False
+        informative_pairs = sum(bool(positive != negative)
+                                for positive, negative in zip(rewards[::2], rewards[1::2], strict=True))
+        if informative_pairs:
             deltas = [torch.zeros_like(param) for param in params]
             for index, direction in enumerate(noise_seeds):
                 coefficient = float(weights[2 * index] - weights[2 * index + 1]) * STEP_SIZE / len(candidates)
@@ -105,9 +108,11 @@ def es_generation(head, cohort, rollout, seed, *, progress):
                     delta.add_(noise, alpha=coefficient)
             if not all(torch.isfinite(delta).all() for delta in deltas):
                 raise RuntimeError("nonfinite constrained ES update")
-            for param, delta in zip(params, deltas):
+            for param, center, delta in zip(params, centers, deltas, strict=True):
                 param.add_(delta)
-    return _generation_metrics(outcomes, rewards, spread, bool(spread), noise_seeds=noise_seeds)
+                changed |= not torch.equal(param, center)
+    return _generation_metrics(outcomes, rewards, spread, changed, tied=informative_pairs == 0,
+                               informative_pairs=informative_pairs, noise_seeds=noise_seeds)
 
 
 def reinforce_generation(head, cohort, rollout, seed, *, progress):

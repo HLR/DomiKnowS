@@ -171,6 +171,16 @@ def test_es_restores_center_after_failure_and_tied_population():
     assert all(torch.equal(current, before[name]) for name, current in head.state_dict().items())
 
 
+def test_es_with_all_pairs_tied_reports_no_parameter_update():
+    head = torch.nn.Linear(1, 1, bias=False)
+    before = head.weight.detach().clone()
+    outcomes = iter([True, True, False, False, True, True, False, False])
+    result = pilot.es_generation(head, [0], lambda *_: pilot.Rollout(next(outcomes)), 42, progress=lambda _: None)
+    assert result["fitness_std"] > 0
+    assert result["informative_pairs"] == 0 and result["tied"] and not result["updated"]
+    assert torch.equal(head.weight, before)
+
+
 def test_reinforce_uses_binary_advantages_for_active_head():
     head = torch.nn.Linear(1, 1, bias=False)
     before = head.weight.item()

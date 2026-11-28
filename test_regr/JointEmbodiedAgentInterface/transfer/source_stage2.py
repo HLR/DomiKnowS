@@ -23,6 +23,7 @@ from .protocol import digest, episodes, freeze, read, sha
 from .repair.common import build_runtime, fresh_planner, load_checkpoint, save_checkpoint
 from .repair.input_protocol import contract_record, generation_context, IMAGE_INSTRUCTION
 from .repair.protocol import verify
+from .source_stage2_es import Population
 from .source_stage2_rollout import verify_manifest
 from .target_rl import MAX_LABELS, advantages, checked_fingerprints, paired_report, predict, score, source_anchors, visible_entities
 from .target_rl_rollout import executor_proof
@@ -33,6 +34,7 @@ RECIPE = {
     "lora_lr": 5e-6, "head_lr": 1e-4, "kl_weight": .05, "eai_replay_weight": .5,
     "vlabench_replay_weight": .25, "target_rewards": False, "controllers_trainable": False,
 }
+ES_SIGMA = .001
 SOURCE_PROFILE = ExecutorProfile((
     Action("pick", (SUBJECT,), grasp=True),
     Action("insert", (DESTINATION,), requires_held=True),
@@ -42,7 +44,9 @@ SOURCE_PROFILE = ExecutorProfile((
 
 def source_provenance():
     files = (Path(__file__), Path(__file__).with_name("source_stage2_rollout.py"),
-             Path(__file__).with_name("target_rl.py"), Path(observed_eai.__file__))
+             Path(__file__).with_name("source_stage2_es.py"),
+             Path(__file__).with_name("target_rl.py"), Path(observed_eai.__file__),
+             Path(observed_eai.__file__).with_name("policy_reference.py"))
     return {path.name: sha(path) for path in files}
 
 
@@ -87,9 +91,9 @@ def eai_scores(rows):
             "generation_errors": sum(bool(row["generation_error"]) for row in rows)}
 
 
-def capture_policy(manager, planner, runtime, reference, domain, traces, outcomes):
+def capture_policy(manager, planner, runtime, reference, domain, traces, outcomes, *, es=False):
     maximum = runtime.max_eai_steps if domain == "eai" else MAX_LABELS
-    weights = advantages(outcomes)
+    weights = [0.] * len(outcomes) if es else advantages(outcomes)
     replays = signal = 0
     kl_sum = 0.0
     for (trace, context, policy), weight in zip(traces, weights, strict=True):
@@ -133,6 +137,40 @@ def vla_rollouts(planner, runtime, rows, draws, *, greedy, output, contract, com
     return score(traces, output, contract, command), traces
 
 
+def collect_es_traces(parameters, population, collect):
+    def draw(candidate):
+        traces = collect()
+        for record, _, _ in traces:
+            record["es_candidate"] = candidate
+            if "rollout_id" in record:
+                record["rollout_id"] = f'{record["episode_id"]}#{candidate}'
+            else:
+                record["draw"] = candidate
+        return traces
+
+    return [trace for candidate in population.collect(parameters, ES_SIGMA, draw) for trace in candidate]
+
+
+def evolution_rollouts(planner, runtime, manager, eai_items, vla_batch, step, contract, command, epoch, index):
+    with runtime.domain_scope("eai", parameter_policy="freeze_inactive"):
+        eai_parameters = [parameter for parameter in manager.parameters if parameter.requires_grad]
+        eai_population = Population.from_budget(RECIPE["draws"], RECIPE["seed"], epoch, index, "eai")
+        eai_traces = collect_es_traces(eai_parameters, eai_population,
+            lambda: eai_rollouts(planner, runtime, eai_items, 1, greedy=False)[1])
+    with common_prompt(planner), runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
+        vla_parameters = [parameter for parameter in manager.parameters if parameter.requires_grad]
+        vla_population = Population.from_budget(RECIPE["draws"], RECIPE["seed"], epoch, index, "vlabench")
+        vla_traces = collect_es_traces(vla_parameters, vla_population,
+            lambda: predict(planner, runtime, vla_batch, EXECUTOR, 1, False, profile=SOURCE_PROFILE))
+    eai_records = [row for row, _, _ in eai_traces]
+    vla_records = score(vla_traces, step / "native", contract, command)
+    domains = {
+        "eai": (eai_population, eai_parameters, eai_population.reward_differences(eai_records)),
+        "vlabench": (vla_population, vla_parameters, vla_population.reward_differences(vla_records)),
+    }
+    return eai_records, eai_traces, vla_records, vla_traces, domains
+
+
 def training_schedule(rows, anchor_rows, rng):
     groups, anchors = defaultdict(list), defaultdict(list)
     for row in rows:
@@ -164,7 +202,7 @@ def validate(planner, runtime, eai, vla, output, contract, command):
     return eai_rows, vla_rows
 
 
-def qualify(baseline, after, updates):
+def qualify(baseline, after, updates, *, optimizer_mode="reinforce"):
     before_eai, after_eai = eai_scores(baseline[0]), eai_scores(after[0])
     if [(row["episode_id"], row["input_hash"]) for row in baseline[0]] != [
             (row["episode_id"], row["input_hash"]) for row in after[0]]:
@@ -172,14 +210,14 @@ def qualify(baseline, after, updates):
     vla = paired_report(baseline[1], after[1], clustered=True)
     reasons = []
     if not all(updates.values()):
-        reasons.append("missing_policy_gradient_signal")
+        reasons.append("missing_es_reward_signal" if optimizer_mode == "es" else "missing_policy_gradient_signal")
     if after_eai["successes"] < before_eai["successes"]:
         reasons.append("eai_success_regression")
     if after_eai["mean_goal_recall"] + .02 < before_eai["mean_goal_recall"]:
         reasons.append("eai_recall_regression")
     if vla["success_rate_delta"] < 0:
         reasons.append("vlabench_native_regression")
-    return {"eai": {"baseline": before_eai, "after": after_eai}, "vlabench": vla,
+    return {"optimizer_mode": optimizer_mode, "eai": {"baseline": before_eai, "after": after_eai}, "vlabench": vla,
             "updated_batches": updates, "qualified": not reasons, "rejections": reasons}
 
 
@@ -223,8 +261,12 @@ def train(args):
     settings = {"recipe": RECIPE, "initialization": initialization, "source": contract, "holdout": holdout,
                 "executor_sha256": source["executor_sha256"], "executor_profile": asdict(SOURCE_PROFILE),
                 "inputs": contract_record(IMAGE_INSTRUCTION), "eai_reward": observed_eai.OBSERVED,
-                "auxiliary_heads": "disabled",
+                "auxiliary_heads": "disabled", "optimizer_mode": args.optimizer,
                 "code_sha256": source_provenance(), "worker": command}
+    es = args.optimizer == "es"
+    if es:
+        settings["evolution_strategies"] = {"sigma": ES_SIGMA, "pairs": RECIPE["draws"] // 2,
+                                           "reward": "mean source success", "pair_sampling_seeds": "shared"}
     if args.validate_only:
         print(json.dumps(settings))
         return
@@ -274,19 +316,36 @@ def train(args):
         for index, (batch, anchors) in enumerate(training_schedule(training, vla_anchors, rng)):
             step = folder / f"step_{index}"
             eai_items = [(f"eai/train/{i:03d}", train_eai[i]) for i in rng.sample(range(len(train_eai)), len(batch))]
-            eai_records, eai_traces = eai_rollouts(planner, runtime, eai_items, RECIPE["draws"], greedy=False)
+            training_contract = {**contract, "split": "training"}
+            es_results = {}
+            if es:
+                eai_records, eai_traces, vla_records, vla_traces, es_results = evolution_rollouts(
+                    planner, runtime, manager, eai_items, batch, step, training_contract, command, epoch, index,
+                )
+                reward_evidence = {domain: result[2] for domain, result in es_results.items()}
+                freeze(step / "es_population.json", reward_evidence)
+                has_signal = any(metrics["informative_pairs"] for metrics in reward_evidence.values())
+            else:
+                eai_records, eai_traces = eai_rollouts(planner, runtime, eai_items, RECIPE["draws"], greedy=False)
+                vla_records, vla_traces = vla_rollouts(planner, runtime, batch, RECIPE["draws"], greedy=False,
+                    output=step / "native", contract=training_contract, command=command)
+                has_signal = any(advantages(eai_records)) or any(advantages(vla_records))
             freeze(step / "eai_rollouts.json", eai_records)
-            vla_records, vla_traces = vla_rollouts(planner, runtime, batch, RECIPE["draws"], greedy=False,
-                output=step / "native", contract={**contract, "split": "training"}, command=command)
-            if not any(advantages(eai_records)) and not any(advantages(vla_records)):
-                freeze(step / "update.json", {"skipped": "tied_rewards_in_every_reset"})
+            if not has_signal:
+                reason = "tied_reward_in_every_mirrored_pair" if es else "tied_rewards_in_every_reset"
+                freeze(step / "update.json", {"skipped": reason})
                 continue
             evidence = SharedUpdateEvidence(planner, optimizer)
-            with manager.step_context():
+            # Qwen enables activation checkpointing in training mode. Keep
+            # dropout disabled during both the forward and recomputation.
+            with deterministic_policy(planner, training=True), manager.step_context():
                 with runtime.domain_scope("eai", parameter_policy="freeze_inactive"):
                     if any(p.requires_grad for p in planner.label_heads["vlabench"].parameters()):
                         raise RuntimeError("inactive VLABench label head is trainable in EAI scope")
-                    eai_policy = capture_policy(manager, planner, runtime, reference, "eai", eai_traces, eai_records)
+                    eai_policy = capture_policy(manager, planner, runtime, reference, "eai", eai_traces, eai_records, es=es)
+                    if es:
+                        population, parameters, metrics = es_results["eai"]
+                        population.capture_reward(manager, "eai", parameters, ES_SIGMA, metrics)
                     for _, item in eai_items:
                         context, _ = observed_eai.input_and_goal(item, runtime.world.eai)
                         loss, _ = eai_loss(planner, context, item["target_action_labels"])
@@ -294,7 +353,10 @@ def train(args):
                 with common_prompt(planner), runtime.domain_scope("vlabench", parameter_policy="freeze_inactive"):
                     if any(p.requires_grad for p in planner.label_heads["eai"].parameters()):
                         raise RuntimeError("inactive EAI label head is trainable in VLABench scope")
-                    vla_policy = capture_policy(manager, planner, runtime, reference, "vlabench", vla_traces, vla_records)
+                    vla_policy = capture_policy(manager, planner, runtime, reference, "vlabench", vla_traces, vla_records, es=es)
+                    if es:
+                        population, parameters, metrics = es_results["vlabench"]
+                        population.capture_reward(manager, "vlabench", parameters, ES_SIGMA, metrics)
                     for row in anchors:
                         manager.capture("vlabench", RECIPE["vlabench_replay_weight"] *
                                         anchor_vla(planner, runtime, row) / len(anchors))
@@ -306,16 +368,18 @@ def train(args):
                 optimizer.step()
                 changes = evidence.report()
             shared_changed |= changes["shared_parameters_changed"]
-            updates["eai"] += int(eai_policy["nonzero_advantages"] > 0)
-            updates["vlabench"] += int(vla_policy["nonzero_advantages"] > 0)
+            for domain, evidence_row in (("eai", eai_policy), ("vlabench", vla_policy)):
+                signal = es_results[domain][2]["informative_pairs"] if es else evidence_row["nonzero_advantages"]
+                updates[domain] += int(bool(signal))
             freeze(step / "update.json", {"eai_policy": eai_policy, "vlabench_policy": vla_policy,
                                          "shared_update": changes})
             print(f"[source-stage2] generation={epoch} batch={index + 1} signal={updates}", flush=True)
         save_checkpoint(folder / "planner.pt", planner, runtime, "joint", epoch, sha(root / "settings.json"),
-                        provenance={"method": RECIPE["version"], "initial_checkpoint_sha256": initialization["sha256"],
+                        provenance={"method": RECIPE["version"], "optimizer_mode": args.optimizer,
+                                    "initial_checkpoint_sha256": initialization["sha256"],
                                     "reference_sha256": reference.fingerprint})
     final = validate(planner, runtime, valid, validation, root / "final", validation_contract, command)
-    result = qualify(baseline, final, updates)
+    result = qualify(baseline, final, updates, optimizer_mode=args.optimizer)
     if not shared_changed:
         result["rejections"].append("no_shared_parameter_change")
         result["qualified"] = False
@@ -329,13 +393,24 @@ def evaluate(args):
     verify(config)
     if (config5["model"] != config["model"] or e5["pretrained_base_files"] != e6["pretrained_base_files"]):
         raise ValueError("E5 and E6 pretrained bases differ")
-    comparison = read(args.pilot / "report.json")
-    settings = read(args.pilot / "settings.json")
-    if (not comparison["qualified"] or settings["initialization"] != e6 or
-            sha(comparison["checkpoint"]) != comparison["checkpoint_sha256"]):
-        raise ValueError("matched evaluation requires a qualified source-only Stage 2 pilot")
+    pilots = {"stage2": args.pilot}
+    if args.compare_pilot:
+        pilots["parallel_stage2"] = args.compare_pilot
+    reports = {name: read(folder / "report.json") for name, folder in pilots.items()}
+    settings = {name: read(folder / "settings.json") for name, folder in pilots.items()}
+    modes = {name: value.get("optimizer_mode", "reinforce") for name, value in settings.items()}
+    for name, report in reports.items():
+        if (not report["qualified"] or settings[name]["initialization"] != e6 or
+                modes[name] != report.get("optimizer_mode", "reinforce") or
+                sha(report["checkpoint"]) != report["checkpoint_sha256"]):
+            raise ValueError("matched evaluation requires qualified source-only Stage 2 pilots")
+    if args.compare_pilot:
+        matched = ("recipe", "source", "inputs", "eai_reward", "auxiliary_heads", "executor_sha256", "executor_profile")
+        if set(modes.values()) != {"es", "reinforce"} or any(
+                settings["stage2"][key] != settings["parallel_stage2"][key] for key in matched):
+            raise ValueError("parallel comparison requires matched ES and REINFORCE settings")
     test, holdout = transfer_partition(args.holdout, args.archive, config, args.excluded_manifest)
-    if holdout != settings["holdout"]:
+    if any(holdout != value["holdout"] for value in settings.values()):
         raise ValueError("LIBERO holdout differs from the one frozen before updates")
     proof = executor_proof("libero", args.executor_source, args.calibration, args.holdout)
     contract = {"dataset": "libero", "split": "evaluation", "manifest": str(args.holdout.resolve()),
@@ -347,7 +422,8 @@ def evaluate(args):
     command = worker(args.worker, "target_rl_rollout")
     protocol = {"contract": contract, "policy": EXECUTOR, "input_protocol": IMAGE_INSTRUCTION,
                 "holdout": holdout,
-                "checkpoints": {"e5": e5, "e6": e6, "stage2": comparison["checkpoint_sha256"]}, "worker": command}
+                "checkpoints": {"e5": e5, "e6": e6, **{name: report["checkpoint_sha256"] for name, report in reports.items()}},
+                "optimizer_modes": modes, "worker": command}
     if args.validate_only:
         print(json.dumps(protocol))
         return
@@ -357,11 +433,11 @@ def evaluate(args):
     _, (runtime, *_) = build_runtime(config, root / "runtime", args.device)
     planner = fresh_planner(config, runtime, "joint")
     outcomes = {}
-    for name, record in (("e5", e5), ("e6", e6), ("stage2", None)):
+    for name, record in (("e5", e5), ("e6", e6), *((name, None) for name in pilots)):
         if record is not None:
             load_planner_snapshot(planner, record)
         else:
-            load_checkpoint(comparison["checkpoint"], planner, "joint", sha(args.pilot / "settings.json"))
+            load_checkpoint(reports[name]["checkpoint"], planner, "joint", sha(pilots[name] / "settings.json"))
         outcomes[name], _ = vla_rollouts(planner, runtime, test, 1, greedy=True, profile=pick_place_profile(),
                                        output=root / name, contract=contract, command=command)
     private = {row["episode_id"]: read(row["scoring_private"]) for row in test}
@@ -377,10 +453,14 @@ def evaluate(args):
             selected = next((op["params"][SUBJECT] for op in row["prediction"] if op["name"] == "pick"), None)
             successes += int(selected is not None and str(spec["entities"][selected]).lower() in targets)
         grounding[name] = {"correct_first_source": successes, "unambiguous_source_cases": cases}
-    freeze(root / "paired_report.json", {"stage2_minus_e6": paired_report(outcomes["e6"], outcomes["stage2"], clustered=True),
-                                        "stage2_minus_e5": paired_report(outcomes["e5"], outcomes["stage2"], clustered=True),
-                                        "e6_minus_e5": paired_report(outcomes["e5"], outcomes["e6"], clustered=True),
-                                        "grounding": grounding})
+    contrasts = {"e6_minus_e5": paired_report(outcomes["e5"], outcomes["e6"], clustered=True)}
+    for name in pilots:
+        for baseline in ("e5", "e6"):
+            contrasts[f"{name}_minus_{baseline}"] = paired_report(outcomes[baseline], outcomes[name], clustered=True)
+    if args.compare_pilot:
+        by_mode = {mode: outcomes[name] for name, mode in modes.items()}
+        contrasts["es_minus_reinforce"] = paired_report(by_mode["reinforce"], by_mode["es"], clustered=True)
+    freeze(root / "paired_report.json", {**contrasts, "optimizer_modes": modes, "grounding": grounding})
 
 
 def evaluate_eai_decoders(args):
@@ -445,8 +525,10 @@ def main(argv=None):
         command.add_argument("--holdout", type=Path, required=True)
         command.add_argument("--excluded-manifest", required=True, action="append", type=Path)
     run.add_argument("--source-manifest", required=True, type=Path)
+    run.add_argument("--optimizer", choices=("reinforce", "es"), default="reinforce")
     for key in ("epoch5-archive", "pilot", "executor-source", "calibration"):
         measure.add_argument("--" + key, required=True, type=Path)
+    measure.add_argument("--compare-pilot", type=Path, help="Qualified pilot from the other optimizer arm")
     decoders = commands.add_parser("eai-decoders")
     decoders.add_argument("--archive", required=True, type=Path)
     decoders.add_argument("--output", required=True, type=Path)

@@ -544,6 +544,22 @@ comparison on matched LIBERO inputs, compiled constraints and the qualified
 1,000-step executor. The report gives native and abstract success separately,
 with first-source accuracy and paired task-cluster intervals.
 
+Add `--optimizer es` to the same `source_stage2 train` command and use a fresh
+output directory for the Evolution Strategies arm. Each domain gets two
+mirrored perturbation pairs at standard deviation 0.001. Both signs share the
+reset and sampling seed. Four draws per reset match REINFORCE's rollout
+budget. ES estimates the gradient of mean native success by finite
+differences. The runner restores the center after every draw, then combines
+the reward estimate with the same KL and supervised replay gradients under
+PCGrad. The update includes shared LoRA and the active label heads.
+
+The ES report records per-pair success differences and the shared-parameter
+update evidence separately. The runner skips a batch when every pair ties in
+both domains. Both optimizer arms must pass the same source retention gates
+to be compared on LIBERO. Add `--compare-pilot <other-run>` to `evaluate` to
+score both qualified arms on the frozen holdout and report the paired
+ES-minus-REINFORCE contrast.
+
 Target-domain RL remains a separate experiment in `transfer.target_rl`.
 Select `--stage1-archive` to initialize it from Epoch 6. It opens held-out
 target episodes only after a checkpoint retains source performance and beats

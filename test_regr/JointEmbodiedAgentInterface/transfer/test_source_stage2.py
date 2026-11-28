@@ -1,5 +1,7 @@
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 import json
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -10,8 +12,10 @@ from ..test.test_stage1_dfa_loss import joint_fixture
 from ..utils import observed_eai
 from ..utils.structured_inference import StructuredPlanCandidate, select_candidate_with_ilp
 from .fresh_metadata.checkpoint import FORMAT, load_planner_snapshot
+from .batch_gradients import BatchGradientManager
 from .protocol import freeze, sha
 from .source_stage2 import SOURCE_PROFILE
+from .source_stage2_es import Population
 from .source_stage2_rollout import HORIZON, PROTOCOL, TASKS, calibration_records, verify_manifest
 
 
@@ -126,3 +130,97 @@ def test_archived_calibration_requires_replayed_controls_for_every_task(tmp_path
     path.write_text("\n".join(map(json.dumps, rows)), encoding="utf-8")
     with pytest.raises(ValueError, match="calibration task and replay"):
         calibration_records(path, 1)
+
+
+def test_mirrored_es_estimate_uses_native_success_and_restores_center():
+    model = torch.nn.Linear(1, 1, bias=False)
+    parameter = model.weight
+    base = parameter.detach().clone()
+    population = Population.from_budget(4, 42, "vla")
+    before_rng = torch.random.get_rng_state()
+    draws = population.collect([parameter], .01, lambda i: (i, parameter.item(), torch.rand(()).item()))
+    assert torch.equal(parameter, base)
+    assert torch.equal(torch.random.get_rng_state(), before_rng)
+    for positive, negative in zip(draws[::2], draws[1::2], strict=True):
+        assert positive[2] == negative[2]
+        assert (positive[1] + negative[1]) / 2 == pytest.approx(base.item(), abs=1e-7)
+    records = [{"episode_id": "task/reset", "es_candidate": candidate, "input_hash": "same", "policy_hash": "same",
+                "success": candidate == 0} for candidate in range(4)]
+    metrics = population.reward_differences(records)
+    assert metrics["informative_pairs"] == 1
+    assert metrics["pair_success_differences"] == [1, 0]
+    manager = BatchGradientManager(model)
+    with manager.step_context():
+        population.capture_reward(manager, "vlabench", [parameter], .01, metrics)
+        (gradient,) = manager.resolve_gradients()
+        epsilon = (draws[0][1] - draws[1][1]) / .02
+        assert gradient.item() == pytest.approx(-epsilon / .04, abs=1e-4)
+    records[1]["policy_hash"] = "changed"
+    with pytest.raises(ValueError, match="identical reset inputs and constraints"):
+        population.reward_differences(records)
+
+
+def test_es_restores_center_when_a_candidate_fails():
+    parameter = torch.nn.Parameter(torch.ones(2))
+    population = Population.from_budget(4, 42, "eai")
+
+    def interrupted(candidate):
+        assert not torch.equal(parameter, torch.ones(2))
+        if candidate == 1:
+            raise RuntimeError("native rollout failed")
+
+    with pytest.raises(RuntimeError, match="native rollout failed"):
+        population.collect([parameter], .01, interrupted)
+    assert torch.equal(parameter, torch.ones(2))
+
+
+def test_source_es_uses_equal_per_reset_budget_and_fixed_executor_contract(tmp_path, monkeypatch):
+    from . import source_stage2 as runner
+
+    planner = torch.nn.Module()
+    planner.lora_weight = torch.nn.Parameter(torch.zeros(1))
+    planner.label_heads = torch.nn.ModuleDict({domain: torch.nn.Linear(1, 1) for domain in ("eai", "vlabench")})
+    manager = BatchGradientManager(planner)
+    baseline = {key: tensor.clone() for key, tensor in planner.state_dict().items()}
+    active = None
+
+    @contextmanager
+    def scope(domain, *, parameter_policy):
+        nonlocal active
+        active = domain
+        inactive = "vlabench" if domain == "eai" else "eai"
+        planner.label_heads[inactive].requires_grad_(False)
+        try:
+            yield
+        finally:
+            planner.label_heads[inactive].requires_grad_(True)
+
+    def eai_rollouts(_planner, _runtime, items, draws, *, greedy):
+        assert active == "eai" and draws == 1 and not greedy
+        assert torch.equal(planner.label_heads["vlabench"].weight, baseline["label_heads.vlabench.weight"])
+        return None, [({"episode_id": key, "input_hash": key, "success": True}, {}, None) for key, _ in items]
+
+    def predict(_planner, _runtime, rows, policy, draws, greedy, *, profile):
+        assert active == "vlabench" and policy == EXECUTOR and profile == runner.SOURCE_PROFILE
+        assert torch.equal(planner.label_heads["eai"].weight, baseline["label_heads.eai.weight"])
+        assert draws == 1 and not greedy
+        return [({"episode_id": key, "rollout_id": key, "input_hash": key}, {}, None) for key in rows]
+
+    def score(traces, output, contract, command):
+        assert contract == {"split": "training"} and command == ["native-worker"]
+        assert output == tmp_path / "native"
+        assert len({row["rollout_id"] for row, _, _ in traces}) == 4
+        return [{**row, "success": row["es_candidate"] == 0} for row, _, _ in traces]
+
+    monkeypatch.setattr(runner, "common_prompt", lambda _: nullcontext())
+    monkeypatch.setattr(runner, "eai_rollouts", eai_rollouts)
+    monkeypatch.setattr(runner, "predict", predict)
+    monkeypatch.setattr(runner, "score", score)
+    eai, _, vla, _, domains = runner.evolution_rollouts(
+        planner, SimpleNamespace(domain_scope=scope), manager, [("eai/reset", {})], ["vla/reset"],
+        tmp_path, {"split": "training"}, ["native-worker"], 1, 0,
+    )
+    assert len(eai) == len(vla) == runner.RECIPE["draws"]
+    assert domains["eai"][2]["informative_pairs"] == 0
+    assert domains["vlabench"][2]["informative_pairs"] == 1
+    assert all(torch.equal(value, baseline[key]) for key, value in planner.state_dict().items())

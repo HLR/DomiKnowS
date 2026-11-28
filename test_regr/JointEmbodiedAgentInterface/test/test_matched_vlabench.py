@@ -1,9 +1,19 @@
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 from test_regr.JointEmbodiedAgentInterface.utils import matched_vlabench as matched
+
+
+def test_open3d_reset_seed_accepts_unsigned_scene_seed(monkeypatch):
+    observed = []
+    monkeypatch.setitem(sys.modules, "open3d", SimpleNamespace(
+        utility=SimpleNamespace(random=SimpleNamespace(seed=observed.append))
+    ))
+    matched.reset_seed(2712830644)
+    assert observed == [565346996]
 
 
 def test_scene_correct_plan_uses_same_table_as_decoder():
