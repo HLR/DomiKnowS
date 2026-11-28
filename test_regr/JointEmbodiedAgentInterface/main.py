@@ -12,6 +12,7 @@ from pathlib import Path
 
 import torch
 from .utils.stage2_training import resolve_parameter_policy, selection_rejections, eai_retention_rejections
+from .utils import observed_eai
 from .utils.policy_reference import resolve_regularization
 
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
@@ -211,11 +212,12 @@ def _stage2_resume_position(payload, rounds_per_epoch):
 
 def _stage2_dfa_enabled(args, resume_payload=None):
     mode = getattr(args, "stage2_dfa", "on")
+    vlabench_mode = getattr(args, "stage2_vlabench_dfa", "inherit")
     if resume_payload and resume_payload.get("stage") == "stage2":
-        saved = resume_payload.get("metrics", {}).get("stage2_dfa", "on")
-        if saved != mode:
+        metrics = resume_payload.get("metrics", {})
+        if metrics.get("stage2_dfa", "on") != mode or metrics.get("stage2_vlabench_dfa", "inherit") != vlabench_mode:
             raise ValueError("Stage 2 DFA mode differs from the checkpoint; resume with the saved "
-                             "--stage2-dfa setting, or start a new Stage 2 run from a Stage 1/controller-warmup checkpoint")
+                             "--stage2-dfa and --stage2-vlabench-dfa settings, or start from a Stage 1/controller-warmup checkpoint")
     return mode != "off"
 
 
@@ -227,38 +229,45 @@ def _unit_interval(value: str) -> float:
 
 
 @torch.no_grad()
-def _evaluate_eai(planner, runtime, examples, *, limit=32, prediction_observer=None):
+def _evaluate_eai(planner, runtime, examples, *, limit=32, prediction_observer=None,
+                  reward_protocol=observed_eai.LEGACY, bind_policy=None):
     view = planner.for_domain("eai")
     exact = success = recall = positive = 0.0
+    errors = unresolved = 0
     selected = list(examples)[:limit]
     was_training = planner.training
     planner.eval()
     try:
-        with runtime.domain_scope("eai"):
+        with torch.no_grad(), runtime.domain_scope("eai"):
             for item in selected:
-                labels, _ = view.sample_labels(
-                    planner_context("eai", item),
-                    runtime.dfa_for("eai", item),
-                    max_steps=runtime.max_eai_steps,
-                    deterministic=True,
-                )
+                if reward_protocol == observed_eai.OBSERVED:
+                    context, goal = observed_eai.input_and_goal(item, runtime.world.eai)
+                    policy = bind_policy(context) if bind_policy is not None else runtime.dfa_for("eai", context)
+                    labels, result = observed_eai.sample(view, context, policy, goal, runtime, deterministic=True)
+                    errors += int(bool(result.get("generation_error")))
+                    unresolved += int(bool(result["unresolved"]))
+                    positive += float(result["is_success"])
+                else:
+                    labels, _ = view.sample_labels(
+                        planner_context("eai", item),
+                        runtime.dfa_for("eai", item),
+                        max_steps=runtime.max_eai_steps,
+                        deterministic=True,
+                    )
+                    result = evaluate_goal_satisfaction(
+                        labels, item, runtime.eai_vocabulary, world_bundle=runtime.world.eai,
+                    )
+                    reward = item["reward_function"](labels, data_item=item)
+                    positive += float(float(torch.as_tensor(reward).mean()) > 0.0)
                 gold = [int(value) for value in torch.as_tensor(item["target_action_labels"]).tolist()]
                 eos = int(runtime.eai_vocabulary.eos_label)
                 if eos in gold:
                     gold = gold[: gold.index(eos) + 1]
                 exact += float(labels == gold)
-                result = evaluate_goal_satisfaction(
-                    labels,
-                    item,
-                    runtime.eai_vocabulary,
-                    world_bundle=runtime.world.eai,
-                )
                 success += float(result["is_success"])
                 recall += float(result["recall"])
                 if prediction_observer is not None:
                     prediction_observer(item, labels, result)
-                reward = item["reward_function"](labels, data_item=item)
-                positive += float(float(torch.as_tensor(reward).mean()) > 0.0)
     finally:
         planner.train(was_training)
     count = max(1, len(selected))
@@ -268,6 +277,9 @@ def _evaluate_eai(planner, runtime, examples, *, limit=32, prediction_observer=N
         "goal_recall": recall / count,
         "positive_reward_rate": positive / count,
         "examples": len(selected),
+        "reward_protocol": reward_protocol,
+        "unresolved_goals": unresolved,
+        "generation_errors": errors,
     }
 
 
@@ -390,6 +402,25 @@ def command_train_agent(args):
     # Before --no-dfa-official, which would otherwise set --knowledge grammar that this refuses.
     prompt_level = apply_prompt_knowledge_argument(args)
     apply_no_dfa_official_argument(args)
+    planner_update = getattr(args, "stage2_planner_update", "reinforce")
+    constrained_pilot = planner_update != "reinforce"
+    if constrained_pilot:
+        if not args.two_stage or not args.resume or args.stage2_epochs <= 0:
+            raise ValueError("constrained Stage 2 requires --two-stage and --resume with a warmed Joint checkpoint")
+        if args.stage2_dfa != "on" or args.stage2_eval_rollouts_per_task != 10:
+            raise ValueError("constrained Stage 2 requires the EAI DFA and ten fixed-seed episodes per VLABench task")
+        if (args.stage2_parameter_policy not in ("auto", "freeze_shared") or
+                args.stage2_freeze_shared_backbone is False):
+            raise ValueError("constrained Stage 2 requires frozen shared parameters")
+        if (args.assist_ablation_rollouts or args.shadow_dagger or args.handover_distance is not None
+                or args.hindsight_relabel):
+            raise ValueError("constrained Stage 2 requires unassisted, unmodified native simulator outcomes")
+        args.stage2_parameter_policy = "freeze_shared"
+        args.stage2_vlabench_dfa = "grammar"
+        args.execution_assistance = "off"
+    vlabench_dfa_mode = getattr(args, "stage2_vlabench_dfa", "inherit")
+    if vlabench_dfa_mode == "grammar" and (getattr(args, "no_dfa_official", False) or prompt_level):
+        raise ValueError("Stage 2 VLABench grammar is incompatible with the requested no-mask protocol")
     if getattr(args, "no_dfa_official", False):
         from test_regr.VLABenchAgentInterface.research.config import apply_research_arguments
         apply_research_arguments(args)
@@ -581,7 +612,7 @@ def command_train_agent(args):
             planner_optimizer=planner_optimizer,
             controller_optimizer=controller_optimizer,
             map_location=device,
-            allow_failed_retention_resume=args.stage2_retention_policy == "continue",
+            allow_failed_retention_resume=constrained_pilot or args.stage2_retention_policy == "continue",
         )
         if payload.get("controller_migration_required"):
             controller_rewarm_required = True
@@ -595,6 +626,16 @@ def command_train_agent(args):
                 "language-conditioned action policy"
             )
         resume_stage = payload["stage"]
+        saved_pilot = payload.get("metrics", {}).get("constrained_stage2")
+        if resume_stage == "stage2" and planner_update != (
+            saved_pilot["mode"] if saved_pilot else "reinforce"
+        ):
+            raise ValueError("Stage 2 planner update mode differs from the checkpoint")
+        if constrained_pilot and (resume_stage not in {"controller_warmup", "stage2"}
+                                  or controller_rewarm_required):
+            raise ValueError("constrained Stage 2 requires a verified controller warm-up checkpoint")
+        if constrained_pilot and saved_pilot and saved_pilot.get("status") == "complete":
+            raise ValueError("constrained Stage 2 candidate already completed; resume from its progress checkpoint")
         _stage2_dfa_enabled(args, payload)
         if supervised_only and resume_stage != "stage1":
             raise ValueError(f"--{training_mode} requires a Stage 1 checkpoint when resuming")
@@ -613,14 +654,14 @@ def command_train_agent(args):
             start_stage1 = int(payload["epoch"]) + 1
         elif resume_stage == "controller_warmup":
             start_stage1 = args.stage1_epochs
-        elif resume_stage == "stage2":
+        elif resume_stage == "stage2" and not constrained_pilot:
             (
                 start_stage2,
                 start_stage2_round,
                 resumed_stage2_metrics,
                 resumed_prior_best,
             ) = _stage2_resume_position(payload, args.stage2_rounds_per_epoch)
-        else:
+        elif resume_stage != "stage2":
             raise ValueError(f"unknown joint checkpoint stage {resume_stage!r}")
 
     best_stage1 = repair_seed or (
@@ -653,7 +694,7 @@ def command_train_agent(args):
             del fallback
         if not initialization or initialization.get("configuration_sha256") != sha(repair_config_path):
             raise ValueError("resume checkpoint does not match the frozen repair source configuration")
-    if resume_stage != "stage2":
+    if resume_stage != "stage2" and not constrained_pilot:
         stage1 = JointSolverPOIProgram(
             runtime,
             planner,
@@ -848,7 +889,7 @@ def command_train_agent(args):
     if args.stage2_epochs <= 0:
         return
 
-    if resume_stage != "stage2":
+    if resume_stage != "stage2" and not constrained_pilot:
         _enter_controller_reinforcement(
             controller_optimizer,
             learning_rate=args.controller_rl_learning_rate,
@@ -859,7 +900,12 @@ def command_train_agent(args):
             f"lr={args.controller_rl_learning_rate:g}; BC moments reset"
         )
     stage2_policy = resolve_parameter_policy(args, resume_payload)
-    planner_kl_weight, planner_reward_policy, reference_replay_count, planner_reference_state = resolve_regularization(args, resume_payload)
+    if constrained_pilot:
+        planner_kl_weight, planner_reward_policy, reference_replay_count, planner_reference_state = (
+            0.0, "dense", 0, None
+        )
+    else:
+        planner_kl_weight, planner_reward_policy, reference_replay_count, planner_reference_state = resolve_regularization(args, resume_payload)
     _status(f"Stage 2 planner KL weight={planner_kl_weight:g}; reward={planner_reward_policy}; "
             f"reference={'restored' if planner_reference_state is not None else 'Stage 2 initialization' if planner_kl_weight else 'disabled'}; "
             f"reference replay observations per domain update={reference_replay_count}")
@@ -903,7 +949,14 @@ def command_train_agent(args):
             evaluation_descriptors=family_episodes(evaluation_descriptors,args.research_eval_episodes_per_family,args.seed)
             args.stage2_eval_rollouts_per_task=1
     stage2_dfa_enabled = _stage2_dfa_enabled(args, resume_payload)
-    _status(f"Stage 2 DFA decoding={'on' if stage2_dfa_enabled else 'off (free sampling and replay)'}")
+    if vlabench_dfa_mode == "grammar":
+        _status(f"Stage 2 DFA decoding EAI={'on' if stage2_dfa_enabled else 'off'}; "
+                "VLABench simulator sampling and replay use observation-bound plan grammar")
+    else:
+        _status(f"Stage 2 DFA decoding={'on' if stage2_dfa_enabled else 'off (free sampling and replay)'}")
+    eai_reward_protocol = observed_eai.reward_protocol(
+        getattr(args, "stage2_eai_reward_protocol", "auto"), resume_payload
+    )
     stage2 = JointReinforcementProgram(
         runtime,
         planner,
@@ -918,12 +971,14 @@ def command_train_agent(args):
         controller_anchor_loader=control_loaders["train"],
         eai_num_samples=args.eai_samples,
         eai_supervised_weight=args.stage2_eai_anchor_weight,
+        eai_reward_protocol=eai_reward_protocol,
         planner_kl_weight=planner_kl_weight,
         planner_reward_policy=planner_reward_policy,
         planner_reference_state=planner_reference_state,
         reference_replay_per_update=reference_replay_count,
         reference_replay_cursors=((resume_payload or {}).get("stage2_planner_regularization") or {}).get("replay_cursors"),
         dfa_enabled=stage2_dfa_enabled,
+        vlabench_grammar_only=vlabench_dfa_mode == "grammar",
         parameter_policy=None if stage2_policy == "none" else stage2_policy,
         device=device,
         num_samples=args.vlabench_planner_samples,
@@ -959,6 +1014,69 @@ def command_train_agent(args):
         dagger_weight=getattr(args, "dagger_weight", 0.20),
     )
     stage2.round_robin_cursor = cursor
+    repair_picks = getattr(args, "stage2_repair_picks", None)
+    repair_grounding = getattr(args, "stage2_repair_grounding", False)
+    if repair_picks or repair_grounding:
+        from .utils.source_pick_repair import train_grounding, train_picks
+        if not constrained_pilot or resume_stage != "controller_warmup" or args.execution_assistance != "off":
+            raise ValueError("Source repair requires the warmed checkpoint and unassisted constrained pilot settings")
+        output.mkdir(parents=True, exist_ok=True)
+        phase = "source_pick_repair" if repair_picks else "source_grounding_repair"
+        def save_repair(report):
+            save_joint_checkpoint(output / "joint_controller_warmup.pt", runtime=runtime, planner=planner,
+                                  controller=controller, planner_optimizer=planner_optimizer,
+                                  controller_optimizer=controller_optimizer, stage="controller_warmup", epoch=0,
+                                  round_robin_cursor=cursor, metrics={**resume_payload["metrics"], phase: report})
+        report = train_picks(stage2, repair_picks, save_repair) if repair_picks else train_grounding(stage2, save_repair)
+        (output / f"{phase}.json").write_text(json.dumps(report, indent=2))
+        return
+    if getattr(args, "stage2_matched_controls", None):
+        from .utils.matched_vlabench import TASKS, run_comparisons
+        if not constrained_pilot or resume_stage != "controller_warmup" or args.execution_assistance != "off":
+            raise ValueError("Matched diagnostics require a warmed checkpoint, constrained pilot configuration and assistance off")
+        output.mkdir(parents=True, exist_ok=True)
+        run_comparisons(stage2, args.stage2_matched_controls, output / "matched_rollouts.jsonl",
+                        tasks=args.stage2_matched_tasks or TASKS,
+                        controller_check=getattr(args, "stage2_check_repaired_controller", False))
+        return
+    if constrained_pilot:
+        from .utils.constrained_stage2 import run_pilot
+
+        output.mkdir(parents=True, exist_ok=True)
+
+        def save_pilot_checkpoint(path, state):
+            return save_joint_checkpoint(
+                path, runtime=runtime, planner=planner, controller=controller,
+                planner_optimizer=planner_optimizer, controller_optimizer=controller_optimizer,
+                stage="stage2", epoch=0, round_robin_cursor=cursor,
+                metrics={
+                    **state.get("final", {}),
+                    "stage2_dfa": "on", "stage2_vlabench_dfa": "grammar",
+                    "stage2_parameter_policy": "freeze_shared",
+                    "retention_eligible": False,
+                    "constrained_stage2": state,
+                    "fallback_path": str(best_stage1) if best_stage1 is not None else None,
+                    **({"initialization": initialization} if initialization is not None else {}),
+                },
+            )
+
+        run_pilot(
+            stage2, mode=planner_update,
+            seed=args.seed if args.stage2_training_seed is None else args.stage2_training_seed,
+            eai_train=eai_train, eai_valid=eai_valid, descriptors=descriptors,
+            evaluation_descriptors=evaluation_descriptors, output=output,
+            initialization=best_stage1 if resume_stage == "controller_warmup" else None,
+            resume=resume_payload["metrics"]["constrained_stage2"] if resume_stage == "stage2" else None,
+            settings={key: getattr(args, key) for key in (
+                "env_factory", "knowledge", "observation_mode", "simulator_max_steps",
+                "vlabench_planner_samples", "max_position_step", "max_rotation_step",
+                "ik_tolerance", "ik_max_steps", "max_consecutive_ik_rejections",
+                "eai_max_steps", "controller_camera_names", "constraint_profile",
+                "grounding_policy", "motion_geometry", "research_perception",
+            )},
+            save_checkpoint=save_pilot_checkpoint, progress=_status,
+        )
+        return
     if assist_ablation_modes:
         if resume_stage != "stage2":
             _status(
@@ -999,6 +1117,8 @@ def command_train_agent(args):
             runtime,
             eai_valid,
             limit=args.validation_limit,
+            reward_protocol=eai_reward_protocol,
+            bind_policy=lambda context: stage2._policy_dfa("eai", context),
         )
         eai_baseline_reference = {
             "goal_success": float(eai_baseline["goal_success"]),
@@ -1033,6 +1153,7 @@ def command_train_agent(args):
             "vlabench": baseline,
             "vlabench_planning": vla_planning_baseline,
             "preflight_eligible": preflight_eligible,
+            "stage2_vlabench_dfa": vlabench_dfa_mode,
         })
         if not preflight_eligible:
             _json({
@@ -1109,7 +1230,9 @@ def command_train_agent(args):
                 round_robin_cursor=stage2.round_robin_cursor,
                 metrics={
                     "stage2_dfa": "on" if stage2_dfa_enabled else "off",
+                    "stage2_vlabench_dfa": vlabench_dfa_mode,
                     "stage2_parameter_policy": stage2_policy,
+                    "stage2_eai_reward_protocol": eai_reward_protocol,
                     "stage2_retention_policy": args.stage2_retention_policy,
                     "retention_eligible": last_retention_eligible,
                     "partial_training": dict(partial_metrics),
@@ -1139,7 +1262,9 @@ def command_train_agent(args):
             round_callback=save_round_progress,
         )
         metrics["stage2_dfa"] = "on" if stage2_dfa_enabled else "off"
+        metrics["stage2_vlabench_dfa"] = vlabench_dfa_mode
         metrics["stage2_parameter_policy"] = stage2_policy
+        metrics["stage2_eai_reward_protocol"] = eai_reward_protocol
         metrics["stage2_retention_policy"] = args.stage2_retention_policy
         metrics["stage2_evaluation"] = {
             "source": "fixed_seed_rollouts" if args.stage2_eval_rollouts_per_task > 0 else "training_rollouts",
@@ -1153,6 +1278,8 @@ def command_train_agent(args):
                 runtime,
                 eai_valid,
                 limit=args.validation_limit,
+                reward_protocol=eai_reward_protocol,
+                bind_policy=lambda context: stage2._policy_dfa("eai", context),
             )
             metrics["eai"] = {
                 **metrics["eai_training"],
@@ -1343,6 +1470,12 @@ def command_evaluate_planning(args):
     run_planning_evaluation(args)
 
 
+def command_promote_constrained_stage2(args):
+    from .utils.constrained_stage2 import promote
+
+    _json({"stage": "constrained-stage2-promoted", "checkpoint": promote(args.reports, args.output)})
+
+
 def build_parser():
     from test_regr.VLABenchAgentInterface.prompt_protocol import add_no_dfa_official_argument
     parser = argparse.ArgumentParser(description="Unified EAI/VLABench dynamic-activation training")
@@ -1398,9 +1531,28 @@ def build_parser():
     agent.add_argument("--scene-verified-training-references", action="store_true",
                        help="freeze audited density references in memory without altering dataset files")
     agent.add_argument("--stage2-epochs", type=int, default=3)
+    repair_modes = agent.add_mutually_exclusive_group()
+    repair_modes.add_argument("--stage2-repair-picks", type=Path, help="Fit the controller on verified source pick trajectories")
+    repair_modes.add_argument("--stage2-repair-grounding", action="store_true", help="Fit the VLABench head on live source scenes")
+    repair_modes.add_argument("--stage2-matched-controls", type=Path,
+                       help="Run matched VLABench diagnostics using a completed source positive-control JSONL")
+    agent.add_argument("--stage2-check-repaired-controller", action="store_true",
+                       help="On matched controls, evaluate only the expert plan with the learned controller")
+    agent.add_argument("--stage2-matched-tasks", nargs="+", choices=(
+        "select_chemistry_tube", "select_fruit", "insert_flower", "add_condiment"),
+        help="Run the three matched resets for each selected source task")
+    agent.add_argument("--stage2-planner-update",
+                       choices=("reinforce", "constrained-es", "constrained-reinforce"),
+                       default="reinforce", help="opt into the frozen-head Stage 2 optimizer comparison")
+    agent.add_argument("--stage2-training-seed", type=int,
+                       help="constrained pilot training seed, independent of dataset and evaluation seeds")
     agent.add_argument("--stage2-dfa", choices=("on", "off"), default="on",
                        help="Stage 2 planner DFA masking for both domains; off uses free sampling, replay "
                             "and planning validation, bypassing task-pattern DFAs and DFA acceptance checks")
+    agent.add_argument("--stage2-eai-reward-protocol", choices=("auto", observed_eai.OBSERVED, observed_eai.LEGACY),
+                       default="auto", help="Use observed EAI scoring for new Stage 2 runs and the saved protocol on resume.")
+    agent.add_argument("--stage2-vlabench-dfa", choices=("inherit", "grammar"), default="inherit",
+                       help="use observation-bound grammar for VLABench simulator sampling, replay, and evaluation")
     agent.add_argument("--stage1-rounds-per-epoch", type=int,
                        help="paired domain updates per epoch; defaults to the larger planner dataset size, "
                             "cycling the smaller domain so both datasets are covered")
@@ -1706,6 +1858,10 @@ def build_parser():
     eval_planning.add_argument("--hidden-dim", type=int, default=256)
     eval_planning.add_argument("--max-views", type=int, default=4)
     eval_planning.set_defaults(handler=command_evaluate_planning)
+    promotion = subparsers.add_parser("promote-constrained-stage2", help="validate both optimizer arms at two seeds")
+    promotion.add_argument("--reports", nargs=4, type=Path, required=True)
+    promotion.add_argument("--output", type=Path, required=True)
+    promotion.set_defaults(handler=command_promote_constrained_stage2)
     from test_regr.VLABenchAgentInterface.research.config import add_research_subcommands
     add_research_subcommands(parser)
     return parser

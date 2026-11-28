@@ -27,10 +27,10 @@ from ..repair.input_protocol import generation_context
 from ..repair.protocol import normalize_anonymous_prediction, verify
 from ..train import tensor_digest
 from .objectives import grounding_losses, permutation_loss, target_prefix
+from .checkpoint import FORMAT
 
 
 RECIPE = 'metadata-pmd-pcgrad-grounding-preference'
-FORMAT = 'fresh-joint-metadata-preference-v1'
 BATCH_SIZE = 8
 EPOCHS = 4
 MASS_WEIGHT = .5

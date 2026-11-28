@@ -3,7 +3,7 @@
 import argparse
 from collections import Counter, defaultdict
 from copy import deepcopy
-from dataclasses import asdict, replace
+from dataclasses import asdict
 import json
 from pathlib import Path
 import time
@@ -11,50 +11,18 @@ import time
 import torch
 
 from domiknows.generation.dfa.productive import SemanticSearchLimitExceeded
-from test_regr.EmbodiedAgentInterface.observed_reward import (
-    prepare_observed_eai_goal,
-    score_observed_eai_goal,
-)
+from test_regr.EmbodiedAgentInterface.observed_reward import score_observed_eai_goal
 
-from ...utils.planner_context import planner_context
+from ...utils.observed_eai import input_and_goal
 from ...utils.structured_inference import LabelSequenceCandidate, constrained_dfa_beam_search
 from ..anonymous_grounding.planner_binding.verification_protocol import exact_policy_search
 from ..protocol import digest, freeze, read, sha
 from ..repair.common import build_runtime, fresh_planner
 from ..repair.protocol import verify
-from .train import FORMAT
+from .checkpoint import FORMAT
 
 BEAM_WIDTH = 8
 FORWARD_BATCH = 4
-
-
-def input_and_goal(item, world):
-    public = {key: item[key] for key in ("tl_goal", "transition_model")}
-    goal = prepare_observed_eai_goal(public, world_bundle=world)
-    actor = goal.aliases.get("character", "character")
-    if actor != "character":
-        if not {"agent", "character"} & goal.types.get(actor, set()):
-            raise ValueError("indexed EAI agent lacks an observed actor type")
-        # VirtualHome names the sole actor in SimpleTL but declares its class in
-        # PDDL. The executor records hand effects on the canonical actor.
-        aliases = {key: ("character" if value == actor else value) for key, value in goal.aliases.items()}
-        aliases[actor] = "character"
-        types = dict(goal.types)
-        types["character"] = types["character"] | types.pop(actor)
-
-        def normalize(facts):
-            return frozenset((fact[0], *("character" if name == actor else name for name in fact[1:]))
-                             for fact in facts)
-
-        goal = replace(goal, aliases=aliases, types=types, positive=normalize(goal.positive),
-                       negative=normalize(goal.negative))
-    prompt = planner_context("eai", {
-        key: item[key] for key in ("causal_prompt_text", "instruction_text", "instruction", "goal", "tl_goal")
-        if key in item
-    })
-    context = {key: prompt[key] for key in ("instruction", "goal")}
-    context.update(goal.policy_context())
-    return context, goal
 
 
 def load_frozen(config, protocol, runtime):
@@ -168,10 +136,11 @@ def candidate_record(candidate, policy, goal, vocabulary, world):
 
 
 @torch.inference_mode()
-def audit_case(planner, runtime, item, index, *, check_batch, shared_reranker=None):
+def audit_case(planner, runtime, item, index, *, check_batch, shared_reranker=None,
+               replay_pools=None, archived_prompt=True):
     started = time.monotonic()
     world, vocabulary = runtime.world.eai, runtime.eai_vocabulary
-    context, goal = input_and_goal(item, world)
+    context, goal = input_and_goal(item, world, archived_prompt=archived_prompt)
     result = {
         "index": index, "task_id": str(item.get("task_id", "")), "domain": goal.domain,
         "observation_sha256": digest(context), "unresolved": list(goal.unresolved), "greedy": None,
@@ -219,6 +188,14 @@ def audit_case(planner, runtime, item, index, *, check_batch, shared_reranker=No
             try:
                 beam = constrained_dfa_beam_search(batch_logits, policy, vocabulary.eos_label,
                                                     max_steps, beam_width=BEAM_WIDTH)
+                result["beam"] = [candidate_record(x, policy, goal, vocabulary, world) for x in beam]
+                if replay_pools is not None:
+                    from ..shared_reranker.features import eai_public_goal
+                    from ..shared_reranker.head import ReplayPool, encode_candidates
+
+                    features = encode_candidates(beam, policy, vocabulary, goal=eai_public_goal(goal, world))
+                    replay_pools.append(ReplayPool(f"eai/train/{index:03d}", features,
+                                                   tuple(row["goal_success"] for row in result["beam"])))
                 if shared_reranker is not None:
                     from ..shared_reranker.features import eai_public_goal
                     from ..shared_reranker.head import rerank_candidates
@@ -226,7 +203,6 @@ def audit_case(planner, runtime, item, index, *, check_batch, shared_reranker=No
                     ranked = rerank_candidates(shared_reranker, beam, policy, vocabulary,
                                                goal=eai_public_goal(goal, world))
                     result["shared_reranker"] = [asdict(entry) for entry in ranked]
-                result["beam"] = [candidate_record(x, policy, goal, vocabulary, world) for x in beam]
             except SemanticSearchLimitExceeded as exc:
                 result["search_errors"]["beam"] = type(exc).__name__
             except RuntimeError as exc:

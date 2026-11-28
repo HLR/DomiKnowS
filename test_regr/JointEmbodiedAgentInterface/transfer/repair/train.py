@@ -16,7 +16,7 @@ from .common import build_runtime,fresh_planner,save_checkpoint,load_checkpoint,
 from .objective import planning_loss,eai_loss as eai_objective
 
 
-def validation(planner,runtime,rows,examples,eai_valid,arm,output):
+def validation(planner,runtime,rows,examples,eai_valid,arm,output,*,strict_inputs=False):
     from ...main import _evaluate_eai
     from ...utils.paired_references import PairedReferenceAudit
     output=Path(output);output.mkdir(parents=True,exist_ok=True);planner.eval()
@@ -25,7 +25,16 @@ def validation(planner,runtime,rows,examples,eai_valid,arm,output):
     with common_prompt(planner),(output/'predictions.jsonl').open('x') as stream,(output/'raw_predictions.jsonl').open('x') as raw_stream:
         audit=PairedReferenceAudit(stream,corrector=lambda values:values)
         for index,(row,example) in enumerate(zip(rows,examples)):
-            bound=source_context(planner,row);prediction=[];error=None;raw_prediction=[];raw_text='';labels=[];changes=[]
+            bound=source_context(planner,row)
+            if strict_inputs:
+                from .input_protocol import generation_context
+
+                bound = generation_context(
+                    {"instruction": bound["instruction"], "images": bound["images"],
+                     "entities": bound["entity_table"]}, runtime.vlabench_vocabulary,
+                )
+                bound["_public_entity_aliases"] = bound["entity_table"]
+            prediction=[];error=None;raw_prediction=[];raw_text='';labels=[];changes=[]
             try:
                 result=(native_decode(planner,bound) if arm=='native' else graph_decode(planner,runtime,bound))
                 raw_prediction,labels,raw_text=result
@@ -54,9 +63,11 @@ def validation(planner,runtime,rows,examples,eai_valid,arm,output):
     planner.free_decoding=False
     # Retain the canonical EAI evaluation protocol, including its compiled rules.
     from ..anonymous_grounding.planner_binding.epoch_recovery import retry_eai_search
+    from ...utils import observed_eai
     retries=[]
     with torch.no_grad(),retry_eai_search(runtime,retries):
-        eai=_evaluate_eai(planner,runtime,eai_valid,limit=None)
+        eai=_evaluate_eai(planner,runtime,eai_valid,limit=None,
+                          reward_protocol=observed_eai.OBSERVED if strict_inputs else observed_eai.LEGACY)
     freeze(output/'eai.json',eai);freeze(output/'eai_search_retries.json',retries)
     freeze(output/'vlabench.json',report)
     result={'eai_successes':round(eai['goal_success']*88),

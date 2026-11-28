@@ -164,11 +164,12 @@ def test_quantized_bias_cast_requires_exact_ownership_match():
         def __init__(self):
             super().__init__()
             self.layer = Linear4bit()
-            self.layer.bias = torch.nn.Parameter(torch.ones(2), requires_grad=False)
+            self.layer.bias = torch.nn.Parameter(torch.tensor([0.1, 0.123456]), requires_grad=False)
             self.layer.compute_dtype = torch.bfloat16
         def compute_parameter_ownership_checksum(self):
             return str(self.layer.bias.dtype)
     planner = Planner()
+    bias_before_forward = planner.layer.bias.detach().clone()
     _restore_quantized_bias_representation(planner, {'compatibility': {'parameter_ownership_checksum':'other-drift'}})
     assert planner.layer.bias.dtype == torch.float32
     initial = {'compatibility': {'parameter_ownership_checksum':'torch.float32'}}
@@ -178,6 +179,40 @@ def test_quantized_bias_cast_requires_exact_ownership_match():
     _restore_quantized_bias_representation(planner, trained)
     assert planner.layer.bias.dtype == torch.bfloat16
     assert trained['representation_restoration'] == ['layer.bias']
+    _restore_quantized_bias_representation(planner, initial)
+    assert initial['representation_restoration'] == ['layer.bias']
+    assert torch.equal(planner.layer.bias, bias_before_forward)
+
+
+def test_saved_quantized_bias_representation_restores_mixed_dtypes():
+    from ..checkpoint import _restore_quantized_bias_representation, _snapshot_frozen_quantized_biases
+    Linear4bit = type('Linear4bit', (torch.nn.Module,), {})
+
+    class Planner(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.first = Linear4bit()
+            self.second = Linear4bit()
+            self.first.bias = torch.nn.Parameter(torch.tensor([0.1]), requires_grad=False)
+            self.second.bias = torch.nn.Parameter(torch.tensor([0.2]).bfloat16(), requires_grad=False)
+
+        def compute_parameter_ownership_checksum(self):
+            return str((self.first.bias.dtype, self.second.bias.dtype))
+
+    planner = Planner()
+    snapshot = _snapshot_frozen_quantized_biases(planner)
+    payload = {'compatibility': {'parameter_ownership_checksum': planner.compute_parameter_ownership_checksum()},
+               'frozen_quantized_biases': snapshot}
+    planner.first.bias.data = planner.first.bias.data.bfloat16()
+    planner.second.bias.data = planner.second.bias.data.float()
+    invalid = {**payload, 'frozen_quantized_biases': {**snapshot, 'second.bias': torch.zeros(2)}}
+    with pytest.raises(ValueError, match='biases differ from the planner structure'):
+        _restore_quantized_bias_representation(planner, invalid)
+    assert planner.first.bias.dtype == torch.bfloat16
+    assert planner.second.bias.dtype == torch.float32
+    _restore_quantized_bias_representation(planner, payload)
+    assert torch.equal(planner.first.bias, snapshot['first.bias'])
+    assert torch.equal(planner.second.bias, snapshot['second.bias'])
 
 
 def test_frozen_reset_restores_osc_joint_reference(tmp_path):

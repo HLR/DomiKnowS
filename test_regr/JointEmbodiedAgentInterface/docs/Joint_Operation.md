@@ -300,9 +300,35 @@ norm; zero samples do not prove every parameter is unchanged.
 
 ### 2. Record fixed-seed baselines and the preflight result
 
+`--stage2-vlabench-dfa grammar` uses the compiled plan syntax and the IDs
+in each observed entity table for VLABench simulator sampling and replay.
+The policy does not bind a per-task skill sequence, target identity, or other
+simulator goal facts. The same mask applies to the fixed-seed baseline and
+post-epoch rollouts. EAI sampling and offline planning validation keep the
+`--stage2-dfa` setting. Stage 2 resume requires the saved mask settings.
+
 The command evaluates the post-warm-up model on ten simulator rollouts per
 selected task by default, with seed base `seed + 100000`. It also records EAI
 holdout success/recall and optional static VLABench planning scores.
+
+For the two-head ES pilot, resume the controller-warm-up checkpoint with
+`--stage2-planner-update constrained-es`. Use `constrained-reinforce` for the
+matched arm. Both modes activate the EAI grounded DFA and the VLABench
+observation grammar, and freeze the shared backbone and controller. Keep the
+source data seed fixed and set `--stage2-training-seed` to 42 and 43 for the
+two repetitions. Use a distinct output directory for each arm and seed.
+
+The pilot runs two generations per head after the 5-of-100 VLABench
+preflight. Each output contains a fixed-cohort report and a generation
+checkpoint that can be resumed with the same mode and training seed. The EAI
+report records coverage of independent scene grounding. Training draws only
+from examples with resolvable concrete goal identities. The historic
+88-example EAI holdout covers VirtualHome.
+
+Run `promote-constrained-stage2 --reports <ES-42> <REINFORCE-42> <ES-43>
+<REINFORCE-43> --output <directory>` with the four
+`constrained_stage2_report.json` paths to apply the source gates and
+replication check before writing `joint_stage2_best.pt`.
 
 VLABench preflight defaults require positive-return rate at least `0.01` and
 IK truncation at most `0.50`. Minimum success and successful-task coverage both
@@ -472,6 +498,56 @@ ablations. Historical checkpoints without a manifest report
 older Stage 2 versions predating the robot-frame contract are rejected. The
 planning evaluator's explicit schema-migration mode is a warm start, not an
 exact optimizer/run resume.
+
+## Transfer-aware Stage 2
+
+Use `transfer.source_stage2` for a planner-only continuation of Fresh Joint
+Epoch 6. The loader verifies Epoch 6's checkpoint, training settings, and
+pretrained Qwen files. The run makes two passes through balanced VLABench
+reset cohorts and samples paired EAI training examples. It applies per-reset
+REINFORCE, a frozen Epoch 6 policy KL, source replay, and PCGrad. Joint label
+heads and shared LoRA can change. The base model and fixed skill executors stay
+frozen. This recipe leaves the Stage 1 auxiliary heads disabled.
+
+New Stage 2 training and evaluation use observed EAI goal scoring. Generation
+sees the instruction and published SimpleTL goal. Initial facts come from the
+PDDL observation and bind the compiled policy. Independent state replay scores
+the generated actions against SimpleTL. Source labels are used only for
+supervised replay and exact-match diagnostics. Existing Stage 2 checkpoints
+resume with their saved scoring protocol. Use `eai-decoders` to compare greedy,
+a fixed legal beam and a shared reranker fitted on independently scored
+training beams. The best candidate in a beam measures coverage only.
+
+VLABench generation receives the instruction, two numbered views and a shared
+action API. The DomiKnowS compiler binds the fixed executor's capabilities and
+observed state. Native VLABench success provides the reward. The worker uses
+separate calibration, training and validation resets. Positive controls must
+succeed and wrong-source controls must fail. The source pilot checks a
+repeated Epoch 6 baseline before any update and evaluates all 88 canonical EAI
+validation examples. Its final report records missing policy gradients,
+shared-parameter changes, and source regressions.
+
+Prepare the source manifest with `transfer.source_stage2_rollout --output
+<source>` inside the VLABench runtime. Pass `--calibration-controls` to replay
+the archived source positive controls and run the paired wrong-source tests
+on their resets. Prepare a fresh LIBERO holdout with
+`transfer.relational_grounding.freeze_libero --stage2` inside the qualified
+LIBERO runtime. Include the previously scored native reset manifests in its
+`--exclude` arguments and in the pilot's `--excluded-manifest` arguments.
+Pass the resulting manifests to `source_stage2 train --archive <epoch6-archive>
+--source-manifest <source/manifest.json> --holdout <holdout/manifest.json>
+--excluded-manifest <prior/manifest.json> --output <new-run>`. These module
+names are relative to `test_regr.JointEmbodiedAgentInterface` for `python -m`.
+Add `--validate-only` to check the frozen inputs without loading Qwen.
+Use `source_stage2 evaluate --help` for the separate E5, E6 and Stage 2
+comparison on matched LIBERO inputs, compiled constraints and the qualified
+1,000-step executor. The report gives native and abstract success separately,
+with first-source accuracy and paired task-cluster intervals.
+
+Target-domain RL remains a separate experiment in `transfer.target_rl`.
+Select `--stage1-archive` to initialize it from Epoch 6. It opens held-out
+target episodes only after a checkpoint retains source performance and beats
+the initialization on native target validation.
 
 ## Evaluation and current implementation limits
 

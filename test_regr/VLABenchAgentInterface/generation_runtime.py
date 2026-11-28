@@ -6,6 +6,9 @@ import hashlib
 from itertools import count
 from typing import Mapping
 
+from domiknows.generation.dfa.core import DFA
+from domiknows.generation.dfa.productive import ProductiveDFA
+
 try:
     from .plan_codec import PlanVocabulary, plan_to_tokens
     from .graph import create_plan_grammar_graph, create_planner_generation_graph
@@ -181,6 +184,25 @@ def compile_planner_dfa(graph, generation_bundle, world, vocabulary, *, max_oper
                                      pattern_dfa=pattern_dfa)
 
 
+class ObservationPlanGrammar(ProductiveDFA):
+    """Compiled plan syntax bound only to pointer IDs in the observation."""
+
+    def __init__(self, grammar, vocabulary, entity_ids, *, completion_bound):
+        self._unavailable = {
+            vocabulary.label_for_token(f"obj:{index}")
+            for index in range(vocabulary.max_entities) if index not in entity_ids
+        }
+        syntax = DFA(grammar.states, grammar.alphabet, grammar.transitions, grammar.start_state,
+                     grammar.accepting_states, grammar.dead_states)
+        super().__init__(syntax, completion_bound=completion_bound)
+        self.alphabet = grammar.alphabet - self._unavailable
+
+    def step(self, state, symbol):
+        if symbol in self._unavailable:
+            return None
+        return super().step(state, symbol)
+
+
 def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> bool:
     try:
         labels = [bundle.vocabulary.label_for_token(token) for token in plan_to_tokens(plan, entity_table, world=world)]
@@ -193,6 +215,8 @@ def dfa_accepts_plan(dfa, bundle, plan, entity_table=None, *, world=None) -> boo
 
 def bind_vlabench_contextual_dfa(base_dfa, vocabulary, context):
     """Bind explicit task and scene facts to compiled world constraints."""
+    if isinstance(base_dfa, ObservationPlanGrammar):
+        return base_dfa
     try:
         from .constraint_compiler import WorldConstraintDFA
         from .task_policy import task_requirements

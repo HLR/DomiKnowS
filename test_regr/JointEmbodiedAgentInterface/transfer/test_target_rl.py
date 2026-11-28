@@ -2,7 +2,7 @@ import pytest
 
 from .data import allocation
 from .protocol import freeze, read, sha
-from .target_rl import advantages, paired_report, predict, score, target_splits, update
+from .target_rl import advantages, paired_report, predict, score, select_adaptation, target_splits, update
 from .target_rl_rollout import executor_proof
 
 
@@ -38,6 +38,17 @@ def test_pairing_rejects_input_drift(tmp_path):
     assert paired_report(baseline, baseline)["success_rate_delta"] == 0.
     with pytest.raises(ValueError, match="input or reset"):
         paired_report(baseline, changed)
+
+
+def test_adaptation_requires_native_validation_improvement_and_retention():
+    def candidate(epoch, successes, eligible):
+        return {"epoch": epoch, "eligible": eligible,
+                "target": {"baseline": {"successes": 10}, "adapted": {"successes": successes}}}
+
+    rejected = [candidate(1, 9, True), candidate(2, 10, True), candidate(3, 20, False)]
+    assert select_adaptation(rejected) is None
+    eligible = candidate(4, 11, True)
+    assert select_adaptation([*rejected, eligible, candidate(5, 11, True)]) == eligible
 
 
 def test_confirmation_indices_stay_out_of_libero_adaptation(tmp_path):

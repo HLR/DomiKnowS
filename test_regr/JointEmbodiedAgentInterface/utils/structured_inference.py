@@ -7,6 +7,7 @@ DomiKnowS domain supplies the hard feasibility tests.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import json
 import time
 from dataclasses import asdict, dataclass
@@ -17,14 +18,11 @@ import torch
 
 from domiknows.generation.dfa.stop_policy import StopPolicy, remaining_steps_for, should_stop_on_token
 
-from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
 from test_regr.VLABenchAgentInterface.plan_codec import labels_to_plan
 from test_regr.VLABenchAgentInterface.reward import score_vlabench_plan
-from test_regr.VLABenchAgentInterface.world_graph import (
-    materialize_plan,
-    validate_plan,
-    verify_plan_constraints,
-)
+from test_regr.VLABenchAgentInterface.semantics import entity_mapping
+
+from . import observed_eai
 
 
 @dataclass(frozen=True)
@@ -200,11 +198,10 @@ def select_candidate_with_ilp(
         raise ValueError("ILP selection requires at least one candidate")
     started = time.perf_counter()
     eligible = [index for index, candidate in enumerate(candidates) if candidate.hard_valid]
-    if domain == "eai" and any(candidates[index].goal_success for index in eligible):
-        eligible = [index for index in eligible if candidates[index].goal_success]
     if not eligible:
         return DecoderSelection(
-            "ilp", candidates[0], (time.perf_counter() - started) * 1000.0,
+            "ilp", StructuredPlanCandidate((), float("-inf"), (), False, False, False, 0.0),
+            (time.perf_counter() - started) * 1000.0,
             solver_status="infeasible", fallback_reason="no hard-valid candidate",
         )
     try:
@@ -226,94 +223,43 @@ def select_candidate_with_ilp(
 
 
 def _score_eai_candidate(
-    candidate: LabelSequenceCandidate, runtime: Any, item: Mapping[str, Any], dfa: Any
+    candidate: LabelSequenceCandidate, runtime: Any, goal: Any, dfa: Any
 ) -> StructuredPlanCandidate:
     vocabulary = runtime.eai_vocabulary
     labels = tuple(int(label) for label in candidate.labels)
-    metrics = evaluate_goal_satisfaction(
-        labels,
-        dict(item),
-        vocabulary=vocabulary,
-        world_bundle=runtime.world.eai,
-        reward_mode="dense",
-        policy=dfa,
-    )
-    constraint_score = metrics.get("world_constraint_score")
-    constraint_valid = constraint_score is None or float(constraint_score) >= 1.0
+    valid = bool(dfa.accepts(labels))
+    metrics = observed_eai.score(labels, goal, runtime) if valid else {"is_success": False, "recall": 0.0}
     return StructuredPlanCandidate(
         labels=labels,
         log_probability=float(candidate.log_probability),
         plan=tuple(vocabulary.token_for_label(label) for label in labels),
-        dfa_valid=bool(dfa.accepts(labels)),
+        dfa_valid=valid,
         schema_valid=True,
-        constraint_valid=constraint_valid,
-        constraint_score=1.0 if constraint_score is None else float(constraint_score),
+        constraint_valid=valid,
+        constraint_score=float(valid),
         goal_success=bool(metrics["is_success"]),
         goal_recall=float(metrics["recall"]),
-        reward_score=float(metrics["rl_reward_score"]),
-        grounding_report=metrics.get("grounding_report"),
-        errors=(() if metrics.get("parse_error") is None else (str(metrics["parse_error"]),)),
+        reward_score=float(metrics["is_success"]),
     )
 
 
 def _score_vlabench_candidate(
-    candidate: LabelSequenceCandidate, runtime: Any, item: Mapping[str, Any], dfa: Any
+    candidate: LabelSequenceCandidate, runtime: Any, _context: Mapping[str, Any], dfa: Any
 ) -> StructuredPlanCandidate:
     labels = tuple(int(label) for label in candidate.labels)
-    entity_table = item.get("entity_table", item.get("entities", ()))
-    task_name = item.get("task") or item.get("task_name") if isinstance(item, Mapping) else getattr(item, "task", None)
-    errors: list[str] = []
-    plan: Sequence[Mapping[str, Any]] = ()
-    constraint_score = 0.0
-    grounding = None
+    valid = bool(dfa.accepts(labels))
+    errors = ()
     try:
         plan = labels_to_plan(labels, runtime.vlabench_vocabulary, world=runtime.world.vlabench)
-        validation = validate_plan(
-            plan,
-            entity_table=entity_table,
-            skill_arguments=runtime.world.vlabench.skill_arguments,
-            policy=dfa,
-        )
-        errors.extend(validation.errors)
-        if validation.valid:
-            root = materialize_plan(plan, entity_table, runtime.world.vlabench, task_name=task_name, policy=dfa)
-            evaluation = verify_plan_constraints(root, runtime.world.vlabench)
-            grounding = root.attributes.get("grounding_report")
-            constraint_score = 1.0 if evaluation is None else float(evaluation.score)
-            if constraint_score < 1.0:
-                errors.append(f"DomiKnowS constraints scored {constraint_score:.6f}")
-    except Exception as error:
-        validation = None
-        errors.append(str(error))
+    except (ValueError, KeyError, TypeError) as error:
+        plan, errors = (), (str(error),)
     return StructuredPlanCandidate(
         labels=labels,
         log_probability=float(candidate.log_probability),
         plan=tuple(plan),
-        dfa_valid=bool(dfa.accepts(labels)),
-        schema_valid=bool(validation and validation.valid),
-        constraint_valid=constraint_score >= 1.0,
-        constraint_score=constraint_score,
-        errors=tuple(errors),
-        grounding_report=grounding,
+        dfa_valid=valid, schema_valid=not errors, constraint_valid=valid, constraint_score=float(valid),
+        errors=errors,
     )
-
-
-def _planner_context(item: Mapping[str, Any], domain: str) -> Mapping[str, Any]:
-    supplied = item.get("planner_context")
-    if isinstance(supplied, Mapping):
-        return supplied
-    if domain == "eai":
-        return {
-            "instruction": item.get("causal_prompt_text") or item.get("instruction_text")
-            or item.get("instruction", ""),
-            "goal": item.get("goal") or item.get("tl_goal", ""),
-        }
-    return {
-        **{k: item[k] for k in ("planning_facts", "task_target_container", "task_target_entity", "task", "task_name", "task_skill_sequence") if k in item},
-        "instruction": item.get("instruction", ""),
-        "images": item.get("images", item.get("segmented_image_paths", ())),
-        "entity_table": item.get("entities", ()),
-    }
 
 
 @torch.no_grad()
@@ -328,15 +274,30 @@ def compare_structured_decoders(
     ilp_time_limit_ms: int = 250,
 ) -> DecoderComparison:
     """Compare greedy, beam, and ILP from one shared encoded observation."""
-    context = _planner_context(item, domain)
-    dfa = runtime.dfa_for(domain, item if domain == "eai" else context)
+    prompt_scope = nullcontext()
+    if domain == "eai":
+        context, evaluation_input = observed_eai.input_and_goal(item, runtime.world.eai)
+        dfa = runtime.dfa_for(domain, context)
+    else:
+        from ..generalization.shared_constraints import bind_shared
+        from ..transfer.matched_baseline.protocol import common_prompt
+        from ..transfer.repair.input_protocol import constraint_context, generation_context
+
+        observed = item.get("planner_context", item)
+        entities = list(entity_mapping(observed.get("entity_table", observed.get("entities", ()))).values())
+        public = {"instruction": observed.get("instruction", ""),
+                  "images": observed.get("images", observed.get("segmented_image_paths", ())),
+                  "entities": entities}
+        context = evaluation_input = generation_context(public, runtime.vlabench_vocabulary)
+        dfa = bind_shared(runtime.vlabench_vocabulary, runtime.max_vlabench_operations, constraint_context(public))
+        prompt_scope = common_prompt(planner)
     limit = max_steps or (
         runtime.max_eai_steps if domain == "eai"
         else runtime.max_vlabench_operations * 5 + 1
     )
     scorer = _score_eai_candidate if domain == "eai" else _score_vlabench_candidate
     domain_planner = planner.for_domain(domain) if hasattr(planner, "for_domain") else planner
-    with runtime.domain_scope(domain):
+    with prompt_scope, runtime.domain_scope(domain):
         started = time.perf_counter()
         context_vector = domain_planner.encode_context(context)
         encoding_ms = (time.perf_counter() - started) * 1000.0
@@ -347,7 +308,7 @@ def compare_structured_decoders(
         )
         greedy_candidate = scorer(
             LabelSequenceCandidate(tuple(greedy_labels), float(greedy_logprob.detach().cpu())),
-            runtime, item, dfa,
+            runtime, evaluation_input, dfa,
         )
         greedy = DecoderSelection(
             "greedy", greedy_candidate, encoding_ms + (time.perf_counter() - started) * 1000.0
@@ -357,7 +318,7 @@ def compare_structured_decoders(
         raw_candidates = domain_planner.beam_labels_from_context(
             context_vector, dfa, max_steps=limit, beam_width=beam_width
         )
-        candidates = tuple(scorer(candidate, runtime, item, dfa) for candidate in raw_candidates)
+        candidates = tuple(scorer(candidate, runtime, evaluation_input, dfa) for candidate in raw_candidates)
         beam_ms = (time.perf_counter() - started) * 1000.0
         beam = DecoderSelection("beam", candidates[0], encoding_ms + beam_ms)
         ilp = select_candidate_with_ilp(

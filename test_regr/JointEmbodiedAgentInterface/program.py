@@ -7,13 +7,14 @@ import random
 import sys
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from types import SimpleNamespace
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import torch
 
 from domiknows.generation.latent.losses import GenerationLossWeights, compute_generation_training_loss
-from domiknows.generation.dfa.productive import SemanticSearchLimitExceeded
+from domiknows.generation.dfa.productive import DFACompletionBounds, SemanticSearchLimitExceeded
 from domiknows.generation.learners.common.losses import (
     allowed_label_sets, allowed_log_mass, allowed_mass_loss, masked_cross_entropy,
 )
@@ -25,6 +26,8 @@ from domiknows.program.metric import MacroAverageTracker
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
 from test_regr.VLABenchAgentInterface.simulation.controller import controller_loss
+from test_regr.VLABenchAgentInterface.generation_runtime import ObservationPlanGrammar
+from test_regr.VLABenchAgentInterface.semantics import entity_mapping
 from test_regr.VLABenchAgentInterface.simulation.program import (
     EOSMaskedCrossEntropyLoss,
     VLABenchHierarchicalReinforcementProgram,
@@ -34,6 +37,7 @@ from test_regr.VLABenchAgentInterface.simulation.program import (
 from .models import JointQwenVLPlanner, FreeDecoding
 from .world_graph import JointDomainRuntime
 from .utils.stage2_training import SharedUpdateEvidence, validate_shared_optimizer
+from .utils import observed_eai
 
 
 @dataclass(frozen=True)
@@ -616,26 +620,43 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         controller_anchor_loader=None,
         eai_num_samples: int = 8,
         eai_supervised_weight: float = 0.5,
+        eai_reward_protocol: str = observed_eai.LEGACY,
         planner_kl_weight: float = 0.0,
         planner_reward_policy: str = "dense",
         planner_reference_state=None,
         reference_replay_per_update: int = 0,
         reference_replay_cursors=None,
         dfa_enabled: bool = True,
+        vlabench_grammar_only: bool = False,
         parameter_policy: str | None = "freeze_inactive",
         device: str | torch.device = "cpu",
         **kwargs,
     ):
         self.joint_runtime = runtime
         self.joint_planner = planner
-        self.planner_dfa_enabled = bool(dfa_enabled)
-        planner.free_decoding = not self.planner_dfa_enabled
+        self.eai_dfa_enabled = bool(dfa_enabled)
+        self.planner_dfa_enabled = bool(dfa_enabled or vlabench_grammar_only)
+        planner.free_decoding = not self.eai_dfa_enabled
+        self._vlabench_grammar = None
+        if vlabench_grammar_only:
+            grammar = runtime.vlabench_dfa
+            completion_bound = DFACompletionBounds.from_dfa(grammar)
+
+            @lru_cache(maxsize=16)
+            def grammar_for_observation(entity_ids):
+                return ObservationPlanGrammar(grammar, runtime.vlabench_vocabulary, entity_ids,
+                                              completion_bound=completion_bound)
+
+            self._vlabench_grammar = grammar_for_observation
         planner.free_decoding_min_steps = 0
         self.eai_planner = planner.for_domain("eai")
         self.vlabench_planner = planner.for_domain("vlabench")
         self.eai_supervised_examples = tuple(eai_supervised_examples)
         self.eai_num_samples = int(eai_num_samples)
         self.eai_supervised_weight = float(eai_supervised_weight)
+        if eai_reward_protocol not in (observed_eai.OBSERVED, observed_eai.LEGACY):
+            raise ValueError("unknown EAI reward protocol")
+        self.eai_reward_protocol = eai_reward_protocol
         self.parameter_policy = parameter_policy
         self.reference_replay_per_update = int(reference_replay_per_update)
         if self.reference_replay_per_update < 0 or (self.reference_replay_per_update and not planner_kl_weight):
@@ -703,7 +724,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         for _ in range(self.reference_replay_per_update):
             cursor = self.reference_replay_cursors[domain]
             example = balanced_reference_example(examples, cursor)
-            context = _context(example, domain)
+            goal = None
+            if domain == "eai" and self.eai_reward_protocol == observed_eai.OBSERVED:
+                context, goal = observed_eai.input_and_goal(example, self.joint_runtime.world.eai)
+            else:
+                context = _context(example, domain)
             if domain == "vlabench" and not context.get("images"):
                 get = example.get if isinstance(example, Mapping) else lambda key, default=(): getattr(example, key, default)
                 context["images"] = get("segmented_image_paths", ()) or get("image_paths", ())
@@ -713,7 +738,14 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             limit = self.joint_runtime.max_eai_steps if domain == "eai" else self.runtime.max_tokens
             # These prefixes come from the frozen policy, never target labels.
             with self.policy_reference.activate(self.joint_planner):
-                labels, _ = view.sample_labels_from_context(context, dfa, max_steps=limit, deterministic=True)
+                if goal is not None:
+                    labels, result = observed_eai.sample(view, context, dfa, goal, self.joint_runtime,
+                                                         deterministic=True)
+                    if result.get("generation_error"):
+                        self.reference_replay_cursors[domain] = cursor + 1
+                        continue
+                else:
+                    labels, _ = view.sample_labels_from_context(context, dfa, max_steps=limit, deterministic=True)
             term = self._regularized_replay_loss(domain, prepared, labels, dfa,
                 torch.zeros((), device=self.joint_planner.device), max_steps=limit) / self.reference_replay_per_update
             self._planner_replay_backward(term)
@@ -768,7 +800,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                                              evidence.labels, evidence.dfa, advantage, **stopping)
 
     def _policy_dfa(self, domain, context):
-        if not self.planner_dfa_enabled:
+        if domain == "vlabench" and self._vlabench_grammar is not None:
+            entities = context.get("entity_table") or context.get("entities") or ()
+            return self._vlabench_grammar(frozenset(entity_mapping(entities)))
+        enabled = self.eai_dfa_enabled if domain == "eai" else self.planner_dfa_enabled
+        if not enabled:
             vocabulary = self.joint_planner.vocabulary(domain)
             return FreeDecoding(vocabulary.label_count, vocabulary.eos_label)
         return self.joint_runtime.dfa_for(domain, context)
@@ -778,13 +814,20 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             return self._policy_dfa("vlabench", {})
         return super()._dfa_for_entities(entities, instruction=instruction, task=task, task_context=task_context)
 
-    def collect_episode(self, descriptor):
+    def _sampling_dfa_for_entities(self, entities, **kwargs):
+        if self._vlabench_grammar is not None:
+            return self._policy_dfa("vlabench", {"entity_table": entities})
+        return super()._sampling_dfa_for_entities(entities, **kwargs)
+
+    def collect_episode(self, descriptor, *, diagnostic=None):
         with self.joint_runtime.domain_scope("vlabench", parameter_policy=self.parameter_policy):
             # The parent implementation invokes methods through planner_head;
             # temporarily expose its non-owning VLABench view.
             planner = self.planner_head
             self.planner_head = self.vlabench_planner
             try:
+                if diagnostic is not None:
+                    return super().collect_episode(descriptor, diagnostic=diagnostic)
                 return super().collect_episode(descriptor)
             finally:
                 self.planner_head = planner
@@ -802,20 +845,25 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         if not self.eai_supervised_examples or not self.eai_supervised_weight:
             return torch.zeros((), device=self.joint_planner.device)
         item = random.choice(self.eai_supervised_examples)
+        context = (observed_eai.input_and_goal(item, self.joint_runtime.world.eai)[0]
+                   if self.eai_reward_protocol == observed_eai.OBSERVED else _context(item, "eai"))
         return self.joint_planner.supervised_loss(
             "eai",
-            context=_context(item, "eai"),
+            context=context,
             target_labels=_labels(item, "eai").to(self.joint_planner.device),
         )
 
     def train_eai_update(self, item: Mapping[str, Any]) -> dict[str, float]:
         self.joint_planner.train()
         self._reference_kls["eai"] = []
-        reward_fn = item.get("reward_function")
-        if not callable(reward_fn):
-            raise ValueError("EAI reinforcement items require reward_function")
-        context = _context(item, "eai")
-        pairs = []
+        observed = self.eai_reward_protocol == observed_eai.OBSERVED
+        if observed:
+            context, observed_goal = observed_eai.input_and_goal(item, self.joint_runtime.world.eai)
+        else:
+            reward_fn = item.get("reward_function")
+            if not callable(reward_fn):
+                raise ValueError("legacy EAI reinforcement items require reward_function")
+            context = _context(item, "eai")
         with self.joint_runtime.domain_scope("eai", parameter_policy=self.parameter_policy):
             shared_update = SharedUpdateEvidence(self.joint_planner, self.planner_optimizer)
             # The causal sampler consumes the observation mapping; retaining an
@@ -823,23 +871,29 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             encoded_context = context
             prepared_context = self.eai_planner.prepare_replay_context(context)
             samples = []
+            errors = []
+            policy_dfa = self._policy_dfa("eai", context if observed else item)
             with torch.no_grad():
                 for sample_index in range(self.eai_num_samples):
                     sample_start = time.monotonic()
                     _emit_progress(f"EAI sample {sample_index + 1}/{self.eai_num_samples}: generating")
-                    policy_dfa = self._policy_dfa("eai", item)
-                    labels, _ = self.eai_planner.sample_labels_from_context(
-                        encoded_context,
-                        policy_dfa,
-                        max_steps=self.joint_runtime.max_eai_steps,
-                    )
-                    reward = reward_fn(labels, data_item=item, policy=policy_dfa)
-                    from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
-                    goal = evaluate_goal_satisfaction(
-                        labels, item, self.joint_runtime.eai_vocabulary,
-                        world_bundle=self.joint_runtime.world.eai,
-                        policy=policy_dfa,
-                    )
+                    if observed:
+                        labels, goal = observed_eai.sample(
+                            self.eai_planner, context, policy_dfa, observed_goal,
+                            self.joint_runtime, deterministic=False,
+                        )
+                        reward = float(goal["is_success"])
+                    else:
+                        labels, _ = self.eai_planner.sample_labels_from_context(
+                            encoded_context, policy_dfa, max_steps=self.joint_runtime.max_eai_steps,
+                        )
+                        reward = reward_fn(labels, data_item=item, policy=policy_dfa)
+                        from test_regr.EmbodiedAgentInterface.reward import evaluate_goal_satisfaction
+                        goal = evaluate_goal_satisfaction(
+                            labels, item, self.joint_runtime.eai_vocabulary,
+                            world_bundle=self.joint_runtime.world.eai, policy=policy_dfa,
+                        )
+                    errors.append(goal.get("generation_error"))
                     samples.append((
                         labels,
                         float(torch.as_tensor(reward).float().mean()),
@@ -855,6 +909,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             total_loss = 0.0
             count = max(1, len(samples))
             for i, (labels, _, _, _, policy_dfa) in enumerate(samples):
+                if errors[i] is not None:
+                    continue
                 adv = advantages[i].detach()
                 if adv.abs() > 1e-6 or self.policy_reference is not None:
                     _emit_progress(f"EAI replay {i + 1}/{count}: policy gradient")
@@ -909,6 +965,9 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "goal_recall": sum(s[2] for s in samples) / len(samples),
             "success": sum(s[3] for s in samples) / len(samples),
             "samples": len(samples),
+            "generation_errors": sum(error is not None for error in errors),
+            "unresolved_goal": bool(observed and observed_goal.unresolved),
+            "reward_protocol": self.eai_reward_protocol,
             "planner_update": shared_evidence,
             "planner_regularization": self._regularization_metrics("eai"),
         }

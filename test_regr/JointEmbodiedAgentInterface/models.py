@@ -202,6 +202,9 @@ class JointQwenVLPlanner(nn.Module):
         if adapter_path:
             from test_regr.VLABenchAgentInterface.research.checkpoint import load_adapter_metadata
             load_adapter_metadata(adapter_path,planner)
+        if load_in_4bit:
+            from .checkpoint import _snapshot_frozen_quantized_biases
+            planner._initial_frozen_quantized_biases = _snapshot_frozen_quantized_biases(planner)
         return planner
 
     def initialize_semantic_embeddings(self, domain: str) -> None:
@@ -441,6 +444,17 @@ class JointQwenVLPlanner(nn.Module):
             for key, value in inputs.items()
         }
 
+    def causal_label_features(self, domain, context, active_tokens):
+        """Hidden states from which the decoder predicts each successive label."""
+        inputs, positions = self._prepare_inputs_and_boundaries(domain, context, active_tokens)
+        output = self.model(**self._inputs_to_model_device(inputs), output_hidden_states=True, use_cache=False)
+        states = getattr(output, "hidden_states", None) or getattr(output, "decoder_hidden_states", None)
+        if states is None:
+            raise RuntimeError("vision-language backbone did not return hidden states")
+        hidden = states[-1][0].float().to(self.device)
+        indices = torch.as_tensor(positions[:len(active_tokens) + 1], device=self.device, dtype=torch.long)
+        return hidden.index_select(0, indices.clamp(max=hidden.shape[0] - 1))
+
     def sequence_logits(
         self,
         domain: str,
@@ -462,21 +476,7 @@ class JointQwenVLPlanner(nn.Module):
             active_labels = row[1:padding_start].tolist()
             active_tokens = [vocabulary.token_for_label(int(l)) for l in active_labels]
 
-            inputs, boundary_positions = self._prepare_inputs_and_boundaries(domain, context, active_tokens)
-            model_inputs = self._inputs_to_model_device(inputs)
-            output = self.model(**model_inputs, output_hidden_states=True, use_cache=False)
-            hidden_states = getattr(output, "hidden_states", None) or getattr(output, "decoder_hidden_states", None)
-            if hidden_states is None:
-                raise RuntimeError("vision-language backbone did not return hidden states")
-            last_hidden = hidden_states[-1][0].float().to(self.device)
-
-            b_indices = torch.tensor(
-                boundary_positions[:len(active_tokens) + 1],
-                dtype=torch.long,
-                device=self.device,
-            )
-            b_indices = b_indices.clamp(max=last_hidden.shape[0] - 1)
-            active_hidden = last_hidden.index_select(0, b_indices)
+            active_hidden = self.causal_label_features(domain, context, active_tokens)
             active_logits = self.label_heads[domain](active_hidden)
 
             logits_list = [active_logits[i] for i in range(active_logits.shape[0])]
@@ -550,6 +550,10 @@ class JointQwenVLPlanner(nn.Module):
         return EncodedContext(prompt_hidden, context=prepared_context, domain=domain)
 
     def _planning_dfa(self, domain, context, dfa):
+        if domain == "vlabench":
+            from test_regr.VLABenchAgentInterface.generation_runtime import ObservationPlanGrammar
+            if isinstance(dfa, ObservationPlanGrammar):
+                return dfa
         if getattr(self, "free_decoding", False):
             vocabulary = self.vocabulary(domain)
             return FreeDecoding(vocabulary.label_count, vocabulary.eos_label,

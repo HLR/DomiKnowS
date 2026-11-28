@@ -384,6 +384,9 @@ def save_joint_checkpoint(
         payload["next_round"] = int(next_round)
     if stage == "stage2" and getattr(planner, "_stage2_regularization_state", None) is not None:
         payload["stage2_planner_regularization"] = planner._stage2_regularization_state
+    frozen_biases = _snapshot_frozen_quantized_biases(planner)
+    if frozen_biases:
+        payload["frozen_quantized_biases"] = frozen_biases
     from test_regr.VLABenchAgentInterface.research.checkpoint import checkpoint_metadata
     payload.update(checkpoint_metadata(runtime.world.vlabench,planner))
     if (target.parent / "split_identities.json").exists():
@@ -405,25 +408,71 @@ def save_joint_checkpoint(
     return target
 
 
-def _restore_quantized_bias_representation(planner, payload):
-    """Recreate Linear4bit's frozen first-forward bias cast, only on exact match."""
-    expected = payload.get("compatibility", {}).get("parameter_ownership_checksum")
-    checksum = getattr(planner, "compute_parameter_ownership_checksum", None)
-    if not expected or not callable(checksum) or checksum() == expected:
-        return
-    changes = []
+def _frozen_quantized_bias_layers(planner):
     for name, module in planner.named_modules():
         bias = getattr(module, "bias", None)
-        dtype = getattr(module, "compute_dtype", None)
-        if (type(module).__name__ == "Linear4bit" and bias is not None
-                and not bias.requires_grad and dtype is not None and bias.dtype != dtype):
-            changes.append((name, bias, bias.data))
-            bias.data = bias.data.to(dtype=dtype)
-    if checksum() != expected:
-        for _, bias, original in changes:
-            bias.data = original
-        return  # Native strict compatibility checks report the remaining drift.
-    payload["representation_restoration"] = [name + ".bias" for name, _, _ in changes]
+        if type(module).__name__ == "Linear4bit" and bias is not None and not bias.requires_grad:
+            yield name + ".bias", module
+
+
+def _snapshot_frozen_quantized_biases(planner):
+    # Linear4bit may replace frozen bias storage during forward. Copy the bias
+    # values so restoring a higher precision can recover the original values.
+    return {name: module.bias.detach().to(device="cpu", copy=True)
+            for name, module in _frozen_quantized_bias_layers(planner)}
+
+
+def _restore_quantized_bias_representation(planner, payload):
+    """Restore runtime-mutable frozen biases while checking exact ownership."""
+    expected = payload.get("compatibility", {}).get("parameter_ownership_checksum")
+    checksum = getattr(planner, "compute_parameter_ownership_checksum", None)
+    if not expected or not callable(checksum):
+        return
+    modules = dict(_frozen_quantized_bias_layers(planner))
+    if not modules:
+        return
+    previous = {name: module.bias.data for name, module in modules.items()}
+
+    def restore(values):
+        matched = False
+        try:
+            for name, module in modules.items():
+                module.bias.data = values[name].to(device=module.bias.device, copy=True)
+            matched = checksum() == expected
+            if matched:
+                payload["representation_restoration"] = [
+                    name for name, module in modules.items() if module.bias.dtype != previous[name].dtype
+                ]
+                return True
+        finally:
+            if not matched:
+                for name, module in modules.items():
+                    module.bias.data = previous[name]
+        return False
+
+    saved = payload.get("frozen_quantized_biases")
+    if saved is not None:
+        if (not isinstance(saved, Mapping) or saved.keys() != modules.keys()
+                or any(not torch.is_tensor(value) or not value.is_floating_point()
+                       or value.shape != previous[name].shape for name, value in saved.items())):
+            raise ValueError("checkpoint frozen quantized biases differ from the planner structure")
+        if not restore(saved):
+            raise ValueError("checkpoint frozen quantized biases do not match the parameter ownership checksum")
+        return
+    if checksum() == expected:
+        return
+
+    initial = getattr(planner, "_initial_frozen_quantized_biases", None)
+    if initial is None or initial.keys() != modules.keys():
+        initial = _snapshot_frozen_quantized_biases(planner)
+        planner._initial_frozen_quantized_biases = initial
+    # Legacy checkpoints recorded only the checksum. Match biases saved before
+    # the first multimodal forward or after Linear4bit's compute-dtype cast.
+    compute = {name: initial[name].to(dtype=getattr(module, "compute_dtype", None))
+               for name, module in modules.items()}
+    for values in (initial, compute):
+        if restore(values):
+            return
 
 
 def load_joint_checkpoint(

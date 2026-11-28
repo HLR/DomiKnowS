@@ -38,6 +38,12 @@ def test_stage2_cli_defaults_and_resume_mode_validation():
     assert not _stage2_dfa_enabled(args, {"stage": "stage2", "metrics": {"stage2_dfa": "off"}})
     with pytest.raises(ValueError, match="DFA mode differs"):
         _stage2_dfa_enabled(args, {"stage": "stage2", "metrics": {}})
+    grammar_args = parser.parse_args(["train-agent", "--two-stage", "--stage2-dfa", "off",
+                                      "--stage2-vlabench-dfa", "grammar"])
+    assert not _stage2_dfa_enabled(grammar_args, {"stage": "stage2", "metrics": {
+        "stage2_dfa": "off", "stage2_vlabench_dfa": "grammar"}})
+    with pytest.raises(ValueError, match="DFA mode differs"):
+        _stage2_dfa_enabled(grammar_args, {"stage": "stage2", "metrics": {"stage2_dfa": "off"}})
 
 
 @pytest.mark.parametrize("domain", ["eai", "vlabench"])
@@ -117,6 +123,38 @@ def test_default_mode_still_applies_dfa_filters(joint_fixture, monkeypatch):
     assert calls == ["base", "pattern"]
 
 
+def test_observation_grammar_hides_oracle_target_and_matches_replay(joint_fixture, monkeypatch):
+    from test_regr.VLABenchAgentInterface.generation_runtime import ObservationPlanGrammar, dfa_accepts_plan
+    from test_regr.VLABenchAgentInterface.simulation import program as simulation
+
+    _, runtime = joint_fixture
+    program, planner = make_program(runtime, vlabench_grammar_only=True)
+    monkeypatch.setattr(simulation, "_task_pattern_dfa", forbidden)
+    monkeypatch.setattr(runtime, "dfa_for", forbidden)
+    entities = {1: "button1"}
+    context = {"instruction": "press the button", "images": (), "entity_table": entities}
+    policy = program._sampling_dfa_for_entities(entities, expected_pattern=("press",), target_name="button0")
+    assert isinstance(policy, ObservationPlanGrammar)
+    assert not hasattr(policy.base_dfa, "constraint_program")
+    assert policy is program._sampling_dfa_for_entities(entities, expected_pattern=("pick",), target_name="button1")
+    assert policy is program._policy_dfa("vlabench", context)
+    assert isinstance(program._policy_dfa("eai", {}), FreeDecoding)
+    vocab = planner.vocabulary("vlabench")
+    press, arg, missing, present, eos = map(vocab.label_for_token,
+        ["skill:press", "arg:target_entity_name", "obj:0", "obj:1", vocab.eos_token])
+    assert policy.accepts([press, arg, present, eos])
+    assert not policy.accepts([press, arg, missing, eos])
+    assert not policy.accepts([press, eos])
+    assert not policy.accepts([eos])
+    planner.eval()
+    view = planner.for_domain("vlabench")
+    plan, logprob, labels = view.sample_with_logprob(**context, dfa=policy, max_steps=4, return_labels=True)
+    assert policy.accepts(labels)
+    assert dfa_accepts_plan(policy, runtime.vlabench_generation, plan, entities, world=runtime.world.vlabench)
+    replayed = view.replay_labels_logprob(view.prepare_replay_context(context), labels, policy, max_steps=4)
+    torch.testing.assert_close(replayed, logprob)
+
+
 def test_eai_rl_updates_with_free_sampling_and_free_replay(joint_fixture, monkeypatch):
     from test_regr.EmbodiedAgentInterface import reward
 
@@ -140,7 +178,9 @@ def test_eai_rl_updates_with_free_sampling_and_free_replay(joint_fixture, monkey
     assert not torch.equal(before, planner.label_heads["eai"].weight)
 
 
-def test_cli_wires_free_stage2_and_records_mode_in_progress_and_epoch_checkpoints(joint_fixture, monkeypatch, tmp_path):
+@pytest.mark.parametrize("vlabench_mode", ["inherit", "grammar"])
+def test_cli_wires_stage2_masks_and_records_mode_in_progress_and_epoch_checkpoints(
+        joint_fixture, monkeypatch, tmp_path, vlabench_mode):
     from .. import main as cli
     from test_regr.VLABenchAgentInterface import dataset_protocol
 
@@ -161,6 +201,7 @@ def test_cli_wires_free_stage2_and_records_mode_in_progress_and_epoch_checkpoint
 
         def __init__(self, *args, dfa_enabled, **kwargs):
             assert dfa_enabled is False
+            assert kwargs["vlabench_grammar_only"] == (vlabench_mode == "grammar")
             assert kwargs["eai_supervised_weight"] == 0.0
 
         def train_alternating_epoch(self, *args, round_callback, **kwargs):
@@ -182,6 +223,7 @@ def test_cli_wires_free_stage2_and_records_mode_in_progress_and_epoch_checkpoint
         "train-agent", "--two-stage", "--stage2-dfa", "off", "--device", "cpu", "--output", str(tmp_path),
         "--stage1-epochs", "0", "--stage1-eai-warmup-steps", "0", "--controller-warmup-steps", "0",
         "--stage2-epochs", "1", "--stage2-eval-rollouts-per-task", "0",
+        "--stage2-vlabench-dfa", vlabench_mode,
         "--stage2-eai-anchor-weight", "0",
     ])
     cli.command_train_agent(args)
@@ -189,3 +231,4 @@ def test_cli_wires_free_stage2_and_records_mode_in_progress_and_epoch_checkpoint
     # Training rollout success does not certify an eligible validation-selected best.
     assert "joint_stage2_best.pt" not in saved
     assert all(payload["metrics"]["stage2_dfa"] == "off" for payload in saved.values())
+    assert all(payload["metrics"]["stage2_vlabench_dfa"] == vlabench_mode for payload in saved.values())

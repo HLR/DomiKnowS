@@ -530,7 +530,7 @@ def _live_task_entity(env: Any, attribute: str):
     return entities.get(name)
 
 
-def _live_task_flower_stem_axis(env: Any, attribute: str) -> np.ndarray | None:
+def _live_task_flower_stem_axis(env: Any, attribute: str, *, entity=None) -> np.ndarray | None:
     """Return the horizontal world direction from the grasp site to the stem end.
 
     VLABench bloom flowers annotate one grasp site next to the head and a
@@ -538,7 +538,8 @@ def _live_task_flower_stem_axis(env: Any, attribute: str) -> np.ndarray | None:
     ``SkillLib.pick`` prior ``[pi, 0, -pi/2]`` assumes the stem lies along
     ``-y`` of the entity; the live axis generalizes that to the settled pose.
     """
-    entity = _live_task_entity(env, attribute)
+    if entity is None:
+        entity = _live_task_entity(env, attribute)
     physics = getattr(env, "physics", None)
     model = getattr(entity, "mjcf_model", None)
     if entity is None or physics is None or model is None:
@@ -566,7 +567,7 @@ def _live_task_flower_stem_axis(env: Any, attribute: str) -> np.ndarray | None:
     return axis / norm
 
 
-def _live_task_condiment_body(env: Any, attribute: str) -> tuple[np.ndarray, float] | None:
+def _live_task_condiment_body(env: Any, attribute: str, *, entity=None) -> tuple[np.ndarray, float] | None:
     """Return the centre halfway up an upright condiment bottle and its radius.
 
     Condiment assets carry no grasp site, so ``get_grasped_keypoints`` falls
@@ -577,7 +578,8 @@ def _live_task_condiment_body(env: Any, attribute: str) -> tuple[np.ndarray, flo
     of the counter and leaves room below the fingers for the pour. The radius
     comes from ``horizontal_radius_site`` (zero when the model has none).
     """
-    entity = _live_task_entity(env, attribute)
+    if entity is None:
+        entity = _live_task_entity(env, attribute)
     physics = getattr(env, "physics", None)
     model = getattr(entity, "mjcf_model", None)
     if physics is None or model is None:
@@ -611,7 +613,7 @@ def _condiment_approach_axis() -> np.ndarray:
     return _quat_rotate(euler_to_quaternion(*CONDIMENT_GRASP_EULER), [0.0, 0.0, 1.0])
 
 
-def _live_task_condiment_grasp_point(env: Any, attribute: str) -> np.ndarray | None:
+def _live_task_condiment_grasp_point(env: Any, attribute: str, *, entity=None) -> np.ndarray | None:
     """Return the fingertip target for a condiment bottle.
 
     Wide bottles (ketchup, 3 cm radius) cannot take the fingertips at their
@@ -620,7 +622,7 @@ def _live_task_condiment_grasp_point(env: Any, attribute: str) -> np.ndarray | N
     approach axis by whatever the radius exceeds the finger reach, so the pads
     close on the near half of the body.
     """
-    body = _live_task_condiment_body(env, attribute)
+    body = _live_task_condiment_body(env, attribute, entity=entity)
     if body is None:
         return None
     centre, radius = body
@@ -1440,7 +1442,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
     def _valid_plan(self, plan, entities, *, dfa=None) -> bool:
         return self._plan_rejection_reason(plan, entities, dfa=dfa) is None
 
-    def collect_episode(self, descriptor: Mapping[str, Any]) -> JointEpisode:
+    def collect_episode(self, descriptor: Mapping[str, Any], *, diagnostic=None) -> JointEpisode:
         from ..research.config import default_perception_options
         if default_perception_options():descriptor={**descriptor,"research_matched":True}
         from ..research.runtime import config_for,reconcile,admit_with_refresh,admission,geometry_admission,record_measured_completion
@@ -1514,7 +1516,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     f"attempt={attempt + 1}/{self.simulator_init_retries}: {type(exc).__name__}"
                 )
         if env is None:
-            return JointEpisode([], [], 0.0, False, False, 0, [])
+            return JointEpisode([], [], 0.0, False, False, 0, [],
+                                termination_reason="simulator_initialization_failed", diagnostics={})
         planner_logprobs: list[torch.Tensor | PlannerReplayDecision] = []
         planner_transition_indices: list[int | None] = []
         transitions: list[ControllerTransition] = []
@@ -1594,6 +1597,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         try:
             reset_reward_tracking(env)
             _refresh_kinematics(env)
+            if diagnostic is not None:
+                diagnostic.begin(env)
             observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
             if measured_execution:
                 env._research_unassisted=True
@@ -1700,7 +1705,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     }
                     from test_regr.JointEmbodiedAgentInterface.utils.planner_context import planner_context as bind_context
                     planner_context=bind_context("vlabench",research_context,context=planner_context)
-                    if callable(prepare_replay) and callable(encode_replay):
+                    if diagnostic is not None and diagnostic.planner == "expert":
+                        selected_plan = diagnostic.plan(env, entities)
+                    elif callable(prepare_replay) and callable(encode_replay):
                         prepared_context = prepare_replay(planner_context)
                         # Collection needs sampled labels, not a retained Qwen
                         # graph. The trajectories are replayed one at a time
@@ -1709,7 +1716,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             encoded_context = encode_replay(prepared_context)
                     elif callable(encode_context):
                         encoded_context = encode_context(planner_context)
-                    for _ in range(self.num_samples):
+                    for _ in range(self.num_samples if selected_plan is None else 0):
                         try:
                             sampled = self._sample_planner_candidate(
                                 replay_available=prepared_context is not None,
@@ -1777,6 +1784,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             valid=True;termination_reason="max_steps";continue
                     break
                 plan = selected_plan
+                if diagnostic is not None:
+                    diagnostic.record_plan(plan)
+                    if diagnostic.controller == "expert":
+                        return diagnostic.execute(env, plan)
                 planner_logprobs.append(selected_logprob)
                 planner_transition_indices.append(len(transitions))
                 if not plan:
@@ -1832,6 +1843,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     operation_cursor = 0
                     condiment_pour_phase = -1
                 active_controller_context=controller_plan_context(plan,operation_cursor)
+                if diagnostic is not None:
+                    diagnostic.select(plan[min(operation_cursor, len(plan) - 1)], entities)
                 if measured_execution:
                     from ..research.runtime import controller_context
                     active_controller_context=controller_context(plan,operation_cursor,entities)
@@ -4332,6 +4345,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         seed: int = 1729,
         assistance: bool | None = None,
         assist_components: Any = None,
+        valid_success_only: bool = False,
     ) -> dict[str, Any]:
         """Run fixed-seed simulator evaluation without optimizer updates.
 
@@ -4376,10 +4390,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         torch.cuda.manual_seed_all(rollout_seed)
                     # Evaluation needs outcomes and diagnostics. Release the CPU
                     # image tensors and planner inputs before collecting again.
+                    episode = self.collect_episode(descriptor)
                     episodes.append(replace(
-                        self.collect_episode(descriptor),
+                        episode, success=bool(episode.success and (episode.valid or not valid_success_only)),
                         planner_logprobs=[], controller=[], planner_returns=None,
                     ))
+                    del episode
                     names.append(task_name)
         finally:
             random.setstate(python_state)
@@ -4489,7 +4505,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "research":__import__("test_regr.VLABenchAgentInterface.research.evaluation",fromlist=["summarize_execution"]).summarize_execution(episodes),
             "episode_diagnostics": [
                 {"task": name, "termination_reason": episode.termination_reason,
-                 "success": bool(episode.success), "return": float(episode.total_return),
+                 "success": bool(episode.success), "valid": bool(episode.valid),
+                 "return": float(episode.total_return),
                  "steps": episode.steps, "diagnostics": episode.diagnostics}
                 for name, episode in zip(names, episodes)
             ],

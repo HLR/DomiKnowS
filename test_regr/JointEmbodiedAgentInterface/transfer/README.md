@@ -73,7 +73,8 @@ training/validation allocation, scene-overlap rejection, and CLI compatibility.
 ## Planner-only target reinforcement learning
 
 `target_rl` starts from the qualified `joint-trained` checkpoint in the decoder
-repair campaign's frozen source selection. It updates LoRA and the VLABench
+repair campaign's frozen source selection or a verified Epoch 6 archive passed
+with `--stage1-archive`. It updates LoRA and the VLABench
 graph-label head using native task success from a qualified LIBERO or RLBench
 executor. It keeps the EAI head frozen and uses supervised EAI and VLABench
 replay plus a 0.05 KL penalty to the initialization. A batch needs different
@@ -103,10 +104,12 @@ as a JSON argument array ending in the path to `target_rl_rollout.py`. The
 trainer appends the request and result file arguments. Both environments must
 see those files and the frozen assets at the same paths.
 
-Selection ranks source-retaining epochs by native success on target validation.
-The selected checkpoint and frozen initialization are then scored on identical
+Selection requires source retention and higher native target validation success
+than the frozen initialization. The selected checkpoint and initialization are scored on identical
 evaluation resets with the same executor and decoding policy. `report.json`
-records native success rates and paired gains and losses. Per-rollout files
+records native success rates, paired gains and losses, and task-cluster intervals.
+Use `--policy shared-verified-executor` to bind the qualified executor's action
+profile through the DomiKnowS compiler. Per-rollout files
 include plan validity and executor outcomes. Each attempt uses a fresh output
 directory.
 
